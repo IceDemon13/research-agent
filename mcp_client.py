@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -7,16 +8,13 @@ SERVER_PATH = Path("jira-mcp-server/server.py")
 
 
 def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
-    """
-    Викликає tool у jira-mcp-server через STDIO MCP.
-    """
-
     process = subprocess.Popen(
-        ["python", str(SERVER_PATH)],
+        [sys.executable, str(SERVER_PATH)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
     )
 
     request = {
@@ -32,10 +30,22 @@ def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
     process.stdin.write(json.dumps(request) + "\n")
     process.stdin.flush()
 
-    response = process.stdout.readline()
+    stdout_line = process.stdout.readline().strip()
+    stderr_text = process.stderr.read().strip()
 
-    if not response:
-        stderr = process.stderr.read()
-        raise RuntimeError(f"MCP server error: {stderr}")
+    process.kill()
 
-    return json.loads(response)
+    if not stdout_line:
+        raise RuntimeError(f"MCP server returned empty response. STDERR: {stderr_text}")
+
+    try:
+        response = json.loads(stdout_line)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to parse MCP response: {stdout_line}\nSTDERR: {stderr_text}"
+        ) from e
+
+    if "error" in response:
+        raise RuntimeError(str(response["error"]))
+
+    return response.get("result", {})

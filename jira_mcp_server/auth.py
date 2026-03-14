@@ -1,6 +1,6 @@
 from requests.auth import HTTPBasicAuth
 
-from config import settings
+from .config import settings
 
 
 def get_jira_auth() -> HTTPBasicAuth:

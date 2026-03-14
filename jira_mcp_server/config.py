@@ -1,4 +1,6 @@
 from pathlib import Path
+from functools import cached_property
+
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,7 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
 
-load_dotenv(dotenv_path=ENV_PATH, override=True)
+# Жорстко завантажуємо саме jira_mcp_server/.env
+load_dotenv(ENV_PATH, override=True)
 
 
 class Settings(BaseSettings):
@@ -19,10 +22,16 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         extra="ignore",
+        case_sensitive=False,
     )
 
-    @property
-	def allowed_projects(self) -> list[str]:
-    return [x.strip() for x in self.jira_allowed_projects.split(",") if x.strip()]
+    @cached_property
+    def allowed_projects(self) -> list[str]:
+        return [
+            p.strip()
+            for p in self.jira_allowed_projects.split(",")
+            if p.strip()
+        ]
+
 
 settings = Settings()
