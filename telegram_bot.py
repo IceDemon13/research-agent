@@ -1,57 +1,52 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-from agent import build_agent
 from config import settings
+from root_agent import run_root_agent
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привіт. Я research agent.\n"
-        "Можу шукати інформацію в інтернеті, читати сторінки та зберігати звіт у файл.\n\n"
-        "Приклад:\n"
-        "Знайди інформацію про LangGraph і збережи звіт у report.md"
+        "Привіт. Я root agent.\n"
+        "Я можу маршрутизувати запити між різними агентами.\n\n"
+        "Наприклад:\n"
+        "1. Знайди інформацію про LangGraph і збережи звіт у report.md\n"
+        "2. Поясни коротко, що таке root agent"
     )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text.strip()
+    message = update.effective_message
+
+    if not message or not message.text:
+        return
+
+    user_text = message.text.strip()
 
     try:
-        # новий агент на кожне повідомлення
-        agent = build_agent()
-
-        result = agent.invoke(
-            {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": user_text
-                    }
-                ]
-            }
-        )
+        result, route = run_root_agent(user_text)
 
         result_messages = result.get("messages", [])
         if not result_messages:
-            await update.message.reply_text("Не вдалося отримати відповідь від агента.")
+            await message.reply_text("Не вдалося отримати відповідь.")
             return
 
         final_message = result_messages[-1]
         answer = str(final_message.content).strip()
 
         if not answer:
-            answer = "Агент відпрацював, але повернув порожню відповідь."
+            answer = "Агент повернув порожню відповідь."
 
-        # Telegram має ліміт на довжину повідомлення
+        answer = f"[Route: {route}]\n\n{answer}"
+
         if len(answer) > 4000:
             for i in range(0, len(answer), 4000):
-                await update.message.reply_text(answer[i:i + 4000])
+                await message.reply_text(answer[i:i + 4000])
         else:
-            await update.message.reply_text(answer)
+            await message.reply_text(answer)
 
     except Exception as e:
-        await update.message.reply_text(f"Помилка: {e}")
+        await message.reply_text(f"Помилка: {e}")
 
 
 def main():
@@ -60,7 +55,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Telegram bot started...")
+    print("Telegram root bot started...")
     app.run_polling()
 
 

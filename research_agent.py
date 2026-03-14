@@ -1,12 +1,11 @@
 from langchain.agents import create_agent
 
-from config import SYSTEM_PROMPT, settings
-from tools import read_url, web_search, write_report
+from config import SYSTEM_PROMPT
 from llm_factory import get_llm
+from tools import read_url, web_search, write_report
 
 
-def build_agent():
-
+def build_research_agent():
     model = get_llm("openai/gpt-4o-mini")
 
     agent = create_agent(
