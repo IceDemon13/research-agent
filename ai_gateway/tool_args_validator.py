@@ -29,6 +29,12 @@ def validate_tool_args(tool_name: str, tool_args: dict) -> dict:
     if tool_name == "jira_search_from_text":
         return _validate_jira_search_from_text(tool_args)
 
+    if tool_name == "list_repo_files":
+        return _validate_list_repo_files(tool_args)
+
+    if tool_name == "read_repo_file":
+        return _validate_read_repo_file(tool_args)
+
     raise ToolArgsValidationError(f"Unknown tool for validation: {tool_name}")
 
 
@@ -112,3 +118,41 @@ def _validate_jira_search_from_text(tool_args: dict) -> dict:
     if len(user_text) > 1000:
         user_text = user_text[:1000]
     return {"user_text": user_text}
+
+
+def _validate_list_repo_files(tool_args: dict) -> dict:
+    root = str(tool_args.get("root", ".")).strip() or "."
+
+    raw_max_files = tool_args.get("max_files", 200)
+    try:
+        max_files = int(raw_max_files)
+    except Exception:
+        max_files = 200
+
+    max_files = max(1, min(max_files, 500))
+
+    return {
+        "root": root,
+        "max_files": max_files,
+    }
+
+
+def _validate_read_repo_file(tool_args: dict) -> dict:
+    path = str(tool_args.get("path", "")).strip()
+    if not path:
+        raise ToolArgsValidationError("read_repo_file: path is empty.")
+    if len(path) > 300:
+        raise ToolArgsValidationError("read_repo_file: path is too long.")
+
+    raw_max_chars = tool_args.get("max_chars", 6000)
+    try:
+        max_chars = int(raw_max_chars)
+    except Exception:
+        max_chars = 6000
+
+    max_chars = max(500, min(max_chars, 20000))
+
+    return {
+        "path": path,
+        "max_chars": max_chars,
+    }

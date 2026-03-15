@@ -21,7 +21,7 @@ DEFAULT_AGENT_PROFILE = AgentProfile(
 )
 
 RESEARCH_AGENT_PROFILE = AgentProfile(
-    name="react_loop",
+    name="research_agent",
     allowed_tools={
         "web_search",
         "read_url",
@@ -47,12 +47,37 @@ JIRA_AGENT_PROFILE = AgentProfile(
     allow_secrets_in_context=False,
 )
 
+SPEC_AGENT_PROFILE = AgentProfile(
+    name="spec_agent",
+    allowed_tools=set(),
+    allow_internet_content=False,
+    allow_code_generation=False,
+    allow_secrets_in_context=False,
+)
+
+CODE_AGENT_PROFILE = AgentProfile(
+    name="code_agent",
+    allowed_tools={
+        "list_repo_files",
+        "read_repo_file",
+    },
+    allow_internet_content=False,
+    allow_code_generation=True,
+    allow_secrets_in_context=False,
+)
+
 
 def get_agent_profile(agent_name: str) -> AgentProfile:
-    if agent_name == "react_loop":
+    if agent_name == "research_agent":
         return RESEARCH_AGENT_PROFILE
 
     if agent_name == "jira_agent":
         return JIRA_AGENT_PROFILE
+
+    if agent_name == "spec_agent":
+        return SPEC_AGENT_PROFILE
+
+    if agent_name == "code_agent":
+        return CODE_AGENT_PROFILE
 
     return DEFAULT_AGENT_PROFILE

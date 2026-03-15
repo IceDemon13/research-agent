@@ -12,7 +12,7 @@ from ai_gateway.tool_executor import (
     execute_tool_safely,
 )
 from logger_utils import log_line
-from tools.registry import TOOLS, TOOLS_MAP
+from tools.registry import get_tools_for_agent, get_tools_map_for_agent
 
 MAX_STEPS = 5
 GATEWAY = LLMGateway()
@@ -39,12 +39,16 @@ def run_react_loop(
     messages = _trim_runtime_memory(memory)
     messages.append({"role": "user", "content": user_input})
 
+    tools = get_tools_for_agent(agent_name)
+    tools_map = get_tools_map_for_agent(agent_name)
+
     log_line("=" * 60)
-    log_line("REACT_LOOP_VERSION: 2026-03-15-spec-v2")
+    log_line("REACT_LOOP_VERSION: 2026-03-15-agent-tools-v1")
     log_line("NEW USER REQUEST")
     log_line(f"USER: {user_input}")
     log_line(f"AGENT NAME: {agent_name}")
     log_line(f"MESSAGES IN MEMORY: {len(messages)}")
+    log_line(f"TOOLS AVAILABLE: {[tool['function']['name'] for tool in tools]}")
 
     for step in range(1, MAX_STEPS + 1):
         log_line("-" * 40)
@@ -55,7 +59,7 @@ def run_react_loop(
             gateway_request = GatewayRequest(
                 user_input=user_input,
                 messages=messages,
-                tools=TOOLS,
+                tools=tools,
                 agent_name=agent_name,
                 metadata={"step": step},
             )
@@ -143,7 +147,7 @@ def run_react_loop(
                 log_line(f"ARGS PARSE ERROR: {raw_args}")
                 log_line(f"ARGS PARSE EXCEPTION: {e}")
             else:
-                tool_func = TOOLS_MAP.get(tool_name)
+                tool_func = tools_map.get(tool_name)
 
                 if not tool_func:
                     tool_result = f"Unknown tool: {tool_name}"
