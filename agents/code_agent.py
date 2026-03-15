@@ -12,6 +12,60 @@ from prompts.code_prompt import CODE_PROMPT
 from tools.repo_tools import list_repo_files, read_repo_file
 
 
+IGNORED_PATH_PARTS = (
+    ".venv/",
+    "venv/",
+    "__pycache__/",
+    ".git/",
+    ".idea/",
+    ".vs/",
+    "node_modules/",
+    "logs/",
+    "dist/",
+    "build/",
+)
+
+PRIORITY_FILES = {
+    "main.py",
+    "config.py",
+    "telegram_bot.py",
+    "agents/root_agent.py",
+    "agents/code_agent.py",
+    "agents/change_agent.py",
+    "agents/draft_agent.py",
+    "agents/spec_agent.py",
+    "agents/research_agent.py",
+    "agents/jira_agent.py",
+    "tools/report_tools.py",
+    "tools/repo_tools.py",
+    "tools/registry.py",
+    "ai_gateway/agent_profiles.py",
+    "ai_gateway/gateway.py",
+    "ai_gateway/tool_executor.py",
+    "ai_gateway/tool_guard.py",
+    "ai_gateway/schemas.py",
+}
+
+BOOSTED_KEYWORDS = [
+    "telegram",
+    "bot",
+    "token",
+    "chat",
+    "report",
+    "txt",
+    "file",
+    "files",
+    "send",
+    "document",
+    "config",
+    "settings",
+    "main",
+    "telegram_bot",
+    "telegram_utils",
+    "report_tools",
+]
+
+
 def _build_code_prompt_input_from_spec(data: SpecToCodeInput) -> str:
     spec = data.spec
 
@@ -58,25 +112,56 @@ Repo context:
 
 
 def _build_repo_context_from_spec(original_request: str, spec: SpecContract) -> str:
-    repo_files_text = list_repo_files(root=".", max_files=500)
-    repo_files = [line.strip() for line in repo_files_text.splitlines() if line.strip()]
+    repo_files_text = list_repo_files(root=".", max_files=800)
+    raw_repo_files = [line.strip() for line in repo_files_text.splitlines() if line.strip()]
+    repo_files = _filter_repo_files(raw_repo_files)
 
     keywords = _extract_keywords(original_request, spec)
-    candidate_files = _pick_candidate_files(repo_files, keywords, limit=6)
+    candidate_files = _pick_candidate_files(repo_files, keywords, limit=8)
 
-    preview = "\n".join(repo_files[:120]) if repo_files else "repo files not found"
+    preview_lines = repo_files[:40]
+    preview = "\n".join(preview_lines) if preview_lines else "repo files not found"
 
-    blocks = ["# Repo Files Preview", preview, "", "# Read Files"]
+    blocks = [
+        "# Repo Files Preview",
+        preview,
+        "",
+        "# Read Files",
+    ]
 
     if not candidate_files:
         blocks.append("- релевантні файли не знайдено автоматично")
         return "\n".join(blocks).strip()
 
     for path in candidate_files:
-        blocks.append(read_repo_file(path, max_chars=5000))
+        if _looks_like_missing_file(path, repo_files):
+            blocks.append(f"File not found: {path}")
+            blocks.append("")
+            continue
+
+        content = read_repo_file(path, max_chars=3500)
+        blocks.append(content)
         blocks.append("")
 
     return "\n".join(blocks).strip()
+
+
+def _filter_repo_files(repo_files: list[str]) -> list[str]:
+    result: list[str] = []
+
+    for path in repo_files:
+        normalized = path.replace("\\", "/").strip()
+        lowered = normalized.lower()
+
+        if not normalized:
+            continue
+
+        if any(part in lowered for part in IGNORED_PATH_PARTS):
+            continue
+
+        result.append(normalized)
+
+    return result
 
 
 def _extract_keywords(original_request: str, spec: SpecContract) -> list[str]:
@@ -122,6 +207,15 @@ def _extract_keywords(original_request: str, spec: SpecContract) -> list[str]:
         "його",
         "їх",
         "також",
+        "можливість",
+        "отримувати",
+        "додати",
+        "форматі",
+        "формату",
+        "користувач",
+        "користувачі",
+        "звіт",
+        "звіту",
     }
 
     result: list[str] = []
@@ -131,33 +225,15 @@ def _extract_keywords(original_request: str, spec: SpecContract) -> list[str]:
         if word not in result:
             result.append(word)
 
-    boosted = [
-        "telegram",
-        "bot",
-        "token",
-        "chat",
-        "report",
-        "txt",
-        "file",
-        "files",
-        "send",
-        "document",
-        "config",
-        "settings",
-        "main",
-        "telegram_bot",
-        "telegram_utils",
-    ]
-
     final_words: list[str] = []
-    for word in boosted + result:
+    for word in BOOSTED_KEYWORDS + result:
         if word not in final_words:
             final_words.append(word)
 
     return final_words[:30]
 
 
-def _pick_candidate_files(repo_files: list[str], keywords: list[str], limit: int = 6) -> list[str]:
+def _pick_candidate_files(repo_files: list[str], keywords: list[str], limit: int = 8) -> list[str]:
     scored: list[tuple[int, str]] = []
 
     for path in repo_files:
@@ -171,15 +247,8 @@ def _pick_candidate_files(repo_files: list[str], keywords: list[str], limit: int
         if lowered.startswith(("agents/", "tools/", "contracts/", "prompts/", "ai_gateway/")):
             score += 2
 
-        if lowered in {
-            "main.py",
-            "config.py",
-            "telegram_bot.py",
-            "agents/root_agent.py",
-            "agents/code_agent.py",
-            "agents/draft_agent.py",
-        }:
-            score += 4
+        if lowered in PRIORITY_FILES:
+            score += 6
 
         if lowered.endswith(
             (
@@ -198,13 +267,26 @@ def _pick_candidate_files(repo_files: list[str], keywords: list[str], limit: int
             score += 2
 
         if lowered.startswith("tests/") or "/tests/" in lowered:
-            score -= 2
+            score -= 3
 
         if score > 0:
             scored.append((score, path))
 
     scored.sort(key=lambda x: (-x[0], x[1]))
-    return [path for _score, path in scored[:limit]]
+
+    result: list[str] = []
+    for _score, path in scored:
+        if path not in result:
+            result.append(path)
+        if len(result) >= limit:
+            break
+
+    return result
+
+
+def _looks_like_missing_file(path: str, repo_files: list[str]) -> bool:
+    normalized = path.replace("\\", "/").strip()
+    return normalized not in repo_files
 
 
 def _extract_patch_plan(answer: str) -> PatchPlan:
@@ -320,7 +402,7 @@ def run_code_agent_from_spec(data: SpecToCodeInput) -> AgentResult:
     answer, _messages = run_react_loop(
         user_input=composed_input,
         memory=memory,
-        agent_name="spec_agent",
+        agent_name="code_agent",
     )
 
     patch_plan = _extract_patch_plan(answer)

@@ -2,26 +2,17 @@ import json
 from typing import Any
 
 from ai_gateway import LLMGateway, ToolGuardError, validate_tool_call
-from ai_gateway.query_sanitizer import sanitize_search_query
 from ai_gateway.response_filter import filter_response_text
 from ai_gateway.schemas import GatewayRequest
-from ai_gateway.tool_args_validator import ToolArgsValidationError, validate_tool_args
-from ai_gateway.tool_executor import (
-    ToolExecutionError,
-    ToolExecutionTimeout,
-    execute_tool_safely,
-)
 from logger_utils import log_line
-from tools.registry import get_tools_for_agent, get_tools_map_for_agent
+from system_prompt import SYSTEM_PROMPT
+from tools.registry import TOOLS, TOOLS_MAP
 
 MAX_STEPS = 5
 GATEWAY = LLMGateway()
 
 
-def _trim_runtime_memory(
-    memory: list[dict[str, Any]],
-    keep_last: int = 10,
-) -> list[dict[str, Any]]:
+def _trim_runtime_memory(memory: list[dict[str, Any]], keep_last: int = 10) -> list[dict[str, Any]]:
     if not memory:
         return []
 
@@ -31,42 +22,53 @@ def _trim_runtime_memory(
     return system_messages[:1] + other_messages[-keep_last:]
 
 
+def _preview_text(text: str, max_chars: int = 160) -> str:
+    value = (text or "").strip()
+    if max_chars <= 0 or len(value) <= max_chars:
+        return value
+    return value[:max_chars] + "...[TRUNCATED]"
+
+
+def _agent_tag(agent_name: str) -> str:
+    return f"[{agent_name}]"
+
+
 def run_react_loop(
     user_input: str,
     memory: list[dict[str, Any]],
-    agent_name: str,
+    agent_name: str = "react_loop",
+    tools: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
+    effective_tools = tools if tools is not None else TOOLS
+    tag = _agent_tag(agent_name)
+
     messages = _trim_runtime_memory(memory)
     messages.append({"role": "user", "content": user_input})
 
-    tools = get_tools_for_agent(agent_name)
-    tools_map = get_tools_map_for_agent(agent_name)
-
     log_line("=" * 60)
-    log_line("REACT_LOOP_VERSION: 2026-03-15-agent-tools-v1")
-    log_line("NEW USER REQUEST")
-    log_line(f"USER: {user_input}")
-    log_line(f"AGENT NAME: {agent_name}")
-    log_line(f"MESSAGES IN MEMORY: {len(messages)}")
-    log_line(f"TOOLS AVAILABLE: {[tool['function']['name'] for tool in tools]}")
+    log_line(f"{tag} NEW USER REQUEST")
+    log_line(f"{tag} REACT_LOOP_VERSION: 2026-03-15-agent-tools-v3")
+    log_line(f"{tag} MESSAGES IN MEMORY: {len(messages)}")
+    log_line(f"{tag} TOOLS AVAILABLE: {[item['function']['name'] for item in effective_tools]}")
+    log_line(f"{tag} USER PREVIEW: {_preview_text(user_input, 160)}")
 
     for step in range(1, MAX_STEPS + 1):
         log_line("-" * 40)
-        log_line(f"STEP {step}")
-        log_line("LLM reasoning via gateway...")
+        log_line(f"{tag} STEP {step}")
+        log_line(f"{tag} LLM reasoning via gateway...")
 
         try:
             gateway_request = GatewayRequest(
                 user_input=user_input,
                 messages=messages,
-                tools=tools,
+                tools=effective_tools,
                 agent_name=agent_name,
                 metadata={"step": step},
             )
             gateway_response = GATEWAY.create_chat_completion(gateway_request)
             response = gateway_response.raw_response
         except Exception as e:
-            log_line(f"GATEWAY / LLM API ERROR: {e}")
+            log_line(f"{tag} GATEWAY / LLM API ERROR: {e}")
             return f"LLM gateway error: {e}", messages
 
         message = response.choices[0].message
@@ -77,10 +79,7 @@ def run_react_loop(
         }
 
         if message.content:
-            preview = message.content.strip()
-            if len(preview) > 300:
-                preview = preview[:300] + "..."
-            log_line(f"ASSISTANT MESSAGE: {preview}")
+            log_line(f"{tag} ASSISTANT MESSAGE: {_preview_text(message.content, 300)}")
 
         if message.tool_calls:
             assistant_message["tool_calls"] = [
@@ -99,21 +98,21 @@ def run_react_loop(
 
         if not message.tool_calls:
             final_answer = filter_response_text(message.content or "No response received.")
-            log_line("FINAL ANSWER READY")
-            log_line(f"FINAL ANSWER: {final_answer[:500]}")
+            log_line(f"{tag} FINAL ANSWER READY")
+            log_line(f"{tag} FINAL ANSWER: {_preview_text(final_answer, 300)}")
             log_line("=" * 60)
             return final_answer, messages
 
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             raw_args = tool_call.function.arguments or "{}"
-            log_line(f"TOOL SELECTED: {tool_name}")
+            log_line(f"{tag} TOOL SELECTED: {tool_name}")
 
             try:
                 validate_tool_call(agent_name, tool_name)
             except ToolGuardError as e:
                 tool_result = str(e)
-                log_line(f"TOOL BLOCKED: {tool_result}")
+                log_line(f"{tag} TOOL BLOCKED: {tool_result}")
                 messages.append(
                     {
                         "role": "tool",
@@ -125,53 +124,24 @@ def run_react_loop(
 
             try:
                 tool_args = json.loads(raw_args)
-
-                if tool_name == "web_search" and "query" in tool_args:
-                    original_query = str(tool_args["query"])
-                    sanitized_query = sanitize_search_query(user_input, original_query)
-                    tool_args["query"] = sanitized_query
-
-                    if sanitized_query != original_query:
-                        log_line(
-                            f"TOOL ARGS SANITIZED: query='{original_query}' -> '{sanitized_query}'"
-                        )
-
-                tool_args = validate_tool_args(tool_name, tool_args)
-                log_line(f"TOOL ARGS: {tool_args}")
-
-            except ToolArgsValidationError as e:
-                tool_result = str(e)
-                log_line(f"TOOL ARGS VALIDATION ERROR: {tool_result}")
-            except Exception as e:
+                log_line(f"{tag} TOOL ARGS: {_preview_text(str(tool_args), 200)}")
+            except Exception:
                 tool_result = f"Tool args parse error: {raw_args}"
-                log_line(f"ARGS PARSE ERROR: {raw_args}")
-                log_line(f"ARGS PARSE EXCEPTION: {e}")
+                log_line(f"{tag} ARGS PARSE ERROR: {_preview_text(raw_args, 200)}")
             else:
-                tool_func = tools_map.get(tool_name)
+                tool_func = TOOLS_MAP.get(tool_name)
 
                 if not tool_func:
                     tool_result = f"Unknown tool: {tool_name}"
-                    log_line(f"UNKNOWN TOOL: {tool_name}")
+                    log_line(f"{tag} UNKNOWN TOOL: {tool_name}")
                 else:
                     try:
-                        tool_result = execute_tool_safely(
-                            tool_func=tool_func,
-                            tool_name=tool_name,
-                            tool_args=tool_args,
-                            timeout_seconds=20,
-                            result_max_chars=12000,
-                        )
-                    except ToolExecutionTimeout as e:
-                        tool_result = str(e)
-                        log_line(f"TOOL TIMEOUT: {tool_result}")
-                    except ToolExecutionError as e:
-                        tool_result = str(e)
-                        log_line(f"TOOL EXECUTION ERROR: {tool_result}")
+                        tool_result = tool_func(**tool_args)
+                    except Exception as e:
+                        tool_result = f"{tool_name} error: {e}"
+                        log_line(f"{tag} TOOL EXECUTION ERROR: {e}")
 
-            preview = str(tool_result)
-            if len(preview) > 500:
-                preview = preview[:500] + "..."
-            log_line(f"TOOL RESULT: {preview}")
+            log_line(f"{tag} TOOL RESULT: {_preview_text(str(tool_result), 250)}")
 
             messages.append(
                 {
@@ -181,8 +151,17 @@ def run_react_loop(
                 }
             )
 
-        log_line(f"STEP {step} COMPLETED")
+        log_line(f"{tag} STEP {step} COMPLETED")
 
-    log_line("MAX STEPS REACHED")
+    log_line(f"{tag} MAX STEPS REACHED")
     log_line("=" * 60)
     return "Reached max steps without final answer.", messages
+
+
+def create_initial_memory() -> list[dict[str, Any]]:
+    return [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT,
+        }
+    ]

@@ -8,24 +8,71 @@ from contracts.draft_set import DraftSet
 from contracts.file_draft import FileDraft
 from loops.react_loop import run_react_loop
 from prompts.draft_prompt import DRAFT_PROMPT
-from tools.repo_tools import read_repo_file
+from tools.repo_tools import list_repo_files, read_repo_file
+
+
+IGNORED_PATH_PARTS = (
+    ".venv/",
+    "venv/",
+    "__pycache__/",
+    ".git/",
+    ".idea/",
+    ".vs/",
+    "node_modules/",
+    "logs/",
+    "dist/",
+    "build/",
+)
+
+
+def _normalize_path(path: str) -> str:
+    return path.replace("\\", "/").strip()
+
+
+def _filter_repo_files(repo_files: list[str]) -> list[str]:
+    result: list[str] = []
+
+    for path in repo_files:
+        normalized = _normalize_path(path)
+        lowered = normalized.lower()
+
+        if not normalized:
+            continue
+
+        if any(part in lowered for part in IGNORED_PATH_PARTS):
+            continue
+
+        result.append(normalized)
+
+    return result
 
 
 def _build_draft_prompt_input(
     original_request: str,
     change_set: ChangeSet,
 ) -> str:
+    repo_files_text = list_repo_files(root=".", max_files=800)
+    raw_repo_files = [line.strip() for line in repo_files_text.splitlines() if line.strip()]
+    repo_files = _filter_repo_files(raw_repo_files)
+
     file_lines = []
     repo_blocks = []
 
-    selected_files = change_set.files[:3]
+    selected_files = change_set.files[:4]
 
     for file_change in selected_files:
+        normalized_path = _normalize_path(file_change.path)
+
         file_lines.append(
-            f"- {file_change.path} | operation={file_change.operation} | why={file_change.why}"
+            f"- {normalized_path} | operation={file_change.operation} | why={file_change.why}"
         )
-        current_text = read_repo_file(file_change.path, max_chars=7000)
-        repo_blocks.append(current_text)
+
+        if normalized_path in repo_files:
+            current_text = read_repo_file(normalized_path, max_chars=5000)
+            repo_blocks.append(current_text)
+        else:
+            repo_blocks.append(f"File not found: {normalized_path}")
+
         repo_blocks.append("")
 
     files_text = "\n".join(file_lines) or "- файли не визначені"
@@ -144,7 +191,8 @@ def run_draft_agent(
     answer, _messages = run_react_loop(
         user_input=composed_input,
         memory=memory,
-        agent_name="spec_agent",
+        agent_name="draft_agent",
+        tools=[],
     )
 
     draft_set = _extract_draft_set(answer)

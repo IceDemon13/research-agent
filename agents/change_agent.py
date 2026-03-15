@@ -183,7 +183,7 @@ def run_change_agent(
     answer, _messages = run_react_loop(
         user_input=composed_input,
         memory=memory,
-        agent_name="code_agent",
+        agent_name="change_agent",
     )
 
     change_set = _extract_change_set(answer)

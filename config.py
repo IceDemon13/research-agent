@@ -21,6 +21,27 @@ class Settings(BaseSettings):
     llm_max_completion_tokens: int = 2000
     llm_temperature: float = 0.2
 
+    log_to_console: bool = True
+    log_to_file: bool = True
+    log_dir: str = "logs"
+    log_file_name: str = "agent.log"
+
+    # console levels:
+    # off | user | steps | info | debug | trace
+    log_level_console: str = "steps"
+
+    # file levels:
+    # off | error | warn | info | debug | trace
+    log_level_file: str = "debug"
+
+    log_console_max_chars: int = 0
+    log_file_max_chars: int = 0
+
+    # pipeline console output:
+    # full | summary | off
+    pipeline_console_output_mode: str = "summary"
+    pipeline_console_preview_chars: int = 300
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

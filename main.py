@@ -4,6 +4,30 @@ from agents.root_agent import (
     run_root_agent,
     run_spec_to_code_pipeline,
 )
+from config import settings
+
+
+def _preview(text: str, max_chars: int) -> str:
+    value = (text or "").strip()
+    if max_chars <= 0 or len(value) <= max_chars:
+        return value
+    return value[:max_chars] + "\n...[TRUNCATED]"
+
+
+def _print_pipeline_block(title: str, content: str) -> None:
+    mode = (settings.pipeline_console_output_mode or "summary").strip().lower()
+
+    if mode == "off":
+        return
+
+    print(f"\n[{title}]")
+
+    if mode == "full":
+        print(content)
+        return
+
+    preview_chars = settings.pipeline_console_preview_chars
+    print(_preview(content, preview_chars))
 
 
 def main() -> None:
@@ -26,17 +50,10 @@ def main() -> None:
 
             spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(pipeline_input)
 
-            print("\n[Spec Result]")
-            print(spec_result.output_text)
-
-            print("\n[Code Plan Result]")
-            print(code_result.output_text)
-
-            print("\n[Change Set Result]")
-            print(change_result.output_text)
-
-            print("\n[Draft Set Result]")
-            print(draft_result.output_text)
+            _print_pipeline_block("Spec Result", spec_result.output_text)
+            _print_pipeline_block("Code Plan Result", code_result.output_text)
+            _print_pipeline_block("Change Set Result", change_result.output_text)
+            _print_pipeline_block("Draft Set Result", draft_result.output_text)
 
             print("\n--- AGENT END ---")
             continue
@@ -46,14 +63,9 @@ def main() -> None:
 
             spec_result, code_result, change_result = run_full_change_pipeline(pipeline_input)
 
-            print("\n[Spec Result]")
-            print(spec_result.output_text)
-
-            print("\n[Code Plan Result]")
-            print(code_result.output_text)
-
-            print("\n[Change Set Result]")
-            print(change_result.output_text)
+            _print_pipeline_block("Spec Result", spec_result.output_text)
+            _print_pipeline_block("Code Plan Result", code_result.output_text)
+            _print_pipeline_block("Change Set Result", change_result.output_text)
 
             print("\n--- AGENT END ---")
             continue
@@ -63,11 +75,8 @@ def main() -> None:
 
             spec_result, code_result = run_spec_to_code_pipeline(pipeline_input)
 
-            print("\n[Spec Result]")
-            print(spec_result.output_text)
-
-            print("\n[Code Plan Result]")
-            print(code_result.output_text)
+            _print_pipeline_block("Spec Result", spec_result.output_text)
+            _print_pipeline_block("Code Plan Result", code_result.output_text)
 
             print("\n--- AGENT END ---")
             continue
