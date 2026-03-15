@@ -1,8 +1,10 @@
-from root_agent import run_root_agent
+from research_agent import ResearchAgentSession
 
 
 def main():
-    print("Root Agent started. Type 'exit' to quit.")
+    print("Research Agent started. Type 'exit' to quit.")
+
+    agent = ResearchAgentSession()
 
     while True:
         user_input = input("\nYou: ").strip()
@@ -11,16 +13,10 @@ def main():
             print("Goodbye!")
             break
 
-        result, route = run_root_agent(user_input)
-
-        result_messages = result.get("messages", [])
-        if not result_messages:
-            print("\nAgent: No response received.")
-            continue
-
-        final_message = result_messages[-1]
-        print(f"\n[Route: {route}]")
-        print(f"Agent: {final_message.content}")
+        print("\n--- AGENT START ---")
+        answer = agent.run(user_input)
+        print(f"\nAgent: {answer}")
+        print("\n--- AGENT END ---")
 
 
 if __name__ == "__main__":

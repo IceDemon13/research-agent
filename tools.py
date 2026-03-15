@@ -1,10 +1,13 @@
-
-from pathlib import Path
 from urllib.parse import urlparse
 
 import trafilatura
 from ddgs import DDGS
 
+from ai_gateway.file_guard import (
+    FileGuardError,
+    to_display_output_path,
+    validate_output_filename,
+)
 from config import settings
 from jql_builder import build_jql_from_text
 from jira_mcp_server.jira_client import get_issue, search_issues
@@ -58,18 +61,15 @@ def read_url(url: str) -> str:
 def write_report(filename: str, content: str) -> str:
     """Save a markdown report into the output folder."""
     try:
-        output_dir = Path("output")
-        output_dir.mkdir(exist_ok=True)
+        safe_path = validate_output_filename(filename)
+        safe_path.parent.mkdir(parents=True, exist_ok=True)
+        safe_path.write_text(content, encoding="utf-8")
 
-        safe_filename = filename.strip()
-        if not safe_filename.endswith(".md"):
-            safe_filename += ".md"
+        display_path = to_display_output_path(safe_path)
+        return f"Report saved to {display_path}"
 
-        file_path = output_dir / safe_filename
-        file_path.write_text(content, encoding="utf-8")
-
-        return f"Report saved to {file_path}"
-
+    except FileGuardError as e:
+        return f"write_report blocked: {e}"
     except Exception as e:
         return f"write_report error: {e}"
 
@@ -163,27 +163,23 @@ TOOLS_MAP = {
     "jira_search_from_text": jira_search_from_text,
 }
 
-TOOLS_MAP = {
-    "web_search": web_search,
-    "read_url": read_url,
-    "write_report": write_report,
-    "jira_search_issues": jira_search_issues,
-    "jira_get_issue": jira_get_issue,
-    "jira_search_from_text": jira_search_from_text,
-}
 
 TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "Search the web for relevant sources",
+            "description": "Search the web for relevant sources.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"}
+                    "query": {
+                        "type": "string",
+                        "description": "The search query."
+                    }
                 },
                 "required": ["query"],
+                "additionalProperties": False,
             },
         },
     },
@@ -191,13 +187,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_url",
-            "description": "Read text from a webpage",
+            "description": "Read and extract readable text content from a webpage URL.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string"}
+                    "url": {
+                        "type": "string",
+                        "description": "The webpage URL to read."
+                    }
                 },
                 "required": ["url"],
+                "additionalProperties": False,
             },
         },
     },
@@ -205,14 +205,21 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "write_report",
-            "description": "Save markdown report to output folder",
+            "description": "Save a markdown report into the output folder.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "filename": {"type": "string"},
-                    "content": {"type": "string"},
+                    "filename": {
+                        "type": "string",
+                        "description": "The output markdown filename."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The markdown file content."
+                    },
                 },
                 "required": ["filename", "content"],
+                "additionalProperties": False,
             },
         },
     },
@@ -220,14 +227,21 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "jira_search_issues",
-            "description": "Search Jira issues using explicit JQL query",
+            "description": "Search Jira issues using an explicit JQL query.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "jql": {"type": "string"},
-                    "limit": {"type": "integer", "default": 10},
+                    "jql": {
+                        "type": "string",
+                        "description": "The JQL query."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of issues to return."
+                    },
                 },
                 "required": ["jql"],
+                "additionalProperties": False,
             },
         },
     },
@@ -235,13 +249,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "jira_get_issue",
-            "description": "Get Jira issue details by issue key like TEL-12345",
+            "description": "Get Jira issue details by issue key like TEL-12345.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "issue_key": {"type": "string"},
+                    "issue_key": {
+                        "type": "string",
+                        "description": "The Jira issue key."
+                    },
                 },
                 "required": ["issue_key"],
+                "additionalProperties": False,
             },
         },
     },
@@ -249,13 +267,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "jira_search_from_text",
-            "description": "Convert natural language request into JQL and search Jira issues",
+            "description": "Convert a natural language request into JQL and search Jira issues.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "user_text": {"type": "string"},
+                    "user_text": {
+                        "type": "string",
+                        "description": "The natural language Jira search request."
+                    },
                 },
                 "required": ["user_text"],
+                "additionalProperties": False,
             },
         },
     },

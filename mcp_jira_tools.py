@@ -59,14 +59,16 @@ def _format_issue_result(data: dict) -> str:
 
 
 @tool
-def jira_search_issues(jql: str, limit: int = 10) -> str:
-    """
-    Search Jira issues using a JQL query and result limit.
-    """
-    print("JQL SENT:", jql)
-    print("LIMIT SENT:", limit)
+def jira_search_issues(jql: str, limit: int = 5):
+
+    if "order by" in jql.lower() and "where" not in jql.lower():
+        jql = "created IS NOT EMPTY " + jql
+
+    print(f"JQL SENT: {jql}")
+    print(f"LIMIT SENT: {limit}")
+
     result = search_issues(jql, limit)
-    return _format_search_result(result)
+    return result
 
 
 @tool

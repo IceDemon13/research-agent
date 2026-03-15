@@ -1,26 +1,12 @@
-# LangGraph Report
+# Що таке Vector Database?
 
-## Overview
-LangGraph is an open-source orchestration framework developed by the LangChain team, designed for building resilient, stateful, multi-actor AI agents as graphs. It is available in Python and JavaScript/TypeScript (LangGraph.js).
+Vector Database (векторові бази даних) - це тип бази даних, що зберігає та виконує запити на векторні ембеддинги даних у векторному просторі. Вони зазвичай реалізують алгоритми наближеного пошуку найближчих сусідів, що дозволяє виконувати семантичний пошук, на відміну від традиційних баз даних, які в основному здійснюють пошук за точним відповідністю.
 
-## Key Features
-- **Stateful Architecture**: LangGraph allows for the persistence of context and state across multiple interactions, enabling long-running sessions and iterative processes.
-- **Multi-Actor Support**: It facilitates the structured coordination of multiple LLM agents or chains, promoting efficient orchestration in multi-agent environments.
-- **Graph-Based Workflows**: Utilizes directed graphs to define workflows, incorporating cycles, conditional branching, and adaptive paths, which model complex, non-linear processes.
-- **Low-Level Control**: Provides developers with fine-grained control over workflows without imposing high-level abstractions, allowing for full customization.
-- **Integration with LangChain**: While it can be used independently, LangGraph is often used alongside LangChain to enhance capabilities in building complex LLM workflows.
+## Основні моменти:
+1. **Векторні Ембеддинги**: Це математичні представлення даних у багатовимірному просторі. Кожен елемент даних представлений одним вектором у цьому просторі, що дозволяє проводити семантичний пошук.
+2. **Використання**: Векторові бази даних часто використовуються в таких сферах як: семантичний пошук, системи рекомендацій, обробка зображень, і генеративні моделі (наприклад, RAG - retrieval-augmented generation).
+3. **Алгоритми**: Ключові техніки для пошуку схожості у високовимірних векторах включають графи HNSW, локально чутливу хешування (LSH) та ін.
+4. **Застосування в AI**: Вони підвищують продуктивність моделей штучного інтелекту, забезпечуючи ефективне управління даними та швидкий доступ до них.
+5. **Переваги**: Векторові бази даних зазвичай перевершують традиційні системи за швидкістю і продуктивністю з використанням спеціалізованих алгоритмів пошуку.
 
-## Use Cases
-LangGraph is particularly suited for:
-- **Conversational Agents**: Building robust systems for handling user interactions.
-- **Complex Automation**: Automating multi-step processes that require state management.
-- **Custom LLM Applications**: Creating tailored applications that leverage the capabilities of large language models.
-
-## Installation
-LangGraph can be installed via pip:
-```bash
-pip install langgraph
-```
-
-## Conclusion
-LangGraph addresses the limitations of traditional frameworks by providing a more expressive and flexible environment for developing complex AI applications. Its focus on statefulness and multi-agent coordination makes it a valuable tool for developers in the field of generative AI.
+Це представляє новий підхід до зберігання та обробки неструктурованих даних, дозволяючи мати результати, максимально наближені до людського сприйняття інформації.
