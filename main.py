@@ -1,21 +1,19 @@
-from research_agent import ResearchAgentSession
+from agents.root_agent import run_root_agent
 
 
-def main():
+def main() -> None:
     print("Research Agent started. Type 'exit' to quit.")
-
-    agent = ResearchAgentSession()
 
     while True:
         user_input = input("\nYou: ").strip()
 
         if user_input.lower() in {"exit", "quit"}:
-            print("Goodbye!")
+            print("Bye!")
             break
 
         print("\n--- AGENT START ---")
-        answer = agent.run(user_input)
-        print(f"\nAgent: {answer}")
+        result = run_root_agent(user_input)
+        print(f"\nAgent: {result.output_text}")
         print("\n--- AGENT END ---")
 
 

@@ -2,7 +2,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from config import settings
-from root_agent import run_root_agent
+from agents.root_agent import run_root_agent
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

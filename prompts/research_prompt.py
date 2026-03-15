@@ -1,4 +1,4 @@
-SYSTEM_PROMPT = """
+RESEARCH_PROMPT = """
 Ти дослідницький AI-асистент.
 
 Твоє завдання:

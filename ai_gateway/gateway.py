@@ -8,6 +8,7 @@ from ai_gateway.model_router import choose_model
 from ai_gateway.policy import check_messages_for_blocking, collect_policy_hits
 from ai_gateway.redactor import redact_messages
 from ai_gateway.schemas import GatewayPreparedRequest, GatewayRequest, GatewayResponse
+from config import settings
 from llm_factory import build_openai_client
 
 
@@ -18,8 +19,8 @@ class LLMGateway:
     def prepare(self, request: GatewayRequest) -> GatewayPreparedRequest:
         minimized_messages = minimize_messages(
             messages=request.messages,
-            max_history_messages=12,
-            max_chars_per_message=4000,
+            max_history_messages=settings.gateway_max_history_messages,
+            max_chars_per_message=settings.gateway_max_chars_per_message,
         )
 
         sanitized_messages, redaction_hits = redact_messages(minimized_messages)
@@ -32,6 +33,7 @@ class LLMGateway:
         selected_model, selected_provider = choose_model(
             messages=sanitized_messages,
             user_input=request.user_input,
+            agent_name=request.agent_name,
         )
 
         prepared = GatewayPreparedRequest(
@@ -67,6 +69,8 @@ class LLMGateway:
             messages=prepared.sanitized_messages,
             tools=request.tools,
             tool_choice="auto",
+            max_completion_tokens=settings.llm_max_completion_tokens,
+            temperature=settings.llm_temperature,
         )
 
         return GatewayResponse(

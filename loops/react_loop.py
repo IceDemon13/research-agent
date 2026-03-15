@@ -6,9 +6,13 @@ from ai_gateway.query_sanitizer import sanitize_search_query
 from ai_gateway.response_filter import filter_response_text
 from ai_gateway.schemas import GatewayRequest
 from ai_gateway.tool_args_validator import ToolArgsValidationError, validate_tool_args
+from ai_gateway.tool_executor import (
+    ToolExecutionError,
+    ToolExecutionTimeout,
+    execute_tool_safely,
+)
 from logger_utils import log_line
-from system_prompt import SYSTEM_PROMPT
-from tools import TOOLS, TOOLS_MAP
+from tools.registry import TOOLS, TOOLS_MAP
 
 MAX_STEPS = 5
 GATEWAY = LLMGateway()
@@ -30,13 +34,16 @@ def _trim_runtime_memory(
 def run_react_loop(
     user_input: str,
     memory: list[dict[str, Any]],
+    agent_name: str,
 ) -> tuple[str, list[dict[str, Any]]]:
     messages = _trim_runtime_memory(memory)
     messages.append({"role": "user", "content": user_input})
 
     log_line("=" * 60)
+    log_line("REACT_LOOP_VERSION: 2026-03-15-spec-v2")
     log_line("NEW USER REQUEST")
     log_line(f"USER: {user_input}")
+    log_line(f"AGENT NAME: {agent_name}")
     log_line(f"MESSAGES IN MEMORY: {len(messages)}")
 
     for step in range(1, MAX_STEPS + 1):
@@ -49,7 +56,7 @@ def run_react_loop(
                 user_input=user_input,
                 messages=messages,
                 tools=TOOLS,
-                agent_name="react_loop",
+                agent_name=agent_name,
                 metadata={"step": step},
             )
             gateway_response = GATEWAY.create_chat_completion(gateway_request)
@@ -99,7 +106,7 @@ def run_react_loop(
             log_line(f"TOOL SELECTED: {tool_name}")
 
             try:
-                validate_tool_call("react_loop", tool_name)
+                validate_tool_call(agent_name, tool_name)
             except ToolGuardError as e:
                 tool_result = str(e)
                 log_line(f"TOOL BLOCKED: {tool_result}")
@@ -143,10 +150,19 @@ def run_react_loop(
                     log_line(f"UNKNOWN TOOL: {tool_name}")
                 else:
                     try:
-                        tool_result = tool_func(**tool_args)
-                    except Exception as e:
-                        tool_result = f"{tool_name} error: {e}"
-                        log_line(f"TOOL EXECUTION ERROR: {e}")
+                        tool_result = execute_tool_safely(
+                            tool_func=tool_func,
+                            tool_name=tool_name,
+                            tool_args=tool_args,
+                            timeout_seconds=20,
+                            result_max_chars=12000,
+                        )
+                    except ToolExecutionTimeout as e:
+                        tool_result = str(e)
+                        log_line(f"TOOL TIMEOUT: {tool_result}")
+                    except ToolExecutionError as e:
+                        tool_result = str(e)
+                        log_line(f"TOOL EXECUTION ERROR: {tool_result}")
 
             preview = str(tool_result)
             if len(preview) > 500:
@@ -166,12 +182,3 @@ def run_react_loop(
     log_line("MAX STEPS REACHED")
     log_line("=" * 60)
     return "Reached max steps without final answer.", messages
-
-
-def create_initial_memory() -> list[dict[str, Any]]:
-    return [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT,
-        }
-    ]
