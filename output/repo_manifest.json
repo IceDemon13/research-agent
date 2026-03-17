@@ -1,0 +1,651 @@
+{
+  "ok": true,
+  "root_path": "C:/работа/my repositories/research-agent",
+  "output_path": "output/repo_manifest.json",
+  "generated_at": "2026-03-17T17:08:22.529313+00:00",
+  "file_count": 107,
+  "files": [
+    {
+      "path": ".env",
+      "size": 600,
+      "extension": "",
+      "line_count": 16
+    },
+    {
+      "path": ".env.example",
+      "size": 0,
+      "extension": ".example",
+      "line_count": 0
+    },
+    {
+      "path": ".gitignore",
+      "size": 4916,
+      "extension": "",
+      "line_count": 210
+    },
+    {
+      "path": ".vs/VSWorkspaceState.json",
+      "size": 78,
+      "extension": ".json",
+      "line_count": 6
+    },
+    {
+      "path": ".vs/research-agent.slnx/v18/DocumentLayout.json",
+      "size": 557,
+      "extension": ".json",
+      "line_count": 23
+    },
+    {
+      "path": "README.md",
+      "size": 191,
+      "extension": ".md",
+      "line_count": 13
+    },
+    {
+      "path": "agent.py",
+      "size": 412,
+      "extension": ".py",
+      "line_count": 18
+    },
+    {
+      "path": "agents/__init__.py",
+      "size": 0,
+      "extension": ".py",
+      "line_count": 0
+    },
+    {
+      "path": "agents/change_agent.py",
+      "size": 5794,
+      "extension": ".py",
+      "line_count": 221
+    },
+    {
+      "path": "agents/code_agent.py",
+      "size": 6894,
+      "extension": ".py",
+      "line_count": 226
+    },
+    {
+      "path": "agents/deterministic_repair.py",
+      "size": 2373,
+      "extension": ".py",
+      "line_count": 80
+    },
+    {
+      "path": "agents/draft_agent.py",
+      "size": 10847,
+      "extension": ".py",
+      "line_count": 365
+    },
+    {
+      "path": "agents/jira_agent.py",
+      "size": 584,
+      "extension": ".py",
+      "line_count": 26
+    },
+    {
+      "path": "agents/repair_agent.py",
+      "size": 6216,
+      "extension": ".py",
+      "line_count": 232
+    },
+    {
+      "path": "agents/research_agent.py",
+      "size": 608,
+      "extension": ".py",
+      "line_count": 26
+    },
+    {
+      "path": "agents/review_agent.py",
+      "size": 27784,
+      "extension": ".py",
+      "line_count": 841
+    },
+    {
+      "path": "agents/root_agent.py",
+      "size": 13506,
+      "extension": ".py",
+      "line_count": 363
+    },
+    {
+      "path": "agents/spec_agent.py",
+      "size": 746,
+      "extension": ".py",
+      "line_count": 31
+    },
+    {
+      "path": "agents/spec_review_agent.py",
+      "size": 1635,
+      "extension": ".py",
+      "line_count": 69
+    },
+    {
+      "path": "ai_gateway/__init__.py",
+      "size": 179,
+      "extension": ".py",
+      "line_count": 4
+    },
+    {
+      "path": "ai_gateway/agent_profiles.py",
+      "size": 2836,
+      "extension": ".py",
+      "line_count": 116
+    },
+    {
+      "path": "ai_gateway/audit.py",
+      "size": 1002,
+      "extension": ".py",
+      "line_count": 34
+    },
+    {
+      "path": "ai_gateway/context_builder.py",
+      "size": 968,
+      "extension": ".py",
+      "line_count": 30
+    },
+    {
+      "path": "ai_gateway/file_guard.py",
+      "size": 1492,
+      "extension": ".py",
+      "line_count": 53
+    },
+    {
+      "path": "ai_gateway/gateway.py",
+      "size": 2931,
+      "extension": ".py",
+      "line_count": 79
+    },
+    {
+      "path": "ai_gateway/model_router.py",
+      "size": 831,
+      "extension": ".py",
+      "line_count": 26
+    },
+    {
+      "path": "ai_gateway/policy.py",
+      "size": 1549,
+      "extension": ".py",
+      "line_count": 52
+    },
+    {
+      "path": "ai_gateway/query_sanitizer.py",
+      "size": 570,
+      "extension": ".py",
+      "line_count": 24
+    },
+    {
+      "path": "ai_gateway/redactor.py",
+      "size": 1960,
+      "extension": ".py",
+      "line_count": 52
+    },
+    {
+      "path": "ai_gateway/response_filter.py",
+      "size": 576,
+      "extension": ".py",
+      "line_count": 30
+    },
+    {
+      "path": "ai_gateway/schemas.py",
+      "size": 758,
+      "extension": ".py",
+      "line_count": 30
+    },
+    {
+      "path": "ai_gateway/tool_args_validator.py",
+      "size": 4687,
+      "extension": ".py",
+      "line_count": 158
+    },
+    {
+      "path": "ai_gateway/tool_executor.py",
+      "size": 1210,
+      "extension": ".py",
+      "line_count": 42
+    },
+    {
+      "path": "ai_gateway/tool_guard.py",
+      "size": 424,
+      "extension": ".py",
+      "line_count": 16
+    },
+    {
+      "path": "config.py",
+      "size": 1332,
+      "extension": ".py",
+      "line_count": 52
+    },
+    {
+      "path": "contracts/__init__.py",
+      "size": 0,
+      "extension": ".py",
+      "line_count": 0
+    },
+    {
+      "path": "contracts/agent_result.py",
+      "size": 279,
+      "extension": ".py",
+      "line_count": 12
+    },
+    {
+      "path": "contracts/change_set.py",
+      "size": 381,
+      "extension": ".py",
+      "line_count": 13
+    },
+    {
+      "path": "contracts/draft_set.py",
+      "size": 299,
+      "extension": ".py",
+      "line_count": 12
+    },
+    {
+      "path": "contracts/file_change_plan.py",
+      "size": 237,
+      "extension": ".py",
+      "line_count": 11
+    },
+    {
+      "path": "contracts/file_draft.py",
+      "size": 164,
+      "extension": ".py",
+      "line_count": 10
+    },
+    {
+      "path": "contracts/normalized_task_brief.py",
+      "size": 532,
+      "extension": ".py",
+      "line_count": 21
+    },
+    {
+      "path": "contracts/patch_plan.py",
+      "size": 369,
+      "extension": ".py",
+      "line_count": 13
+    },
+    {
+      "path": "contracts/proposed_file_change.py",
+      "size": 341,
+      "extension": ".py",
+      "line_count": 13
+    },
+    {
+      "path": "contracts/repair_result.py",
+      "size": 354,
+      "extension": ".py",
+      "line_count": 13
+    },
+    {
+      "path": "contracts/review_result.py",
+      "size": 588,
+      "extension": ".py",
+      "line_count": 20
+    },
+    {
+      "path": "contracts/route_result.py",
+      "size": 152,
+      "extension": ".py",
+      "line_count": 9
+    },
+    {
+      "path": "contracts/spec_contract.py",
+      "size": 479,
+      "extension": ".py",
+      "line_count": 15
+    },
+    {
+      "path": "contracts/spec_parser.py",
+      "size": 2916,
+      "extension": ".py",
+      "line_count": 87
+    },
+    {
+      "path": "contracts/spec_to_code_input.py",
+      "size": 226,
+      "extension": ".py",
+      "line_count": 11
+    },
+    {
+      "path": "contracts/task_source.py",
+      "size": 163,
+      "extension": ".py",
+      "line_count": 9
+    },
+    {
+      "path": "example_output/report.md",
+      "size": 423,
+      "extension": ".md",
+      "line_count": 15
+    },
+    {
+      "path": "jira_mcp_agent.py",
+      "size": 2126,
+      "extension": ".py",
+      "line_count": 51
+    },
+    {
+      "path": "jira_mcp_server/.env",
+      "size": 341,
+      "extension": "",
+      "line_count": 6
+    },
+    {
+      "path": "jira_mcp_server/__init__.py",
+      "size": 0,
+      "extension": ".py",
+      "line_count": 0
+    },
+    {
+      "path": "jira_mcp_server/audit.py",
+      "size": 291,
+      "extension": ".py",
+      "line_count": 12
+    },
+    {
+      "path": "jira_mcp_server/auth.py",
+      "size": 328,
+      "extension": ".py",
+      "line_count": 14
+    },
+    {
+      "path": "jira_mcp_server/config.py",
+      "size": 873,
+      "extension": ".py",
+      "line_count": 37
+    },
+    {
+      "path": "jira_mcp_server/jira_client.py",
+      "size": 1510,
+      "extension": ".py",
+      "line_count": 61
+    },
+    {
+      "path": "jira_mcp_server/server.py",
+      "size": 2426,
+      "extension": ".py",
+      "line_count": 78
+    },
+    {
+      "path": "jira_mcp_server/test_jira.py",
+      "size": 261,
+      "extension": ".py",
+      "line_count": 8
+    },
+    {
+      "path": "jira_mcp_server/validators.py",
+      "size": 633,
+      "extension": ".py",
+      "line_count": 23
+    },
+    {
+      "path": "jql_builder.py",
+      "size": 3728,
+      "extension": ".py",
+      "line_count": 128
+    },
+    {
+      "path": "llm_factory.py",
+      "size": 346,
+      "extension": ".py",
+      "line_count": 13
+    },
+    {
+      "path": "logger_utils.py",
+      "size": 4702,
+      "extension": ".py",
+      "line_count": 185
+    },
+    {
+      "path": "logs/agent.log",
+      "size": 1136782,
+      "extension": ".log",
+      "line_count": 22660
+    },
+    {
+      "path": "loops/__init__.py",
+      "size": 0,
+      "extension": ".py",
+      "line_count": 0
+    },
+    {
+      "path": "loops/react_loop.py",
+      "size": 5923,
+      "extension": ".py",
+      "line_count": 167
+    },
+    {
+      "path": "main.py",
+      "size": 3342,
+      "extension": ".py",
+      "line_count": 108
+    },
+    {
+      "path": "mcp_client.py",
+      "size": 1285,
+      "extension": ".py",
+      "line_count": 51
+    },
+    {
+      "path": "mcp_jira_tools.py",
+      "size": 2514,
+      "extension": ".py",
+      "line_count": 92
+    },
+    {
+      "path": "memory.py",
+      "size": 147,
+      "extension": ".py",
+      "line_count": 8
+    },
+    {
+      "path": "output/dnipro_weather_report.md",
+      "size": 462,
+      "extension": ".md",
+      "line_count": 14
+    },
+    {
+      "path": "output/kurs_hryvnia_to_dollar.txt",
+      "size": 228,
+      "extension": ".txt",
+      "line_count": 3
+    },
+    {
+      "path": "output/langgraph_vs_langchain.md",
+      "size": 3663,
+      "extension": ".md",
+      "line_count": 30
+    },
+    {
+      "path": "output/rag_comparison.md",
+      "size": 3664,
+      "extension": ".md",
+      "line_count": 32
+    },
+    {
+      "path": "output/report.md",
+      "size": 2137,
+      "extension": ".md",
+      "line_count": 14
+    },
+    {
+      "path": "output/курс_долара_до_гривні.md",
+      "size": 678,
+      "extension": ".md",
+      "line_count": 22
+    },
+    {
+      "path": "prompts/__init__.py",
+      "size": 0,
+      "extension": ".py",
+      "line_count": 0
+    },
+    {
+      "path": "prompts/change_prompt.py",
+      "size": 3962,
+      "extension": ".py",
+      "line_count": 90
+    },
+    {
+      "path": "prompts/code_prompt.py",
+      "size": 1646,
+      "extension": ".py",
+      "line_count": 59
+    },
+    {
+      "path": "prompts/draft_prompt.py",
+      "size": 4018,
+      "extension": ".py",
+      "line_count": 82
+    },
+    {
+      "path": "prompts/jira_prompt.py",
+      "size": 895,
+      "extension": ".py",
+      "line_count": 18
+    },
+    {
+      "path": "prompts/repair_prompt.py",
+      "size": 4064,
+      "extension": ".py",
+      "line_count": 88
+    },
+    {
+      "path": "prompts/research_prompt.py",
+      "size": 1890,
+      "extension": ".py",
+      "line_count": 30
+    },
+    {
+      "path": "prompts/review_prompt.py",
+      "size": 1032,
+      "extension": ".py",
+      "line_count": 41
+    },
+    {
+      "path": "prompts/root_prompt.py",
+      "size": 1078,
+      "extension": ".py",
+      "line_count": 23
+    },
+    {
+      "path": "prompts/spec_prompt.py",
+      "size": 1518,
+      "extension": ".py",
+      "line_count": 48
+    },
+    {
+      "path": "prompts/spec_review_prompt.py",
+      "size": 1209,
+      "extension": ".py",
+      "line_count": 45
+    },
+    {
+      "path": "services/brief_exporter.py",
+      "size": 1876,
+      "extension": ".py",
+      "line_count": 71
+    },
+    {
+      "path": "services/jira_field_inspector.py",
+      "size": 1864,
+      "extension": ".py",
+      "line_count": 66
+    },
+    {
+      "path": "services/jira_task_loader.py",
+      "size": 11548,
+      "extension": ".py",
+      "line_count": 394
+    },
+    {
+      "path": "services/spec_exporter.py",
+      "size": 1730,
+      "extension": ".py",
+      "line_count": 67
+    },
+    {
+      "path": "services/task_brief_builder.py",
+      "size": 5601,
+      "extension": ".py",
+      "line_count": 178
+    },
+    {
+      "path": "services/task_registry.py",
+      "size": 2198,
+      "extension": ".py",
+      "line_count": 80
+    },
+    {
+      "path": "services/task_source_detector.py",
+      "size": 1729,
+      "extension": ".py",
+      "line_count": 68
+    },
+    {
+      "path": "simple_chat_agent.py",
+      "size": 771,
+      "extension": ".py",
+      "line_count": 26
+    },
+    {
+      "path": "system_prompt.py",
+      "size": 1888,
+      "extension": ".py",
+      "line_count": 30
+    },
+    {
+      "path": "telegram_bot.py",
+      "size": 8508,
+      "extension": ".py",
+      "line_count": 266
+    },
+    {
+      "path": "test_jira_tool.py",
+      "size": 218,
+      "extension": ".py",
+      "line_count": 12
+    },
+    {
+      "path": "tools.py",
+      "size": 8883,
+      "extension": ".py",
+      "line_count": 284
+    },
+    {
+      "path": "tools/__init__.py",
+      "size": 0,
+      "extension": ".py",
+      "line_count": 0
+    },
+    {
+      "path": "tools/jira_tools.py",
+      "size": 2564,
+      "extension": ".py",
+      "line_count": 82
+    },
+    {
+      "path": "tools/registry.py",
+      "size": 10406,
+      "extension": ".py",
+      "line_count": 285
+    },
+    {
+      "path": "tools/repo_tools.py",
+      "size": 19247,
+      "extension": ".py",
+      "line_count": 693
+    },
+    {
+      "path": "tools/report_tools.py",
+      "size": 681,
+      "extension": ".py",
+      "line_count": 21
+    },
+    {
+      "path": "tools/web_tools.py",
+      "size": 1465,
+      "extension": ".py",
+      "line_count": 51
+    }
+  ]
+}

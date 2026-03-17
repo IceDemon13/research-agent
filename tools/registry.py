@@ -3,7 +3,18 @@ from tools.jira_tools import (
     jira_search_from_text,
     jira_search_issues,
 )
-from tools.repo_tools import list_repo_files, read_repo_file
+from tools.repo_tools import (
+    build_context,
+    build_repo_manifest,
+    find_symbol_occurrences,
+    list_repo_files,
+    parse_repo_query,
+    read_file_range,
+    read_repo_file,
+    resolve_repo_targets,
+    select_candidate_files,
+    search_in_repo,
+)
 from tools.report_tools import write_report
 from tools.web_tools import read_url, web_search
 
@@ -14,8 +25,16 @@ TOOLS_MAP = {
     "jira_search_issues": jira_search_issues,
     "jira_get_issue": jira_get_issue,
     "jira_search_from_text": jira_search_from_text,
+    "build_context": build_context,
+    "build_repo_manifest": build_repo_manifest,
+    "find_symbol_occurrences": find_symbol_occurrences,
     "list_repo_files": list_repo_files,
+    "parse_repo_query": parse_repo_query,
+    "read_file_range": read_file_range,
     "read_repo_file": read_repo_file,
+    "resolve_repo_targets": resolve_repo_targets,
+    "select_candidate_files": select_candidate_files,
+    "search_in_repo": search_in_repo,
 }
 
 TOOLS = [
@@ -114,6 +133,95 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "parse_repo_query",
+            "description": "Parse a raw repository task into structured intent, symbol hints, path hints, keywords, and a cleaned repo query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_input": {"type": "string", "description": "Raw user request to parse into repository query signals."},
+                },
+                "required": ["user_input"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "resolve_repo_targets",
+            "description": "Resolve parsed repository path hints against the repository manifest and return the most likely target files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "parsed_query": {
+                        "type": "object",
+                        "properties": {
+                            "intent": {"type": "string"},
+                            "symbol_hints": {"type": "array", "items": {"type": "string"}},
+                            "path_hints": {"type": "array", "items": {"type": "string"}},
+                            "keywords": {"type": "array", "items": {"type": "string"}},
+                            "clean_query": {"type": "string"},
+                        },
+                        "additionalProperties": False,
+                    },
+                    "manifest": {"type": "object", "description": "Loaded repository manifest payload."},
+                },
+                "required": ["parsed_query", "manifest"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "build_context",
+            "description": "Build a token-bounded code context from the most relevant repository snippets for a task, using either a raw query string or a parsed repo query object.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "description": "Raw task text or parsed repo query signals to build context for.",
+                        "anyOf": [
+                            {"type": "string"},
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "intent": {"type": "string"},
+                                    "symbol_hints": {"type": "array", "items": {"type": "string"}},
+                                    "path_hints": {"type": "array", "items": {"type": "string"}},
+                                    "keywords": {"type": "array", "items": {"type": "string"}},
+                                    "clean_query": {"type": "string"},
+                                },
+                                "additionalProperties": False,
+                            },
+                        ],
+                    },
+                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "max_tokens": {"type": "integer", "description": "Approximate token budget for returned snippets."},
+                },
+                "required": ["query", "root_path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "build_repo_manifest",
+            "description": "Scan the repository, build a file manifest, and save it to output/repo_manifest.json for fast repo overview.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                },
+                "required": ["root_path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_repo_files",
             "description": "List repository files to understand the current project structure before building a code plan.",
             "parameters": {
@@ -122,6 +230,23 @@ TOOLS = [
                     "root": {"type": "string", "description": "Repository root folder. Default is current directory."},
                     "max_files": {"type": "integer", "description": "Maximum number of files to return."},
                 },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file_range",
+            "description": "Read only a specific line range from a repository file without loading the whole file into memory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path to file in repository."},
+                    "start_line": {"type": "integer", "description": "1-based starting line number."},
+                    "end_line": {"type": "integer", "description": "1-based ending line number."},
+                },
+                "required": ["path", "start_line", "end_line"],
                 "additionalProperties": False,
             },
         },
@@ -138,6 +263,57 @@ TOOLS = [
                     "max_chars": {"type": "integer", "description": "Maximum number of characters to return."},
                 },
                 "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_symbol_occurrences",
+            "description": "Find repository occurrences of a symbol, preferring function or class definitions before generic usages.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol_name": {"type": "string", "description": "Function, class, or symbol name to locate."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "max_results": {"type": "integer", "description": "Maximum number of matches to return."},
+                },
+                "required": ["symbol_name", "root_path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_in_repo",
+            "description": "Search case-insensitively across repository text files and return matching file paths, line numbers, and snippets.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Text to search for."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "max_results": {"type": "integer", "description": "Maximum number of matches to return."},
+                },
+                "required": ["query", "root_path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "select_candidate_files",
+            "description": "Select the most relevant repository files for a task using repo search hits and manifest metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Task or search query to rank files against."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "max_files": {"type": "integer", "description": "Maximum number of ranked files to return."},
+                },
+                "required": ["query", "root_path"],
                 "additionalProperties": False,
             },
         },
@@ -160,8 +336,16 @@ AGENT_TOOL_NAMES = {
     },
     "spec_agent": set(),
     "code_agent": {
+        "build_context",
+        "build_repo_manifest",
+        "find_symbol_occurrences",
         "list_repo_files",
+        "parse_repo_query",
+        "read_file_range",
         "read_repo_file",
+        "resolve_repo_targets",
+        "select_candidate_files",
+        "search_in_repo",
     },
 }
 

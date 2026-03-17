@@ -9,4 +9,6 @@ class AgentResult:
     agent_name: str
     output_text: str
     success: bool = True
+    task_intent: str = "create"
+    repo_context: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)

@@ -9,9 +9,10 @@ from contracts.change_set import ChangeSet
 from contracts.draft_set import DraftSet
 from contracts.review_result import ReviewResult
 from contracts.spec_contract import SpecContract
+from logger_utils import log_line
 from loops.react_loop import run_react_loop
 from prompts.review_prompt import REVIEW_PROMPT
-from tools.repo_tools import read_repo_file
+from tools.repo_tools import ensure_repo_context, format_repo_context, read_repo_file
 
 
 MAX_FILE_CHARS_FOR_REVIEW = 8000
@@ -458,6 +459,7 @@ def _build_file_change_preview(path: str, draft_content: str) -> str:
 
 def _build_review_prompt_input(
     original_request: str,
+    task_intent: str,
     spec: SpecContract,
     change_set: ChangeSet,
     draft_set: DraftSet,
@@ -500,6 +502,9 @@ Change preview:
 
 Original request:
 {original_request}
+
+Task intent:
+{task_intent}
 
 # Spec
 Title: {spec.title or "Spec"}
@@ -712,12 +717,75 @@ def _build_precheck_pass_result(draft_set: DraftSet) -> ReviewResult:
     )
 
 
+def _build_existing_code_review_prompt_input(
+    original_request: str,
+    repo_context: dict,
+    analysis_text: str,
+) -> str:
+    files_used = repo_context.get("files_used", []) or []
+    files_block = "\n".join(f"- {path}" for path in files_used) or "- none"
+
+    return f"""Review the existing repository implementation only.
+
+Original request:
+{original_request}
+
+Existing implementation analysis:
+{analysis_text or "No implementation analysis provided."}
+
+Relevant files:
+{files_block}
+"""
+
+
 def run_review_agent(
     original_request: str,
     spec: SpecContract,
     change_set: ChangeSet,
     draft_set: DraftSet,
+    task_intent: str = "create",
+    repo_context: dict | None = None,
 ) -> AgentResult:
+    resolved_repo_context = ensure_repo_context(original_request, ".", repo_context)
+    if task_intent == "review":
+        memory = [
+            {
+                "role": "system",
+                "content": REVIEW_PROMPT,
+            }
+        ]
+
+        composed_input = _build_existing_code_review_prompt_input(
+            original_request=original_request,
+            repo_context=resolved_repo_context,
+            analysis_text=spec.context,
+        )
+        composed_input = f"{format_repo_context(resolved_repo_context)}\n\n{composed_input}"
+
+        answer, _messages = run_react_loop(
+            user_input=composed_input,
+            memory=memory,
+            agent_name="review_agent",
+        )
+
+        normalized_answer = _normalize_review_answer(answer)
+        review_result = _extract_review_result(normalized_answer)
+
+        if not normalized_answer.startswith("# Review Result") or not review_result.summary:
+            review_result = _build_fallback_review_result(answer)
+
+        return AgentResult(
+            agent_name="review",
+            output_text=_build_review_text_from_result(review_result),
+            success=review_result.status == "approved",
+            task_intent=task_intent,
+            repo_context=resolved_repo_context,
+            metadata={
+                "artifact_type": "review_result",
+                "review_result": review_result,
+            },
+        )
+
     structural_issues = _detect_structural_draft_issues(draft_set)
     syntax_issues = _detect_python_syntax_issues(draft_set)
     handler_issues = _detect_registered_handler_issues(draft_set)
@@ -747,6 +815,9 @@ def run_review_agent(
     ]
 
     if precheck_issues:
+        log_line(
+            f"REVIEW AGENT: deterministic issues blocked draft review {precheck_issues}"
+        )
         review_result = ReviewResult(
             status="needs_fix",
             summary="Draft set has deterministic technical issues, so it was rejected before semantic LLM review.",
@@ -766,6 +837,8 @@ def run_review_agent(
             agent_name="review",
             output_text=_build_review_text_from_result(review_result),
             success=False,
+            task_intent=task_intent,
+            repo_context=resolved_repo_context,
             metadata={
                 "artifact_type": "review_result",
                 "review_result": review_result,
@@ -783,10 +856,12 @@ def run_review_agent(
 
     composed_input = _build_review_prompt_input(
         original_request=original_request,
+        task_intent=task_intent,
         spec=spec,
         change_set=change_set,
         draft_set=draft_set,
     )
+    composed_input = f"{format_repo_context(resolved_repo_context)}\n\n{composed_input}"
 
     answer, _messages = run_react_loop(
         user_input=composed_input,
@@ -834,6 +909,8 @@ def run_review_agent(
         agent_name="review",
         output_text=_build_review_text_from_result(review_result),
         success=review_result.status == "approved",
+        task_intent=task_intent,
+        repo_context=resolved_repo_context,
         metadata={
             "artifact_type": "review_result",
             "review_result": review_result,

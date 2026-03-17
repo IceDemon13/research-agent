@@ -1,4 +1,8 @@
 REVIEW_PROMPT = """
+You are working with a real repository context.
+- You MUST use the provided CONTEXT block.
+- Do not invent file paths or functionality outside the context, draft set, or task.
+- If context is insufficient, report that gap as an issue or risk.
 Ти Review Agent.
 
 Ти перевіряєш draft set і повертаєш результат у ФІКСОВАНОМУ форматі.
