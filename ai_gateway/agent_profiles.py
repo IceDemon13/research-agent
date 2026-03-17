@@ -66,6 +66,14 @@ CODE_AGENT_PROFILE = AgentProfile(
     allow_secrets_in_context=False,
 )
 
+CHANGE_AGENT_PROFILE = AgentProfile(
+    name="change_agent",
+    allowed_tools=set(),
+    allow_internet_content=False,
+    allow_code_generation=False,
+    allow_secrets_in_context=False,
+)
+
 DRAFT_AGENT_PROFILE = AgentProfile(
     name="draft_agent",
     allowed_tools=set(),
@@ -73,6 +81,15 @@ DRAFT_AGENT_PROFILE = AgentProfile(
     allow_code_generation=True,
     allow_secrets_in_context=False,
 )
+
+REVIEW_AGENT_PROFILE = AgentProfile(
+    name="review_agent",
+    allowed_tools=set(),
+    allow_internet_content=False,
+    allow_code_generation=False,
+    allow_secrets_in_context=False,
+)
+
 
 def get_agent_profile(agent_name: str) -> AgentProfile:
     if agent_name == "research_agent":
@@ -86,8 +103,14 @@ def get_agent_profile(agent_name: str) -> AgentProfile:
 
     if agent_name == "code_agent":
         return CODE_AGENT_PROFILE
-    
+
+    if agent_name == "change_agent":
+        return CHANGE_AGENT_PROFILE
+
     if agent_name == "draft_agent":
         return DRAFT_AGENT_PROFILE
+
+    if agent_name == "review_agent":
+        return REVIEW_AGENT_PROFILE
 
     return DEFAULT_AGENT_PROFILE

@@ -39,6 +39,7 @@ PRIORITY_FILES = {
     "tools/report_tools.py",
     "tools/repo_tools.py",
     "tools/registry.py",
+    "tools.py",
     "ai_gateway/agent_profiles.py",
     "ai_gateway/gateway.py",
     "ai_gateway/tool_executor.py",
@@ -57,13 +58,17 @@ BOOSTED_KEYWORDS = [
     "files",
     "send",
     "document",
-    "config",
-    "settings",
-    "main",
     "telegram_bot",
-    "telegram_utils",
+    "tools",
     "report_tools",
 ]
+
+TELEGRAM_INVARIANT_FILES = (
+    "telegram_bot.py",
+    "config.py",
+    "tools.py",
+    "tools/report_tools.py",
+)
 
 
 def _build_code_prompt_input_from_spec(data: SpecToCodeInput) -> str:
@@ -117,7 +122,13 @@ def _build_repo_context_from_spec(original_request: str, spec: SpecContract) -> 
     repo_files = _filter_repo_files(raw_repo_files)
 
     keywords = _extract_keywords(original_request, spec)
-    candidate_files = _pick_candidate_files(repo_files, keywords, limit=8)
+    candidate_files = _pick_candidate_files(
+        repo_files=repo_files,
+        keywords=keywords,
+        original_request=original_request,
+        spec=spec,
+        limit=8,
+    )
 
     preview_lines = repo_files[:40]
     preview = "\n".join(preview_lines) if preview_lines else "repo files not found"
@@ -139,7 +150,7 @@ def _build_repo_context_from_spec(original_request: str, spec: SpecContract) -> 
             blocks.append("")
             continue
 
-        content = read_repo_file(path, max_chars=3500)
+        content = read_repo_file(path, max_chars=5000)
         blocks.append(content)
         blocks.append("")
 
@@ -216,6 +227,12 @@ def _extract_keywords(original_request: str, spec: SpecContract) -> list[str]:
         "користувачі",
         "звіт",
         "звіту",
+        "частота",
+        "тип",
+        "налаштування",
+        "preferences",
+        "frequency",
+        "schedule",
     }
 
     result: list[str] = []
@@ -233,8 +250,56 @@ def _extract_keywords(original_request: str, spec: SpecContract) -> list[str]:
     return final_words[:30]
 
 
-def _pick_candidate_files(repo_files: list[str], keywords: list[str], limit: int = 8) -> list[str]:
+def _request_mentions_config_explicitly(original_request: str, spec: SpecContract) -> bool:
+    text = " ".join(
+        [
+            original_request,
+            spec.goal,
+            spec.context,
+            *spec.scope,
+            *spec.requirements,
+            *spec.acceptance_criteria,
+        ]
+    ).lower()
+
+    config_markers = (
+        "config",
+        "settings",
+        "налаштування",
+        "configuration",
+        "env",
+        "token",
+    )
+
+    schedule_markers = (
+        "частота",
+        "frequency",
+        "schedule",
+        "scheduler",
+        "періодич",
+        "розклад",
+        "тип звіту",
+        "type of report",
+        "preferences",
+    )
+
+    has_config = any(marker in text for marker in config_markers)
+    has_schedule = any(marker in text for marker in schedule_markers)
+
+    return has_config or has_schedule
+
+
+def _pick_candidate_files(
+    repo_files: list[str],
+    keywords: list[str],
+    original_request: str,
+    spec: SpecContract,
+    limit: int = 8,
+) -> list[str]:
     scored: list[tuple[int, str]] = []
+    lowered_request = (original_request or "").lower()
+    is_telegram_task = "telegram" in lowered_request or "телеграм" in lowered_request
+    can_touch_config = _request_mentions_config_explicitly(original_request, spec)
 
     for path in repo_files:
         lowered = path.lower()
@@ -269,19 +334,35 @@ def _pick_candidate_files(repo_files: list[str], keywords: list[str], limit: int
         if lowered.startswith("tests/") or "/tests/" in lowered:
             score -= 3
 
+        if is_telegram_task and lowered in TELEGRAM_INVARIANT_FILES:
+            score += 10
+
+        if lowered == "config.py" and not can_touch_config:
+            score -= 8
+
         if score > 0:
             scored.append((score, path))
 
     scored.sort(key=lambda x: (-x[0], x[1]))
 
     result: list[str] = []
+
+    if is_telegram_task:
+        for invariant in TELEGRAM_INVARIANT_FILES:
+            if invariant in repo_files and invariant not in result:
+                if invariant == "config.py" and not can_touch_config:
+                    continue
+                result.append(invariant)
+
     for _score, path in scored:
+        if path == "config.py" and not can_touch_config:
+            continue
         if path not in result:
             result.append(path)
         if len(result) >= limit:
             break
 
-    return result
+    return result[:limit]
 
 
 def _looks_like_missing_file(path: str, repo_files: list[str]) -> bool:

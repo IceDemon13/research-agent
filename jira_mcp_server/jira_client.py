@@ -31,8 +31,26 @@ def search_issues(jql: str, limit: int | None = None) -> dict:
     return response.json()
 
 
-def get_issue(issue_key: str) -> dict:
+def get_issue(issue_key: str, fields: list[str] | None = None) -> dict:
     url = f"{settings.jira_base_url}/rest/api/3/issue/{issue_key}"
+
+    params = {}
+    if fields:
+        params["fields"] = ",".join(fields)
+
+    response = requests.get(
+        url,
+        params=params,
+        headers=get_jira_headers(),
+        auth=get_jira_auth(),
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def list_fields() -> list[dict]:
+    url = f"{settings.jira_base_url}/rest/api/3/field"
     response = requests.get(
         url,
         headers=get_jira_headers(),

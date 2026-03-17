@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # pipeline console output:
     # full | summary | off
     pipeline_console_output_mode: str = "summary"
-    pipeline_console_preview_chars: int = 300
+    pipeline_console_preview_chars: int = 3000
 
     model_config = SettingsConfigDict(
         env_file=".env",

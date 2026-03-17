@@ -11,25 +11,42 @@ from prompts.change_prompt import CHANGE_PROMPT
 from tools.repo_tools import read_repo_file
 
 
+MAX_REPO_FILE_CHARS = 120000
+
+
 def _build_change_prompt_input(
     original_request: str,
     patch_plan: PatchPlan,
 ) -> str:
-    file_lines = []
-    repo_blocks = []
+    file_lines: list[str] = []
+    repo_blocks: list[str] = []
 
-    for file_plan in patch_plan.files[:4]:
-        file_lines.append(f"- {file_plan.path}: {file_plan.summary}")
+    for file_plan in patch_plan.files[:6]:
+        path = (file_plan.path or "").strip()
+        if not path:
+            continue
 
-        file_text = read_repo_file(file_plan.path, max_chars=5000)
-        repo_blocks.append(file_text)
-        repo_blocks.append("")
+        file_lines.append(f"- {path}: {file_plan.summary}")
+
+        file_text = read_repo_file(path, max_chars=MAX_REPO_FILE_CHARS)
+        if not file_text.strip():
+            file_text = "Current repo file not found or empty."
+
+        repo_blocks.append(
+            f"""### Repo File: {path}
+Patch plan summary:
+{file_plan.summary}
+
+Current content:
+{file_text}
+"""
+        )
 
     risks_text = "\n".join(f"- {item}" for item in patch_plan.risks) or "- не вказано"
     checks_text = "\n".join(f"- {item}" for item in patch_plan.checks) or "- не вказано"
     files_text = "\n".join(file_lines) or "- файли не визначені"
 
-    repo_context = "\n".join(repo_blocks).strip()
+    repo_context = "\n\n".join(repo_blocks).strip()
     if not repo_context:
         repo_context = "repo context not available"
 
@@ -62,7 +79,7 @@ def _extract_change_set(answer: str) -> ChangeSet:
     files = _extract_files(answer)
 
     return ChangeSet(
-        goal=goal,
+        goal=goal or "Change set",
         files=files,
         risks=risks,
         checks=checks,
@@ -119,7 +136,12 @@ def _extract_block_bullets(block: str, header: str) -> list[str]:
             capture = True
             continue
 
-        if capture and stripped.endswith(":") and stripped in {"Why:", "Targets:", "Edits:", "Checks:"} and stripped != header:
+        if (
+            capture
+            and stripped.endswith(":")
+            and stripped in {"Why:", "Targets:", "Edits:", "Checks:"}
+            and stripped != header
+        ):
             break
 
         if capture and stripped.startswith("### File:"):
@@ -191,7 +213,7 @@ def run_change_agent(
     return AgentResult(
         agent_name="change",
         output_text=answer,
-        success=True,
+        success=bool(change_set.files),
         metadata={
             "artifact_type": "change_set",
             "change_set": change_set,
