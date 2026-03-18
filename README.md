@@ -216,6 +216,106 @@ It is especially useful for:
 - building repository-aware context before analysis
 - returning a safe fallback suggestion when a rewrite would be risky
 
+### Repo Context Pipeline
+`repo_context` is the internal repository snapshot passed between pipeline stages and downstream agents. It exists to keep review, spec, change, and draft flows grounded in the same deterministic view of the repo instead of letting each stage guess its own file set.
+
+The structure includes:
+- `parsed_query`: normalized task intent, path hints, symbol hints, and keywords
+- `resolved_target_files`: the strongest current file targets
+- `resolved_symbols`: symbol-to-file resolution results
+- `file_selection`: why each surviving file was kept
+- `files_used`: the final working file set
+- `chunks`: retrieved code snippets with path, reason, and snippet text
+- `total_chunks`: the final chunk count
+- `debug`: optional internal metadata about applied rules, removed paths, forced paths, and notes
+
+Sanitization exists because raw repo search is noisy. Without filtering, implementation-focused requests can drift into docs, entrypoints, test files, output artifacts, or agent internals and produce weaker specs or reviews. The pipeline therefore removes forbidden or low-value paths first, applies mode-specific overrides next, then runs a consistency finalizer so the parallel structures do not drift apart.
+
+Deterministic rule ordering matters. The shaping pipeline always follows the same sequence:
+- normalize the incoming context
+- remove forbidden or noise paths for the current request
+- apply command-mode overrides such as repo-helper create anchoring or implementation-focused spec shaping
+- finalize structural consistency across files, chunks, and file-selection metadata
+- finalize debug metadata from the original-vs-final context diff
+
+Mode differences:
+- `spec`: implementation-focused, but broad enough to retain nearby repo context for planning
+- `changes`: strongest implementation anchoring, especially for create requests that should land in repo tooling
+- `drafts`: prefers symbol-only or patch-only fallback behavior for tightly scoped edits
+- `review`: the strictest implementation focus, with minimal tolerance for repo drift
+
+Consistency finalization exists because `repo_context` has multiple parallel structures. After shaping, the finalizer dedupes and normalizes paths, drops stale `file_selection` entries, keeps `resolved_target_files` aligned with the surviving context, and recomputes `total_chunks`.
+
+Debug metadata exists so internal shaping decisions remain explainable. When rules remove or force files, the pipeline records which rules fired and which paths were removed or forced without changing the public repo-context contract.
+
+Examples:
+- `create helper to export repo manifest summary as markdown`
+  The pipeline strips docs and entrypoint drift, then forces repo-domain implementation targets such as `tools/repo_tools.py` or `tools/registry.py`.
+- `review existing search_in_repo implementation in repo_tools`
+  The pipeline keeps the implementation target, removes `output/*`, `agents/*`, and other noise, and passes a review-focused repo context downstream.
+- `add completion log to search_in_repo`
+  The pipeline prefers a symbol-only context, removes README drift, and keeps the draft request locked to the resolved implementation file.
+
+### Running Tests
+Use the repo-local PowerShell wrappers so the intended test scope is explicit and easy to discover.
+
+Repo-context suite:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_repo_context_tests.ps1
+```
+
+Full unittest suite:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_all_tests.ps1
+```
+
+Single targeted unittest:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_test.ps1 -TestPath "tests.test_repo_commands.RepoContextShapingTests.test_impl_focused_trace_contains_key_structured_steps"
+```
+
+Quality gate:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\quality_gate.ps1
+```
+
+The equivalent raw unittest commands are:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest tests.test_repo_commands
+.\.venv\Scripts\python.exe -m unittest
+```
+
+If the raw commands fail before Python starts, the local virtualenv launcher is likely broken. In this repository, `.venv\pyvenv.cfg` or `venv\pyvenv.cfg` may point at an unusable Windows Store base interpreter. The scripts above keep the expected workflow explicit even when that environment issue needs to be repaired.
+
+If direct `./scripts/*.ps1` execution is blocked, that is a PowerShell execution-policy issue rather than a repo test failure, which is why the documented commands above use `powershell -ExecutionPolicy Bypass -File ...`.
+
+`quality_gate.ps1` is the recommended pre-commit or pre-push entrypoint. It runs the repo-context suite first, then the full unittest suite, and stops on the first failure.
+
+For the recommended agent-oriented test loop, see `docs/TEST_WORKFLOW.md`.
+### CI Coverage
+GitHub Actions runs the safe local Python unittest suite on every push and pull request via [`.github/workflows/python-tests.yml`](/c:/работа/my%20repositories/research-agent/.github/workflows/python-tests.yml).
+
+CI runs:
+
+```bash
+python -m unittest tests.test_repo_commands
+python -m unittest
+```
+
+The workflow is intentionally minimal:
+- set up Python 3.12
+- install `requirements.txt`
+- run the repo-context suite
+- run the full unittest suite
+
+If future tests require local secrets, live services, or machine-specific setup, they should stay out of this workflow or be split into a separate opt-in job. The current CI job is meant to cover only the safe local suite that should run deterministically in automation.
+
+Recommended recovery:
+- recreate `.venv` from a working local Python installation
+- verify `.\.venv\Scripts\python.exe --version`
+- rerun the commands above
+
 ### What The System Can Do
 - Repository-aware review of existing code
 - Targeted drafts for existing symbols and files
@@ -394,3 +494,4 @@ This is intentional: it avoids breaking working logic in complex functions.
 - very large or legacy functions may fall back to safe insertion guidance
 - not every agent output should be treated as copy-paste-ready without review
 - broader multi-file refactors are better handled through `/changes` or `/pipeline` than a single `/drafts` request
+

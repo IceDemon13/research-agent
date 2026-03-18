@@ -11,12 +11,25 @@ from agents.spec_agent import run_spec_agent
 from contracts.agent_result import AgentResult
 from contracts.change_set import ChangeSet
 from contracts.draft_set import DraftSet
+from contracts.repo_context_contract import normalize_repo_context
 from contracts.review_result import ReviewResult
 from contracts.route_result import RouteResult
 from contracts.spec_contract import SpecContract
 from contracts.spec_to_code_input import SpecToCodeInput
 from config import settings
 from logger_utils import log_line
+from services.repo_context_rules import (
+    _collect_repo_context_paths,
+    apply_repo_helper_create_rules,
+    append_pipeline_trace,
+    ensure_repo_impl_target,
+    ensure_repo_impl_target_in_final_context,
+    has_repo_helper_impl_target,
+    is_repo_helper_create_request,
+    make_trace_entry,
+    remove_readme_from_symbol_only_context,
+    run_repo_context_rule_pipeline,
+)
 from tools.repo_tools import (
     build_context,
     parse_repo_query,
@@ -27,26 +40,6 @@ from tools.repo_tools import (
 
 ISSUE_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b", re.IGNORECASE)
 MAX_REPAIR_ATTEMPTS = 3
-REPO_HELPER_FALLBACK_TARGETS = (
-    "tools/repo_tools.py",
-    "tools/registry.py",
-)
-REPO_FOCUSED_FORBIDDEN_PATHS = {
-    "README.md",
-    "main.py",
-    "telegram_bot.py",
-}
-FINAL_SPEC_STAGE_EXCLUDED_PATHS = {
-    "README.md",
-    "main.py",
-    "telegram_bot.py",
-    "agents/change_agent.py",
-    "agents/draft_agent.py",
-    "agents/review_agent.py",
-}
-FINAL_SPEC_STAGE_EXCLUDED_PREFIXES = (
-    "tests/",
-)
 
 
 def _with_command_mode(user_input: str, command_mode: str = "") -> str:
@@ -67,14 +60,116 @@ def _query_mentions_existing_target(user_input: str) -> bool:
     return "existing" in (user_input or "").lower()
 
 
+def _build_stage_summary(
+    stage_name: str,
+    task_intent: str,
+    repo_context: dict | None,
+) -> dict:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    debug = context.get("debug") if isinstance(context.get("debug"), dict) else {}
+    rules_applied = list(debug.get("rules_applied", []) or [])
+    removed_paths = list(debug.get("removed_paths", []) or [])
+    forced_paths = list(debug.get("forced_paths", []) or [])
+    override_markers = (
+        "overwrite_repo_helper_create_context",
+        "apply_repo_impl_focus_rules.impl_target",
+        "apply_repo_impl_focus_rules.repo_helper_fallback",
+        "ensure_repo_impl_target",
+        "ensure_repo_impl_target_in_final_context",
+    )
+    return {
+        "stage_name": str(stage_name).strip(),
+        "task_intent": str(task_intent or "").strip(),
+        "repo_context_files_used_count": len(context.get("files_used", []) or []),
+        "repo_context_chunk_count": len(context.get("chunks", []) or []),
+        "key_rule_markers_applied": rules_applied,
+        "context_was_overridden": bool(forced_paths) or any(marker in rules_applied for marker in override_markers),
+        "context_was_sanitized": bool(removed_paths),
+    }
+
+
+def _attach_stage_summary(
+    result: AgentResult,
+    *,
+    stage_name: str,
+    repo_context: dict | None = None,
+    task_intent: str | None = None,
+) -> AgentResult:
+    context = repo_context if repo_context is not None else result.repo_context
+    resolved_task_intent = task_intent or result.task_intent
+    updated_metadata = dict(result.metadata) if isinstance(result.metadata, dict) else {}
+    stage_summary = _build_stage_summary(
+        stage_name,
+        resolved_task_intent,
+        context,
+    )
+    existing_stage_summaries = list(updated_metadata.get("pipeline_stage_summaries", []) or [])
+    updated_metadata["stage_summary"] = stage_summary
+    updated_metadata["pipeline_stage_summaries"] = [*existing_stage_summaries, stage_summary]
+    return AgentResult(
+        agent_name=result.agent_name,
+        output_text=result.output_text,
+        success=result.success,
+        task_intent=result.task_intent,
+        repo_context=result.repo_context,
+        metadata=updated_metadata,
+    )
+
+
 def _build_shared_repo_context(user_input: str, command_mode: str = "") -> dict:
     parsed_query = parse_repo_query(_with_command_mode(user_input, command_mode))
-    repo_context = build_context(parsed_query, ".", max_tokens=8000)
+    repo_context = normalize_repo_context(build_context(parsed_query, ".", max_tokens=8000))
+    repo_context = append_pipeline_trace(
+        repo_context,
+        entry=make_trace_entry(
+            "root_agent",
+            "parsed_request",
+            command_mode=command_mode,
+            intent=str(parsed_query.get("intent", "")),
+            symbol_hints=list(parsed_query.get("symbol_hints", []) or []),
+            path_hints=list(parsed_query.get("path_hints", []) or []),
+        ),
+    )
+    repo_context = append_pipeline_trace(
+        repo_context,
+        entry=make_trace_entry(
+            "root_agent",
+            "context_build",
+            command_mode=command_mode,
+            files_used_count=len(repo_context.get("files_used", []) or []),
+            chunk_count=len(repo_context.get("chunks", []) or []),
+        ),
+    )
     _debug_log_repo_context_state("before_sanitation", repo_context)
-    repo_context = sanitize_repo_context(repo_context)
+    repo_context = normalize_repo_context(sanitize_repo_context(repo_context))
+    repo_context = append_pipeline_trace(
+        repo_context,
+        entry=make_trace_entry(
+            "root_agent",
+            "context_sanitize",
+            command_mode=command_mode,
+            files_used_count=len(repo_context.get("files_used", []) or []),
+            chunk_count=len(repo_context.get("chunks", []) or []),
+        ),
+    )
     _debug_log_repo_context_state("after_sanitation", repo_context)
-    repo_context = _ensure_repo_helper_create_context(parsed_query, repo_context)
-    repo_context = _remove_readme_from_symbol_only_context(parsed_query, repo_context)
+    repo_context = normalize_repo_context(repo_context)
+    repo_context = apply_repo_helper_create_rules(
+        parsed_query,
+        repo_context,
+        read_file_range=read_file_range,
+        validate_manifest_file_path=validate_manifest_file_path,
+        sanitize_repo_context_fn=sanitize_repo_context,
+        log_line=log_line,
+    )
+    repo_context = normalize_repo_context(repo_context)
+    repo_context = remove_readme_from_symbol_only_context(
+        parsed_query,
+        repo_context,
+        debug_enabled=_is_debug_mode_enabled(),
+        log_line=log_line,
+    )
+    repo_context = normalize_repo_context(repo_context)
     _debug_log_repo_context_state("after_anchoring", repo_context)
     return repo_context
 
@@ -85,14 +180,36 @@ def _finalize_repo_context_for_spec_stage(
     command_mode: str = "",
 ) -> dict:
     parsed_query = parse_repo_query(_with_command_mode(user_input, command_mode))
-    finalized_context = dict(repo_context) if isinstance(repo_context, dict) else {}
+    finalized_context = normalize_repo_context(repo_context)
     _debug_log_repo_context_state("before_final_spec_context", finalized_context)
-    finalized_context = sanitize_repo_context(finalized_context)
-    finalized_context = _ensure_repo_helper_create_context(parsed_query, finalized_context)
-    finalized_context = _remove_readme_from_symbol_only_context(parsed_query, finalized_context)
-    if _is_repo_helper_create_request(parsed_query) and not _has_repo_helper_impl_target(finalized_context):
-        finalized_context = _force_repo_helper_impl_target_in_place(parsed_query, finalized_context)
-    finalized_context = sanitize_repo_context(finalized_context)
+    finalized_context = normalize_repo_context(sanitize_repo_context(finalized_context))
+    finalized_context = normalize_repo_context(finalized_context)
+    finalized_context = apply_repo_helper_create_rules(
+        parsed_query,
+        finalized_context,
+        read_file_range=read_file_range,
+        validate_manifest_file_path=validate_manifest_file_path,
+        sanitize_repo_context_fn=sanitize_repo_context,
+        log_line=log_line,
+    )
+    finalized_context = normalize_repo_context(finalized_context)
+    finalized_context = remove_readme_from_symbol_only_context(
+        parsed_query,
+        finalized_context,
+        debug_enabled=_is_debug_mode_enabled(),
+        log_line=log_line,
+    )
+    finalized_context = normalize_repo_context(finalized_context)
+    if is_repo_helper_create_request(parsed_query) and not has_repo_helper_impl_target(finalized_context):
+        finalized_context = ensure_repo_impl_target(
+            parsed_query,
+            finalized_context,
+            read_file_range=read_file_range,
+            validate_manifest_file_path=validate_manifest_file_path,
+            log_line=log_line,
+        )
+    finalized_context = normalize_repo_context(finalized_context)
+    finalized_context = normalize_repo_context(sanitize_repo_context(finalized_context))
     _debug_log_repo_context_state("before_run_spec_agent", finalized_context)
     return finalized_context
 
@@ -103,20 +220,30 @@ def _run_spec_agent_with_finalized_repo_context(
     repo_context: dict | None,
     command_mode: str = "",
 ) -> AgentResult:
-    finalized_repo_context = _prepare_final_repo_context_for_downstream(
+    finalized_repo_context = normalize_repo_context(_prepare_final_repo_context_for_downstream(
         user_input,
         repo_context,
         command_mode=command_mode,
         stage_name="spec",
-    )
+    ))
     parsed_query = parse_repo_query(_with_command_mode(user_input, command_mode))
-    if _is_repo_helper_create_request(parsed_query) and not _has_repo_helper_impl_target(finalized_repo_context):
-        finalized_repo_context = _force_repo_helper_impl_target_in_place(parsed_query, finalized_repo_context)
-        finalized_repo_context = _normalize_final_spec_stage_repo_context(
+    if is_repo_helper_create_request(parsed_query) and not has_repo_helper_impl_target(finalized_repo_context):
+        finalized_repo_context = normalize_repo_context(ensure_repo_impl_target(
+            parsed_query,
+            finalized_repo_context,
+            read_file_range=read_file_range,
+            validate_manifest_file_path=validate_manifest_file_path,
+            log_line=log_line,
+        ))
+        finalized_repo_context = normalize_repo_context(apply_mode_aware_repo_context_rules(
             user_input,
             finalized_repo_context,
             command_mode=command_mode,
-        )
+            parse_repo_query=parse_repo_query,
+            with_command_mode=_with_command_mode,
+            read_file_range=read_file_range,
+            validate_manifest_file_path=validate_manifest_file_path,
+        ))
     file_selection = (
         finalized_repo_context.get("file_selection")
         if isinstance(finalized_repo_context.get("file_selection"), dict)
@@ -150,14 +277,33 @@ def _run_spec_agent_with_finalized_repo_context(
         and "manifest" in text
         and "markdown" in text
     ):
-        finalized_repo_context = _ensure_repo_helper_impl_target_in_final_context(
+        finalized_repo_context = normalize_repo_context(ensure_repo_impl_target_in_final_context(
             parsed_query,
             finalized_repo_context,
-        )
-    return run_spec_agent(
+            read_file_range=read_file_range,
+            validate_manifest_file_path=validate_manifest_file_path,
+        ))
+    finalized_repo_context = append_pipeline_trace(
+        finalized_repo_context,
+        entry=make_trace_entry(
+            "root_agent",
+            "downstream_dispatch",
+            agent="spec",
+            command_mode=command_mode,
+            files_used_count=len(finalized_repo_context.get("files_used", []) or []),
+            resolved_target_count=len(finalized_repo_context.get("resolved_target_files", []) or []),
+        ),
+    )
+    spec_result = run_spec_agent(
         user_input,
         task_intent=task_intent,
         repo_context=finalized_repo_context,
+    )
+    return _attach_stage_summary(
+        spec_result,
+        stage_name="spec",
+        repo_context=finalized_repo_context,
+        task_intent=task_intent,
     )
 
 
@@ -167,27 +313,35 @@ def _prepare_final_repo_context_for_downstream(
     command_mode: str = "",
     stage_name: str = "spec",
 ) -> dict:
-    finalized_repo_context = _finalize_repo_context_for_spec_stage(
+    original_input_paths = _collect_repo_context_paths(repo_context)
+    finalized_repo_context = normalize_repo_context(_finalize_repo_context_for_spec_stage(
         user_input,
         repo_context,
         command_mode=command_mode,
+    ))
+    finalized_repo_context = normalize_repo_context(finalized_repo_context)
+    finalized_repo_context = append_pipeline_trace(
+        finalized_repo_context,
+        entry=make_trace_entry(
+            "root_agent",
+            "rule_application",
+            command_mode=command_mode,
+            stage_name=stage_name,
+            original_input_path_count=len(original_input_paths),
+        ),
     )
-    finalized_repo_context = _normalize_final_spec_stage_repo_context(
+    finalized_repo_context = run_repo_context_rule_pipeline(
         user_input,
         finalized_repo_context,
         command_mode=command_mode,
+        stage_name=stage_name,
+        original_input_paths=original_input_paths,
+        parse_repo_query=parse_repo_query,
+        with_command_mode=_with_command_mode,
+        read_file_range=read_file_range,
+        validate_manifest_file_path=validate_manifest_file_path,
     )
-    parsed_query = parse_repo_query(_with_command_mode(user_input, command_mode))
-    if _is_implementation_focused_request(parsed_query) or _is_repo_helper_create_request(parsed_query):
-        finalized_repo_context = _filter_repo_context_paths(
-            finalized_repo_context,
-            REPO_FOCUSED_FORBIDDEN_PATHS,
-        )
-    if _is_repo_helper_create_request(parsed_query):
-        finalized_repo_context = _overwrite_repo_helper_impl_target_context(
-            parsed_query,
-            finalized_repo_context,
-        )
+    finalized_repo_context = normalize_repo_context(finalized_repo_context)
     file_selection = (
         finalized_repo_context.get("file_selection")
         if isinstance(finalized_repo_context.get("file_selection"), dict)
@@ -212,45 +366,6 @@ def _prepare_final_repo_context_for_downstream(
     return finalized_repo_context
 
 
-def _overwrite_repo_helper_impl_target_context(
-    parsed_query: dict,
-    repo_context: dict | None,
-) -> dict:
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    if not _is_repo_helper_create_request(parsed_query):
-        return context
-
-    filtered_context = _filter_repo_context_paths(context, {"README.md", "main.py"})
-    fallback_target = next(
-        (path for path in REPO_HELPER_FALLBACK_TARGETS if validate_manifest_file_path(path, ".")),
-        "",
-    )
-    if not fallback_target:
-        return filtered_context
-
-    snippet = read_file_range(fallback_target, 1, 40)
-    if (
-        snippet.startswith("File not found:")
-        or snippet.startswith("Path is not a file:")
-        or snippet.startswith("Failed to read file:")
-    ):
-        snippet = ""
-
-    filtered_context["resolved_target_files"] = [fallback_target]
-    filtered_context["files_used"] = [fallback_target]
-    filtered_context["file_selection"] = {
-        fallback_target: ["repo helper implementation target"]
-    }
-    filtered_context["chunks"] = [
-        {
-            "path": fallback_target,
-            "reason": "repo helper implementation target",
-            "snippet": snippet,
-        }
-    ]
-    return filtered_context
-
-
 def _is_debug_mode_enabled() -> bool:
     return (settings.log_level_console or "").strip().lower() in {"debug", "trace"}
 
@@ -271,658 +386,6 @@ def _debug_log_repo_context_state(stage_name: str, repo_context: dict | None) ->
         f"chunk_paths={chunk_paths}; "
         f"resolved_target_files={context.get('resolved_target_files', []) or []}"
     )
-
-
-def _explicitly_requests_docs(parsed_query: dict) -> bool:
-    values = [
-        parsed_query.get("clean_query", ""),
-        *parsed_query.get("path_hints", []),
-        *parsed_query.get("keywords", []),
-        *parsed_query.get("symbol_hints", []),
-    ]
-    normalized = [str(value).strip().lower() for value in values if str(value).strip()]
-    return any(
-        marker in value
-        for value in normalized
-        for marker in ("readme", "documentation", "docs", "markdown docs", "documentation update")
-    )
-
-
-def _is_repo_helper_create_request(parsed_query: dict) -> bool:
-    text = " ".join(
-        str(value or "").lower()
-        for value in [
-            parsed_query.get("raw_query", ""),
-            parsed_query.get("clean_query", ""),
-            " ".join(parsed_query.get("keywords", []) or []),
-        ]
-    )
-    has_create = parsed_query.get("intent") == "create" or any(
-        word in text for word in ("create", "add", "generate", "export")
-    )
-    has_repo_domain = any(
-        word in text for word in ("repo", "repository", "manifest")
-    )
-    has_helper_or_export_shape = any(
-        word in text for word in ("helper", "export", "summary", "markdown", "md")
-    )
-    return has_create and has_repo_domain and has_helper_or_export_shape
-
-
-def _has_repo_helper_impl_target(repo_context: dict | None) -> bool:
-    context = repo_context if isinstance(repo_context, dict) else {}
-    files_used = [str(path).strip() for path in context.get("files_used", []) or [] if str(path).strip()]
-    resolved_target_files = [
-        str(path).strip() for path in context.get("resolved_target_files", []) or [] if str(path).strip()
-    ]
-    chunk_paths = [
-        str(chunk.get("path", "")).strip()
-        for chunk in (context.get("chunks") or [])
-        if isinstance(chunk, dict) and str(chunk.get("path", "")).strip()
-    ]
-    file_selection_paths = [
-        str(path).strip()
-        for path in (
-            (context.get("file_selection") or {}).keys()
-            if isinstance(context.get("file_selection"), dict)
-            else []
-        )
-        if str(path).strip()
-    ]
-    known_paths = set(files_used) | set(resolved_target_files) | set(chunk_paths) | set(file_selection_paths)
-    return any(path in known_paths for path in REPO_HELPER_FALLBACK_TARGETS)
-
-
-def _normalize_repo_context_path(path: str) -> str:
-    return str(path).strip().replace("\\", "/")
-
-
-def _filter_repo_context_paths(
-    repo_context: dict | None,
-    disallowed_paths: set[str],
-) -> dict:
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    normalized_disallowed = {_normalize_repo_context_path(path) for path in disallowed_paths if path}
-
-    resolved_target_files = [
-        _normalize_repo_context_path(path)
-        for path in context.get("resolved_target_files", []) or []
-        if _normalize_repo_context_path(path) and _normalize_repo_context_path(path) not in normalized_disallowed
-    ]
-    files_used = [
-        _normalize_repo_context_path(path)
-        for path in context.get("files_used", []) or []
-        if _normalize_repo_context_path(path) and _normalize_repo_context_path(path) not in normalized_disallowed
-    ]
-    chunks = [
-        chunk
-        for chunk in (context.get("chunks") or [])
-        if isinstance(chunk, dict)
-        and _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-        and _normalize_repo_context_path(str(chunk.get("path", "")).strip()) not in normalized_disallowed
-    ]
-    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-    file_selection = {
-        _normalize_repo_context_path(path): reasons
-        for path, reasons in file_selection.items()
-        if _normalize_repo_context_path(path)
-        and _normalize_repo_context_path(path) not in normalized_disallowed
-    }
-    resolved_symbols = context.get("resolved_symbols") if isinstance(context.get("resolved_symbols"), dict) else {}
-    resolved_symbols = {
-        str(symbol_name).strip(): [
-            _normalize_repo_context_path(path)
-            for path in symbol_paths
-            if _normalize_repo_context_path(path) and _normalize_repo_context_path(path) not in normalized_disallowed
-        ]
-        for symbol_name, symbol_paths in resolved_symbols.items()
-        if str(symbol_name).strip()
-    }
-
-    context["resolved_target_files"] = list(dict.fromkeys(resolved_target_files))
-    context["files_used"] = list(dict.fromkeys(files_used))
-    context["chunks"] = chunks
-    context["file_selection"] = file_selection
-    context["resolved_symbols"] = resolved_symbols
-    return context
-
-
-def _ensure_repo_helper_impl_target_in_final_context(
-    parsed_query: dict,
-    repo_context: dict | None,
-) -> dict:
-    context = _filter_repo_context_paths(repo_context, REPO_FOCUSED_FORBIDDEN_PATHS)
-    if not _is_repo_helper_create_request(parsed_query):
-        return context
-
-    existing_targets = set(context.get("resolved_target_files", []) or []) | set(context.get("files_used", []) or [])
-    existing_targets.update(
-        _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-        for chunk in (context.get("chunks") or [])
-        if isinstance(chunk, dict) and _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-    )
-    existing_targets.update(
-        _normalize_repo_context_path(path)
-        for path in (
-            (context.get("file_selection") or {}).keys()
-            if isinstance(context.get("file_selection"), dict)
-            else []
-        )
-        if _normalize_repo_context_path(path)
-    )
-
-    forced_targets = [
-        path
-        for path in REPO_HELPER_FALLBACK_TARGETS
-        if validate_manifest_file_path(path, ".")
-    ]
-    if not forced_targets:
-        return context
-
-    if not any(path in existing_targets for path in REPO_HELPER_FALLBACK_TARGETS):
-        primary_target = forced_targets[0]
-        context["resolved_target_files"] = list(
-            dict.fromkeys([primary_target, *(context.get("resolved_target_files", []) or [])])
-        )
-        context["files_used"] = list(dict.fromkeys([primary_target, *(context.get("files_used", []) or [])]))
-        file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-        file_selection[primary_target] = list(
-            dict.fromkeys([*list(file_selection.get(primary_target, []) or []), "repo helper create fallback"])
-        )
-        context["file_selection"] = file_selection
-
-    current_chunk_paths = {
-        _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-        for chunk in (context.get("chunks") or [])
-        if isinstance(chunk, dict) and _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-    }
-    for target_path in forced_targets:
-        if target_path == "tools/registry.py" and target_path not in existing_targets:
-            continue
-        if target_path not in (context.get("resolved_target_files", []) or []):
-            context["resolved_target_files"] = list(
-                dict.fromkeys([*(context.get("resolved_target_files", []) or []), target_path])
-            )
-        if target_path not in (context.get("files_used", []) or []):
-            context["files_used"] = list(dict.fromkeys([*(context.get("files_used", []) or []), target_path]))
-        file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-        file_selection[target_path] = list(
-            dict.fromkeys([*list(file_selection.get(target_path, []) or []), "repo helper create fallback"])
-        )
-        context["file_selection"] = file_selection
-        if target_path not in current_chunk_paths:
-            snippet = read_file_range(target_path, 1, 40)
-            if not (
-                snippet.startswith("File not found:")
-                or snippet.startswith("Path is not a file:")
-                or snippet.startswith("Failed to read file:")
-            ):
-                context.setdefault("chunks", [])
-                context["chunks"].insert(
-                    0,
-                    {
-                        "path": target_path,
-                        "snippet": snippet,
-                        "reason": "repo helper create fallback",
-                    },
-                )
-                current_chunk_paths.add(target_path)
-
-    return _filter_repo_context_paths(context, REPO_FOCUSED_FORBIDDEN_PATHS)
-
-
-def _is_excluded_final_spec_stage_path(path: str, parsed_query: dict) -> bool:
-    normalized_path = _normalize_repo_context_path(path)
-    lowered = normalized_path.lower()
-    if _explicitly_requests_docs(parsed_query) and lowered == "readme.md":
-        return False
-    if normalized_path in FINAL_SPEC_STAGE_EXCLUDED_PATHS:
-        return True
-    return any(lowered.startswith(prefix) for prefix in FINAL_SPEC_STAGE_EXCLUDED_PREFIXES)
-
-
-def _is_implementation_focused_request(parsed_query: dict) -> bool:
-    return bool(parsed_query.get("symbol_hints") or parsed_query.get("path_hints"))
-
-
-def _explicitly_requests_output_paths(parsed_query: dict) -> bool:
-    values = [
-        parsed_query.get("raw_query", ""),
-        parsed_query.get("clean_query", ""),
-        *parsed_query.get("path_hints", []),
-        *parsed_query.get("keywords", []),
-        *parsed_query.get("symbol_hints", []),
-    ]
-    normalized = [str(value).strip().lower().replace("\\", "/") for value in values if str(value).strip()]
-    return any(
-        value == "output"
-        or value.startswith("output/")
-        or "/output/" in value
-        for value in normalized
-    )
-
-
-def _is_output_artifact_path(path: str) -> bool:
-    normalized_path = _normalize_repo_context_path(path).lower()
-    return normalized_path.startswith("output/")
-
-
-def _is_repo_implementation_focused_request(parsed_query: dict) -> bool:
-    values = [
-        parsed_query.get("raw_query", ""),
-        parsed_query.get("clean_query", ""),
-        *parsed_query.get("path_hints", []),
-        *parsed_query.get("keywords", []),
-        *parsed_query.get("symbol_hints", []),
-    ]
-    text = " ".join(str(value or "").lower() for value in values)
-    has_repo_signal = any(
-        marker in text for marker in ("repo_tools", "tools/repo_tools.py", "search_in_repo", "implementation", "existing")
-    )
-    return _is_implementation_focused_request(parsed_query) and has_repo_signal
-
-
-def _normalize_final_spec_stage_repo_context(
-    user_input: str,
-    repo_context: dict | None,
-    command_mode: str = "",
-) -> dict:
-    parsed_query = parse_repo_query(_with_command_mode(user_input, command_mode))
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    if not (_is_implementation_focused_request(parsed_query) or _is_repo_helper_create_request(parsed_query)):
-        return context
-
-    original_context = context
-    resolved_target_files = [
-        _normalize_repo_context_path(path)
-        for path in context.get("resolved_target_files", []) or []
-        if _normalize_repo_context_path(path)
-    ]
-    files_used = [
-        _normalize_repo_context_path(path)
-        for path in context.get("files_used", []) or []
-        if _normalize_repo_context_path(path)
-    ]
-    chunks = [chunk for chunk in (context.get("chunks") or []) if isinstance(chunk, dict)]
-    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-    resolved_symbols = context.get("resolved_symbols") if isinstance(context.get("resolved_symbols"), dict) else {}
-
-    resolved_target_files = [
-        path for path in resolved_target_files
-        if not _is_excluded_final_spec_stage_path(path, parsed_query)
-    ]
-    files_used = [
-        path for path in files_used
-        if not _is_excluded_final_spec_stage_path(path, parsed_query)
-    ]
-    chunks = [
-        chunk for chunk in chunks
-        if not _is_excluded_final_spec_stage_path(str(chunk.get("path", "")).strip(), parsed_query)
-    ]
-    file_selection = {
-        _normalize_repo_context_path(path): reasons
-        for path, reasons in file_selection.items()
-        if _normalize_repo_context_path(path)
-        and not _is_excluded_final_spec_stage_path(path, parsed_query)
-    }
-    resolved_symbols = {
-        str(symbol_name).strip(): [
-            _normalize_repo_context_path(path)
-            for path in symbol_paths
-            if _normalize_repo_context_path(path)
-            and not _is_excluded_final_spec_stage_path(path, parsed_query)
-        ]
-        for symbol_name, symbol_paths in resolved_symbols.items()
-        if str(symbol_name).strip()
-    }
-
-    if _is_repo_implementation_focused_request(parsed_query) and not _explicitly_requests_output_paths(parsed_query):
-        resolved_target_files = [path for path in resolved_target_files if not _is_output_artifact_path(path)]
-        files_used = [path for path in files_used if not _is_output_artifact_path(path)]
-        chunks = [
-            chunk for chunk in chunks
-            if not _is_output_artifact_path(str(chunk.get("path", "")).strip())
-        ]
-        file_selection = {
-            path: reasons
-            for path, reasons in file_selection.items()
-            if not _is_output_artifact_path(path)
-        }
-        resolved_symbols = {
-            symbol_name: [
-                path for path in symbol_paths
-                if not _is_output_artifact_path(path)
-            ]
-            for symbol_name, symbol_paths in resolved_symbols.items()
-        }
-
-        impl_target = "tools/repo_tools.py"
-        if validate_manifest_file_path(impl_target, "."):
-            resolved_target_files = list(dict.fromkeys([impl_target, *resolved_target_files]))
-            files_used = list(dict.fromkeys([impl_target, *files_used]))
-            file_selection[impl_target] = list(
-                dict.fromkeys([*list(file_selection.get(impl_target, []) or []), "final spec-stage repo implementation target"])
-            )
-            current_chunk_paths = {
-                _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-                for chunk in chunks
-                if _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-            }
-            if impl_target not in current_chunk_paths:
-                snippet = read_file_range(impl_target, 1, 40)
-                if not (
-                    snippet.startswith("File not found:")
-                    or snippet.startswith("Path is not a file:")
-                    or snippet.startswith("Failed to read file:")
-                ):
-                    chunks.insert(
-                        0,
-                        {
-                            "path": impl_target,
-                            "snippet": snippet,
-                            "reason": "final spec-stage repo implementation target",
-                        },
-                    )
-
-    if _is_repo_helper_create_request(parsed_query):
-        kept_impl_targets = [
-            path for path in REPO_HELPER_FALLBACK_TARGETS
-            if path in set(resolved_target_files) | set(files_used) | set(file_selection.keys()) | {
-                _normalize_repo_context_path(str(chunk.get("path", "")).strip()) for chunk in chunks
-            }
-        ]
-        if not kept_impl_targets:
-            forced_targets = [
-                path for path in REPO_HELPER_FALLBACK_TARGETS
-                if validate_manifest_file_path(path, ".")
-            ]
-            if forced_targets:
-                preferred_target = forced_targets[0]
-                files_used = list(dict.fromkeys([preferred_target, *files_used]))
-                resolved_target_files = list(dict.fromkeys([preferred_target, *resolved_target_files]))
-                file_selection[preferred_target] = list(
-                    dict.fromkeys(
-                        [
-                            *list(file_selection.get(preferred_target, []) or []),
-                            "final spec-stage implementation fallback",
-                        ]
-                    )
-                )
-                for extra_target in forced_targets[1:]:
-                    original_known_paths = set(
-                        [
-                            *[
-                                _normalize_repo_context_path(path)
-                                for path in (original_context.get("resolved_target_files", []) or [])
-                                if _normalize_repo_context_path(path)
-                            ],
-                            *[
-                                _normalize_repo_context_path(path)
-                                for path in (original_context.get("files_used", []) or [])
-                                if _normalize_repo_context_path(path)
-                            ],
-                            *[
-                                _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-                                for chunk in (original_context.get("chunks", []) or [])
-                                if isinstance(chunk, dict) and _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-                            ],
-                            *[
-                                _normalize_repo_context_path(path)
-                                for path in (
-                                    (original_context.get("file_selection") or {}).keys()
-                                    if isinstance(original_context.get("file_selection"), dict)
-                                    else []
-                                )
-                                if _normalize_repo_context_path(path)
-                            ],
-                        ]
-                    )
-                    if extra_target in original_known_paths:
-                        files_used = list(dict.fromkeys([*files_used, extra_target]))
-                        resolved_target_files = list(dict.fromkeys([*resolved_target_files, extra_target]))
-                        file_selection[extra_target] = list(
-                            dict.fromkeys(
-                                [
-                                    *list(file_selection.get(extra_target, []) or []),
-                                    "final spec-stage retained repo helper target",
-                                ]
-                            )
-                        )
-                current_chunk_paths = {
-                    _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-                    for chunk in chunks
-                    if _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-                }
-                for target_path in resolved_target_files:
-                    if target_path in REPO_HELPER_FALLBACK_TARGETS and target_path not in current_chunk_paths:
-                        snippet = read_file_range(target_path, 1, 40)
-                        if not (
-                            snippet.startswith("File not found:")
-                            or snippet.startswith("Path is not a file:")
-                            or snippet.startswith("Failed to read file:")
-                        ):
-                            chunks.insert(
-                                0,
-                                {
-                                    "path": target_path,
-                                    "snippet": snippet,
-                                    "reason": "final spec-stage implementation fallback",
-                                },
-                            )
-
-    kept_paths = set(resolved_target_files) | set(files_used)
-    kept_paths.update(
-        _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-        for chunk in chunks
-        if _normalize_repo_context_path(str(chunk.get("path", "")).strip())
-    )
-    file_selection = {
-        path: reasons
-        for path, reasons in file_selection.items()
-        if path in kept_paths
-    }
-    files_used = list(dict.fromkeys([*resolved_target_files, *files_used]))
-
-    context["resolved_target_files"] = resolved_target_files
-    context["files_used"] = files_used
-    context["chunks"] = chunks
-    context["file_selection"] = file_selection
-    context["resolved_symbols"] = resolved_symbols
-    return context
-
-
-def _force_repo_helper_impl_target_in_place(parsed_query: dict, repo_context: dict | None) -> dict:
-    context = repo_context if isinstance(repo_context, dict) else {}
-    if not _is_repo_helper_create_request(parsed_query):
-        return context
-    if _has_repo_helper_impl_target(context):
-        return context
-
-    fallback_target = next(
-        (path for path in REPO_HELPER_FALLBACK_TARGETS if validate_manifest_file_path(path, ".")),
-        "",
-    )
-    if not fallback_target:
-        return context
-
-    resolved_target_files = [
-        str(path).strip()
-        for path in context.get("resolved_target_files", []) or []
-        if str(path).strip() and str(path).strip() not in {"README.md", "main.py"}
-    ]
-    files_used = [
-        str(path).strip()
-        for path in context.get("files_used", []) or []
-        if str(path).strip() and str(path).strip() not in {"README.md", "main.py"}
-    ]
-    chunks = [chunk for chunk in (context.get("chunks") or []) if isinstance(chunk, dict)]
-    chunks = [
-        chunk
-        for chunk in chunks
-        if str(chunk.get("path", "")).strip() not in {"README.md", "main.py"}
-    ]
-    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-    file_selection = {
-        str(path).strip(): reasons
-        for path, reasons in file_selection.items()
-        if str(path).strip() and str(path).strip() not in {"README.md", "main.py"}
-    }
-
-    snippet = read_file_range(fallback_target, 1, 40)
-    if not (
-        snippet.startswith("File not found:")
-        or snippet.startswith("Path is not a file:")
-        or snippet.startswith("Failed to read file:")
-    ) and not any(str(chunk.get("path", "")).strip() == fallback_target for chunk in chunks):
-        chunks.insert(
-            0,
-            {
-                "path": fallback_target,
-                "snippet": snippet,
-                "reason": "finalized spec-stage repo-helper implementation fallback",
-            },
-        )
-
-    context["resolved_target_files"] = list(dict.fromkeys([fallback_target, *resolved_target_files]))
-    context["files_used"] = list(dict.fromkeys([fallback_target, *files_used]))
-    file_selection[str(fallback_target)] = list(
-        dict.fromkeys(
-            [
-                *list(file_selection.get(fallback_target, []) or []),
-                "finalized spec-stage repo-helper implementation fallback",
-            ]
-        )
-    )
-    context["file_selection"] = file_selection
-    context["chunks"] = chunks
-    log_line(f"ROOT AGENT: hard-injected repo-helper implementation target {fallback_target} before spec")
-    return context
-
-
-def _ensure_repo_helper_create_context(parsed_query: dict, repo_context: dict | None) -> dict:
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    if not _is_repo_helper_create_request(parsed_query):
-        return context
-
-    resolved_target_files = [
-        str(path).strip()
-        for path in context.get("resolved_target_files", []) or []
-        if str(path).strip()
-    ]
-    files_used = [
-        str(path).strip()
-        for path in context.get("files_used", []) or []
-        if str(path).strip()
-    ]
-    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-    chunks = [chunk for chunk in (context.get("chunks") or []) if isinstance(chunk, dict)]
-    existing_targets = set(resolved_target_files) | set(files_used)
-    fallback_target = next((path for path in REPO_HELPER_FALLBACK_TARGETS if path in existing_targets), "")
-    if not fallback_target:
-        fallback_target = next(
-            (path for path in REPO_HELPER_FALLBACK_TARGETS if validate_manifest_file_path(path, ".")),
-            "",
-        )
-    if not fallback_target:
-        return context
-
-    snippet = read_file_range(fallback_target, 1, 40)
-    if not (
-        snippet.startswith("File not found:")
-        or snippet.startswith("Path is not a file:")
-        or snippet.startswith("Failed to read file:")
-    ):
-        if not any(str(chunk.get("path", "")).strip() == fallback_target for chunk in chunks):
-            chunks.insert(
-                0,
-                {
-                    "path": fallback_target,
-                    "snippet": snippet,
-                    "reason": "root-agent repo-helper implementation fallback",
-                },
-            )
-    context["chunks"] = chunks
-
-    context["resolved_target_files"] = list(dict.fromkeys([fallback_target, *resolved_target_files]))
-    context["files_used"] = list(dict.fromkeys([fallback_target, *files_used]))
-    file_selection[str(fallback_target)] = list(
-        dict.fromkeys(
-            [
-                *list(file_selection.get(fallback_target, []) or []),
-                "root-agent repo-helper implementation fallback",
-            ]
-        )
-    )
-    context["file_selection"] = file_selection
-    log_line(f"ROOT AGENT: forced repo-helper implementation target {fallback_target} before spec/code")
-    return sanitize_repo_context(context)
-
-
-def _remove_readme_from_symbol_only_context(parsed_query: dict, repo_context: dict | None) -> dict:
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    if _explicitly_requests_docs(parsed_query):
-        return context
-
-    resolved_target_files = [
-        str(path).strip()
-        for path in context.get("resolved_target_files", []) or []
-        if str(path).strip()
-    ]
-    implementation_targets = [
-        path
-        for path in resolved_target_files
-        if path.lower().replace("\\", "/") != "readme.md"
-    ]
-    if len(implementation_targets) != 1:
-        return context
-
-    primary_target = implementation_targets[0].replace("\\", "/").lower()
-    if not primary_target.endswith(".py"):
-        return context
-    if not (parsed_query.get("symbol_hints") or parsed_query.get("path_hints")):
-        return context
-
-    sanitized_resolved_target_files = implementation_targets
-    files_used = [
-        str(path).strip()
-        for path in context.get("files_used", []) or []
-        if str(path).strip() and str(path).strip().lower().replace("\\", "/") != "readme.md"
-    ]
-    chunks = [
-        chunk
-        for chunk in (context.get("chunks") or [])
-        if isinstance(chunk, dict)
-        and str(chunk.get("path", "")).strip().lower().replace("\\", "/") != "readme.md"
-    ]
-    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-    sanitized_file_selection = {
-        str(path).strip(): value
-        for path, value in file_selection.items()
-        if str(path).strip().lower().replace("\\", "/") != "readme.md"
-    }
-    resolved_symbols = context.get("resolved_symbols") if isinstance(context.get("resolved_symbols"), dict) else {}
-    sanitized_resolved_symbols = {
-        str(symbol_name).strip(): [
-            str(path).strip()
-            for path in symbol_paths
-            if str(path).strip() and str(path).strip().lower().replace("\\", "/") != "readme.md"
-        ]
-        for symbol_name, symbol_paths in resolved_symbols.items()
-        if str(symbol_name).strip()
-    }
-
-    context["resolved_target_files"] = sanitized_resolved_target_files
-    context["files_used"] = files_used
-    context["chunks"] = chunks
-    context["file_selection"] = sanitized_file_selection
-    context["resolved_symbols"] = sanitized_resolved_symbols
-    if _is_debug_mode_enabled():
-        log_line(
-            "ROOT SPEC/CODE CONTEXT readme_cleanup_applied: "
-            f"resolved_target_files={sanitized_resolved_target_files}; "
-            f"files_used={files_used}"
-        )
-    return context
 
 
 def _log_change_agent_repo_context_summary(task_intent: str, repo_context: dict | None) -> None:
@@ -1230,13 +693,13 @@ def run_lightweight_review_pipeline(user_input: str) -> AgentResult:
     parsed_query = parse_repo_query(_with_command_mode(user_input, "review"))
     log_line("PIPELINE MODE: review_only")
     log_line("ROOT AGENT: selected pipeline mode review_only")
-    repo_context = sanitize_repo_context(build_context(parsed_query, ".", max_tokens=8000))
-    repo_context = _prepare_final_repo_context_for_downstream(
+    repo_context = normalize_repo_context(sanitize_repo_context(build_context(parsed_query, ".", max_tokens=8000)))
+    repo_context = normalize_repo_context(_prepare_final_repo_context_for_downstream(
         user_input,
         repo_context,
         command_mode="review",
         stage_name="spec",
-    )
+    ))
 
     spec_result = _run_spec_agent_with_finalized_repo_context(
         user_input,
@@ -1270,7 +733,12 @@ def run_lightweight_review_pipeline(user_input: str) -> AgentResult:
         ),
     )
     repo_context = code_input.repo_context
-    code_result = run_code_agent_from_spec(code_input)
+    code_result = _attach_stage_summary(
+        run_code_agent_from_spec(code_input),
+        stage_name="code",
+        repo_context=repo_context,
+        task_intent=task_intent,
+    )
 
     review_spec = SpecContract(
         title=spec.title or "Existing code review",
@@ -1476,14 +944,14 @@ def run_spec_to_code_pipeline(
 
     spec = spec_result.metadata.get("spec")
     if spec is None:
-        return spec_result, AgentResult(
+        return spec_result, _attach_stage_summary(AgentResult(
             agent_name="code",
             output_text="Не вдалося побудувати code plan, бо spec не був сформований.",
             success=False,
             task_intent=resolved_task_intent,
             repo_context=repo_context,
             metadata={"artifact_type": "code_plan"},
-        )
+        ), stage_name="code", repo_context=repo_context, task_intent=resolved_task_intent)
 
     code_input = SpecToCodeInput(
         original_request=user_input,
@@ -1523,14 +991,14 @@ def run_full_change_pipeline(
 
     patch_plan = code_result.metadata.get("patch_plan")
     if patch_plan is None:
-        change_result = AgentResult(
+        change_result = _attach_stage_summary(AgentResult(
             agent_name="change",
             output_text="Не вдалося побудувати proposed file changes, бо patch plan не був сформований.",
             success=False,
             task_intent=resolved_task_intent,
             repo_context=repo_context,
             metadata={"artifact_type": "change_set"},
-        )
+        ), stage_name="change", repo_context=repo_context, task_intent=resolved_task_intent)
         return spec_result, code_result, change_result
 
     _log_change_agent_repo_context_summary(resolved_task_intent, repo_context)
@@ -1552,6 +1020,12 @@ def run_full_change_pipeline(
         change_result=change_result,
         task_intent=resolved_task_intent,
         repo_context=repo_context,
+    )
+    change_result = _attach_stage_summary(
+        change_result,
+        stage_name="change",
+        repo_context=repo_context,
+        task_intent=resolved_task_intent,
     )
 
     return spec_result, code_result, change_result
@@ -1575,14 +1049,14 @@ def run_full_draft_pipeline(user_input: str) -> tuple[AgentResult, AgentResult, 
 
     change_set = change_result.metadata.get("change_set")
     if change_set is None:
-        draft_result = AgentResult(
+        draft_result = _attach_stage_summary(AgentResult(
             agent_name="draft",
             output_text="Не вдалося побудувати draft files, бо change set не був сформований.",
             success=False,
             task_intent=task_intent,
             repo_context=repo_context,
             metadata={"artifact_type": "draft_set"},
-        )
+        ), stage_name="draft", repo_context=repo_context, task_intent=task_intent)
         return spec_result, code_result, change_result, draft_result
 
     draft_result = run_draft_agent(
@@ -1592,6 +1066,12 @@ def run_full_draft_pipeline(user_input: str) -> tuple[AgentResult, AgentResult, 
         repo_context=repo_context,
     )
     draft_result = _attach_draft_result_runtime_debug(draft_result)
+    draft_result = _attach_stage_summary(
+        draft_result,
+        stage_name="draft",
+        repo_context=repo_context,
+        task_intent=task_intent,
+    )
 
     return spec_result, code_result, change_result, draft_result
 
@@ -1633,7 +1113,7 @@ def _build_review_result_agent(
         f"{chr(10).join(extra_lines)}"
     )
 
-    return AgentResult(
+    return _attach_stage_summary(AgentResult(
         agent_name="review",
         output_text=output_text,
         success=review_result.status == "approved",
@@ -1643,7 +1123,7 @@ def _build_review_result_agent(
             "artifact_type": "review_result",
             "review_result": review_result,
         },
-    )
+    ), stage_name="review", repo_context=repo_context or {}, task_intent=task_intent)
 
 
 def _draft_means_already_applied(draft_result: AgentResult) -> bool:
@@ -1686,26 +1166,26 @@ def run_full_review_pipeline(
 
     spec = spec_result.metadata.get("spec")
     if spec is None:
-        review_result = AgentResult(
+        review_result = _attach_stage_summary(AgentResult(
             agent_name="review",
             output_text="Не вдалося побудувати review result, бо spec не був сформований.",
             success=False,
             task_intent=task_intent,
             repo_context=repo_context,
             metadata={"artifact_type": "review_result"},
-        )
+        ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
         return spec_result, code_result, change_result, draft_result, review_result
 
     change_set = change_result.metadata.get("change_set")
     if change_set is None:
-        review_result = AgentResult(
+        review_result = _attach_stage_summary(AgentResult(
             agent_name="review",
             output_text="Не вдалося побудувати review result, бо change set не був сформований.",
             success=False,
             task_intent=task_intent,
             repo_context=repo_context,
             metadata={"artifact_type": "review_result"},
-        )
+        ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
         return spec_result, code_result, change_result, draft_result, review_result
 
     if _draft_means_already_applied(draft_result):
@@ -1733,24 +1213,24 @@ def run_full_review_pipeline(
 
     draft_set = draft_result.metadata.get("draft_set")
     if draft_set is None:
-        review_result = AgentResult(
+        review_result = _attach_stage_summary(AgentResult(
             agent_name="review",
             output_text="Не вдалося побудувати review result, бо draft set не був сформований.",
             success=False,
             task_intent=task_intent,
             repo_context=repo_context,
             metadata={"artifact_type": "review_result"},
-        )
+        ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
         return spec_result, code_result, change_result, draft_result, review_result
 
-    review_result = run_review_agent(
+    review_result = _attach_stage_summary(run_review_agent(
         original_request=user_input,
         spec=spec,
         change_set=change_set,
         draft_set=draft_set,
         task_intent=task_intent,
         repo_context=repo_context,
-    )
+    ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
 
     if review_result.success:
         return spec_result, code_result, change_result, draft_result, review_result
@@ -1778,7 +1258,7 @@ def run_full_review_pipeline(
         if repaired_draft_set is None:
             break
 
-        current_draft_result = AgentResult(
+        current_draft_result = _attach_stage_summary(AgentResult(
             agent_name="draft",
             output_text=repair_result.output_text,
             success=repair_result.success,
@@ -1788,16 +1268,16 @@ def run_full_review_pipeline(
                 "artifact_type": "draft_set",
                 "draft_set": repaired_draft_set,
             },
-        )
+        ), stage_name="draft", repo_context=repo_context, task_intent=task_intent)
 
-        current_review_result = run_review_agent(
+        current_review_result = _attach_stage_summary(run_review_agent(
             original_request=user_input,
             spec=spec,
             change_set=change_set,
             draft_set=repaired_draft_set,
             task_intent=task_intent,
             repo_context=repo_context,
-        )
+        ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
 
         if current_review_result.success:
             return spec_result, code_result, change_result, current_draft_result, current_review_result

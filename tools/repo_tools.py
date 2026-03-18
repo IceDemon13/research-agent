@@ -7,7 +7,16 @@ from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 
+from contracts.repo_context_contract import normalize_repo_context
 from logger_utils import log_line
+from services.repo_context_rules import (
+    finalize_repo_helper_create_context,
+    get_repo_context_priority_tier,
+    is_repo_helper_create_request,
+    is_priority_repo_context_path,
+    RepoContextPriorityTier,
+    sanitize_repo_context as sanitize_repo_context_rules,
+)
 
 
 IGNORED_DIRS = {
@@ -803,78 +812,17 @@ def _explicitly_requests_internal_repo_paths(parsed_query: dict) -> bool:
 
 
 def _is_repo_helper_create_request(parsed_query: dict) -> bool:
-    text = " ".join(
-        str(value or "").lower()
-        for value in [
-            parsed_query.get("raw_query", ""),
-            parsed_query.get("clean_query", ""),
-            " ".join(parsed_query.get("keywords", []) or []),
-        ]
-    )
-
-    has_create = parsed_query.get("intent") == "create" or any(
-        word in text for word in ("create", "add", "generate", "export")
-    )
-    has_repo_domain = any(
-        word in text for word in ("repo", "repository", "manifest")
-    )
-    has_helper_or_export_shape = any(
-        word in text for word in ("helper", "export", "summary", "markdown", "md")
-    )
-
-    return has_create and has_repo_domain and has_helper_or_export_shape
+    return is_repo_helper_create_request(parsed_query)
 
 
 def _finalize_repo_helper_create_context(parsed_query: dict, repo_context: dict | None) -> dict:
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    files_used = context.get("files_used", []) or []
-    resolved_target_files = context.get("resolved_target_files", []) or []
-    file_selection = context.get("file_selection", {}) or {}
-    chunks = context.get("chunks", []) or []
-    if not _is_repo_helper_create_request(parsed_query):
-        return context
-
-    forbidden_paths = {_normalize_repo_context_path(path) for path in REPO_FOCUSED_CREATE_FORBIDDEN_PATHS}
-
-    forced_target = "tools/repo_tools.py"
-    if not validate_manifest_file_path(forced_target, "."):
-        for candidate in REPO_HELPER_FALLBACK_TARGETS:
-            if validate_manifest_file_path(candidate, "."):
-                forced_target = candidate
-                break
-
-    snippet = read_file_range(forced_target, 1, 40)
-    if (
-        snippet.startswith("File not found:")
-        or snippet.startswith("Path is not a file:")
-        or snippet.startswith("Failed to read file:")
-    ):
-        snippet = ""
-
-    context["resolved_target_files"] = [forced_target]
-    context["files_used"] = [forced_target]
-    context["file_selection"] = {
-        forced_target: ["repo helper implementation target"]
-    }
-    context["chunks"] = [
-        {
-            "path": forced_target,
-            "reason": "repo helper implementation target",
-            "snippet": snippet,
-        }
-    ]
-    log_line(f"BUILD CONTEXT HELPER FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
-    log_line(f"BUILD CONTEXT HELPER FINAL TARGETS: {json.dumps(context['resolved_target_files'], ensure_ascii=False)}")
-    log_line(f"BUILD CONTEXT HELPER FINAL FILES USED: {json.dumps(context['files_used'], ensure_ascii=False)}")
-    log_line(
-        f"BUILD CONTEXT HELPER FINAL FILE SELECTION KEYS: "
-        f"{json.dumps(list(context['file_selection'].keys()), ensure_ascii=False)}"
+    return finalize_repo_helper_create_context(
+        parsed_query,
+        repo_context,
+        read_file_range=read_file_range,
+        validate_manifest_file_path=validate_manifest_file_path,
+        log_line=log_line,
     )
-    log_line(
-        f"BUILD CONTEXT HELPER FINAL CHUNK PATHS: "
-        f"{json.dumps([_normalize_repo_context_path(str(chunk.get('path', '')).strip()) for chunk in context['chunks'] if isinstance(chunk, dict)], ensure_ascii=False)}"
-    )
-    return context
 
 
 def _is_default_internal_path(path: str, parsed_query: dict) -> bool:
@@ -1037,84 +985,24 @@ def _is_similar_snippet(snippet: str, existing_snippets: list[str]) -> bool:
 
 def ensure_repo_context(query: str | dict, root_path: str, repo_context: dict | None = None) -> dict:
     if isinstance(repo_context, dict) and repo_context.get("chunks") is not None:
-        return repo_context
-    return build_context(query=query, root_path=root_path)
+        return normalize_repo_context(repo_context)
+    return normalize_repo_context(build_context(query=query, root_path=root_path))
 
 
 def sanitize_repo_context(repo_context: dict | None) -> dict:
-    context = dict(repo_context) if isinstance(repo_context, dict) else {}
-    parsed_query = context.get("parsed_query") if isinstance(context.get("parsed_query"), dict) else {}
-    resolved_target_files = [
-        str(path).strip()
-        for path in context.get("resolved_target_files", []) or []
-        if str(path).strip()
-    ]
-    files_used = [
-        str(path).strip()
-        for path in context.get("files_used", []) or []
-        if str(path).strip()
-    ]
-    chunks = [
-        chunk for chunk in (context.get("chunks") or [])
-        if isinstance(chunk, dict)
-    ]
-    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
-
-    hard_focus_mode = _is_hard_focus_request(parsed_query, resolved_target_files)
-    allowed_focus_paths = set(resolved_target_files)
-
-    resolved_symbols = context.get("resolved_symbols") if isinstance(context.get("resolved_symbols"), dict) else {}
-    for symbol_paths in resolved_symbols.values():
-        if not isinstance(symbol_paths, list):
-            continue
-        unique_symbol_paths = list(
-            dict.fromkeys([str(path).strip() for path in symbol_paths if str(path).strip()])
+    return normalize_repo_context(
+        sanitize_repo_context_rules(
+        repo_context,
+        is_hard_focus_request=_is_hard_focus_request,
+        is_default_internal_path=_is_default_internal_path,
+        is_disallowed_hard_focus_support_path=_is_disallowed_hard_focus_support_path,
+        explicitly_requests_internal_repo_paths=_explicitly_requests_internal_repo_paths,
         )
-        if len(unique_symbol_paths) == 1:
-            allowed_focus_paths.update(unique_symbol_paths)
-
-    for path, reasons in file_selection.items():
-        normalized_path = str(path).strip()
-        if not normalized_path or _is_default_internal_path(normalized_path, parsed_query):
-            continue
-        if hard_focus_mode and _is_disallowed_hard_focus_support_path(normalized_path, parsed_query, resolved_target_files):
-            continue
-        if any(
-            marker in str(reason)
-            for reason in (reasons or [])
-            for marker in ("resolved target file", "symbol definition", "symbol usage", "path hint")
-        ):
-            allowed_focus_paths.add(normalized_path)
-
-    if hard_focus_mode:
-        chunks = [
-            chunk
-            for chunk in chunks
-            if str(chunk.get("path", "")).strip() in allowed_focus_paths
-        ]
-        files_used = [path for path in files_used if path in allowed_focus_paths]
-        files_used = list(dict.fromkeys([*resolved_target_files, *files_used]))
-
-    if not _explicitly_requests_internal_repo_paths(parsed_query):
-        chunks = [
-            chunk
-            for chunk in chunks
-            if not _is_default_internal_path(str(chunk.get("path", "")).strip(), parsed_query)
-        ]
-        files_used = [path for path in files_used if not _is_default_internal_path(path, parsed_query)]
-
-    context["files_used"] = files_used
-    context["chunks"] = chunks
-    context["file_selection"] = {
-        str(path).strip(): value
-        for path, value in file_selection.items()
-        if str(path).strip() in set(files_used) | set(resolved_target_files)
-    }
-    return context
+    )
 
 
 def format_repo_context(repo_context: dict | None) -> str:
-    context = repo_context if isinstance(repo_context, dict) else {}
+    context = normalize_repo_context(repo_context)
     files_used = context.get("files_used", []) or []
     chunks = context.get("chunks", []) or []
 
@@ -1632,7 +1520,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
     normalized_query, parsed_query = _normalize_parsed_repo_query(query)
     if not normalized_query:
         log_line("BUILD CONTEXT FAILED: query is empty")
-        return {
+        return normalize_repo_context({
             "query": query,
             "parsed_query": parsed_query,
             "resolved_target_files": [],
@@ -1641,12 +1529,12 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             "files_used": [],
             "chunks": [],
             "total_chunks": 0,
-        }
+        })
 
     root = Path(root_path).resolve()
     if not root.exists() or not root.is_dir():
         log_line(f"BUILD CONTEXT FAILED: invalid root path {root_path}")
-        return {
+        return normalize_repo_context({
             "query": query,
             "parsed_query": parsed_query,
             "resolved_target_files": [],
@@ -1655,7 +1543,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             "files_used": [],
             "chunks": [],
             "total_chunks": 0,
-        }
+        })
 
     safe_max_tokens = max(1, max_tokens)
     manifest = _load_repo_manifest(root_path)
@@ -1873,9 +1761,34 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             )
             bump_candidate(path, 1.0, matches=1, reason=f"fallback query: {fallback_query}")
 
+    forced_priority_targets = list(
+        dict.fromkeys(
+            [
+                *resolved_target_files,
+                *([create_repo_fallback_path] if create_repo_fallback_path else []),
+                *[
+                    path
+                    for path in REPO_HELPER_FALLBACK_TARGETS
+                    if validate_manifest_file_path(path, ".")
+                ],
+            ]
+        )
+    )
     ranked_candidates = sorted(
         candidate_scores.values(),
-        key=lambda item: (-float(item.get("score", 0.0)), -int(item.get("matches", 0)), item["path"]),
+        key=lambda item: (
+            -int(
+                get_repo_context_priority_tier(
+                    item["path"],
+                    file_selection_reasons.get(item["path"], []),
+                    parsed_query,
+                    forced_targets=forced_priority_targets,
+                )
+            ),
+            -float(item.get("score", 0.0)),
+            -int(item.get("matches", 0)),
+            item["path"],
+        ),
     )
     hard_focus_mode = _is_hard_focus_request(parsed_query, resolved_target_files)
     forced_paths = list(dict.fromkeys([
@@ -1897,6 +1810,13 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             continue
         if hard_focus_mode and _is_disallowed_hard_focus_support_path(path, parsed_query, resolved_target_files):
             continue
+        if get_repo_context_priority_tier(
+            path,
+            file_selection_reasons.get(path, []),
+            parsed_query,
+            forced_targets=forced_priority_targets,
+        ) == RepoContextPriorityTier.FORBIDDEN_NOISE:
+            continue
         candidate_files.append(candidate_scores[path])
         added_paths.add(path)
 
@@ -1911,17 +1831,22 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             continue
         if hard_focus_mode and _is_disallowed_hard_focus_support_path(path, parsed_query, resolved_target_files):
             continue
+        priority_tier = get_repo_context_priority_tier(
+            path,
+            file_selection_reasons.get(path, []),
+            parsed_query,
+            forced_targets=forced_priority_targets,
+        )
+        if priority_tier == RepoContextPriorityTier.FORBIDDEN_NOISE:
+            continue
 
         reasons = file_selection_reasons.get(path, [])
-        is_related = any(
-            marker in reason
-            for reason in reasons
-            for marker in (
-                "resolved target file",
-                "symbol definition",
-                "symbol usage",
-                "path hint",
-            )
+        is_related = is_priority_repo_context_path(
+            path,
+            reasons,
+            parsed_query,
+            forced_targets=forced_priority_targets,
+            minimum_tier=RepoContextPriorityTier.EXPLICIT_PATH_TARGET,
         )
         if hard_focus_mode and not is_related:
             continue
@@ -1949,7 +1874,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             "total_chunks": 0,
         }
         result = _finalize_repo_helper_create_context(parsed_query, result)
-        result["total_chunks"] = len(result.get("chunks", []) or [])
+        result = normalize_repo_context(result)
         log_line(f"BUILD CONTEXT FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
         log_line(f"BUILD CONTEXT FINAL TARGETS: {json.dumps(result.get('resolved_target_files', []) or [], ensure_ascii=False)}")
         log_line(f"BUILD CONTEXT FINAL FILES USED: {json.dumps(result.get('files_used', []) or [], ensure_ascii=False)}")
@@ -2047,7 +1972,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                     "total_chunks": len(chunks),
                 }
                 result = _finalize_repo_helper_create_context(parsed_query, result)
-                result["total_chunks"] = len(result.get("chunks", []) or [])
+                result = normalize_repo_context(result)
                 log_line(f"BUILD CONTEXT FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
                 log_line(f"BUILD CONTEXT FINAL TARGETS: {json.dumps(result.get('resolved_target_files', []) or [], ensure_ascii=False)}")
                 log_line(f"BUILD CONTEXT FINAL FILES USED: {json.dumps(result.get('files_used', []) or [], ensure_ascii=False)}")
@@ -2169,7 +2094,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         "total_chunks": len(chunks),
     }
     result = _finalize_repo_helper_create_context(parsed_query, result)
-    result["total_chunks"] = len(result.get("chunks", []) or [])
+    result = normalize_repo_context(result)
     log_line(f"BUILD CONTEXT RESOLVED SYMBOLS: {json.dumps(symbol_resolution, ensure_ascii=False)}")
     log_line(f"BUILD CONTEXT FILES USED: {json.dumps(files_used, ensure_ascii=False)}")
     log_line(f"BUILD CONTEXT FILE SELECTION: {json.dumps(file_selection, ensure_ascii=False)}")

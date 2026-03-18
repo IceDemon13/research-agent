@@ -14,13 +14,19 @@ from contracts.proposed_file_change import ProposedFileChange
 from contracts.review_result import ReviewResult
 from contracts.spec_contract import SpecContract
 from contracts.spec_to_code_input import SpecToCodeInput
+from services.repo_context_rules import RepoContextPriorityTier, get_repo_context_priority_tier
 from tests.repo_context_assertions import (
     assert_chunk_and_file_selection_consistent as _assert_file_selection_consistent,
     assert_create_mode_repo_domain_context,
+    assert_debug_metadata_contains as _assert_debug_metadata_contains,
+    assert_finalized_repo_context_consistent as _assert_finalized_repo_context_consistent,
     assert_no_forbidden_drift as _assert_no_drift,
+    assert_pipeline_trace_contains as _assert_pipeline_trace_contains,
+    assert_repo_context_snapshot as _assert_repo_context_snapshot,
     assert_repo_context_structures_sanitized as _assert_context_structures_sanitized,
     assert_repo_impl_target_present as _assert_context_contains_repo_impl_target,
     assert_resolved_target_present as _assert_target,
+    assert_review_mode_repo_context,
     assert_symbol_only_context_locked,
     repo_paths as _repo_paths,
 )
@@ -637,6 +643,220 @@ class RepoCommandGoldenTests(unittest.TestCase):
 
 
 class RepoContextShapingTests(unittest.TestCase):
+    def test_changes_repo_helper_create_debug_metadata_explains_forced_target(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "create",
+                "symbol_hints": [],
+                "path_hints": [],
+                "keywords": ["repo", "manifest", "markdown"],
+                "clean_query": "create helper to export repo manifest summary as markdown",
+            },
+            "resolved_target_files": ["README.md"],
+            "files_used": ["README.md", "main.py"],
+            "file_selection": {"README.md": ["doc drift"], "main.py": ["entrypoint drift"]},
+            "chunks": [
+                {"path": "README.md", "snippet": "docs", "reason": "doc drift"},
+                {"path": "main.py", "snippet": "entrypoint", "reason": "entrypoint drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "create helper to export repo manifest summary as markdown",
+            dirty_context,
+            command_mode="changes",
+            stage_name="spec",
+        )
+
+        _assert_debug_metadata_contains(
+            self,
+            repo_context,
+            expected_rules=("overwrite_repo_helper_create_context",),
+            expected_removed_paths=("README.md",),
+        )
+        self.assertTrue({"tools/repo_tools.py", "tools/registry.py"} & set(repo_context.get("debug", {}).get("forced_paths", []) or []))
+
+    def test_symbol_only_cleanup_debug_metadata_tracks_removed_readme(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "modify",
+                "symbol_hints": ["search_in_repo"],
+                "path_hints": [],
+                "keywords": ["search_in_repo"],
+                "clean_query": "search_in_repo",
+            },
+            "resolved_target_files": ["tools/repo_tools.py", "README.md"],
+            "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py", "README.md"]},
+            "files_used": ["README.md", "tools/repo_tools.py"],
+            "file_selection": {
+                "README.md": ["doc drift"],
+                "tools/repo_tools.py": ["symbol definition"],
+            },
+            "chunks": [
+                {"path": "README.md", "snippet": "docs", "reason": "doc drift"},
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "add completion log to search_in_repo",
+            dirty_context,
+            command_mode="drafts",
+            stage_name="spec",
+        )
+
+        _assert_debug_metadata_contains(
+            self,
+            repo_context,
+            expected_rules=("remove_readme_from_symbol_only_context",),
+            expected_removed_paths=("README.md",),
+        )
+
+    def test_spec_impl_focus_debug_metadata_tracks_output_and_internal_removals(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "modify",
+                "symbol_hints": ["search_in_repo"],
+                "path_hints": ["repo_tools"],
+                "keywords": ["search_in_repo", "repo_tools", "implementation"],
+                "clean_query": "review existing search_in_repo implementation in repo_tools",
+            },
+            "resolved_target_files": ["tools/repo_tools.py", "output/repo_manifest.json"],
+            "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            "files_used": [
+                "tools/repo_tools.py",
+                "output/repo_manifest.json",
+                "agents/review_agent.py",
+                "README.md",
+            ],
+            "file_selection": {
+                "tools/repo_tools.py": ["symbol definition"],
+                "output/repo_manifest.json": ["candidate file score"],
+                "agents/review_agent.py": ["drift"],
+            },
+            "chunks": [
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+                {"path": "output/repo_manifest.json", "snippet": "{}", "reason": "artifact drift"},
+                {"path": "agents/review_agent.py", "snippet": "internal", "reason": "drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "review existing search_in_repo implementation in repo_tools",
+            dirty_context,
+            command_mode="spec",
+            stage_name="spec",
+        )
+
+        _assert_debug_metadata_contains(
+            self,
+            repo_context,
+            expected_rules=(
+                "apply_repo_impl_focus_rules.excluded_paths",
+                "apply_repo_impl_focus_rules.output_artifacts",
+            ),
+            expected_removed_paths=("output/repo_manifest.json", "agents/review_agent.py"),
+        )
+
+    def test_impl_focused_trace_contains_key_structured_steps(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "modify",
+                "symbol_hints": ["search_in_repo"],
+                "path_hints": ["repo_tools"],
+                "keywords": ["search_in_repo", "repo_tools", "implementation"],
+                "clean_query": "review existing search_in_repo implementation in repo_tools",
+            },
+            "resolved_target_files": ["tools/repo_tools.py", "output/repo_manifest.json"],
+            "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            "files_used": [
+                "tools/repo_tools.py",
+                "output/repo_manifest.json",
+                "agents/review_agent.py",
+            ],
+            "file_selection": {
+                "tools/repo_tools.py": ["symbol definition"],
+                "output/repo_manifest.json": ["candidate file score"],
+                "agents/review_agent.py": ["drift"],
+            },
+            "chunks": [
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+                {"path": "output/repo_manifest.json", "snippet": "{}", "reason": "artifact drift"},
+                {"path": "agents/review_agent.py", "snippet": "internal", "reason": "drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "review existing search_in_repo implementation in repo_tools",
+            dirty_context,
+            command_mode="spec",
+            stage_name="spec",
+        )
+
+        _assert_pipeline_trace_contains(
+            self,
+            repo_context,
+            expected_entries=(
+                {"step": "root_agent", "action": "rule_application", "command_mode": "spec", "stage_name": "spec"},
+                {"step": "run_repo_context_rule_pipeline", "action": "normalize_input", "command_mode": "spec"},
+                {"step": "apply_repo_impl_focus_rules", "action": "exclude_path", "path": "agents/review_agent.py"},
+                {"step": "apply_repo_impl_focus_rules", "action": "force_path", "path": "tools/repo_tools.py"},
+                {"step": "run_repo_context_rule_pipeline", "action": "finalize_debug"},
+            ),
+        )
+
+    def test_repo_context_priority_tiers_favor_impl_targets_over_docs_and_output(self) -> None:
+        parsed_query = {
+            "intent": "modify",
+            "symbol_hints": ["search_in_repo"],
+            "path_hints": ["tools/repo_tools.py"],
+            "keywords": ["search_in_repo", "repo_tools"],
+            "clean_query": "review existing search_in_repo implementation in repo_tools",
+        }
+
+        self.assertEqual(
+            get_repo_context_priority_tier(
+                "tools/repo_tools.py",
+                ["symbol definition: search_in_repo"],
+                parsed_query,
+                forced_targets=["tools/repo_tools.py"],
+            ),
+            RepoContextPriorityTier.EXPLICIT_SYMBOL_TARGET,
+        )
+        self.assertEqual(
+            get_repo_context_priority_tier(
+                "tools/registry.py",
+                ["repo helper create fallback"],
+                parsed_query,
+                forced_targets=["tools/registry.py"],
+            ),
+            RepoContextPriorityTier.FORCED_REPO_IMPLEMENTATION_TARGET,
+        )
+        self.assertEqual(
+            get_repo_context_priority_tier(
+                "services/repo_context_rules.py",
+                ["candidate file score"],
+                parsed_query,
+            ),
+            RepoContextPriorityTier.DOMAIN_RELEVANT_SUPPORT,
+        )
+        self.assertEqual(
+            get_repo_context_priority_tier(
+                "README.md",
+                ["candidate file score"],
+                parsed_query,
+            ),
+            RepoContextPriorityTier.FORBIDDEN_NOISE,
+        )
+        self.assertEqual(
+            get_repo_context_priority_tier(
+                "output/repo_manifest.json",
+                ["candidate file score"],
+                parsed_query,
+            ),
+            RepoContextPriorityTier.FORBIDDEN_NOISE,
+        )
+
     def test_drafts_symbol_only_context_stays_locked_to_resolved_implementation_file(self) -> None:
         dirty_context = {
             "parsed_query": {
@@ -708,6 +928,144 @@ class RepoContextShapingTests(unittest.TestCase):
 
         assert_create_mode_repo_domain_context(self, repo_context)
 
+    def test_repo_context_snapshot_repo_helper_create(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "create",
+                "symbol_hints": [],
+                "path_hints": [],
+                "keywords": ["repo", "manifest", "markdown"],
+                "clean_query": "create helper to export repo manifest summary as markdown",
+            },
+            "resolved_target_files": ["README.md"],
+            "resolved_symbols": {},
+            "files_used": ["README.md", "main.py"],
+            "file_selection": {
+                "README.md": ["doc drift"],
+                "main.py": ["entrypoint drift"],
+            },
+            "chunks": [
+                {"path": "README.md", "snippet": "docs", "reason": "doc drift"},
+                {"path": "main.py", "snippet": "entrypoint", "reason": "entrypoint drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "create helper to export repo manifest summary as markdown",
+            dirty_context,
+            command_mode="changes",
+            stage_name="spec",
+        )
+
+        _assert_repo_context_snapshot(
+            self,
+            repo_context,
+            {
+                "resolved_target_files": ["tools/repo_tools.py"],
+                "files_used": ["tools/repo_tools.py"],
+                "file_selection_keys": ["tools/repo_tools.py"],
+                "chunk_paths": ["tools/repo_tools.py"],
+            },
+        )
+
+    def test_repo_context_snapshot_impl_focused_spec(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "modify",
+                "symbol_hints": ["search_in_repo"],
+                "path_hints": ["repo_tools"],
+                "keywords": ["search_in_repo", "repo_tools", "implementation"],
+                "clean_query": "review existing search_in_repo implementation in repo_tools",
+            },
+            "resolved_target_files": ["tools/repo_tools.py", "output/repo_manifest.json"],
+            "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            "files_used": [
+                "tools/repo_tools.py",
+                "output/repo_manifest.json",
+                "agents/review_agent.py",
+                "README.md",
+            ],
+            "file_selection": {
+                "tools/repo_tools.py": ["symbol definition"],
+                "output/repo_manifest.json": ["candidate file score"],
+                "agents/review_agent.py": ["drift"],
+            },
+            "chunks": [
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+                {"path": "output/repo_manifest.json", "snippet": "{}", "reason": "artifact drift"},
+                {"path": "agents/review_agent.py", "snippet": "internal", "reason": "drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "review existing search_in_repo implementation in repo_tools",
+            dirty_context,
+            command_mode="spec",
+            stage_name="spec",
+        )
+
+        _assert_repo_context_snapshot(
+            self,
+            repo_context,
+            {
+                "resolved_target_files": ["tools/repo_tools.py"],
+                "files_used": ["tools/repo_tools.py"],
+                "file_selection_keys": ["tools/repo_tools.py"],
+                "chunk_paths": ["tools/repo_tools.py"],
+                "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            },
+        )
+
+    def test_repo_context_snapshot_symbol_only_draft(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "modify",
+                "symbol_hints": ["search_in_repo"],
+                "path_hints": [],
+                "keywords": ["search_in_repo"],
+                "clean_query": "search_in_repo",
+            },
+            "resolved_target_files": ["tools/repo_tools.py", "README.md"],
+            "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py", "README.md"]},
+            "files_used": [
+                "README.md",
+                "tools/repo_tools.py",
+                "main.py",
+                "telegram_bot.py",
+                "agents/change_agent.py",
+                "tests/test_repo_commands.py",
+            ],
+            "file_selection": {
+                "README.md": ["drift"],
+                "tools/repo_tools.py": ["symbol definition"],
+                "main.py": ["drift"],
+            },
+            "chunks": [
+                {"path": "README.md", "snippet": "docs", "reason": "drift"},
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+                {"path": "main.py", "snippet": "entrypoint", "reason": "drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "add completion log to search_in_repo",
+            dirty_context,
+            command_mode="drafts",
+            stage_name="spec",
+        )
+
+        _assert_repo_context_snapshot(
+            self,
+            repo_context,
+            {
+                "resolved_target_files": ["tools/repo_tools.py"],
+                "files_used": ["tools/repo_tools.py"],
+                "file_selection_keys": ["tools/repo_tools.py"],
+                "chunk_paths": ["tools/repo_tools.py"],
+                "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            },
+        )
+
     def test_review_implementation_context_excludes_docs_entrypoints_and_agents(self) -> None:
         dirty_context = {
             "parsed_query": {
@@ -746,10 +1104,57 @@ class RepoContextShapingTests(unittest.TestCase):
             stage_name="spec",
         )
 
-        _assert_target(self, repo_context, "tools/repo_tools.py", "search_in_repo")
-        _assert_no_drift(self, repo_context)
-        _assert_context_structures_sanitized(self, repo_context)
-        _assert_file_selection_consistent(self, repo_context)
+        assert_review_mode_repo_context(self, repo_context, "tools/repo_tools.py", "search_in_repo")
+
+    def test_repo_context_snapshot_review_mode(self) -> None:
+        dirty_context = {
+            "parsed_query": {
+                "intent": "review",
+                "symbol_hints": ["search_in_repo"],
+                "path_hints": ["repo_tools"],
+                "keywords": ["search_in_repo", "repo_tools"],
+                "clean_query": "review existing search_in_repo implementation in repo_tools",
+            },
+            "resolved_target_files": ["tools/repo_tools.py"],
+            "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            "files_used": [
+                "tools/repo_tools.py",
+                "README.md",
+                "main.py",
+                "telegram_bot.py",
+                "agents/review_agent.py",
+                "tests/test_repo_commands.py",
+            ],
+            "file_selection": {
+                "tools/repo_tools.py": ["symbol definition"],
+                "README.md": ["drift"],
+                "telegram_bot.py": ["drift"],
+            },
+            "chunks": [
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+                {"path": "README.md", "snippet": "docs", "reason": "drift"},
+                {"path": "telegram_bot.py", "snippet": "bot", "reason": "drift"},
+            ],
+        }
+
+        repo_context = root_agent._prepare_final_repo_context_for_downstream(
+            "review existing search_in_repo implementation in repo_tools",
+            dirty_context,
+            command_mode="review",
+            stage_name="spec",
+        )
+
+        _assert_repo_context_snapshot(
+            self,
+            repo_context,
+            {
+                "resolved_target_files": ["tools/repo_tools.py"],
+                "files_used": ["tools/repo_tools.py"],
+                "file_selection_keys": ["tools/repo_tools.py"],
+                "chunk_paths": ["tools/repo_tools.py"],
+                "resolved_symbols": {"search_in_repo": ["tools/repo_tools.py"]},
+            },
+        )
 
     def test_spec_implementation_focused_request_passes_sanitized_context_to_downstream_agents(self) -> None:
         request = "підготуй специфікацію для додавання більш детального логування в search_in_repo"
@@ -787,6 +1192,31 @@ class RepoContextShapingTests(unittest.TestCase):
 
         self.assertTrue(spec_result.success)
         self.assertTrue(code_result.success)
+
+    def test_finalized_repo_context_consistency_cleans_stale_parallel_structures(self) -> None:
+        repo_context = {
+            "resolved_target_files": ["tools/repo_tools.py", "tools/repo_tools.py"],
+            "files_used": ["tools/repo_tools.py"],
+            "file_selection": {
+                "tools/repo_tools.py": ["symbol definition"],
+                "README.md": ["stale drift"],
+            },
+            "chunks": [
+                {"path": "tools/repo_tools.py", "snippet": "def search_in_repo(...)", "reason": "symbol definition"},
+                {"path": "tools/repo_tools.py", "snippet": "duplicate", "reason": "duplicate"},
+                {"path": "", "snippet": "invalid", "reason": "invalid"},
+            ],
+            "total_chunks": 99,
+        }
+
+        finalized = root_agent._prepare_final_repo_context_for_downstream(
+            "review existing search_in_repo implementation in repo_tools",
+            repo_context,
+            command_mode="spec",
+            stage_name="spec",
+        )
+
+        _assert_finalized_repo_context_consistent(self, finalized)
 
 
 if __name__ == "__main__":
