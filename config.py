@@ -34,13 +34,13 @@ class Settings(BaseSettings):
     # off | error | warn | info | debug | trace
     log_level_file: str = "debug"
 
-    log_console_max_chars: int = 0
+    log_console_max_chars: int = 600
     log_file_max_chars: int = 0
 
     # pipeline console output:
     # full | summary | off
     pipeline_console_output_mode: str = "summary"
-    pipeline_console_preview_chars: int = 3000
+    pipeline_console_preview_chars: int = 1200
 
     model_config = SettingsConfigDict(
         env_file=".env",

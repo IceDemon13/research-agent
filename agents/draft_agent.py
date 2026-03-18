@@ -16,6 +16,7 @@ from tools.repo_tools import (
     format_repo_context,
     read_file_range,
     read_repo_file,
+    validate_manifest_file_path,
     validate_manifest_file_paths,
 )
 
@@ -107,6 +108,22 @@ def _get_locked_symbol_names(repo_context: dict | None) -> list[str]:
         for symbol in parsed_query.get("symbol_hints", [])
         if str(symbol).strip()
     ]
+
+
+def _has_unique_symbol_locked_target(
+    repo_context: dict | None,
+    locked_paths: list[str],
+    locked_symbols: list[str],
+) -> bool:
+    if len(locked_paths) != 1 or len(locked_symbols) != 1:
+        return False
+
+    path = (locked_paths[0] or "").strip()
+    if not path or not validate_manifest_file_path(path, "."):
+        return False
+
+    symbol_scope = _get_symbol_scope_for_file(path, repo_context)
+    return bool(symbol_scope and str(symbol_scope.get("symbol", "")).strip() == locked_symbols[0])
 
 
 def _get_symbol_scope_for_file(path: str, repo_context: dict | None) -> dict | None:
@@ -389,6 +406,8 @@ def _format_draft_debug_block(
     draft_preserved_helper_usage: bool = True,
     draft_preserved_core_logic: bool = True,
     draft_rewrite_strategy: str = "surgical_edit",
+    draft_rewrite_attempts: int = 0,
+    draft_used_safe_fallback: bool = False,
 ) -> str:
     missing_items = list(missing_delta_items or [])
     return "\n".join(
@@ -402,6 +421,8 @@ def _format_draft_debug_block(
             f"DRAFT_PRESERVED_HELPER_USAGE={'true' if draft_preserved_helper_usage else 'false'}",
             f"DRAFT_PRESERVED_CORE_LOGIC={'true' if draft_preserved_core_logic else 'false'}",
             f"DRAFT_REWRITE_STRATEGY={draft_rewrite_strategy}",
+            f"DRAFT_REWRITE_ATTEMPTS={draft_rewrite_attempts}",
+            f"DRAFT_USED_SAFE_FALLBACK={'true' if draft_used_safe_fallback else 'false'}",
             f"SHORT_CIRCUIT_REASON={short_circuit_reason}",
             f"REQUESTED_DELTA_PRESENT={'true' if requested_delta_present else 'false'}",
             f"MISSING_DELTA_ITEMS={missing_items}",
@@ -973,7 +994,7 @@ def _build_forced_symbol_level_draft(
     repo_context: dict | None,
     locked_paths: list[str],
     locked_symbols: list[str],
-) -> tuple[DraftSet, str, str] | None:
+) -> tuple[DraftSet, str, str, dict] | None:
     if len(locked_paths) != 1 or len(locked_symbols) != 1:
         return None
 
@@ -998,10 +1019,27 @@ def _build_forced_symbol_level_draft(
     )
 
     logging_injection_only = _is_logging_only_modify_request(original_request)
-
-    if symbol_name == "search_in_repo" and "search_in_repo" in (original_request or "").lower() and not logging_injection_only:
-        replacement_symbol_text = _build_search_in_repo_rewrite()
-    else:
+    rewrite_attempts = 1
+    replacement_symbol_text = _generate_symbol_only_rewrite(
+        original_request=original_request,
+        path=path,
+        symbol_name=symbol_name,
+        current_symbol_text=current_symbol_text,
+        file_change=matching_change,
+        repo_context=repo_context,
+        logging_injection_only=logging_injection_only,
+    )
+    preserved_return_shape, preserved_helper_usage, preserved_core_logic, preserved_signature = _evaluate_symbol_preservation(
+        current_symbol_text,
+        replacement_symbol_text,
+    )
+    if not (
+        preserved_return_shape
+        and preserved_helper_usage
+        and preserved_core_logic
+        and preserved_signature
+    ):
+        rewrite_attempts = 2
         replacement_symbol_text = _generate_symbol_only_rewrite(
             original_request=original_request,
             path=path,
@@ -1009,6 +1047,7 @@ def _build_forced_symbol_level_draft(
             current_symbol_text=current_symbol_text,
             file_change=matching_change,
             repo_context=repo_context,
+            strict_retry=True,
             logging_injection_only=logging_injection_only,
         )
         preserved_return_shape, preserved_helper_usage, preserved_core_logic, preserved_signature = _evaluate_symbol_preservation(
@@ -1021,27 +1060,7 @@ def _build_forced_symbol_level_draft(
             and preserved_core_logic
             and preserved_signature
         ):
-            replacement_symbol_text = _generate_symbol_only_rewrite(
-                original_request=original_request,
-                path=path,
-                symbol_name=symbol_name,
-                current_symbol_text=current_symbol_text,
-                file_change=matching_change,
-                repo_context=repo_context,
-                strict_retry=True,
-                logging_injection_only=logging_injection_only,
-            )
-            preserved_return_shape, preserved_helper_usage, preserved_core_logic, preserved_signature = _evaluate_symbol_preservation(
-                current_symbol_text,
-                replacement_symbol_text,
-            )
-            if not (
-                preserved_return_shape
-                and preserved_helper_usage
-                and preserved_core_logic
-                and preserved_signature
-            ):
-                return None
+            return None
 
     if not replacement_symbol_text.strip():
         return None
@@ -1054,6 +1073,16 @@ def _build_forced_symbol_level_draft(
     why_text = f"Update only the locked symbol {symbol_name} while preserving surrounding file structure."
     if matching_change:
         why_text = matching_change.why or why_text
+
+    debug_details = {
+        "draft_rewrite_strategy": "behavior_preserving_symbol_rewrite",
+        "draft_rewrite_attempts": rewrite_attempts,
+        "draft_used_safe_fallback": False,
+        "draft_preserved_return_shape": preserved_return_shape,
+        "draft_preserved_helper_usage": preserved_helper_usage,
+        "draft_preserved_core_logic": preserved_core_logic,
+        "draft_preserved_signature": preserved_signature,
+    }
 
     return (
         DraftSet(
@@ -1069,6 +1098,7 @@ def _build_forced_symbol_level_draft(
         ),
         path,
         replacement_symbol_text,
+        debug_details,
     )
 
 
@@ -1093,9 +1123,9 @@ def _format_draft_set_output(draft_set: DraftSet) -> str:
     files_text = "\n\n".join(file_blocks)
     return (
         "# Draft Set\n\n"
-        f"## 1. РњРµС‚Р°\n{draft_set.goal or 'Draft set'}\n\n"
+        f"## 1. Мета\n{draft_set.goal or 'Draft set'}\n\n"
         f"## 2. Draft files\n\n{files_text}\n\n"
-        f"## 3. Р РёР·РёРєРё\n{risks_text}"
+        f"## 3. Ризики\n{risks_text}"
     )
 
 
@@ -1109,7 +1139,7 @@ def _format_symbol_only_draft_output(
     risks_text = "\n".join(f"- {item}" for item in risks) or "- none"
     return (
         "# Draft Set\n\n"
-        f"## 1. Р СљР ВµРЎвЂљР В°\n{goal or 'Draft set'}\n\n"
+        f"## 1. Мета\n{goal or 'Draft set'}\n\n"
         "## 2. Draft files\n\n"
         f"### File: {path}\n"
         f"### Symbol: {symbol_name}\n"
@@ -1119,7 +1149,7 @@ def _format_symbol_only_draft_output(
         "<<<FILE_CONTENT_START\n"
         f"{symbol_text.rstrip()}\n"
         "<<<FILE_CONTENT_END\n\n"
-        f"## 3. Р В Р С‘Р В·Р С‘Р С”Р С‘\n{risks_text}"
+        f"## 3. Ризики\n{risks_text}"
     )
 
 
@@ -1128,27 +1158,285 @@ def _format_logging_insertion_plan_output(
     symbol_name: str,
     missing_delta_items: list[str],
 ) -> str:
-    insertion_points: list[str] = []
+    current_text = read_repo_file(path, max_chars=400000)
+    current_symbol_text = _extract_symbol_text(current_text, symbol_name) or _read_symbol_current_text(path, None, current_text)
+    symbol_lines = current_symbol_text.splitlines()
 
-    for item in missing_delta_items:
-        lowered = item.lower()
-        if "empty query" in lowered or "start_line/end_line" in lowered:
-            insertion_points.append(f"- Add `log_line(...)` immediately before the existing validation return in `{symbol_name}` for: {item}.")
-        elif "invalid root path" in lowered or "invalid path" in lowered or "file access" in lowered or "manifest unavailable" in lowered:
-            insertion_points.append(f"- Add `log_line(...)` on the existing failure branch in `{symbol_name}` for: {item}.")
-        elif "completion" in lowered or "candidate count" in lowered or "result count" in lowered or "range read" in lowered:
-            insertion_points.append(f"- Add `log_line(...)` immediately before the final successful return in `{symbol_name}` for: {item}.")
-        else:
-            insertion_points.append(f"- Add a minimal local `log_line(...)` in `{symbol_name}` for: {item}.")
+    def find_nearby_line(*needles: str) -> str:
+        lowered_lines = [(line, line.strip().lower()) for line in symbol_lines if line.strip()]
+        for needle in needles:
+            lowered_needle = needle.lower()
+            for original, lowered in lowered_lines:
+                if lowered_needle in lowered:
+                    return original.strip()
+        return symbol_lines[0].strip() if symbol_lines else f"def {symbol_name}(...):"
 
-    plan_text = "\n".join(insertion_points) or f"- Add minimal `log_line(...)` statements inside `{symbol_name}` without changing control flow."
+    def build_patch_block(
+        title: str,
+        nearby_line: str,
+        new_lines: list[str],
+    ) -> str:
+        new_lines_block = "\n".join(f"  {line}" for line in new_lines)
+        return "\n".join(
+            [
+                f"- Insertion point: {title}",
+                f"  Existing nearby line: `{nearby_line}`",
+                "  New line(s) to add:",
+                new_lines_block,
+            ]
+        )
+
+    patch_blocks: list[str] = []
+    normalized_symbol = (symbol_name or "").strip().lower()
+
+    if normalized_symbol == "search_in_repo":
+        for item in missing_delta_items:
+            lowered = item.lower()
+            if "empty query" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before empty-query return",
+                        find_nearby_line("if not needle:"),
+                        ['log_line("REPO SEARCH FAILED: query is empty")'],
+                    )
+                )
+            elif "invalid root path" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before invalid-root return",
+                        find_nearby_line("if not root.exists()", "if not root.exists() or not root.is_dir():"),
+                        ['log_line(f"REPO SEARCH FAILED: invalid root path {root_path}")'],
+                    )
+                )
+            elif "query" in lowered or "root_path" in lowered or "max_results" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "after query normalization and before validation branches",
+                        find_nearby_line("needle ="),
+                        ['log_line(f"REPO SEARCH START: query={query!r} root_path={root_path!r} max_results={max_results}")'],
+                    )
+                )
+            elif "result count" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before final successful return",
+                        find_nearby_line("return results"),
+                        ['log_line(f"REPO SEARCH READY: found {len(results)} matches for query={query!r}")'],
+                    )
+                )
+
+    elif normalized_symbol == "read_file_range":
+        for item in missing_delta_items:
+            lowered = item.lower()
+            if "start_line/end_line" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before invalid line number return",
+                        find_nearby_line("if start_line < 1 or end_line < 1:", "if end_line < start_line:"),
+                        ['log_line(f"READ FILE RANGE FAILED: invalid line arguments start_line={start_line} end_line={end_line}")'],
+                    )
+                )
+            elif "invalid path or file access" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before invalid path/file access return",
+                        find_nearby_line("if not candidate.exists():", "if not candidate.is_file():", "if _is_ignored(candidate):", "if not _is_text_file(candidate):", "if handle is None:"),
+                        ['log_line(f"READ FILE RANGE FAILED: unable to access path {raw_path}")'],
+                    )
+                )
+            elif "range read" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before final successful return",
+                        find_nearby_line("return f\"# FILE:", "return f'# FILE:"),
+                        ['log_line(f"READ FILE RANGE READY: path={raw_path} lines={start_line}-{actual_end_line}")'],
+                    )
+                )
+
+    elif normalized_symbol == "select_candidate_files":
+        for item in missing_delta_items:
+            lowered = item.lower()
+            if "normalized query" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "after normalized query creation",
+                        find_nearby_line("normalized_query ="),
+                        ['log_line(f"CANDIDATE FILES START: query={normalized_query!r} root_path={root_path!r} max_files={max_files}")'],
+                    )
+                )
+            elif "invalid root path" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before invalid root return",
+                        find_nearby_line("if not root.exists() or not root.is_dir():"),
+                        ['log_line(f"CANDIDATE FILES FAILED: invalid root path {root_path}")'],
+                    )
+                )
+            elif "manifest unavailable" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before manifest unavailable return",
+                        find_nearby_line("if not manifest.get(\"ok\"):", "if not manifest.get('ok'):"),
+                        ['log_line("CANDIDATE FILES FAILED: manifest unavailable")'],
+                    )
+                )
+            elif "candidate count" in lowered or "top reasons" in lowered:
+                patch_blocks.append(
+                    build_patch_block(
+                        "before final successful return",
+                        find_nearby_line("return selected"),
+                        [
+                            'log_line(f"CANDIDATE FILES TOP: {top_path} chosen for query={normalized_query!r} because {top_reasons or [\'highest score\']}")',
+                            'log_line(f"CANDIDATE FILES READY: selected {len(selected)} files for query={normalized_query!r}")',
+                        ],
+                    )
+                )
+
+    if not patch_blocks:
+        patch_blocks.append(
+            build_patch_block(
+                "inside the locked symbol without changing control flow",
+                find_nearby_line(f"def {symbol_name}("),
+                ['log_line("Add minimal symbol-specific logging here without changing existing logic")'],
+            )
+        )
 
     return (
         "# Draft Generation Failure\n\n"
         f"File: {path}\n"
         f"Symbol: {symbol_name}\n"
-        "Safe fallback suggestion:\n"
-        f"{plan_text}"
+        "Patch-only safe fallback:\n"
+        f"{chr(10).join(patch_blocks)}"
+    )
+
+
+def _request_explicitly_allows_multi_file_change(original_request: str) -> bool:
+    lowered = (original_request or "").lower()
+    multi_file_markers = (
+        "multiple files",
+        "multi-file",
+        "two files",
+        "several files",
+        "across files",
+        "across multiple files",
+    )
+    return any(marker in lowered for marker in multi_file_markers)
+
+
+def _request_explicitly_allows_signature_change(original_request: str) -> bool:
+    lowered = (original_request or "").lower()
+    markers = (
+        "change signature",
+        "update signature",
+        "change parameters",
+        "add parameter",
+        "remove parameter",
+        "rename parameter",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def _request_explicitly_allows_return_change(original_request: str) -> bool:
+    lowered = (original_request or "").lower()
+    markers = (
+        "change return",
+        "change return type",
+        "change output format",
+        "change output shape",
+        "change response format",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def _request_explicitly_allows_helper_change(original_request: str) -> bool:
+    lowered = (original_request or "").lower()
+    markers = (
+        "replace helper",
+        "change helper",
+        "swap helper",
+        "use logging instead of log_line",
+        "replace log_line with logging",
+    )
+    return any(marker in lowered for marker in markers)
+
+
+def _collect_locked_modify_safety_failures(
+    original_request: str,
+    draft_set: DraftSet,
+    locked_paths: list[str],
+    locked_symbols: list[str],
+    draft_preserved_return_shape: bool,
+    draft_preserved_helper_usage: bool,
+    draft_preserved_core_logic: bool,
+) -> list[str]:
+    failures: list[str] = []
+
+    if len(draft_set.files) != 1 and not _request_explicitly_allows_multi_file_change(original_request):
+        failures.append("multiple_files_not_allowed")
+    if len(locked_paths) != 1:
+        failures.append("one_target_file_required")
+    if len(locked_symbols) != 1:
+        failures.append("one_target_symbol_required")
+    if not draft_preserved_return_shape and not _request_explicitly_allows_return_change(original_request):
+        failures.append("return_shape_not_preserved")
+    if not draft_preserved_helper_usage and not _request_explicitly_allows_helper_change(original_request):
+        failures.append("helper_usage_not_preserved")
+    if not draft_preserved_core_logic:
+        failures.append("core_logic_not_preserved")
+
+    return list(dict.fromkeys(failures))
+
+
+def _build_locked_modify_patch_fallback_result(
+    original_request: str,
+    task_intent: str,
+    repo_context: dict | None,
+    locked_paths: list[str],
+    locked_symbols: list[str],
+    short_circuit_used: bool,
+    short_circuit_reason: str,
+    requested_delta_present: bool,
+    missing_delta_items: list[str],
+    safety_failures: list[str],
+    draft_behavior_preservation_mode: str,
+    draft_rewrite_attempts: int,
+) -> AgentResult:
+    fallback_path = locked_paths[0] if locked_paths else "<unknown>"
+    fallback_symbol = locked_symbols[0] if locked_symbols else "<unknown>"
+    fallback_output = (
+        f"{_format_draft_debug_block(short_circuit_used, 'locked_modify_safety_rules_failed', requested_delta_present, missing_delta_items, True, 'surgical_edit', 'symbol_only', draft_behavior_preservation_mode, False, False, False, 'patch_only_fallback', draft_rewrite_attempts, True)}\n"
+        "DRAFT_GENERATION_FAILED_REASON=locked_modify_safety_rules_failed\n"
+        f"PRESERVATION_FAILURE_FIELDS={safety_failures}\n"
+        f"{_format_logging_insertion_plan_output(fallback_path, fallback_symbol, missing_delta_items)}"
+    )
+    return AgentResult(
+        agent_name="draft",
+        output_text=fallback_output,
+        success=False,
+        task_intent=task_intent,
+        repo_context=repo_context or {},
+        metadata={
+            "artifact_type": "draft_set",
+            "draft_set": _build_empty_draft_set(),
+            "draft_debug": {
+                "short_circuit_used": short_circuit_used,
+                "short_circuit_reason": "locked_modify_safety_rules_failed",
+                "requested_delta_present": requested_delta_present,
+                "missing_delta_items": missing_delta_items,
+                "forced_draft_used": True,
+                "draft_generation_mode": "surgical_edit",
+                "draft_output_scope": "symbol_only",
+                "draft_behavior_preservation_mode": draft_behavior_preservation_mode,
+                "draft_preserved_return_shape": False,
+                "draft_preserved_helper_usage": False,
+                "draft_preserved_core_logic": False,
+                "draft_rewrite_strategy": "patch_only_fallback",
+                "draft_rewrite_attempts": draft_rewrite_attempts,
+                "draft_used_safe_fallback": True,
+                "draft_generation_failed_reason": "locked_modify_safety_rules_failed",
+                "preservation_failure_fields": list(safety_failures),
+            },
+        },
     )
 
 
@@ -1400,6 +1688,11 @@ def run_draft_agent(
     chunks = resolved_repo_context.get("chunks") if isinstance(resolved_repo_context, dict) else []
     repo_context_empty = not files_used and not chunks
     exact_target_present = any(path in files_used for path in locked_paths)
+    unique_symbol_target_present = _has_unique_symbol_locked_target(
+        resolved_repo_context,
+        locked_paths,
+        locked_symbols,
+    )
     symbol_present_in_chunks = any(
         _get_symbol_scope_for_file(path, resolved_repo_context) is not None
         for path in locked_paths
@@ -1413,6 +1706,8 @@ def run_draft_agent(
     draft_preserved_helper_usage = True
     draft_preserved_core_logic = True
     draft_rewrite_strategy = "surgical_edit"
+    draft_rewrite_attempts = 0
+    draft_used_safe_fallback = False
     if locked_paths and task_intent in {"modify", "review"}:
         log_line(f"TARGET FILE LOCKED: {locked_paths}")
         change_set = _filter_change_set_to_locked_targets(change_set, locked_paths)
@@ -1463,7 +1758,7 @@ def run_draft_agent(
             "DRAFT AGENT: target file and symbol present in repo context; continuing without insufficient-context fallback"
         )
     elif locked_paths and not change_set.files:
-        if task_intent == "modify" and exact_target_present and symbol_present_in_chunks:
+        if task_intent == "modify" and (exact_target_present or unique_symbol_target_present) and symbol_present_in_chunks:
             log_line(
                 "DRAFT AGENT: forcing draft generation from valid locked modify context"
             )
@@ -1475,13 +1770,13 @@ def run_draft_agent(
             )
             change_set = _build_locked_change_set(original_request, locked_paths, change_set, locked_symbols)
         else:
-            if task_intent == "modify" and not repo_context_empty and exact_target_present and relevant_chunks_found:
+            if task_intent == "modify" and not repo_context_empty and (exact_target_present or unique_symbol_target_present) and relevant_chunks_found:
                 log_line(
                     "DRAFT AGENT: bypassing invalid insufficient-context fallback for modify request with valid target context"
                 )
                 change_set = _build_locked_change_set(original_request, locked_paths, change_set, locked_symbols)
                 forced_draft_used = True
-            elif not repo_context_empty and exact_target_present and symbol_present_in_chunks:
+            elif not repo_context_empty and (exact_target_present or unique_symbol_target_present) and symbol_present_in_chunks:
                 log_line(
                     "DRAFT AGENT: bypassing invalid insufficient-context fallback for locked target context"
                 )
@@ -1511,6 +1806,8 @@ def run_draft_agent(
                             "draft_preserved_helper_usage": draft_preserved_helper_usage,
                             "draft_preserved_core_logic": draft_preserved_core_logic,
                             "draft_rewrite_strategy": draft_rewrite_strategy,
+                            "draft_rewrite_attempts": draft_rewrite_attempts,
+                            "draft_used_safe_fallback": draft_used_safe_fallback,
                         },
                     },
                 )
@@ -1523,7 +1820,7 @@ def run_draft_agent(
 
     if (
         task_intent == "modify"
-        and exact_target_present
+        and (exact_target_present or unique_symbol_target_present)
         and symbol_present_in_chunks
         and len(locked_paths) == 1
         and len(locked_symbols) == 1
@@ -1537,13 +1834,14 @@ def run_draft_agent(
             locked_symbols=locked_symbols,
         )
         if forced_symbol_draft_bundle is not None:
-            forced_symbol_draft, forced_path, forced_symbol_text = forced_symbol_draft_bundle
-            log_line("DRAFT AGENT: forcing symbol-level surgical draft generation")
+            forced_symbol_draft, forced_path, forced_symbol_text, forced_debug = forced_symbol_draft_bundle
+            log_line("DRAFT AGENT: forcing behavior-preserving symbol rewrite draft generation")
             forced_draft_used = True
             draft_generation_mode = "surgical_edit"
             draft_output_scope = "symbol_only"
-            if _is_logging_only_modify_request(original_request):
-                draft_rewrite_strategy = "logging_injection"
+            draft_rewrite_strategy = str(forced_debug.get("draft_rewrite_strategy", "behavior_preserving_symbol_rewrite"))
+            draft_rewrite_attempts = int(forced_debug.get("draft_rewrite_attempts", 0))
+            draft_used_safe_fallback = bool(forced_debug.get("draft_used_safe_fallback", False))
             current_symbol_text = _extract_symbol_text(
                 read_repo_file(forced_path, max_chars=400000),
                 locked_symbols[0],
@@ -1565,8 +1863,35 @@ def run_draft_agent(
             ):
                 log_line("DRAFT AGENT: rejecting forced draft because preservation validation failed")
             else:
+                locked_modify_safety_failures = _collect_locked_modify_safety_failures(
+                    original_request=original_request,
+                    draft_set=forced_symbol_draft,
+                    locked_paths=locked_paths,
+                    locked_symbols=locked_symbols,
+                    draft_preserved_return_shape=draft_preserved_return_shape,
+                    draft_preserved_helper_usage=draft_preserved_helper_usage,
+                    draft_preserved_core_logic=draft_preserved_core_logic,
+                )
+                if locked_modify_safety_failures:
+                    log_line(
+                        f"DRAFT AGENT: locked modify safety rules failed {locked_modify_safety_failures}"
+                    )
+                    return _build_locked_modify_patch_fallback_result(
+                        original_request=original_request,
+                        task_intent=task_intent,
+                        repo_context=resolved_repo_context,
+                        locked_paths=locked_paths,
+                        locked_symbols=locked_symbols,
+                        short_circuit_used=short_circuit_used,
+                        short_circuit_reason=short_circuit_reason,
+                        requested_delta_present=requested_delta_present,
+                        missing_delta_items=missing_delta_items,
+                        safety_failures=locked_modify_safety_failures,
+                        draft_behavior_preservation_mode=draft_behavior_preservation_mode,
+                        draft_rewrite_attempts=draft_rewrite_attempts,
+                    )
                 forced_output = (
-                    f"{_format_draft_debug_block(short_circuit_used, short_circuit_reason, requested_delta_present, missing_delta_items, forced_draft_used, draft_generation_mode, draft_output_scope, draft_behavior_preservation_mode, draft_preserved_return_shape, draft_preserved_helper_usage, draft_preserved_core_logic, draft_rewrite_strategy)}\n"
+                    f"{_format_draft_debug_block(short_circuit_used, short_circuit_reason, requested_delta_present, missing_delta_items, forced_draft_used, draft_generation_mode, draft_output_scope, draft_behavior_preservation_mode, draft_preserved_return_shape, draft_preserved_helper_usage, draft_preserved_core_logic, draft_rewrite_strategy, draft_rewrite_attempts, draft_used_safe_fallback)}\n"
                     f"{_format_symbol_only_draft_output(forced_path, locked_symbols[0], forced_symbol_text, forced_symbol_draft.goal, forced_symbol_draft.risks)}"
                 )
                 return AgentResult(
@@ -1591,18 +1916,23 @@ def run_draft_agent(
                             "draft_preserved_helper_usage": draft_preserved_helper_usage,
                             "draft_preserved_core_logic": draft_preserved_core_logic,
                             "draft_rewrite_strategy": draft_rewrite_strategy,
+                            "draft_rewrite_attempts": draft_rewrite_attempts,
+                            "draft_used_safe_fallback": draft_used_safe_fallback,
                         },
                     },
                 )
         if logging_injection_only:
             log_line("DRAFT AGENT: locked logging-injection draft failed preservation validation")
+            draft_rewrite_strategy = "behavior_preserving_symbol_rewrite"
+            draft_rewrite_attempts = 2
+            draft_used_safe_fallback = True
             preservation_failure_fields = [
                 "return_shape",
                 "helper_usage",
                 "core_logic",
             ]
             failure_output = (
-                f"{_format_draft_debug_block(short_circuit_used, 'preservation_validation_failed', requested_delta_present, missing_delta_items, True, 'surgical_edit', 'symbol_only', draft_behavior_preservation_mode, False, False, False, 'logging_injection')}\n"
+                f"{_format_draft_debug_block(short_circuit_used, 'preservation_validation_failed', requested_delta_present, missing_delta_items, True, 'surgical_edit', 'symbol_only', draft_behavior_preservation_mode, False, False, False, draft_rewrite_strategy, draft_rewrite_attempts, draft_used_safe_fallback)}\n"
                 "DRAFT_GENERATION_FAILED_REASON=preservation_validation_failed\n"
                 f"PRESERVATION_FAILURE_FIELDS={preservation_failure_fields}\n"
                 f"{_format_logging_insertion_plan_output(locked_paths[0], locked_symbols[0], missing_delta_items)}"
@@ -1628,7 +1958,9 @@ def run_draft_agent(
                         "draft_preserved_return_shape": False,
                         "draft_preserved_helper_usage": False,
                         "draft_preserved_core_logic": False,
-                        "draft_rewrite_strategy": "logging_injection",
+                        "draft_rewrite_strategy": draft_rewrite_strategy,
+                        "draft_rewrite_attempts": draft_rewrite_attempts,
+                        "draft_used_safe_fallback": draft_used_safe_fallback,
                         "draft_generation_failed_reason": "preservation_validation_failed",
                         "preservation_failure_fields": preservation_failure_fields,
                     },
@@ -1664,6 +1996,8 @@ def run_draft_agent(
                     "draft_preserved_helper_usage": draft_preserved_helper_usage,
                     "draft_preserved_core_logic": draft_preserved_core_logic,
                     "draft_rewrite_strategy": draft_rewrite_strategy,
+                    "draft_rewrite_attempts": draft_rewrite_attempts,
+                    "draft_used_safe_fallback": draft_used_safe_fallback,
                 },
             },
         )
@@ -1701,13 +2035,71 @@ def run_draft_agent(
     if locked_paths:
         draft_set = _filter_draft_set_to_locked_targets(draft_set, locked_paths)
 
+    if (
+        task_intent == "modify"
+        and len(locked_paths) == 1
+        and len(locked_symbols) == 1
+        and draft_set.files
+    ):
+        current_symbol_text = _extract_symbol_text(
+            read_repo_file(locked_paths[0], max_chars=400000),
+            locked_symbols[0],
+        )
+        drafted_file = next(
+            (
+                file_draft
+                for file_draft in draft_set.files
+                if (file_draft.path or "").strip() == locked_paths[0]
+            ),
+            None,
+        )
+        drafted_symbol_text = ""
+        if drafted_file is not None:
+            drafted_symbol_text = _extract_symbol_text(drafted_file.content or "", locked_symbols[0])
+
+        if current_symbol_text.strip() and drafted_symbol_text.strip():
+            (
+                draft_preserved_return_shape,
+                draft_preserved_helper_usage,
+                draft_preserved_core_logic,
+                _draft_preserved_signature,
+            ) = _evaluate_symbol_preservation(current_symbol_text, drafted_symbol_text)
+
+        locked_modify_safety_failures = _collect_locked_modify_safety_failures(
+            original_request=original_request,
+            draft_set=draft_set,
+            locked_paths=locked_paths,
+            locked_symbols=locked_symbols,
+            draft_preserved_return_shape=draft_preserved_return_shape,
+            draft_preserved_helper_usage=draft_preserved_helper_usage,
+            draft_preserved_core_logic=draft_preserved_core_logic,
+        )
+        if locked_modify_safety_failures:
+            log_line(
+                f"DRAFT AGENT: generic locked modify draft failed safety rules {locked_modify_safety_failures}"
+            )
+            return _build_locked_modify_patch_fallback_result(
+                original_request=original_request,
+                task_intent=task_intent,
+                repo_context=resolved_repo_context,
+                locked_paths=locked_paths,
+                locked_symbols=locked_symbols,
+                short_circuit_used=short_circuit_used,
+                short_circuit_reason=short_circuit_reason,
+                requested_delta_present=requested_delta_present,
+                missing_delta_items=missing_delta_items,
+                safety_failures=locked_modify_safety_failures,
+                draft_behavior_preservation_mode=draft_behavior_preservation_mode,
+                draft_rewrite_attempts=draft_rewrite_attempts,
+            )
+
     if draft_generation_mode == "other":
         draft_generation_mode = "partial"
     if draft_output_scope == "full_file":
         draft_output_scope = "full_file"
 
     answer = (
-        f"{_format_draft_debug_block(short_circuit_used, short_circuit_reason, requested_delta_present, missing_delta_items, forced_draft_used, draft_generation_mode, draft_output_scope, draft_behavior_preservation_mode, draft_preserved_return_shape, draft_preserved_helper_usage, draft_preserved_core_logic, draft_rewrite_strategy)}\n"
+        f"{_format_draft_debug_block(short_circuit_used, short_circuit_reason, requested_delta_present, missing_delta_items, forced_draft_used, draft_generation_mode, draft_output_scope, draft_behavior_preservation_mode, draft_preserved_return_shape, draft_preserved_helper_usage, draft_preserved_core_logic, draft_rewrite_strategy, draft_rewrite_attempts, draft_used_safe_fallback)}\n"
         f"{answer}"
     )
 
@@ -1733,6 +2125,8 @@ def run_draft_agent(
                 "draft_preserved_helper_usage": draft_preserved_helper_usage,
                 "draft_preserved_core_logic": draft_preserved_core_logic,
                 "draft_rewrite_strategy": draft_rewrite_strategy,
+                "draft_rewrite_attempts": draft_rewrite_attempts,
+                "draft_used_safe_fallback": draft_used_safe_fallback,
             },
         },
     )

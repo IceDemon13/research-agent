@@ -1,8 +1,9 @@
 from fastmcp import FastMCP
 
-from audit import audit_log
-from jira_client import create_issue, get_issue, search_issues, update_description
-from validators import extract_project_from_jql, validate_project_key
+from .audit import audit_log
+from .config import settings
+from .jira_client import get_issue, search_issues
+from .validators import extract_project_from_jql, validate_project_key
 
 
 mcp = FastMCP("jira-mcp-server")
@@ -10,6 +11,7 @@ mcp = FastMCP("jira-mcp-server")
 
 @mcp.tool()
 def jira_search_issues(jql: str, limit: int = 10) -> dict:
+    """Search Jira issues by JQL and return a compact normalized payload."""
     project_key = extract_project_from_jql(jql)
     if project_key:
         validate_project_key(project_key)
@@ -39,6 +41,7 @@ def jira_search_issues(jql: str, limit: int = 10) -> dict:
 
 @mcp.tool()
 def jira_get_issue(issue_key: str) -> dict:
+    """Get one Jira issue by key and return a compact normalized payload."""
     audit_log("jira_get_issue", {"issue_key": issue_key})
     data = get_issue(issue_key)
 
@@ -52,26 +55,6 @@ def jira_get_issue(issue_key: str) -> dict:
         "created": fields.get("created"),
         "updated": fields.get("updated"),
     }
-
-
-@mcp.tool()
-def jira_create_issue(project_key: str, issue_type: str, summary: str, description: str):
-    """
-    Create Jira issue (restricted projects).
-    """
-
-    if project_key not in settings.allowed_projects:
-        raise ValueError(
-            f"Project '{project_key}' is not allowed. Allowed projects: {settings.allowed_projects}"
-        )
-
-    return create_issue(project_key, issue_type, summary, description)
-
-
-@mcp.tool()
-def jira_update_description(issue_key: str, description: str) -> dict:
-    audit_log("jira_update_description", {"issue_key": issue_key})
-    return update_description(issue_key, description)
 
 
 if __name__ == "__main__":

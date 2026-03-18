@@ -24,21 +24,62 @@ def _chunk_text(text: str, chunk_size: int = 4000) -> list[str]:
     return [value[i:i + chunk_size] for i in range(0, len(value), chunk_size)]
 
 
+def build_start_message_clean() -> str:
+    return (
+        "Привіт. Я можу допомогти з аналізом і підготовкою змін у репозиторії.\n\n"
+        "Що я вмію:\n"
+        "- робити review існуючого коду\n"
+        "- готувати drafts для точкових змін у функціях і файлах\n"
+        "- формувати change set для нових helper/module змін\n"
+        "- готувати spec перед реалізацією\n\n"
+        "Приклади запитів:\n"
+        "- /review review existing search_in_repo implementation in repo_tools\n"
+        "- /drafts add more detailed logging to existing search_in_repo in tools/repo_tools.py\n"
+        "- /drafts add input validation logging to read_file_range in tools/repo_tools.py\n"
+        "- /changes create helper to export repo manifest summary as markdown\n"
+        "- /spec підготуй специфікацію для додавання більш детального логування в search_in_repo\n\n"
+        "Важливо:\n"
+        "для складних функцій я можу повернути safe fallback suggestion замість ризикованого rewrite."
+    )
+
+
+def build_start_message() -> str:
+    return (
+        "Привіт. Я можу допомогти з аналізом і підготовкою змін у репозиторії.\n\n"
+        "Що я вмію:\n"
+        "- робити review існуючого коду\n"
+        "- готувати drafts для точкових змін у функціях і файлах\n"
+        "- формувати change set для нових helper/module змін\n"
+        "- готувати spec перед реалізацією\n\n"
+        "Приклади запитів:\n"
+        "- /review review existing search_in_repo implementation in repo_tools\n"
+        "- /drafts add more detailed logging to existing search_in_repo in tools/repo_tools.py\n"
+        "- /drafts add input validation logging to read_file_range in tools/repo_tools.py\n"
+        "- /changes create helper to export repo manifest summary as markdown\n"
+        "- /spec підготуй специфікацію для додавання більш детального логування в search_in_repo\n\n"
+        "Важливо:\n"
+        "для складних функцій я можу повернути safe fallback suggestion замість ризикованого rewrite."
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(build_start_message_clean())
+    return
     await update.message.reply_text(
-        "Привіт. Я root agent.\n\n"
-        "Доступні команди:\n"
-        "/task <текст|Jira key|Jira URL> — розібрати вхідне ТЗ або задачу\n"
-        "/brief <текст|Jira key|Jira URL> — відправити normalised brief файлом\n"
-        "/spec <текст|Jira key|Jira URL> — побудувати formal spec і відправити файлом\n"
-        "/reviewspec <текст|Jira key|Jira URL> — перевірити якість spec для BA\n"
-        "/report <запит> — виконати запит і відправити результат у txt-файлі\n\n"
-        "Приклади:\n"
-        "/task TEL-13475\n"
-        "/brief TEL-13475\n"
-        "/spec TEL-13475\n"
-        "/reviewspec TEL-13475\n"
-        "/report Знайди інформацію про LangGraph"
+        "Привіт. Я можу допомогти з аналізом і підготовкою змін у репозиторії.\n\n"
+        "Що я вмію:\n"
+        "- робити review існуючого коду\n"
+        "- готувати drafts для точкових змін у функціях і файлах\n"
+        "- формувати change set для нових helper/module змін\n"
+        "- готувати spec перед реалізацією\n\n"
+        "Приклади запитів:\n"
+        "- /review review existing search_in_repo implementation in repo_tools\n"
+        "- /drafts add more detailed logging to existing search_in_repo in tools/repo_tools.py\n"
+        "- /drafts add input validation logging to read_file_range in tools/repo_tools.py\n"
+        "- /changes create helper to export repo manifest summary as markdown\n"
+        "- /spec підготуй специфікацію для додавання більш детального логування в search_in_repo\n\n"
+        "Важливо:\n"
+        "для складних функцій я можу повернути safe fallback suggestion замість ризикованого rewrite."
     )
 
 

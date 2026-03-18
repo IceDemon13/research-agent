@@ -723,15 +723,32 @@ def _build_existing_code_review_prompt_input(
     analysis_text: str,
 ) -> str:
     files_used = repo_context.get("files_used", []) or []
+    resolved_target_files = repo_context.get("resolved_target_files", []) or []
+    resolved_symbols = repo_context.get("resolved_symbols") if isinstance(repo_context.get("resolved_symbols"), dict) else {}
     files_block = "\n".join(f"- {path}" for path in files_used) or "- none"
+    target_files_block = "\n".join(f"- {path}" for path in resolved_target_files) or "- none"
+    symbols_block = "\n".join(
+        f"- {symbol}: {', '.join(paths) if isinstance(paths, list) and paths else 'no resolved file'}"
+        for symbol, paths in resolved_symbols.items()
+    ) or "- none"
 
     return f"""Review the existing repository implementation only.
+- Base findings only on the current implementation shown in the provided repository context.
+- Prioritize the resolved target file and symbol.
+- Do not include unrelated files such as README.md, telegram_bot.py, or main.py unless they are explicitly relevant in the repository context.
+- Do not make generic assumptions outside the provided snippets.
 
 Original request:
 {original_request}
 
 Existing implementation analysis:
 {analysis_text or "No implementation analysis provided."}
+
+Resolved target files:
+{target_files_block}
+
+Resolved symbols:
+{symbols_block}
 
 Relevant files:
 {files_block}

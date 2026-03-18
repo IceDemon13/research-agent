@@ -21,6 +21,7 @@ from tools.repo_tools import (
 
 MAX_REPO_FILE_CHARS = 120000
 INSUFFICIENT_REPOSITORY_CONTEXT_MESSAGE = "Not enough repository context"
+CREATE_MODE_DISALLOWED_TARGETS = ("readme.md", "main.py", "docs/")
 
 
 def _get_real_repo_context_paths(repo_context: dict | None) -> list[str]:
@@ -135,6 +136,17 @@ def _has_relevant_symbol_context(repo_context: dict | None, locked_symbols: list
 
 def _symbol_present_in_chunks(repo_context: dict | None, symbol_hints: list[str]) -> bool:
     return _has_relevant_symbol_context(repo_context, symbol_hints)
+
+
+def _has_unique_symbol_locked_target(
+    repo_context: dict | None,
+    target_files: list[str],
+    symbol_hints: list[str],
+) -> bool:
+    if len(target_files) != 1 or len(symbol_hints) != 1:
+        return False
+    path = (target_files[0] or "").strip()
+    return bool(path) and validate_manifest_file_path(path, ".") and _has_relevant_symbol_context(repo_context, symbol_hints)
 
 
 def _get_candidate_repo_context_paths(repo_context: dict | None) -> list[str]:
@@ -267,6 +279,42 @@ def _infer_requested_symbols(original_request: str, locked_symbols: list[str]) -
         inferred_symbols.append("search_in_repo")
 
     return inferred_symbols
+
+
+def _is_disallowed_create_target(path: str, original_request: str, repo_context: dict | None) -> bool:
+    lowered_path = (path or "").strip().lower().replace("\\", "/")
+    if not lowered_path:
+        return False
+
+    context = repo_context if isinstance(repo_context, dict) else {}
+    parsed_query = context.get("parsed_query") if isinstance(context.get("parsed_query"), dict) else {}
+    request_text = " ".join(
+        [
+            str(original_request or ""),
+            str(parsed_query.get("clean_query", "")),
+            *[str(item) for item in parsed_query.get("path_hints", [])],
+        ]
+    ).lower()
+
+    if lowered_path.endswith(".md") and "markdown" not in request_text and "readme" not in request_text and "docs" not in request_text:
+        return True
+
+    if any(marker in lowered_path for marker in CREATE_MODE_DISALLOWED_TARGETS):
+        if any(marker in request_text for marker in CREATE_MODE_DISALLOWED_TARGETS):
+            return False
+        if "readme" in request_text or "startup" in request_text or "entrypoint" in request_text:
+            return False
+        return True
+
+    return False
+
+
+def _filter_create_target_paths(paths: list[str], original_request: str, repo_context: dict | None) -> list[str]:
+    return [
+        path
+        for path in paths
+        if not _is_disallowed_create_target(path, original_request, repo_context)
+    ]
 
 
 def _log_change_agent_received_context_summary(
@@ -917,15 +965,21 @@ def run_change_agent(
     locked_symbols = _get_locked_symbol_names(resolved_repo_context)
     effective_symbols = _infer_requested_symbols(original_request, locked_symbols)
     context_files = _get_candidate_repo_context_paths(resolved_repo_context)
+    if task_intent == "create":
+        context_files = _filter_create_target_paths(context_files, original_request, resolved_repo_context)
     files_used = resolved_repo_context.get("files_used") if isinstance(resolved_repo_context, dict) else []
     chunks = resolved_repo_context.get("chunks") if isinstance(resolved_repo_context, dict) else []
     exact_target_files = [path for path in locked_paths if validate_manifest_file_path(path, ".")]
+    if task_intent == "create":
+        exact_target_files = _filter_create_target_paths(exact_target_files, original_request, resolved_repo_context)
     obvious_target_paths = _choose_obvious_target_paths(
         original_request=original_request,
         repo_context=resolved_repo_context,
         exact_target_files=exact_target_files,
         context_files=context_files,
     )
+    if task_intent == "create":
+        obvious_target_paths = _filter_create_target_paths(obvious_target_paths, original_request, resolved_repo_context)
     has_locked_path_context = _has_context_for_locked_paths(resolved_repo_context, exact_target_files)
     has_locked_symbol_context = _has_relevant_symbol_context(resolved_repo_context, locked_symbols)
     has_candidate_context = _has_relevant_task_context(resolved_repo_context, context_files)
@@ -934,6 +988,11 @@ def run_change_agent(
     has_chunks = bool(chunks)
     exact_target_in_files_used = any(path in files_used for path in exact_target_files)
     symbol_present_in_chunks = _symbol_present_in_chunks(resolved_repo_context, effective_symbols)
+    unique_symbol_target_present = _has_unique_symbol_locked_target(
+        resolved_repo_context,
+        exact_target_files,
+        effective_symbols,
+    )
     obvious_target_present = any(path in files_used for path in obvious_target_paths)
     has_any_candidate_file = bool(context_files)
     primary_context_paths = obvious_target_paths or context_files[:1]
@@ -973,12 +1032,13 @@ def run_change_agent(
             bool(exact_target_files)
             or obvious_target_present
             or exact_target_in_files_used
+            or unique_symbol_target_present
         )
     )
     hard_locked_modify_guard = (
         task_intent == "modify"
         and bool(exact_target_files)
-        and exact_target_in_files_used
+        and (exact_target_in_files_used or unique_symbol_target_present)
         and symbol_present_in_chunks
     )
 

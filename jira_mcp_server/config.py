@@ -13,9 +13,9 @@ load_dotenv(ENV_PATH, override=True)
 
 
 class Settings(BaseSettings):
-    jira_base_url: str
-    jira_email: str
-    jira_api_token: str
+    jira_base_url: str = "https://example.invalid"
+    jira_email: str = ""
+    jira_api_token: str = ""
 
     jira_allowed_projects: str = "TEL"
     jira_default_limit: int = 10

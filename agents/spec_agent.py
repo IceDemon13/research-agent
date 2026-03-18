@@ -7,17 +7,64 @@ from tools.repo_tools import ensure_repo_context, format_repo_context
 
 
 INSUFFICIENT_REVIEW_CONTEXT_MESSAGE = "Not enough repository context to review implementation"
+INTERNAL_SPEC_SYSTEM_FILES = {
+    "contracts/spec_contract.py",
+    "contracts/spec_parser.py",
+}
+
+
+def _filter_spec_scope_paths(
+    paths: list[str],
+    allow_internal_spec_files: bool,
+) -> list[str]:
+    filtered: list[str] = []
+    for path in paths:
+        cleaned = str(path).strip()
+        if not cleaned:
+            continue
+        if not allow_internal_spec_files and cleaned in INTERNAL_SPEC_SYSTEM_FILES:
+            continue
+        filtered.append(cleaned)
+    return list(dict.fromkeys(filtered))
 
 
 def _build_spec_prompt_input(user_input: str, task_intent: str, repo_context: dict) -> str:
     files_used = repo_context.get("files_used") or []
-    files_block = "\n".join(f"- {path}" for path in files_used) or "- none"
     resolved_target_files = repo_context.get("resolved_target_files") or []
     resolved_symbols = repo_context.get("resolved_symbols") or {}
-    target_files_block = "\n".join(f"- {path}" for path in resolved_target_files) or "- none"
+    parsed_query = repo_context.get("parsed_query") if isinstance(repo_context.get("parsed_query"), dict) else {}
+    explicit_internal_targets = INTERNAL_SPEC_SYSTEM_FILES
+    requested_path_hints = {
+        str(path).strip()
+        for path in parsed_query.get("path_hints", [])
+        if str(path).strip()
+    }
+    target_file_set = {str(path).strip() for path in resolved_target_files}
+    internal_target_explicitly_requested = bool(explicit_internal_targets & (target_file_set | requested_path_hints))
+
+    filtered_target_files = _filter_spec_scope_paths(
+        resolved_target_files,
+        allow_internal_spec_files=internal_target_explicitly_requested,
+    )
+    filtered_files_used = _filter_spec_scope_paths(
+        files_used,
+        allow_internal_spec_files=internal_target_explicitly_requested,
+    )
+    filtered_resolved_symbols: dict[str, list[str]] = {}
+    for symbol, paths in resolved_symbols.items():
+        filtered_paths = _filter_spec_scope_paths(
+            list(paths or []),
+            allow_internal_spec_files=internal_target_explicitly_requested,
+        )
+        if filtered_paths or internal_target_explicitly_requested:
+            filtered_resolved_symbols[str(symbol).strip()] = filtered_paths
+
+    preferred_scope_files = filtered_target_files or filtered_files_used
+    files_block = "\n".join(f"- {path}" for path in preferred_scope_files) or "- none"
+    target_files_block = "\n".join(f"- {path}" for path in filtered_target_files) or "- none"
     symbols_block = "\n".join(
         f"- {symbol}: {', '.join(paths) if paths else 'no resolved file'}"
-        for symbol, paths in resolved_symbols.items()
+        for symbol, paths in filtered_resolved_symbols.items()
     ) or "- none"
 
     intent_guidance = ""
@@ -29,12 +76,20 @@ def _build_spec_prompt_input(user_input: str, task_intent: str, repo_context: di
             "- Do not propose new files.\n"
             "- Do not frame the task as missing functionality by default.\n"
         )
-    if resolved_target_files or resolved_symbols:
+    if filtered_target_files or filtered_resolved_symbols:
         intent_guidance += (
             "Target scope requirements:\n"
             "- Describe only the resolved target files or symbol implementation area.\n"
             "- Do not broaden scope to neighboring modules unless explicitly required by imports or registry wiring.\n"
             "- Do not add registry.py or other files unless the repository context clearly requires them.\n"
+        )
+    if (parsed_query.get("path_hints") or parsed_query.get("symbol_hints")) and not internal_target_explicitly_requested:
+        intent_guidance += (
+            "Repository task targeting requirements:\n"
+            "- Treat this as a repository task specification first.\n"
+            "- Anchor the spec to the requested repository file or symbol from the resolved targets.\n"
+            "- Do not drift into internal spec-system files such as contracts/spec_contract.py, contracts/spec_parser.py, or spec review internals unless the user explicitly asks about them.\n"
+            "- Keep the spec concise, task-oriented, and focused on the requested repo change.\n"
         )
 
     return (

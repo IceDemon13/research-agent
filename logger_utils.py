@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import sys
 
 from config import settings
 
@@ -23,6 +24,23 @@ FILE_LEVELS = {
     "debug": 20,
     "trace": 10,
 }
+
+MOJIBAKE_MARKERS = (
+    "Рђ",
+    "Р‘",
+    "Р’",
+    "Р“",
+    "Р”",
+    "Р•",
+    "РЄ",
+    "РІ",
+    "Рї",
+    "СЃ",
+    "С‚",
+    "СЏ",
+    "Рњ",
+    "Рё",
+)
 
 
 def _normalize_console_level(value: str) -> str:
@@ -160,6 +178,69 @@ def _trim_message(message: str, max_chars: int) -> str:
     return message[:max_chars] + "...[TRUNCATED]"
 
 
+def ensure_utf8_console() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is None or not hasattr(stream, "reconfigure"):
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+
+def _looks_like_utf8_cp1251_mojibake(text: str) -> bool:
+    if not text:
+        return False
+    return sum(text.count(marker) for marker in MOJIBAKE_MARKERS) >= 2
+
+
+def _score_readable_cyrillic(text: str) -> int:
+    score = 0
+    for char in text:
+        if "А" <= char <= "я" or char in "ЄєІіЇїҐґ":
+            score += 2
+    score -= sum(text.count(marker) for marker in MOJIBAKE_MARKERS) * 3
+    return score
+
+
+def _repair_utf8_cp1251_mojibake(text: str) -> str:
+    try:
+        return text.encode("cp1251", errors="strict").decode("utf-8", errors="strict")
+    except Exception:
+        return text
+
+
+def _make_utf8_cp1251_mojibake(text: str) -> str:
+    try:
+        return text.encode("utf-8", errors="strict").decode("cp1251", errors="strict")
+    except Exception:
+        return text
+
+
+def normalize_display_text(text: str) -> str:
+    safe_text = str(text or "")
+    if not _looks_like_utf8_cp1251_mojibake(safe_text):
+        return safe_text
+
+    repaired = _repair_utf8_cp1251_mojibake(safe_text)
+    if _score_readable_cyrillic(repaired) > _score_readable_cyrillic(safe_text):
+        return repaired
+    return safe_text
+
+
+def build_encoding_self_check() -> dict[str, object]:
+    samples = ["Мета", "Ризики", "Що перевірити"]
+    mojibake_samples = [_make_utf8_cp1251_mojibake(item) for item in samples]
+    repaired = [normalize_display_text(item) for item in mojibake_samples]
+    return {
+        "ok": repaired == samples,
+        "samples": samples,
+        "mojibake_samples": mojibake_samples,
+        "repaired": repaired,
+    }
+
+
 def _build_log_line(message: str) -> str:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return f"[{timestamp}] {message}"
@@ -175,7 +256,9 @@ def log_line(message: str) -> None:
     safe_message = str(message)
 
     if _should_log_console(safe_message):
-        console_message = _trim_message(safe_message, settings.log_console_max_chars)
+        ensure_utf8_console()
+        console_message = normalize_display_text(safe_message)
+        console_message = _trim_message(console_message, settings.log_console_max_chars)
         print(_build_log_line(console_message))
 
     if _should_log_file(safe_message):

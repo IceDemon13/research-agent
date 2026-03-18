@@ -58,8 +58,9 @@ def _format_issue_result(data: dict) -> str:
     )
 
 
-@tool
+@tool(description="Search Jira issues by JQL and return raw issue data.")
 def jira_search_issues(jql: str, limit: int = 5):
+    """Search Jira issues by JQL and return the raw Jira search payload."""
 
     if "order by" in jql.lower() and "where" not in jql.lower():
         jql = "created IS NOT EMPTY " + jql
@@ -71,7 +72,7 @@ def jira_search_issues(jql: str, limit: int = 5):
     return result
 
 
-@tool
+@tool(description="Get Jira issue details by issue key.")
 def jira_get_issue(issue_key: str) -> str:
     """
     Get Jira issue details by issue key.
@@ -80,7 +81,7 @@ def jira_get_issue(issue_key: str) -> str:
     return _format_issue_result(result)
 
 
-@tool
+@tool(description="Convert natural language to JQL and search Jira issues.")
 def jira_search_from_text(user_text: str) -> str:
     """
     Build JQL from natural language text and search Jira issues.

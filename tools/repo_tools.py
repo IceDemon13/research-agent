@@ -106,6 +106,7 @@ REPO_QUERY_FILLER_WORDS = {
     "the",
 }
 REPO_QUERY_COMMAND_PREFIXES = {
+    "/spec",
     "/review",
     "/drafts",
     "/changes",
@@ -134,6 +135,72 @@ REPO_DOMAIN_PRIMARY_PATHS = (
     "services/",
     "artifacts/",
     "output/",
+)
+REPO_HELPER_FALLBACK_TARGETS = (
+    "tools/repo_tools.py",
+    "tools/registry.py",
+)
+REPO_DOMAIN_DISALLOWED_CREATE_PATHS = (
+    "readme.md",
+    "main.py",
+    "docs/",
+)
+REPO_FOCUSED_CREATE_FORBIDDEN_PATHS = (
+    "README.md",
+    "main.py",
+    "telegram_bot.py",
+)
+REPO_HELPER_CREATE_ACTION_MARKERS = (
+    "create",
+    "add",
+    "generate",
+    "export",
+)
+REPO_HELPER_CREATE_ARTIFACT_MARKERS = (
+    "helper",
+    "function",
+    "tool",
+    "exporter",
+)
+REPO_HELPER_CREATE_DOMAIN_MARKERS = (
+    "repo",
+    "repository",
+    "manifest",
+    "markdown",
+)
+HARD_FOCUS_DISALLOWED_PATH_MARKERS = (
+    "readme.md",
+    "main.py",
+    "telegram_bot.py",
+    "tests/",
+)
+DEFAULT_INTERNAL_PATH_MARKERS = (
+    "tests/",
+    "agents/change_agent.py",
+    "agents/draft_agent.py",
+    "agents/review_agent.py",
+)
+DEFAULT_INTERNAL_QUERY_MARKERS = (
+    "test",
+    "tests",
+    "agent",
+    "agents",
+    "pipeline",
+    "internal",
+    "debug",
+    "change_agent",
+    "draft_agent",
+    "review_agent",
+)
+DOCUMENTATION_QUERY_MARKERS = (
+    "readme",
+    "docs",
+    "documentation",
+    "document",
+    "doc",
+    "markdown docs",
+    "documentation update",
+    "documentation updates",
 )
 UNRELATED_DOMAIN_MARKERS = {
     "telegram": ("telegram_bot.py", "telegram"),
@@ -185,6 +252,10 @@ def _resolve_repo_relative_path(path: str) -> tuple[Path | None, str | None]:
 
     candidate = (root_path / raw_path).resolve()
     return candidate, None
+
+
+def _normalize_repo_context_path(path: str) -> str:
+    return str(path or "").replace("\\", "/").strip()
 
 
 def _is_text_file(path: Path) -> bool:
@@ -368,6 +439,42 @@ def _is_repo_domain_primary_path(path: str) -> bool:
     return any(marker in lowered_path for marker in REPO_DOMAIN_PRIMARY_PATHS)
 
 
+def _is_explicitly_requested_path(path: str, parsed_query: dict) -> bool:
+    lowered_path = (path or "").lower()
+    if not lowered_path:
+        return False
+
+    values = [
+        parsed_query.get("clean_query", ""),
+        *parsed_query.get("path_hints", []),
+        *parsed_query.get("keywords", []),
+    ]
+    normalized_values = [str(value).strip().lower().replace("\\", "/") for value in values if str(value).strip()]
+
+    for value in normalized_values:
+        if not value:
+            continue
+        if lowered_path == value:
+            return True
+        if lowered_path.endswith(f"/{value}") or lowered_path.endswith(value):
+            return True
+
+    return False
+
+
+def _is_disallowed_create_target(path: str, parsed_query: dict) -> bool:
+    lowered_path = (path or "").lower()
+    if not lowered_path or parsed_query.get("intent") != "create":
+        return False
+    if not _is_repo_domain_query(parsed_query):
+        return False
+    if _is_explicitly_requested_path(path, parsed_query):
+        return False
+    if lowered_path.endswith(".md"):
+        return True
+    return any(lowered_path.endswith(marker) or marker in lowered_path for marker in REPO_DOMAIN_DISALLOWED_CREATE_PATHS)
+
+
 def _select_nearest_repo_module(manifest_files: dict[str, dict], parsed_query: dict) -> tuple[str, list[str]]:
     repo_candidates: list[tuple[int, str, list[str]]] = []
     lowered_keywords = {
@@ -383,6 +490,8 @@ def _select_nearest_repo_module(manifest_files: dict[str, dict], parsed_query: d
 
     for path in manifest_files:
         lowered_path = path.lower()
+        if _is_disallowed_create_target(path, parsed_query):
+            continue
         if not any(marker in lowered_path for marker in REPO_DOMAIN_PATH_MARKERS):
             continue
 
@@ -434,6 +543,10 @@ def _score_repo_domain_path(path: str, parsed_query: dict) -> tuple[float, str]:
             if _contains_any_marker(lowered_path, markers):
                 score -= 18.0
                 reasons.append(f"downrank unrelated {domain_name} domain")
+
+        if _is_disallowed_create_target(path, parsed_query):
+            score -= 40.0
+            reasons.append("downrank docs/entrypoint for repo-helper create mode")
 
     return score, ", ".join(reasons)
 
@@ -505,6 +618,7 @@ def parse_repo_query(user_input: str) -> dict:
         clean_query = working_text.strip()
 
     result = {
+        "raw_query": raw_text,
         "intent": intent,
         "symbol_hints": symbol_hints,
         "path_hints": path_hints,
@@ -518,13 +632,18 @@ def parse_repo_query(user_input: str) -> dict:
 def _normalize_parsed_repo_query(query: str | dict) -> tuple[str, dict]:
     if isinstance(query, dict):
         parsed_query = {
+            "raw_query": str(query.get("raw_query", "")).strip(),
             "intent": str(query.get("intent", "create")).strip() or "create",
             "symbol_hints": _dedupe_preserve_order([str(item).strip() for item in query.get("symbol_hints", [])]),
             "path_hints": _dedupe_preserve_order([str(item).strip() for item in query.get("path_hints", [])]),
             "keywords": _dedupe_preserve_order([str(item).strip() for item in query.get("keywords", [])]),
             "clean_query": str(query.get("clean_query", "")).strip(),
         }
-        raw_query = parsed_query["clean_query"] or " ".join(parsed_query["keywords"]).strip()
+        raw_query = (
+            parsed_query["raw_query"]
+            or parsed_query["clean_query"]
+            or " ".join(parsed_query["keywords"]).strip()
+        )
         return raw_query, parsed_query
 
     raw_query = (query or "").strip()
@@ -580,6 +699,196 @@ def _match_manifest_paths_for_hints(manifest_files: dict[str, dict], path_hints:
                 matched_paths.append(manifest_path)
 
     return _dedupe_preserve_order(matched_paths)
+
+
+def _resolve_unique_symbol_target_files(
+    symbol_resolution: dict[str, list[str]],
+    resolved_target_files: list[str],
+) -> tuple[list[str], dict[str, str]]:
+    selected_targets = list(dict.fromkeys(resolved_target_files))
+    selected_target_set = set(selected_targets)
+    promoted_symbols: dict[str, str] = {}
+
+    for symbol_name, symbol_paths in symbol_resolution.items():
+        unique_paths = list(dict.fromkeys([str(path).strip() for path in symbol_paths if str(path).strip()]))
+        if len(unique_paths) != 1:
+            continue
+        unique_path = unique_paths[0]
+        if unique_path not in selected_target_set:
+            selected_targets.append(unique_path)
+            selected_target_set.add(unique_path)
+        promoted_symbols[symbol_name] = unique_path
+
+    return selected_targets, promoted_symbols
+
+
+def _collect_review_focus_paths(
+    resolved_target_files: list[str],
+    symbol_resolution: dict[str, list[str]],
+) -> list[str]:
+    focus_paths = list(dict.fromkeys([str(path).strip() for path in resolved_target_files if str(path).strip()]))
+
+    for symbol_paths in symbol_resolution.values():
+        if not isinstance(symbol_paths, list):
+            continue
+        unique_symbol_paths = list(
+            dict.fromkeys([str(path).strip() for path in symbol_paths if str(path).strip()])
+        )
+        if len(unique_symbol_paths) == 1:
+            focus_paths.extend(path for path in unique_symbol_paths if path not in focus_paths)
+
+    return list(dict.fromkeys(focus_paths))
+
+
+def _is_hard_focus_request(parsed_query: dict, resolved_target_files: list[str]) -> bool:
+    if not resolved_target_files:
+        return False
+    return bool(parsed_query.get("path_hints") or parsed_query.get("symbol_hints"))
+
+
+def _is_disallowed_hard_focus_support_path(path: str, parsed_query: dict, resolved_target_files: list[str]) -> bool:
+    normalized_path = str(path or "").strip().lower().replace("\\", "/")
+    if not normalized_path:
+        return False
+    if path in resolved_target_files:
+        return False
+    if _is_explicitly_requested_path(path, parsed_query):
+        return False
+    if ("readme" in normalized_path or normalized_path.endswith(".md") or "docs/" in normalized_path) and _explicitly_requests_documentation_paths(parsed_query):
+        return False
+    return any(
+        normalized_path == marker or normalized_path.startswith(marker) or marker in normalized_path
+        for marker in HARD_FOCUS_DISALLOWED_PATH_MARKERS
+    )
+
+
+def _explicitly_requests_documentation_paths(parsed_query: dict) -> bool:
+    values = [
+        parsed_query.get("clean_query", ""),
+        *parsed_query.get("path_hints", []),
+        *parsed_query.get("keywords", []),
+        *parsed_query.get("symbol_hints", []),
+    ]
+    normalized_values = [str(value).strip().lower().replace("\\", "/") for value in values if str(value).strip()]
+
+    for value in normalized_values:
+        if "readme" in value:
+            return True
+        if "docs/" in value or value == "docs":
+            return True
+        if any(marker in value for marker in DOCUMENTATION_QUERY_MARKERS):
+            return True
+
+    return False
+
+
+def _explicitly_requests_internal_repo_paths(parsed_query: dict) -> bool:
+    values = [
+        parsed_query.get("clean_query", ""),
+        *parsed_query.get("path_hints", []),
+        *parsed_query.get("keywords", []),
+        *parsed_query.get("symbol_hints", []),
+    ]
+    normalized_values = [str(value).strip().lower().replace("\\", "/") for value in values if str(value).strip()]
+
+    for value in normalized_values:
+        if any(marker in value for marker in DEFAULT_INTERNAL_PATH_MARKERS):
+            return True
+        if value in DEFAULT_INTERNAL_QUERY_MARKERS:
+            return True
+        if any(marker in value for marker in DEFAULT_INTERNAL_QUERY_MARKERS):
+            return True
+
+    return False
+
+
+def _is_repo_helper_create_request(parsed_query: dict) -> bool:
+    text = " ".join(
+        str(value or "").lower()
+        for value in [
+            parsed_query.get("raw_query", ""),
+            parsed_query.get("clean_query", ""),
+            " ".join(parsed_query.get("keywords", []) or []),
+        ]
+    )
+
+    has_create = parsed_query.get("intent") == "create" or any(
+        word in text for word in ("create", "add", "generate", "export")
+    )
+    has_repo_domain = any(
+        word in text for word in ("repo", "repository", "manifest")
+    )
+    has_helper_or_export_shape = any(
+        word in text for word in ("helper", "export", "summary", "markdown", "md")
+    )
+
+    return has_create and has_repo_domain and has_helper_or_export_shape
+
+
+def _finalize_repo_helper_create_context(parsed_query: dict, repo_context: dict | None) -> dict:
+    context = dict(repo_context) if isinstance(repo_context, dict) else {}
+    files_used = context.get("files_used", []) or []
+    resolved_target_files = context.get("resolved_target_files", []) or []
+    file_selection = context.get("file_selection", {}) or {}
+    chunks = context.get("chunks", []) or []
+    if not _is_repo_helper_create_request(parsed_query):
+        return context
+
+    forbidden_paths = {_normalize_repo_context_path(path) for path in REPO_FOCUSED_CREATE_FORBIDDEN_PATHS}
+
+    forced_target = "tools/repo_tools.py"
+    if not validate_manifest_file_path(forced_target, "."):
+        for candidate in REPO_HELPER_FALLBACK_TARGETS:
+            if validate_manifest_file_path(candidate, "."):
+                forced_target = candidate
+                break
+
+    snippet = read_file_range(forced_target, 1, 40)
+    if (
+        snippet.startswith("File not found:")
+        or snippet.startswith("Path is not a file:")
+        or snippet.startswith("Failed to read file:")
+    ):
+        snippet = ""
+
+    context["resolved_target_files"] = [forced_target]
+    context["files_used"] = [forced_target]
+    context["file_selection"] = {
+        forced_target: ["repo helper implementation target"]
+    }
+    context["chunks"] = [
+        {
+            "path": forced_target,
+            "reason": "repo helper implementation target",
+            "snippet": snippet,
+        }
+    ]
+    log_line(f"BUILD CONTEXT HELPER FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
+    log_line(f"BUILD CONTEXT HELPER FINAL TARGETS: {json.dumps(context['resolved_target_files'], ensure_ascii=False)}")
+    log_line(f"BUILD CONTEXT HELPER FINAL FILES USED: {json.dumps(context['files_used'], ensure_ascii=False)}")
+    log_line(
+        f"BUILD CONTEXT HELPER FINAL FILE SELECTION KEYS: "
+        f"{json.dumps(list(context['file_selection'].keys()), ensure_ascii=False)}"
+    )
+    log_line(
+        f"BUILD CONTEXT HELPER FINAL CHUNK PATHS: "
+        f"{json.dumps([_normalize_repo_context_path(str(chunk.get('path', '')).strip()) for chunk in context['chunks'] if isinstance(chunk, dict)], ensure_ascii=False)}"
+    )
+    return context
+
+
+def _is_default_internal_path(path: str, parsed_query: dict) -> bool:
+    normalized_path = str(path or "").strip().lower().replace("\\", "/")
+    if not normalized_path:
+        return False
+    if _is_explicitly_requested_path(path, parsed_query):
+        return False
+    if _explicitly_requests_internal_repo_paths(parsed_query):
+        return False
+    return any(
+        normalized_path == marker or normalized_path.startswith(marker) or marker in normalized_path
+        for marker in DEFAULT_INTERNAL_PATH_MARKERS
+    )
 
 
 def resolve_repo_targets(parsed_query: dict, manifest: dict) -> dict:
@@ -730,6 +1039,78 @@ def ensure_repo_context(query: str | dict, root_path: str, repo_context: dict | 
     if isinstance(repo_context, dict) and repo_context.get("chunks") is not None:
         return repo_context
     return build_context(query=query, root_path=root_path)
+
+
+def sanitize_repo_context(repo_context: dict | None) -> dict:
+    context = dict(repo_context) if isinstance(repo_context, dict) else {}
+    parsed_query = context.get("parsed_query") if isinstance(context.get("parsed_query"), dict) else {}
+    resolved_target_files = [
+        str(path).strip()
+        for path in context.get("resolved_target_files", []) or []
+        if str(path).strip()
+    ]
+    files_used = [
+        str(path).strip()
+        for path in context.get("files_used", []) or []
+        if str(path).strip()
+    ]
+    chunks = [
+        chunk for chunk in (context.get("chunks") or [])
+        if isinstance(chunk, dict)
+    ]
+    file_selection = context.get("file_selection") if isinstance(context.get("file_selection"), dict) else {}
+
+    hard_focus_mode = _is_hard_focus_request(parsed_query, resolved_target_files)
+    allowed_focus_paths = set(resolved_target_files)
+
+    resolved_symbols = context.get("resolved_symbols") if isinstance(context.get("resolved_symbols"), dict) else {}
+    for symbol_paths in resolved_symbols.values():
+        if not isinstance(symbol_paths, list):
+            continue
+        unique_symbol_paths = list(
+            dict.fromkeys([str(path).strip() for path in symbol_paths if str(path).strip()])
+        )
+        if len(unique_symbol_paths) == 1:
+            allowed_focus_paths.update(unique_symbol_paths)
+
+    for path, reasons in file_selection.items():
+        normalized_path = str(path).strip()
+        if not normalized_path or _is_default_internal_path(normalized_path, parsed_query):
+            continue
+        if hard_focus_mode and _is_disallowed_hard_focus_support_path(normalized_path, parsed_query, resolved_target_files):
+            continue
+        if any(
+            marker in str(reason)
+            for reason in (reasons or [])
+            for marker in ("resolved target file", "symbol definition", "symbol usage", "path hint")
+        ):
+            allowed_focus_paths.add(normalized_path)
+
+    if hard_focus_mode:
+        chunks = [
+            chunk
+            for chunk in chunks
+            if str(chunk.get("path", "")).strip() in allowed_focus_paths
+        ]
+        files_used = [path for path in files_used if path in allowed_focus_paths]
+        files_used = list(dict.fromkeys([*resolved_target_files, *files_used]))
+
+    if not _explicitly_requests_internal_repo_paths(parsed_query):
+        chunks = [
+            chunk
+            for chunk in chunks
+            if not _is_default_internal_path(str(chunk.get("path", "")).strip(), parsed_query)
+        ]
+        files_used = [path for path in files_used if not _is_default_internal_path(path, parsed_query)]
+
+    context["files_used"] = files_used
+    context["chunks"] = chunks
+    context["file_selection"] = {
+        str(path).strip(): value
+        for path, value in file_selection.items()
+        if str(path).strip() in set(files_used) | set(resolved_target_files)
+    }
+    return context
 
 
 def format_repo_context(repo_context: dict | None) -> str:
@@ -1133,6 +1514,10 @@ def select_candidate_files(query: str, root_path: str, max_files: int = 8) -> li
         filename_lower = Path(path).name.lower()
         score = 0.0
 
+        if _is_default_internal_path(path, parsed_query):
+            add_reason(path, "filtered internal/test path for normal repo context")
+            continue
+
         if query_lower and query_lower in filename_lower:
             score += 5
             add_reason(path, "filename matched query")
@@ -1151,6 +1536,8 @@ def select_candidate_files(query: str, root_path: str, max_files: int = 8) -> li
             if domain_score:
                 score += domain_score
                 add_reason(path, domain_reason)
+            if _is_disallowed_create_target(path, parsed_query):
+                add_reason(path, "filtered as docs/entrypoint for repo-helper create mode")
 
         if score > 0:
             scored[path] = {
@@ -1163,6 +1550,8 @@ def select_candidate_files(query: str, root_path: str, max_files: int = 8) -> li
     for result in search_results:
         path = result.get("path")
         if not path:
+            continue
+        if _is_default_internal_path(path, parsed_query):
             continue
 
         meta = manifest_files.get(path, {})
@@ -1200,6 +1589,8 @@ def select_candidate_files(query: str, root_path: str, max_files: int = 8) -> li
 
     for entry in scored.values():
         line_count = entry.get("line_count", 0)
+        if parsed_query.get("intent") == "create" and _is_disallowed_create_target(entry["path"], parsed_query):
+            continue
         if line_count > MAX_CANDIDATE_FILE_LINES and entry["score"] < HIGH_SCORE_FOR_LARGE_FILE:
             continue
 
@@ -1281,6 +1672,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             parsed_query,
         )
         if create_repo_fallback_path:
+            resolved_target_files = [create_repo_fallback_path]
             log_line(
                 f"BUILD CONTEXT CREATE FALLBACK: {create_repo_fallback_path} chosen because {create_repo_fallback_reasons}"
             )
@@ -1288,6 +1680,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
     candidate_scores: dict[str, dict] = {}
     search_results_by_path: dict[str, list[dict]] = {}
     symbol_resolution: dict[str, list[str]] = {}
+    symbol_promoted_targets: dict[str, str] = {}
     file_selection_reasons: dict[str, list[str]] = {}
 
     def register_file_reason(path: str, reason: str) -> None:
@@ -1404,6 +1797,18 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                 f"BUILD CONTEXT SYMBOL DEFINITIONS: {symbol_hint} -> {json.dumps(symbol_resolution[symbol_hint], ensure_ascii=False)}"
             )
 
+    resolved_target_files, symbol_promoted_targets = _resolve_unique_symbol_target_files(
+        symbol_resolution,
+        resolved_target_files,
+    )
+    for symbol_name, promoted_path in symbol_promoted_targets.items():
+        bump_candidate(promoted_path, 40.0, matches=1, reason=f"unique symbol target: {symbol_name}")
+        register_file_reason(promoted_path, "promoted from unique symbol resolution")
+    if symbol_promoted_targets:
+        log_line(
+            f"BUILD CONTEXT UNIQUE SYMBOL TARGETS: {json.dumps(symbol_promoted_targets, ensure_ascii=False)}"
+        )
+
     for path_hint in parsed_query.get("path_hints", []):
         if not path_hint:
             continue
@@ -1472,6 +1877,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         candidate_scores.values(),
         key=lambda item: (-float(item.get("score", 0.0)), -int(item.get("matches", 0)), item["path"]),
     )
+    hard_focus_mode = _is_hard_focus_request(parsed_query, resolved_target_files)
     forced_paths = list(dict.fromkeys([
         *resolved_target_files,
         *([create_repo_fallback_path] if create_repo_fallback_path else []),
@@ -1487,6 +1893,10 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
     for path in forced_paths:
         if path not in candidate_scores:
             continue
+        if _is_default_internal_path(path, parsed_query):
+            continue
+        if hard_focus_mode and _is_disallowed_hard_focus_support_path(path, parsed_query, resolved_target_files):
+            continue
         candidate_files.append(candidate_scores[path])
         added_paths.add(path)
 
@@ -1496,6 +1906,10 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
     for item in ranked_candidates:
         path = item["path"]
         if path in added_paths:
+            continue
+        if _is_default_internal_path(path, parsed_query):
+            continue
+        if hard_focus_mode and _is_disallowed_hard_focus_support_path(path, parsed_query, resolved_target_files):
             continue
 
         reasons = file_selection_reasons.get(path, [])
@@ -1509,6 +1923,8 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                 "path hint",
             )
         )
+        if hard_focus_mode and not is_related:
+            continue
         if strict_target_lock and not is_related:
             if unrelated_support_count >= 1:
                 continue
@@ -1522,7 +1938,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
 
     if not candidate_files:
         log_line(f"BUILD CONTEXT READY: no candidates for query={effective_query!r}")
-        return {
+        result = {
             "query": normalized_query,
             "parsed_query": parsed_query,
             "resolved_target_files": resolved_target_files,
@@ -1532,6 +1948,20 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             "chunks": [],
             "total_chunks": 0,
         }
+        result = _finalize_repo_helper_create_context(parsed_query, result)
+        result["total_chunks"] = len(result.get("chunks", []) or [])
+        log_line(f"BUILD CONTEXT FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
+        log_line(f"BUILD CONTEXT FINAL TARGETS: {json.dumps(result.get('resolved_target_files', []) or [], ensure_ascii=False)}")
+        log_line(f"BUILD CONTEXT FINAL FILES USED: {json.dumps(result.get('files_used', []) or [], ensure_ascii=False)}")
+        log_line(
+            f"BUILD CONTEXT FINAL FILE SELECTION KEYS: "
+            f"{json.dumps(list((result.get('file_selection', {}) or {}).keys()), ensure_ascii=False)}"
+        )
+        log_line(
+            f"BUILD CONTEXT FINAL CHUNK PATHS: "
+            f"{json.dumps([str(chunk.get('path', '')).strip() for chunk in (result.get('chunks', []) or []) if isinstance(chunk, dict)], ensure_ascii=False)}"
+        )
+        return result
 
     chunks: list[dict] = []
     files_used: list[str] = []
@@ -1603,7 +2033,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                     f"BUILD CONTEXT READY: token budget reached with {len(chunks)} chunks for query={effective_query!r}"
                 )
                 selected_files = list(dict.fromkeys([*resolved_target_files, *files_used]))
-                return {
+                result = {
                     "query": normalized_query,
                     "parsed_query": parsed_query,
                     "resolved_target_files": resolved_target_files,
@@ -1616,6 +2046,20 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                     "chunks": chunks,
                     "total_chunks": len(chunks),
                 }
+                result = _finalize_repo_helper_create_context(parsed_query, result)
+                result["total_chunks"] = len(result.get("chunks", []) or [])
+                log_line(f"BUILD CONTEXT FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
+                log_line(f"BUILD CONTEXT FINAL TARGETS: {json.dumps(result.get('resolved_target_files', []) or [], ensure_ascii=False)}")
+                log_line(f"BUILD CONTEXT FINAL FILES USED: {json.dumps(result.get('files_used', []) or [], ensure_ascii=False)}")
+                log_line(
+                    f"BUILD CONTEXT FINAL FILE SELECTION KEYS: "
+                    f"{json.dumps(list((result.get('file_selection', {}) or {}).keys()), ensure_ascii=False)}"
+                )
+                log_line(
+                    f"BUILD CONTEXT FINAL CHUNK PATHS: "
+                    f"{json.dumps([str(chunk.get('path', '')).strip() for chunk in (result.get('chunks', []) or []) if isinstance(chunk, dict)], ensure_ascii=False)}"
+                )
+                return result
 
             chunks.append(chunk)
             total_tokens += chunk_tokens
@@ -1654,6 +2098,62 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         *resolved_target_files,
         *files_used,
     ]))
+    if hard_focus_mode:
+        allowed_focus_paths = set(resolved_target_files)
+        for symbol_paths in symbol_resolution.values():
+            if not isinstance(symbol_paths, list):
+                continue
+            unique_symbol_paths = list(
+                dict.fromkeys([str(path).strip() for path in symbol_paths if str(path).strip()])
+            )
+            if len(unique_symbol_paths) == 1:
+                allowed_focus_paths.update(unique_symbol_paths)
+        for path, reasons in file_selection_reasons.items():
+            if _is_default_internal_path(path, parsed_query):
+                continue
+            if _is_disallowed_hard_focus_support_path(path, parsed_query, resolved_target_files):
+                continue
+            if any(
+                marker in reason
+                for reason in reasons
+                for marker in ("resolved target file", "symbol definition", "symbol usage", "path hint")
+            ):
+                allowed_focus_paths.add(path)
+        chunks = [
+            chunk
+            for chunk in chunks
+            if isinstance(chunk, dict) and str(chunk.get("path", "")).strip() in allowed_focus_paths
+        ]
+        files_used = [path for path in files_used if path in allowed_focus_paths]
+        files_used = list(dict.fromkeys([*resolved_target_files, *files_used]))
+        log_line(
+            f"BUILD CONTEXT HARD FOCUS: {json.dumps(sorted(allowed_focus_paths), ensure_ascii=False)}"
+        )
+    if not _explicitly_requests_internal_repo_paths(parsed_query):
+        chunks = [
+            chunk
+            for chunk in chunks
+            if isinstance(chunk, dict)
+            and not _is_default_internal_path(str(chunk.get("path", "")).strip(), parsed_query)
+        ]
+        files_used = [
+            path for path in files_used
+            if not _is_default_internal_path(path, parsed_query)
+        ]
+    if parsed_query.get("intent") == "review":
+        review_focus_paths = _collect_review_focus_paths(resolved_target_files, symbol_resolution)
+        if review_focus_paths:
+            allowed_review_paths = set(review_focus_paths)
+            chunks = [
+                chunk
+                for chunk in chunks
+                if isinstance(chunk, dict) and str(chunk.get("path", "")).strip() in allowed_review_paths
+            ]
+            files_used = [path for path in files_used if path in allowed_review_paths]
+            files_used = list(dict.fromkeys([*review_focus_paths, *files_used]))
+            log_line(
+                f"BUILD CONTEXT REVIEW FOCUS: {json.dumps(review_focus_paths, ensure_ascii=False)}"
+            )
     file_selection = {
         path: _dedupe_preserve_order(file_selection_reasons.get(path, []))
         for path in files_used
@@ -1668,10 +2168,23 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         "chunks": chunks,
         "total_chunks": len(chunks),
     }
+    result = _finalize_repo_helper_create_context(parsed_query, result)
+    result["total_chunks"] = len(result.get("chunks", []) or [])
     log_line(f"BUILD CONTEXT RESOLVED SYMBOLS: {json.dumps(symbol_resolution, ensure_ascii=False)}")
     log_line(f"BUILD CONTEXT FILES USED: {json.dumps(files_used, ensure_ascii=False)}")
     log_line(f"BUILD CONTEXT FILE SELECTION: {json.dumps(file_selection, ensure_ascii=False)}")
+    log_line(f"BUILD CONTEXT FINAL PARSED QUERY: {json.dumps(parsed_query, ensure_ascii=False)}")
+    log_line(f"BUILD CONTEXT FINAL TARGETS: {json.dumps(result.get('resolved_target_files', []) or [], ensure_ascii=False)}")
+    log_line(f"BUILD CONTEXT FINAL FILES USED: {json.dumps(result.get('files_used', []) or [], ensure_ascii=False)}")
     log_line(
-        f"BUILD CONTEXT READY: built {result['total_chunks']} chunks from {len(files_used)} files for query={effective_query!r}"
+        f"BUILD CONTEXT FINAL FILE SELECTION KEYS: "
+        f"{json.dumps(list((result.get('file_selection', {}) or {}).keys()), ensure_ascii=False)}"
+    )
+    log_line(
+        f"BUILD CONTEXT FINAL CHUNK PATHS: "
+        f"{json.dumps([str(chunk.get('path', '')).strip() for chunk in (result.get('chunks', []) or []) if isinstance(chunk, dict)], ensure_ascii=False)}"
+    )
+    log_line(
+        f"BUILD CONTEXT READY: built {result['total_chunks']} chunks from {len(result.get('files_used', []) or [])} files for query={effective_query!r}"
     )
     return result
