@@ -1,18 +1,5 @@
-from langchain.agents import create_agent
+from __future__ import annotations
 
-from config import SYSTEM_PROMPT, settings
-from tools import read_url, web_search, write_report
-from llm_factory import get_llm
+from agents.root_agent import answer_question, build_agent
 
-
-def build_agent():
-
-    model = get_llm("openai/gpt-4o-mini")
-
-    agent = create_agent(
-        model=model,
-        tools=[web_search, read_url, write_report],
-        system_prompt=SYSTEM_PROMPT,
-    )
-
-    return agent
+__all__ = ["answer_question", "build_agent"]

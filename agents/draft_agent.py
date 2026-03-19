@@ -44,6 +44,26 @@ INSUFFICIENT_REPOSITORY_CONTEXT_MESSAGE = "Not enough repository context"
 SYMBOL_CONTEXT_RADIUS = 30
 
 
+def _repo_context_root_path(repo_context: dict | None) -> str:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return str(context.get("root_path", ".") or ".").strip() or "."
+
+
+def _repo_context_repo_id(repo_context: dict | None) -> str | None:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    repo_id = str(context.get("repo_id", "") or "").strip()
+    return repo_id or None
+
+
+def _read_repo_file_from_context(path: str, repo_context: dict | None, max_chars: int) -> str:
+    return read_repo_file(
+        path,
+        max_chars=max_chars,
+        root_path=_repo_context_root_path(repo_context),
+        repo_id=_repo_context_repo_id(repo_context),
+    )
+
+
 def _get_real_repo_context_paths(repo_context: dict | None) -> list[str]:
     context = repo_context if isinstance(repo_context, dict) else {}
     files_used = context.get("resolved_target_files") or context.get("files_used") or []
@@ -119,7 +139,11 @@ def _has_unique_symbol_locked_target(
         return False
 
     path = (locked_paths[0] or "").strip()
-    if not path or not validate_manifest_file_path(path, "."):
+    if not path or not validate_manifest_file_path(
+        path,
+        _repo_context_root_path(repo_context),
+        repo_id=_repo_context_repo_id(repo_context),
+    ):
         return False
 
     symbol_scope = _get_symbol_scope_for_file(path, repo_context)
@@ -135,7 +159,12 @@ def _get_symbol_scope_for_file(path: str, repo_context: dict | None) -> dict | N
         return None
 
     for symbol_name in locked_symbols:
-        occurrences = find_symbol_occurrences(symbol_name, ".", max_results=10)
+        occurrences = find_symbol_occurrences(
+            symbol_name,
+            _repo_context_root_path(repo_context),
+            max_results=10,
+            repo_id=_repo_context_repo_id(repo_context),
+        )
         for occurrence in occurrences:
             occurrence_path = str(occurrence.get("path", "")).strip()
             if occurrence_path != path:
@@ -144,7 +173,13 @@ def _get_symbol_scope_for_file(path: str, repo_context: dict | None) -> dict | N
             line_number = max(1, int(occurrence.get("line", 1)))
             start_line = max(1, line_number - SYMBOL_CONTEXT_RADIUS)
             end_line = line_number + SYMBOL_CONTEXT_RADIUS
-            snippet = read_file_range(path, start_line, end_line)
+            snippet = read_file_range(
+                path,
+                start_line,
+                end_line,
+                root_path=_repo_context_root_path(repo_context),
+                repo_id=_repo_context_repo_id(repo_context),
+            )
             if snippet.startswith("Failed to read file:") or snippet.startswith("File not found:"):
                 continue
 
@@ -209,12 +244,13 @@ def _build_locked_change_set(
     )
 
 
-def _validate_draft_set_paths(draft_set: DraftSet) -> DraftSet:
+def _validate_draft_set_paths(draft_set: DraftSet, repo_context: dict | None = None) -> DraftSet:
     valid_files: list[FileDraft] = []
     invalid_paths: list[str] = []
     path_validation = validate_manifest_file_paths(
         [(file_draft.path or "").strip() for file_draft in draft_set.files],
-        ".",
+        _repo_context_root_path(repo_context),
+        repo_id=_repo_context_repo_id(repo_context),
     )
 
     for file_draft in draft_set.files:
@@ -578,7 +614,7 @@ def _evaluate_requested_delta_for_file(
     if not path:
         return False, "missing_path", ["missing_path"]
 
-    current_text = read_repo_file(path, max_chars=200000)
+    current_text = _read_repo_file_from_context(path, repo_context, max_chars=200000)
     if not current_text.strip():
         return False, "missing_current_file_text", ["missing_current_file_text"]
 
@@ -1000,7 +1036,7 @@ def _build_forced_symbol_level_draft(
 
     path = locked_paths[0]
     symbol_name = locked_symbols[0]
-    current_text = read_repo_file(path, max_chars=400000)
+    current_text = _read_repo_file_from_context(path, repo_context, max_chars=400000)
     if not current_text.strip():
         return None
     current_symbol_text = _extract_symbol_text(current_text, symbol_name)
@@ -1157,8 +1193,9 @@ def _format_logging_insertion_plan_output(
     path: str,
     symbol_name: str,
     missing_delta_items: list[str],
+    repo_context: dict | None = None,
 ) -> str:
-    current_text = read_repo_file(path, max_chars=400000)
+    current_text = _read_repo_file_from_context(path, repo_context, max_chars=400000)
     current_symbol_text = _extract_symbol_text(current_text, symbol_name) or _read_symbol_current_text(path, None, current_text)
     symbol_lines = current_symbol_text.splitlines()
 
@@ -1407,7 +1444,7 @@ def _build_locked_modify_patch_fallback_result(
         f"{_format_draft_debug_block(short_circuit_used, 'locked_modify_safety_rules_failed', requested_delta_present, missing_delta_items, True, 'surgical_edit', 'symbol_only', draft_behavior_preservation_mode, False, False, False, 'patch_only_fallback', draft_rewrite_attempts, True)}\n"
         "DRAFT_GENERATION_FAILED_REASON=locked_modify_safety_rules_failed\n"
         f"PRESERVATION_FAILURE_FIELDS={safety_failures}\n"
-        f"{_format_logging_insertion_plan_output(fallback_path, fallback_symbol, missing_delta_items)}"
+        f"{_format_logging_insertion_plan_output(fallback_path, fallback_symbol, missing_delta_items, repo_context)}"
     )
     return AgentResult(
         agent_name="draft",
@@ -1459,7 +1496,7 @@ def _build_file_context_block(
     repo_context: dict | None,
 ) -> str:
     path = (file_change.path or "").strip()
-    current_text = read_repo_file(path, max_chars=200000)
+    current_text = _read_repo_file_from_context(path, repo_context, max_chars=200000)
     if not current_text.strip():
         current_text = "Current repo file not found or empty."
 
@@ -1548,7 +1585,7 @@ def _build_draft_prompt_input(
     file_lines: list[str] = []
     repo_blocks: list[str] = []
 
-    config_text = read_repo_file("config.py", max_chars=120000)
+    config_text = _read_repo_file_from_context("config.py", repo_context, max_chars=120000)
     config_fields = _extract_config_fields(config_text)
     locked_paths = _get_locked_repo_target_paths(repo_context)
     locked_symbols = _get_locked_symbol_names(repo_context)
@@ -1560,7 +1597,7 @@ def _build_draft_prompt_input(
         if not path:
             continue
 
-        current_text = read_repo_file(path, max_chars=200000)
+        current_text = _read_repo_file_from_context(path, repo_context, max_chars=200000)
 
         if _is_change_already_applied_for_file(path, current_text, change_set):
             continue
@@ -1681,7 +1718,12 @@ def run_draft_agent(
     task_intent: str = "create",
     repo_context: dict | None = None,
 ) -> AgentResult:
-    resolved_repo_context = ensure_repo_context(original_request, ".", repo_context)
+    resolved_repo_context = ensure_repo_context(
+        original_request,
+        _repo_context_root_path(repo_context),
+        repo_context,
+        repo_id=_repo_context_repo_id(repo_context),
+    )
     locked_paths = _get_locked_repo_target_paths(resolved_repo_context)
     locked_symbols = _get_locked_symbol_names(resolved_repo_context)
     files_used = resolved_repo_context.get("files_used") if isinstance(resolved_repo_context, dict) else []
@@ -1843,7 +1885,7 @@ def run_draft_agent(
             draft_rewrite_attempts = int(forced_debug.get("draft_rewrite_attempts", 0))
             draft_used_safe_fallback = bool(forced_debug.get("draft_used_safe_fallback", False))
             current_symbol_text = _extract_symbol_text(
-                read_repo_file(forced_path, max_chars=400000),
+                _read_repo_file_from_context(forced_path, resolved_repo_context, max_chars=400000),
                 locked_symbols[0],
             )
             (
@@ -1935,7 +1977,7 @@ def run_draft_agent(
                 f"{_format_draft_debug_block(short_circuit_used, 'preservation_validation_failed', requested_delta_present, missing_delta_items, True, 'surgical_edit', 'symbol_only', draft_behavior_preservation_mode, False, False, False, draft_rewrite_strategy, draft_rewrite_attempts, draft_used_safe_fallback)}\n"
                 "DRAFT_GENERATION_FAILED_REASON=preservation_validation_failed\n"
                 f"PRESERVATION_FAILURE_FIELDS={preservation_failure_fields}\n"
-                f"{_format_logging_insertion_plan_output(locked_paths[0], locked_symbols[0], missing_delta_items)}"
+                f"{_format_logging_insertion_plan_output(locked_paths[0], locked_symbols[0], missing_delta_items, resolved_repo_context)}"
             )
             return AgentResult(
                 agent_name="draft",
@@ -2031,7 +2073,7 @@ def run_draft_agent(
     )
 
     draft_set = _extract_draft_set(answer)
-    draft_set = _validate_draft_set_paths(draft_set)
+    draft_set = _validate_draft_set_paths(draft_set, resolved_repo_context)
     if locked_paths:
         draft_set = _filter_draft_set_to_locked_targets(draft_set, locked_paths)
 
@@ -2042,7 +2084,7 @@ def run_draft_agent(
         and draft_set.files
     ):
         current_symbol_text = _extract_symbol_text(
-            read_repo_file(locked_paths[0], max_chars=400000),
+            _read_repo_file_from_context(locked_paths[0], resolved_repo_context, max_chars=400000),
             locked_symbols[0],
         )
         drafted_file = next(

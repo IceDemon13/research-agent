@@ -24,6 +24,17 @@ INSUFFICIENT_REPOSITORY_CONTEXT_MESSAGE = "Not enough repository context"
 CREATE_MODE_DISALLOWED_TARGETS = ("readme.md", "main.py", "docs/")
 
 
+def _repo_context_root_path(repo_context: dict | None) -> str:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return str(context.get("root_path", ".") or ".").strip() or "."
+
+
+def _repo_context_repo_id(repo_context: dict | None) -> str | None:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    repo_id = str(context.get("repo_id", "") or "").strip()
+    return repo_id or None
+
+
 def _get_real_repo_context_paths(repo_context: dict | None) -> list[str]:
     context = repo_context if isinstance(repo_context, dict) else {}
     files_used = context.get("resolved_target_files") or context.get("files_used") or []
@@ -146,7 +157,11 @@ def _has_unique_symbol_locked_target(
     if len(target_files) != 1 or len(symbol_hints) != 1:
         return False
     path = (target_files[0] or "").strip()
-    return bool(path) and validate_manifest_file_path(path, ".") and _has_relevant_symbol_context(repo_context, symbol_hints)
+    return bool(path) and validate_manifest_file_path(
+        path,
+        _repo_context_root_path(repo_context),
+        repo_id=_repo_context_repo_id(repo_context),
+    ) and _has_relevant_symbol_context(repo_context, symbol_hints)
 
 
 def _get_candidate_repo_context_paths(repo_context: dict | None) -> list[str]:
@@ -158,7 +173,11 @@ def _get_candidate_repo_context_paths(repo_context: dict | None) -> list[str]:
     return [
         path
         for path in real_paths
-        if validate_manifest_file_path(path, ".")
+        if validate_manifest_file_path(
+            path,
+            _repo_context_root_path(repo_context),
+            repo_id=_repo_context_repo_id(repo_context),
+        )
     ]
 
 
@@ -521,7 +540,11 @@ def build_change_set_from_locked_context(
     normalized_paths = [
         path
         for path in list(dict.fromkeys(target_paths))
-        if validate_manifest_file_path(path, ".")
+        if validate_manifest_file_path(
+            path,
+            _repo_context_root_path(repo_context),
+            repo_id=_repo_context_repo_id(repo_context),
+        )
     ]
     if not normalized_paths:
         return _build_empty_change_set()
@@ -648,12 +671,13 @@ def _build_locked_change_set(
     )
 
 
-def _validate_change_set_paths(change_set: ChangeSet) -> ChangeSet:
+def _validate_change_set_paths(change_set: ChangeSet, repo_context: dict | None = None) -> ChangeSet:
     valid_files: list[ProposedFileChange] = []
     invalid_paths: list[str] = []
     path_validation = validate_manifest_file_paths(
         [(file_change.path or "").strip() for file_change in change_set.files],
-        ".",
+        _repo_context_root_path(repo_context),
+        repo_id=_repo_context_repo_id(repo_context),
     )
 
     for file_change in change_set.files:
@@ -759,7 +783,12 @@ def _build_change_prompt_input(
 
         file_lines.append(f"- {path}: {file_plan.summary}")
 
-        file_text = read_repo_file(path, max_chars=MAX_REPO_FILE_CHARS)
+        file_text = read_repo_file(
+            path,
+            max_chars=MAX_REPO_FILE_CHARS,
+            root_path=_repo_context_root_path(repo_context),
+            repo_id=_repo_context_repo_id(repo_context),
+        )
         if not file_text.strip():
             file_text = "Current repo file not found or empty."
 
@@ -781,7 +810,12 @@ Current content:
     if not detailed_repo_context:
         detailed_repo_context = "repo context not available"
 
-    resolved_repo_context = ensure_repo_context(original_request, ".", repo_context)
+    resolved_repo_context = ensure_repo_context(
+        original_request,
+        _repo_context_root_path(repo_context),
+        repo_context,
+        repo_id=_repo_context_repo_id(repo_context),
+    )
     shared_context = format_repo_context(resolved_repo_context)
     locked_paths = _get_locked_repo_target_paths(resolved_repo_context)
     locked_symbols = _get_locked_symbol_names(resolved_repo_context)
@@ -960,7 +994,12 @@ def run_change_agent(
     repo_context: dict | None = None,
     debug_context_summary: str = "",
 ) -> AgentResult:
-    resolved_repo_context = ensure_repo_context(original_request, ".", repo_context)
+    resolved_repo_context = ensure_repo_context(
+        original_request,
+        _repo_context_root_path(repo_context),
+        repo_context,
+        repo_id=_repo_context_repo_id(repo_context),
+    )
     locked_paths = _get_locked_repo_target_paths(resolved_repo_context)
     locked_symbols = _get_locked_symbol_names(resolved_repo_context)
     effective_symbols = _infer_requested_symbols(original_request, locked_symbols)
@@ -969,7 +1008,15 @@ def run_change_agent(
         context_files = _filter_create_target_paths(context_files, original_request, resolved_repo_context)
     files_used = resolved_repo_context.get("files_used") if isinstance(resolved_repo_context, dict) else []
     chunks = resolved_repo_context.get("chunks") if isinstance(resolved_repo_context, dict) else []
-    exact_target_files = [path for path in locked_paths if validate_manifest_file_path(path, ".")]
+    exact_target_files = [
+        path
+        for path in locked_paths
+        if validate_manifest_file_path(
+            path,
+            _repo_context_root_path(resolved_repo_context),
+            repo_id=_repo_context_repo_id(resolved_repo_context),
+        )
+    ]
     if task_intent == "create":
         exact_target_files = _filter_create_target_paths(exact_target_files, original_request, resolved_repo_context)
     obvious_target_paths = _choose_obvious_target_paths(
@@ -1143,7 +1190,7 @@ def run_change_agent(
     )
 
     change_set = _extract_change_set(answer)
-    change_set = _validate_change_set_paths(change_set)
+    change_set = _validate_change_set_paths(change_set, resolved_repo_context)
     if locked_paths:
         change_set = _filter_change_set_to_locked_targets(change_set, locked_paths)
     if not change_set.files and task_intent == "modify" and primary_context_paths and context_supports_targeted_fallback:

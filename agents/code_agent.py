@@ -11,6 +11,17 @@ from prompts.code_prompt import CODE_PROMPT
 from tools.repo_tools import ensure_repo_context, format_repo_context
 
 
+def _repo_context_root_path(repo_context: dict | None) -> str:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return str(context.get("root_path", ".") or ".").strip() or "."
+
+
+def _repo_context_repo_id(repo_context: dict | None) -> str | None:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    repo_id = str(context.get("repo_id", "") or "").strip()
+    return repo_id or None
+
+
 def _build_code_prompt_input_from_spec(data: SpecToCodeInput) -> str:
     spec = data.spec
 
@@ -74,7 +85,12 @@ Task intent:
 
 
 def _build_repo_context_from_spec(original_request: str, repo_context: dict | None) -> str:
-    resolved_repo_context = ensure_repo_context(original_request, ".", repo_context)
+    resolved_repo_context = ensure_repo_context(
+        original_request,
+        _repo_context_root_path(repo_context),
+        repo_context,
+        repo_id=_repo_context_repo_id(repo_context),
+    )
     if not resolved_repo_context.get("chunks"):
         log_line("CODE AGENT WARNING: build_context returned empty context; continuing without repo snippets")
     return format_repo_context(resolved_repo_context)
@@ -180,7 +196,12 @@ def run_code_agent(
         original_request=user_input,
         spec=dummy_spec,
         task_intent=task_intent,
-        repo_context=ensure_repo_context(user_input, ".", repo_context),
+        repo_context=ensure_repo_context(
+            user_input,
+            _repo_context_root_path(repo_context),
+            repo_context,
+            repo_id=_repo_context_repo_id(repo_context),
+        ),
     )
 
     return run_code_agent_from_spec(code_input)

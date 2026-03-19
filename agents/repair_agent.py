@@ -18,6 +18,17 @@ FILE_BLOCK_RE = re.compile(
 )
 
 
+def _repo_context_root_path(repo_context: dict | None) -> str:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return str(context.get("root_path", ".") or ".").strip() or "."
+
+
+def _repo_context_repo_id(repo_context: dict | None) -> str | None:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    repo_id = str(context.get("repo_id", "") or "").strip()
+    return repo_id or None
+
+
 def _extract_section_text(text: str, header: str) -> str:
     lines = text.splitlines()
     capture = False
@@ -86,6 +97,7 @@ def _build_repair_prompt_input(
     change_set,
     draft_set: DraftSet,
     review_result,
+    repo_context: dict | None = None,
 ) -> str:
     scope_text = "\n".join(f"- {item}" for item in getattr(spec, "scope", [])) or "- не вказано"
     out_of_scope_text = "\n".join(f"- {item}" for item in getattr(spec, "out_of_scope", [])) or "- не вказано"
@@ -113,7 +125,12 @@ def _build_repair_prompt_input(
     blocks: list[str] = []
 
     for file_draft in draft_set.files:
-        current_repo_text = read_repo_file(file_draft.path, max_chars=120000)
+        current_repo_text = read_repo_file(
+            file_draft.path,
+            max_chars=120000,
+            root_path=_repo_context_root_path(repo_context),
+            repo_id=_repo_context_repo_id(repo_context),
+        )
         if not current_repo_text.strip():
             current_repo_text = "Current repo file not found or empty."
 
@@ -197,6 +214,7 @@ def run_repair_agent(
     change_set,
     draft_set: DraftSet,
     review_result,
+    repo_context: dict | None = None,
 ) -> AgentResult:
     memory = [
         {
@@ -211,6 +229,7 @@ def run_repair_agent(
         change_set=change_set,
         draft_set=draft_set,
         review_result=review_result,
+        repo_context=repo_context,
     )
 
     answer, _messages = run_react_loop(

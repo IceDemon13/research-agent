@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 
+from config import settings
 from contracts.repo_context_contract import normalize_repo_context
 from logger_utils import log_line
+from services.repo_registry import resolve_repo
 from services.repo_context_rules import (
     finalize_repo_helper_create_context,
     get_repo_context_priority_tier,
@@ -246,8 +248,27 @@ def _is_manifest_ignored(path: Path) -> bool:
     return bool(parts & MANIFEST_IGNORED_DIR_NAMES)
 
 
-def _resolve_repo_relative_path(path: str) -> tuple[Path | None, str | None]:
-    root_path = Path(".").resolve()
+def _resolve_repo_runtime(root_path: str = ".", repo_id: str | None = None) -> tuple[Path, str]:
+    normalized_root_path = str(root_path or ".").strip() or "."
+    if repo_id:
+        repo = resolve_repo(repo_id=repo_id, fallback_root_path=normalized_root_path)
+        return Path(repo.root_path).resolve(), repo.repo_id
+
+    candidate_root = Path(normalized_root_path).expanduser().resolve()
+    if normalized_root_path == "." or candidate_root == Path(".").resolve():
+        repo = resolve_repo(fallback_root_path=str(candidate_root))
+        return Path(repo.root_path).resolve(), repo.repo_id
+
+    return candidate_root, ""
+
+
+def _resolve_repo_relative_path(
+    path: str,
+    *,
+    root_path: str = ".",
+    repo_id: str | None = None,
+) -> tuple[Path | None, str | None]:
+    resolved_root_path, _resolved_repo_id = _resolve_repo_runtime(root_path, repo_id)
     raw_path = (path or "").strip()
 
     if not raw_path:
@@ -259,7 +280,7 @@ def _resolve_repo_relative_path(path: str) -> tuple[Path | None, str | None]:
     if ".." in Path(raw_path).parts:
         return None, "Parent path traversal is not allowed."
 
-    candidate = (root_path / raw_path).resolve()
+    candidate = (resolved_root_path / raw_path).resolve()
     return candidate, None
 
 
@@ -906,26 +927,51 @@ def resolve_repo_targets(parsed_query: dict, manifest: dict) -> dict:
     return result
 
 
-def _get_manifest_path() -> Path:
+def _get_manifest_path(repo_id: str = "") -> Path:
+    normalized_repo_id = str(repo_id or "").strip()
+    if normalized_repo_id:
+        artifacts_root = Path(settings.runtime.repo_registry_path).expanduser().resolve().parent
+        return artifacts_root / normalized_repo_id / "repo_manifest.json"
     return Path("output") / "repo_manifest.json"
 
 
-def _load_repo_manifest(root_path: str) -> dict:
-    manifest_path = _get_manifest_path()
+def _coerce_manifest_payload(payload: dict, manifest_path: Path) -> dict:
+    if payload.get("ok"):
+        return payload
+    return {
+        "ok": True,
+        "repo_id": str(payload.get("repo_id", "")).strip(),
+        "root_path": str(payload.get("root_path", "")).strip(),
+        "output_path": manifest_path.as_posix(),
+        "generated_at": str(payload.get("indexed_at", "")).strip(),
+        "file_count": int(payload.get("file_count", 0) or 0),
+        "files": list(payload.get("files", []) or []),
+        "main_docs_candidates": list(payload.get("main_docs_candidates", []) or []),
+        "config_candidates": list(payload.get("config_candidates", []) or []),
+        "likely_test_paths": list(payload.get("likely_test_paths", []) or []),
+    }
+
+
+def _load_repo_manifest(root_path: str, repo_id: str | None = None) -> dict:
+    resolved_root_path, resolved_repo_id = _resolve_repo_runtime(root_path, repo_id)
+    manifest_path = _get_manifest_path(str(resolved_repo_id or repo_id or "").strip())
 
     if manifest_path.exists():
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("ok") and manifest.get("root_path") == Path(root_path).resolve().as_posix():
+            manifest = _coerce_manifest_payload(
+                json.loads(manifest_path.read_text(encoding="utf-8")),
+                manifest_path,
+            )
+            if manifest.get("ok") and manifest.get("root_path") == resolved_root_path.as_posix():
                 return manifest
         except Exception:
             pass
 
-    return build_repo_manifest(root_path)
+    return build_repo_manifest(resolved_root_path.as_posix(), repo_id=resolved_repo_id or repo_id)
 
 
-def _manifest_file_path_set(root_path: str) -> set[str]:
-    manifest = _load_repo_manifest(root_path)
+def _manifest_file_path_set(root_path: str, repo_id: str | None = None) -> set[str]:
+    manifest = _load_repo_manifest(root_path, repo_id=repo_id)
     if not manifest.get("ok"):
         return set()
 
@@ -940,16 +986,20 @@ def _manifest_file_path_set(root_path: str) -> set[str]:
     return result
 
 
-def validate_manifest_file_path(path: str, root_path: str = ".") -> bool:
+def validate_manifest_file_path(path: str, root_path: str = ".", repo_id: str | None = None) -> bool:
     normalized_path = str(path or "").strip()
     if not normalized_path:
         return False
 
-    return normalized_path in _manifest_file_path_set(root_path)
+    return normalized_path in _manifest_file_path_set(root_path, repo_id=repo_id)
 
 
-def validate_manifest_file_paths(paths: list[str], root_path: str = ".") -> dict[str, bool]:
-    manifest_paths = _manifest_file_path_set(root_path)
+def validate_manifest_file_paths(
+    paths: list[str],
+    root_path: str = ".",
+    repo_id: str | None = None,
+) -> dict[str, bool]:
+    manifest_paths = _manifest_file_path_set(root_path, repo_id=repo_id)
     result: dict[str, bool] = {}
 
     for path in paths:
@@ -983,10 +1033,15 @@ def _is_similar_snippet(snippet: str, existing_snippets: list[str]) -> bool:
     return False
 
 
-def ensure_repo_context(query: str | dict, root_path: str, repo_context: dict | None = None) -> dict:
+def ensure_repo_context(
+    query: str | dict,
+    root_path: str,
+    repo_context: dict | None = None,
+    repo_id: str | None = None,
+) -> dict:
     if isinstance(repo_context, dict) and repo_context.get("chunks") is not None:
         return normalize_repo_context(repo_context)
-    return normalize_repo_context(build_context(query=query, root_path=root_path))
+    return normalize_repo_context(build_context(query=query, root_path=root_path, repo_id=repo_id))
 
 
 def sanitize_repo_context(repo_context: dict | None) -> dict:
@@ -1025,9 +1080,12 @@ def format_repo_context(repo_context: dict | None) -> str:
     )
 
 
-def build_repo_manifest(root_path: str) -> dict:
-    root = Path(root_path).resolve()
-    output_path = Path("output") / "repo_manifest.json"
+def build_repo_manifest(root_path: str = ".", repo_id: str | None = None) -> dict:
+    normalized_repo_id = str(repo_id or "").strip()
+    resolved_root_path, resolved_repo_id = _resolve_repo_runtime(root_path, normalized_repo_id or None)
+    root = resolved_root_path
+    effective_repo_id = normalized_repo_id or resolved_repo_id
+    output_path = _get_manifest_path(effective_repo_id)
 
     if not root.exists():
         message = f"Root path does not exist: {root_path}"
@@ -1038,6 +1096,15 @@ def build_repo_manifest(root_path: str) -> dict:
         message = f"Root path is not a directory: {root_path}"
         log_line(f"REPO MANIFEST FAILED: {message}")
         return {"ok": False, "error": message}
+
+    if effective_repo_id:
+        try:
+            from services.repo_index_service import build_repo_index
+
+            artifacts = build_repo_index(effective_repo_id)
+            return _coerce_manifest_payload(artifacts.manifest.to_dict(), output_path)
+        except Exception as exc:
+            log_line(f"REPO MANIFEST FALLBACK: repo_id={effective_repo_id} index service failed: {exc}")
 
     log_line(f"REPO MANIFEST START: scanning {root.as_posix()}")
 
@@ -1073,6 +1140,7 @@ def build_repo_manifest(root_path: str) -> dict:
 
     manifest = {
         "ok": True,
+        "repo_id": effective_repo_id,
         "root_path": root.as_posix(),
         "output_path": output_path.as_posix(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1095,8 +1163,8 @@ def build_repo_manifest(root_path: str) -> dict:
     return manifest
 
 
-def list_repo_files(root: str = ".", max_files: int = 200) -> str:
-    root_path = Path(root).resolve()
+def list_repo_files(root: str = ".", max_files: int = 200, repo_id: str | None = None) -> str:
+    root_path, _resolved_repo_id = _resolve_repo_runtime(root, repo_id)
 
     if not root_path.exists():
         return f"Root path does not exist: {root}"
@@ -1128,8 +1196,14 @@ def list_repo_files(root: str = ".", max_files: int = 200) -> str:
     return "\n".join(files)
 
 
-def read_repo_file(path: str, max_chars: int = 6000) -> str:
-    candidate, error = _resolve_repo_relative_path(path)
+def read_repo_file(
+    path: str,
+    max_chars: int = 6000,
+    *,
+    root_path: str = ".",
+    repo_id: str | None = None,
+) -> str:
+    candidate, error = _resolve_repo_relative_path(path, root_path=root_path, repo_id=repo_id)
     raw_path = (path or "").strip()
 
     if error:
@@ -1163,8 +1237,15 @@ def read_repo_file(path: str, max_chars: int = 6000) -> str:
     return f"# FILE: {raw_path}\n\n{text}"
 
 
-def read_file_range(path: str, start_line: int, end_line: int) -> str:
-    candidate, error = _resolve_repo_relative_path(path)
+def read_file_range(
+    path: str,
+    start_line: int,
+    end_line: int,
+    *,
+    root_path: str = ".",
+    repo_id: str | None = None,
+) -> str:
+    candidate, error = _resolve_repo_relative_path(path, root_path=root_path, repo_id=repo_id)
     raw_path = (path or "").strip()
 
     if error:
@@ -1212,8 +1293,13 @@ def read_file_range(path: str, start_line: int, end_line: int) -> str:
     return f"# FILE: {raw_path}\n# LINES: {start_line}-{actual_end_line}\n\n{body}"
 
 
-def search_in_repo(query: str, root_path: str, max_results: int = 20) -> list[dict]:
-    root = Path(root_path).resolve()
+def search_in_repo(
+    query: str,
+    root_path: str = ".",
+    max_results: int = 20,
+    repo_id: str | None = None,
+) -> list[dict]:
+    root, _resolved_repo_id = _resolve_repo_runtime(root_path, repo_id)
     needle = (query or "").strip().lower()
 
     if not needle:
@@ -1283,8 +1369,13 @@ def search_in_repo(query: str, root_path: str, max_results: int = 20) -> list[di
     return results
 
 
-def find_symbol_occurrences(symbol_name: str, root_path: str, max_results: int = 10) -> list[dict]:
-    root = Path(root_path).resolve()
+def find_symbol_occurrences(
+    symbol_name: str,
+    root_path: str = ".",
+    max_results: int = 10,
+    repo_id: str | None = None,
+) -> list[dict]:
+    root, _resolved_repo_id = _resolve_repo_runtime(root_path, repo_id)
     symbol = (symbol_name or "").strip()
     safe_max_results = max(1, max_results)
 
@@ -1350,7 +1441,7 @@ def find_symbol_occurrences(symbol_name: str, root_path: str, max_results: int =
         )
         return definition_results
 
-    usage_results = search_in_repo(symbol, root_path, max_results=safe_max_results)
+    usage_results = search_in_repo(symbol, root_path, max_results=safe_max_results, repo_id=repo_id)
     for item in usage_results:
         item["match_kind"] = USAGE_MATCH_KIND
         item["symbol"] = symbol
@@ -1361,13 +1452,18 @@ def find_symbol_occurrences(symbol_name: str, root_path: str, max_results: int =
     return usage_results
 
 
-def select_candidate_files(query: str, root_path: str, max_files: int = 8) -> list[dict]:
+def select_candidate_files(
+    query: str,
+    root_path: str = ".",
+    max_files: int = 8,
+    repo_id: str | None = None,
+) -> list[dict]:
     normalized_query = (query or "").strip()
     if not normalized_query:
         log_line("CANDIDATE FILES FAILED: query is empty")
         return []
 
-    root = Path(root_path).resolve()
+    root, _resolved_repo_id = _resolve_repo_runtime(root_path, repo_id)
     if not root.exists() or not root.is_dir():
         log_line(f"CANDIDATE FILES FAILED: invalid root path {root_path}")
         return []
@@ -1375,8 +1471,8 @@ def select_candidate_files(query: str, root_path: str, max_files: int = 8) -> li
     safe_max_files = max(1, max_files)
     keywords = _extract_keywords(normalized_query)
     parsed_query = parse_repo_query(normalized_query)
-    search_results = search_in_repo(normalized_query, root_path, max_results=max(safe_max_files * 5, 20))
-    manifest = _load_repo_manifest(root_path)
+    search_results = search_in_repo(normalized_query, root_path, max_results=max(safe_max_files * 5, 20), repo_id=repo_id)
+    manifest = _load_repo_manifest(root_path, repo_id=repo_id)
 
     if not manifest.get("ok"):
         log_line("CANDIDATE FILES FAILED: manifest unavailable")
@@ -1516,12 +1612,19 @@ def _has_concrete_repo_target(parsed_query: dict, resolved_targets: dict) -> boo
     )
 
 
-def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> dict:
+def build_context(
+    query: str | dict,
+    root_path: str = ".",
+    max_tokens: int = 8000,
+    repo_id: str | None = None,
+) -> dict:
     normalized_query, parsed_query = _normalize_parsed_repo_query(query)
     if not normalized_query:
         log_line("BUILD CONTEXT FAILED: query is empty")
         return normalize_repo_context({
             "query": query,
+            "repo_id": str(repo_id or "").strip(),
+            "root_path": str(root_path or ".").strip(),
             "parsed_query": parsed_query,
             "resolved_target_files": [],
             "resolved_symbols": {},
@@ -1531,11 +1634,13 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             "total_chunks": 0,
         })
 
-    root = Path(root_path).resolve()
+    root, resolved_repo_id = _resolve_repo_runtime(root_path, repo_id)
     if not root.exists() or not root.is_dir():
         log_line(f"BUILD CONTEXT FAILED: invalid root path {root_path}")
         return normalize_repo_context({
             "query": query,
+            "repo_id": resolved_repo_id,
+            "root_path": root.as_posix(),
             "parsed_query": parsed_query,
             "resolved_target_files": [],
             "resolved_symbols": {},
@@ -1546,7 +1651,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         })
 
     safe_max_tokens = max(1, max_tokens)
-    manifest = _load_repo_manifest(root_path)
+    manifest = _load_repo_manifest(root.as_posix(), repo_id=resolved_repo_id or repo_id)
     manifest_files = _manifest_files_map(manifest)
     resolved_targets = resolve_repo_targets(parsed_query, manifest)
     resolved_target_files = resolved_targets.get("resolved_target_files", [])
@@ -1591,7 +1696,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         entry["matches"] += matches
         register_file_reason(path, reason)
 
-    for item in select_candidate_files(effective_query, root_path):
+    for item in select_candidate_files(effective_query, root.as_posix(), repo_id=resolved_repo_id or repo_id):
         path = str(item.get("path", "")).strip()
         if not path:
             continue
@@ -1626,8 +1731,9 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
 
         symbol_results = find_symbol_occurrences(
             symbol_hint,
-            root_path,
+            root.as_posix(),
             max_results=max(10, MAX_MATCHES_PER_CONTEXT_FILE * 4),
+            repo_id=resolved_repo_id or repo_id,
         )
         symbol_files: list[str] = []
         definition_pairs: set[tuple[str, int]] = set()
@@ -1660,8 +1766,9 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         if definition_pairs:
             usage_results = search_in_repo(
                 symbol_hint,
-                root_path,
+                root.as_posix(),
                 max_results=max(10, MAX_MATCHES_PER_CONTEXT_FILE * 4),
+                repo_id=resolved_repo_id or repo_id,
             )
             for result in usage_results:
                 path = str(result.get("path", "")).strip()
@@ -1702,8 +1809,9 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             continue
         query_results = search_in_repo(
             path_hint,
-            root_path,
+            root.as_posix(),
             max_results=max(10, MAX_MATCHES_PER_CONTEXT_FILE * 4),
+            repo_id=resolved_repo_id or repo_id,
         )
         for result in query_results:
             path = str(result.get("path", "")).strip()
@@ -1724,8 +1832,9 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             continue
         query_results = search_in_repo(
             keyword,
-            root_path,
+            root.as_posix(),
             max_results=max(10, MAX_MATCHES_PER_CONTEXT_FILE * 4),
+            repo_id=resolved_repo_id or repo_id,
         )
         for result in query_results:
             path = str(result.get("path", "")).strip()
@@ -1745,8 +1854,9 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
     if fallback_query:
         for result in search_in_repo(
             fallback_query,
-            root_path,
+            root.as_posix(),
             max_results=max(8, MAX_MATCHES_PER_CONTEXT_FILE * 2),
+            repo_id=resolved_repo_id or repo_id,
         ):
             path = str(result.get("path", "")).strip()
             if not path:
@@ -1769,7 +1879,7 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                 *[
                     path
                     for path in REPO_HELPER_FALLBACK_TARGETS
-                    if validate_manifest_file_path(path, ".")
+                    if validate_manifest_file_path(path, root.as_posix(), repo_id=resolved_repo_id or repo_id)
                 ],
             ]
         )
@@ -1865,6 +1975,8 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         log_line(f"BUILD CONTEXT READY: no candidates for query={effective_query!r}")
         result = {
             "query": normalized_query,
+            "repo_id": resolved_repo_id or str(repo_id or "").strip(),
+            "root_path": root.as_posix(),
             "parsed_query": parsed_query,
             "resolved_target_files": resolved_target_files,
             "resolved_symbols": symbol_resolution,
@@ -1934,7 +2046,13 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
             line_number = int(match.get("line", 1))
             start_line = max(1, line_number - CONTEXT_WINDOW_LINES)
             end_line = line_number + CONTEXT_WINDOW_LINES
-            snippet = read_file_range(path, start_line, end_line)
+            snippet = read_file_range(
+                path,
+                start_line,
+                end_line,
+                root_path=root.as_posix(),
+                repo_id=resolved_repo_id or repo_id,
+            )
 
             if snippet.startswith("File not found:") or snippet.startswith("Path is not a file:"):
                 continue
@@ -1960,6 +2078,8 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
                 selected_files = list(dict.fromkeys([*resolved_target_files, *files_used]))
                 result = {
                     "query": normalized_query,
+                    "repo_id": resolved_repo_id or str(repo_id or "").strip(),
+                    "root_path": root.as_posix(),
                     "parsed_query": parsed_query,
                     "resolved_target_files": resolved_target_files,
                     "resolved_symbols": symbol_resolution,
@@ -2001,7 +2121,13 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
         if forced_path not in manifest_files:
             continue
 
-        snippet = read_file_range(forced_path, 1, min(CONTEXT_WINDOW_LINES * 2, 40))
+        snippet = read_file_range(
+            forced_path,
+            1,
+            min(CONTEXT_WINDOW_LINES * 2, 40),
+            root_path=root.as_posix(),
+            repo_id=resolved_repo_id or repo_id,
+        )
         if snippet.startswith("Failed to read file:") or snippet.startswith("File not found:"):
             continue
 
@@ -2085,6 +2211,8 @@ def build_context(query: str | dict, root_path: str, max_tokens: int = 8000) -> 
     }
     result = {
         "query": normalized_query,
+        "repo_id": resolved_repo_id or str(repo_id or "").strip(),
+        "root_path": root.as_posix(),
         "parsed_query": parsed_query,
         "resolved_target_files": resolved_target_files,
         "resolved_symbols": symbol_resolution,

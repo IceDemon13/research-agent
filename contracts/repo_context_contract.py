@@ -63,6 +63,8 @@ def _normalize_debug_section(value: object) -> dict:
 
 def empty_repo_context(parsed_query: dict | None = None) -> dict:
     return {
+        "repo_id": "",
+        "root_path": "",
         "parsed_query": dict(parsed_query) if isinstance(parsed_query, dict) else {},
         "resolved_target_files": [],
         "resolved_symbols": {},
@@ -78,6 +80,8 @@ def coerce_repo_context(repo_context: dict | None) -> dict:
     normalized = empty_repo_context(
         context.get("parsed_query") if isinstance(context.get("parsed_query"), dict) else None
     )
+    normalized["repo_id"] = str(context.get("repo_id", "")).strip()
+    normalized["root_path"] = str(context.get("root_path", "")).strip()
     normalized["parsed_query"] = dict(context.get("parsed_query")) if isinstance(context.get("parsed_query"), dict) else {}
     normalized["resolved_target_files"] = _normalize_path_list(context.get("resolved_target_files"))
     normalized["resolved_symbols"] = _normalize_string_list_map(context.get("resolved_symbols"))
@@ -114,6 +118,8 @@ def normalize_repo_context(repo_context: dict | None) -> dict:
 
 @dataclass(slots=True)
 class RepoContextContract:
+    repo_id: str = ""
+    root_path: str = ""
     parsed_query: dict = field(default_factory=dict)
     resolved_target_files: list[str] = field(default_factory=list)
     resolved_symbols: dict[str, list[str]] = field(default_factory=dict)
@@ -126,6 +132,8 @@ class RepoContextContract:
     def from_dict(cls, repo_context: dict | None) -> "RepoContextContract":
         normalized = normalize_repo_context(repo_context)
         return cls(
+            repo_id=normalized.get("repo_id", ""),
+            root_path=normalized.get("root_path", ""),
             parsed_query=normalized["parsed_query"],
             resolved_target_files=normalized["resolved_target_files"],
             resolved_symbols=normalized["resolved_symbols"],
@@ -138,6 +146,8 @@ class RepoContextContract:
     def to_dict(self) -> dict:
         return normalize_repo_context(
             {
+                "repo_id": self.repo_id,
+                "root_path": self.root_path,
                 "parsed_query": self.parsed_query,
                 "resolved_target_files": self.resolved_target_files,
                 "resolved_symbols": self.resolved_symbols,

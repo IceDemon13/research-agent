@@ -6,7 +6,10 @@ from ai_gateway.file_guard import (
 
 
 def write_report(filename: str, content: str) -> str:
-    """Save a markdown report into the output folder."""
+    """Save a markdown report into the output folder.
+
+    This is an artifact writer only and must not be used for repo source mutation.
+    """
     try:
         safe_path = validate_output_filename(filename)
         safe_path.parent.mkdir(parents=True, exist_ok=True)

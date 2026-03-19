@@ -16,11 +16,13 @@ from tools.repo_tools import (
     search_in_repo,
 )
 from tools.report_tools import write_report
+from tools.tools import knowledge_search
 from tools.web_tools import read_url, web_search
 
 TOOLS_MAP = {
     "web_search": web_search,
     "read_url": read_url,
+    "knowledge_search": knowledge_search,
     "write_report": write_report,
     "jira_search_issues": jira_search_issues,
     "jira_get_issue": jira_get_issue,
@@ -64,6 +66,21 @@ TOOLS = [
                     "url": {"type": "string", "description": "The webpage URL to read."}
                 },
                 "required": ["url"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "knowledge_search",
+            "description": "Search the local knowledge base and return concise relevant chunks with sources.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The knowledge search query."}
+                },
+                "required": ["query"],
                 "additionalProperties": False,
             },
         },
@@ -196,10 +213,11 @@ TOOLS = [
                             },
                         ],
                     },
-                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                     "max_tokens": {"type": "integer", "description": "Approximate token budget for returned snippets."},
                 },
-                "required": ["query", "root_path"],
+                "required": ["query"],
                 "additionalProperties": False,
             },
         },
@@ -212,9 +230,9 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                 },
-                "required": ["root_path"],
                 "additionalProperties": False,
             },
         },
@@ -228,6 +246,7 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "root": {"type": "string", "description": "Repository root folder. Default is current directory."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                     "max_files": {"type": "integer", "description": "Maximum number of files to return."},
                 },
                 "additionalProperties": False,
@@ -245,6 +264,8 @@ TOOLS = [
                     "path": {"type": "string", "description": "Relative path to file in repository."},
                     "start_line": {"type": "integer", "description": "1-based starting line number."},
                     "end_line": {"type": "integer", "description": "1-based ending line number."},
+                    "root_path": {"type": "string", "description": "Repository root folder. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                 },
                 "required": ["path", "start_line", "end_line"],
                 "additionalProperties": False,
@@ -261,6 +282,8 @@ TOOLS = [
                 "properties": {
                     "path": {"type": "string", "description": "Relative path to file in repository."},
                     "max_chars": {"type": "integer", "description": "Maximum number of characters to return."},
+                    "root_path": {"type": "string", "description": "Repository root folder. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                 },
                 "required": ["path"],
                 "additionalProperties": False,
@@ -276,10 +299,11 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "symbol_name": {"type": "string", "description": "Function, class, or symbol name to locate."},
-                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                     "max_results": {"type": "integer", "description": "Maximum number of matches to return."},
                 },
-                "required": ["symbol_name", "root_path"],
+                "required": ["symbol_name"],
                 "additionalProperties": False,
             },
         },
@@ -293,10 +317,11 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Text to search for."},
-                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                     "max_results": {"type": "integer", "description": "Maximum number of matches to return."},
                 },
-                "required": ["query", "root_path"],
+                "required": ["query"],
                 "additionalProperties": False,
             },
         },
@@ -310,10 +335,11 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Task or search query to rank files against."},
-                    "root_path": {"type": "string", "description": "Repository root folder to scan."},
+                    "root_path": {"type": "string", "description": "Repository root folder to scan. Optional when repo_id is provided."},
+                    "repo_id": {"type": "string", "description": "Registered repository id to resolve into a root path."},
                     "max_files": {"type": "integer", "description": "Maximum number of ranked files to return."},
                 },
-                "required": ["query", "root_path"],
+                "required": ["query"],
                 "additionalProperties": False,
             },
         },
@@ -324,6 +350,7 @@ AGENT_TOOL_NAMES = {
     "research_agent": {
         "web_search",
         "read_url",
+        "knowledge_search",
         "write_report",
         "jira_search_issues",
         "jira_get_issue",

@@ -42,6 +42,26 @@ SUSPICIOUS_PATTERNS = (
 )
 
 
+def _repo_context_root_path(repo_context: dict | None) -> str:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return str(context.get("root_path", ".") or ".").strip() or "."
+
+
+def _repo_context_repo_id(repo_context: dict | None) -> str | None:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    repo_id = str(context.get("repo_id", "") or "").strip()
+    return repo_id or None
+
+
+def _read_repo_file_from_context(path: str, repo_context: dict | None, max_chars: int) -> str:
+    return read_repo_file(
+        path,
+        max_chars=max_chars,
+        root_path=_repo_context_root_path(repo_context),
+        repo_id=_repo_context_repo_id(repo_context),
+    )
+
+
 def _compact_text(value: str, max_chars: int = MAX_FILE_CHARS_FOR_REVIEW) -> str:
     text = (value or "").strip()
     if len(text) <= max_chars:
@@ -202,7 +222,7 @@ def _detect_run_root_agent_contract_issues(draft_set: DraftSet) -> list[str]:
 
     root_agent_content = file_map.get("agents/root_agent.py")
     if not root_agent_content:
-        root_agent_content = read_repo_file("agents/root_agent.py", max_chars=120000)
+        root_agent_content = _read_repo_file_from_context("agents/root_agent.py", repo_context, max_chars=120000)
 
     return_shape = _extract_root_agent_return_shape(root_agent_content)
 
@@ -336,7 +356,7 @@ def _detect_settings_usage_issues(draft_set: DraftSet) -> list[str]:
 
     config_text = file_map.get("config.py")
     if not config_text:
-        config_text = read_repo_file("config.py", max_chars=120000)
+        config_text = _read_repo_file_from_context("config.py", repo_context, max_chars=120000)
 
     if not config_text.strip():
         return issues
@@ -411,7 +431,7 @@ def _detect_dangerous_overwrite_issues(draft_set: DraftSet) -> list[str]:
         path = (file_draft.path or "").strip()
         draft_content = file_draft.content or ""
 
-        current_content = read_repo_file(path, max_chars=120000)
+        current_content = _read_repo_file_from_context(path, repo_context, max_chars=120000)
         if not current_content.strip():
             continue
 
@@ -424,7 +444,7 @@ def _detect_dangerous_overwrite_issues(draft_set: DraftSet) -> list[str]:
 
 
 def _build_file_change_preview(path: str, draft_content: str) -> str:
-    current_content = read_repo_file(path, max_chars=120000)
+    current_content = _read_repo_file_from_context(path, repo_context, max_chars=120000)
 
     if not current_content.strip():
         return (
@@ -763,7 +783,12 @@ def run_review_agent(
     task_intent: str = "create",
     repo_context: dict | None = None,
 ) -> AgentResult:
-    resolved_repo_context = ensure_repo_context(original_request, ".", repo_context)
+    resolved_repo_context = ensure_repo_context(
+        original_request,
+        _repo_context_root_path(repo_context),
+        repo_context,
+        repo_id=_repo_context_repo_id(repo_context),
+    )
     if task_intent == "review":
         memory = [
             {

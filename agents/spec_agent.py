@@ -13,6 +13,17 @@ INTERNAL_SPEC_SYSTEM_FILES = {
 }
 
 
+def _repo_context_root_path(repo_context: dict | None) -> str:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return str(context.get("root_path", ".") or ".").strip() or "."
+
+
+def _repo_context_repo_id(repo_context: dict | None) -> str | None:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    repo_id = str(context.get("repo_id", "") or "").strip()
+    return repo_id or None
+
+
 def _filter_spec_scope_paths(
     paths: list[str],
     allow_internal_spec_files: bool,
@@ -108,7 +119,12 @@ def run_spec_agent(
     task_intent: str = "create",
     repo_context: dict | None = None,
 ) -> AgentResult:
-    resolved_repo_context = ensure_repo_context(user_input, ".", repo_context)
+    resolved_repo_context = ensure_repo_context(
+        user_input,
+        _repo_context_root_path(repo_context),
+        repo_context,
+        repo_id=_repo_context_repo_id(repo_context),
+    )
     if task_intent == "review" and not resolved_repo_context.get("chunks"):
         log_line("SPEC AGENT: Not enough repository context to review implementation")
         return AgentResult(

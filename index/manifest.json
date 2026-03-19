@@ -1,0 +1,25 @@
+{
+  "data_dir": "C:\\work\\my repositories\\research-agent\\data",
+  "embedding_model": "text-embedding-3-small",
+  "chunk_size": 1000,
+  "chunk_overlap": 200,
+  "total_chunks": 46,
+  "total_sources": 6,
+  "languages": [
+    "en",
+    "mixed",
+    "uk"
+  ],
+  "sources": [
+    "README.md",
+    "hybrid_retrieval.md",
+    "repo_context.md",
+    "sdd_commands.md",
+    "sdd_commands_uk.md",
+    "test_workflow.md"
+  ],
+  "artifacts": {
+    "faiss_index": "faiss.index",
+    "chunks": "chunks.jsonl"
+  }
+}

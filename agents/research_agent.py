@@ -1,22 +1,11 @@
+from __future__ import annotations
+
 from contracts.agent_result import AgentResult
-from loops.react_loop import run_react_loop
-from prompts.research_prompt import RESEARCH_PROMPT
+from agents.rag_research_agent import build_agent as build_research_agent
 
 
 def run_research_agent(user_input: str) -> AgentResult:
-
-    memory = [
-        {
-            "role": "system",
-            "content": RESEARCH_PROMPT,
-        }
-    ]
-
-    answer, _messages = run_react_loop(
-        user_input=user_input,
-        memory=memory,
-        agent_name="research_agent",
-    )
+    answer = build_research_agent().answer(user_input)
 
     return AgentResult(
         agent_name="research",
@@ -24,3 +13,7 @@ def run_research_agent(user_input: str) -> AgentResult:
         success=True,
         metadata={},
     )
+
+
+def inspect_research_query(user_input: str) -> dict:
+    return build_research_agent().inspect_query(user_input)

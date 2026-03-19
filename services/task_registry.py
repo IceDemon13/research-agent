@@ -49,6 +49,10 @@ def write_task_artifact(
     file_name: str,
     content: str,
 ) -> str:
+    """Write task artifacts under artifacts/tasks only.
+
+    This helper is intentionally separate from any repo source-file apply path.
+    """
     workspace = resolve_task_workspace(task_brief)
     file_path = workspace / file_name
     file_path.write_text(content, encoding="utf-8")
