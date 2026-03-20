@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from agents import root_agent
 from contracts.agent_result import AgentResult
+from contracts.actor_contract import ActorContext
 from contracts.change_set import ChangeSet
 from contracts.crucible_review_contract import CrucibleReviewResult
 from contracts.draft_set import DraftSet
@@ -21,6 +22,132 @@ from services.diff_service import DiffService
 from services.repo_registry import RepositoryRegistryService
 from services.temp_workspace_service import TempWorkspaceService
 from services.validation_service import ValidationService
+
+
+class _RecordingScmService:
+    def __init__(self) -> None:
+        self.created_branches: list[str] = []
+        self.commit_messages: list[str] = []
+
+    def detect_git_repo(self, repo_path):
+        return True
+
+    def is_clean(self, repo_path):
+        return ScmOperationResult(
+            operation="is_clean",
+            repo_path=str(repo_path),
+            success=True,
+            data={"is_clean": True, "changed_files": []},
+        )
+
+    def get_remote(self, repo_path, remote_name="origin"):
+        return ScmOperationResult(
+            operation="get_remote",
+            repo_path=str(repo_path),
+            success=True,
+            data={
+                "remote_name": remote_name,
+                "remote_url": "https://bitbucket.org/acme/sample-repo.git",
+            },
+        )
+
+    def get_current_branch(self, repo_path):
+        return ScmOperationResult(
+            operation="get_current_branch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": "main"},
+        )
+
+    def create_branch(self, repo_path, branch_name):
+        self.created_branches.append(str(branch_name))
+        return ScmOperationResult(
+            operation="create_branch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": branch_name},
+        )
+
+    def checkout_branch(self, repo_path, branch_name):
+        return ScmOperationResult(
+            operation="checkout_branch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": branch_name},
+        )
+
+    def add_all_changes(self, repo_path):
+        return ScmOperationResult(
+            operation="add_all_changes",
+            repo_path=str(repo_path),
+            success=True,
+        )
+
+    def get_status(self, repo_path):
+        return ScmStatus(
+            repo_path=str(repo_path),
+            is_git_repo=True,
+            branch_name="main",
+            has_changes=True,
+            changed_files=["src/app.py"],
+        )
+
+    def commit(self, repo_path, message):
+        self.commit_messages.append(str(message))
+        return ScmOperationResult(
+            operation="commit",
+            repo_path=str(repo_path),
+            success=True,
+            data={"message": message},
+        )
+
+    def get_head_commit_hash(self, repo_path):
+        return ScmOperationResult(
+            operation="get_head_commit_hash",
+            repo_path=str(repo_path),
+            success=True,
+            data={"commit_hash": "abc123def456"},
+        )
+
+    def push(self, repo_path, branch_name, remote_name="origin"):
+        return ScmOperationResult(
+            operation="push",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": branch_name, "remote_name": remote_name},
+        )
+
+
+class _RecordingBitbucketService:
+    def __init__(self) -> None:
+        self.requests: list[dict] = []
+
+    def create_pull_request(
+        self,
+        repo_url: str,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+    ) -> PullRequestResult:
+        self.requests.append(
+            {
+                "repo_url": repo_url,
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "title": title,
+                "description": description,
+            }
+        )
+        return PullRequestResult(
+            success=True,
+            title=title,
+            source_branch=source_branch,
+            target_branch=target_branch,
+            url="https://bitbucket.org/acme/sample-repo/pull-requests/1",
+            repo_url=repo_url,
+            data={"description": description},
+        )
 
 
 class _ScriptedValidationService:
@@ -257,6 +384,28 @@ class _SuccessfulCrucibleService:
         )
 
 
+class _FailingCrucibleService:
+    def create_review(
+        self,
+        repo: str,
+        branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str],
+    ) -> CrucibleReviewResult:
+        return CrucibleReviewResult(
+            success=False,
+            title=title,
+            repo=repo,
+            branch=branch,
+            reviewers=reviewers,
+            url="",
+            review_id="",
+            error="Crucible review creation failed.",
+            data={"description": description},
+        )
+
+
 class ImplementationModeTests(unittest.TestCase):
     def setUp(self) -> None:
         self._temp_root = (Path("artifacts") / "test-temp").resolve()
@@ -345,6 +494,7 @@ class ImplementationModeTests(unittest.TestCase):
         create_review: bool = False,
         run_log: bool = False,
         permissions: dict | None = None,
+        actor_context: ActorContext | None = None,
     ) -> AgentResult:
         effective_permissions = permissions or {
             "allow_real_apply": True,
@@ -392,6 +542,7 @@ class ImplementationModeTests(unittest.TestCase):
                 create_pr=create_pr,
                 create_review=create_review,
                 run_log=run_log,
+                actor_context=actor_context,
             )
 
     def test_implementation_mode_dry_run_only_validates_candidate_state_without_mutating_repo(self) -> None:
@@ -637,15 +788,21 @@ class ImplementationModeTests(unittest.TestCase):
 
     def test_implementation_mode_creates_pr_after_validated_real_apply(self) -> None:
         validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
+        scm_service = _RecordingScmService()
+        bitbucket_service = _RecordingBitbucketService()
 
         with patch.object(
             root_agent,
             "ScmService",
-            side_effect=lambda *args, **kwargs: _SuccessfulScmService(),
+            side_effect=lambda *args, **kwargs: scm_service,
         ), patch.object(
             root_agent,
             "BitbucketService",
-            side_effect=lambda *args, **kwargs: _SuccessfulBitbucketService(),
+            side_effect=lambda *args, **kwargs: bitbucket_service,
+        ), patch.object(
+            root_agent,
+            "CrucibleService",
+            side_effect=lambda *args, **kwargs: _SuccessfulCrucibleService(),
         ):
             result = self._run_with_validation_service(
                 validation_factory=lambda storage_path=None: _ScriptedValidationService(
@@ -661,12 +818,23 @@ class ImplementationModeTests(unittest.TestCase):
         self.assertIsNotNone(implementation_result.real_apply_result)
         self.assertIsNotNone(implementation_result.pull_request_result)
         self.assertTrue(implementation_result.pull_request_result.success)
-        self.assertTrue(implementation_result.scm_branch_name.startswith("feature/ai/"))
+        self.assertEqual(
+            implementation_result.scm_branch_name,
+            f"feature/ai/{implementation_result.run_record.run_id}",
+        )
         self.assertEqual(
             implementation_result.scm_remote_url,
             "https://bitbucket.org/acme/sample-repo.git",
         )
         self.assertEqual(implementation_result.run_record.scm.get("commit_hash"), "abc123def456")
+        self.assertEqual(
+            scm_service.commit_messages,
+            [f"AI: implement {implementation_result.artifact_summary.goal}"],
+        )
+        self.assertEqual(bitbucket_service.requests[0]["title"], f"AI Implementation: {implementation_result.artifact_summary.goal}")
+        self.assertIn(implementation_result.run_record.run_id, bitbucket_service.requests[0]["description"])
+        self.assertEqual(implementation_result.review_status, "success")
+        self.assertEqual(implementation_result.publication_status, "success")
 
     def test_implementation_mode_stops_before_pr_when_scm_fails(self) -> None:
         validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
@@ -733,7 +901,7 @@ class ImplementationModeTests(unittest.TestCase):
             any("remote origin not available" in warning.lower() for warning in implementation_result.scm_warnings)
         )
         self.assertTrue(
-            any("remote origin not available" in decision.lower() for decision in implementation_result.policy_decisions)
+            any("remote origin not available" in decision.reason.lower() for decision in implementation_result.policy_decisions)
         )
 
     def test_implementation_mode_blocks_review_when_pr_creation_fails(self) -> None:
@@ -767,13 +935,50 @@ class ImplementationModeTests(unittest.TestCase):
         self.assertIsNotNone(implementation_result.pull_request_result)
         self.assertFalse(implementation_result.pull_request_result.success)
         self.assertIsNone(implementation_result.crucible_review_result)
+        self.assertEqual(implementation_result.review_status, "skipped")
         self.assertTrue(
-            any("no pull request was created successfully" in decision.lower() for decision in implementation_result.policy_decisions)
+            any("no pull request was created successfully" in decision.reason.lower() for decision in implementation_result.policy_decisions)
         )
         self.assertEqual(
             [step.name for step in implementation_result.run_record.steps],
             ["draft", "validation", "apply", "commit_push", "pull_request"],
         )
+
+    def test_implementation_mode_marks_publication_partial_when_auto_review_fails_after_pr_success(self) -> None:
+        validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
+
+        with patch.object(
+            root_agent,
+            "ScmService",
+            side_effect=lambda *args, **kwargs: _SuccessfulScmService(),
+        ), patch.object(
+            root_agent,
+            "BitbucketService",
+            side_effect=lambda *args, **kwargs: _SuccessfulBitbucketService(),
+        ), patch.object(
+            root_agent,
+            "CrucibleService",
+            side_effect=lambda *args, **kwargs: _FailingCrucibleService(),
+        ):
+            result = self._run_with_validation_service(
+                validation_factory=lambda storage_path=None: _ScriptedValidationService(
+                    storage_path=storage_path,
+                    command=validation_command,
+                ),
+                real_apply=True,
+                create_pr=True,
+            )
+
+        implementation_result = result.metadata["implementation_result"]
+        self.assertEqual(implementation_result.final_status, "applied")
+        self.assertIsNotNone(implementation_result.pull_request_result)
+        self.assertTrue(implementation_result.pull_request_result.success)
+        self.assertIsNotNone(implementation_result.crucible_review_result)
+        self.assertFalse(implementation_result.crucible_review_result.success)
+        self.assertEqual(implementation_result.review_status, "failed")
+        self.assertIn("failed", implementation_result.review_error.lower())
+        self.assertEqual(implementation_result.publication_status, "partial")
+        self.assertEqual(implementation_result.run_record.status, "partial")
 
     def test_implementation_mode_blocks_real_apply_when_permission_is_disabled(self) -> None:
         validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
@@ -808,7 +1013,40 @@ class ImplementationModeTests(unittest.TestCase):
         self.assertIsNone(implementation_result.pull_request_result)
         self.assertIsNone(implementation_result.crucible_review_result)
         self.assertTrue(
-            any("allow_real_apply=false" in decision for decision in implementation_result.policy_decisions)
+            any("allow_real_apply=false" in decision.reason for decision in implementation_result.policy_decisions)
+        )
+
+    def test_implementation_mode_blocks_real_apply_when_actor_lacks_capability(self) -> None:
+        validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
+        developer_actor = ActorContext(
+            actor_id="dev-1",
+            actor_type="user",
+            role="developer",
+            source_channel="api",
+            display_name="Developer",
+        )
+
+        result = self._run_with_validation_service(
+            validation_factory=lambda storage_path=None: _ScriptedValidationService(
+                storage_path=storage_path,
+                command=validation_command,
+            ),
+            real_apply=True,
+            actor_context=developer_actor,
+            permissions={
+                "allow_real_apply": True,
+                "allow_pr_creation": True,
+                "allow_review_creation": True,
+            },
+        )
+
+        implementation_result = result.metadata["implementation_result"]
+        self.assertEqual(implementation_result.final_status, "real_apply_blocked_permission_denied")
+        self.assertTrue(
+            any(
+                decision.capability == "implementation.apply" and not decision.allowed
+                for decision in implementation_result.policy_decisions
+            )
         )
 
     def test_implementation_mode_blocks_pr_and_review_when_publication_permissions_are_disabled(self) -> None:
@@ -848,11 +1086,12 @@ class ImplementationModeTests(unittest.TestCase):
         self.assertIsNone(implementation_result.pull_request_result)
         self.assertIsNone(implementation_result.crucible_review_result)
         self.assertTrue(
-            any("allow_pr_creation=false" in decision for decision in implementation_result.policy_decisions)
+            any("allow_pr_creation=false" in decision.reason for decision in implementation_result.policy_decisions)
         )
         self.assertTrue(
-            any("allow_review_creation=false" in decision for decision in implementation_result.policy_decisions)
+            any("allow_review_creation=false" in decision.reason for decision in implementation_result.policy_decisions)
         )
+        self.assertEqual(implementation_result.review_status, "skipped")
 
     def test_implementation_mode_creates_crucible_review_after_validated_real_apply(self) -> None:
         validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
@@ -882,6 +1121,10 @@ class ImplementationModeTests(unittest.TestCase):
         self.assertEqual(
             implementation_result.crucible_review_result.review_id,
             "CR-PROJ-1",
+        )
+        self.assertIn(
+            implementation_result.run_record.run_id,
+            implementation_result.crucible_review_result.data.get("description", ""),
         )
 
     def test_implementation_mode_skips_crucible_review_when_branch_is_missing(self) -> None:

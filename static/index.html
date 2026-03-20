@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Runs</title>
+  <script src="./config.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
+    h1 { margin-bottom: 8px; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin: 16px 0; flex-wrap: wrap; }
+    input, select, button, a { font: inherit; }
+    input, select { padding: 6px 8px; }
+    button, .link-button {
+      padding: 8px 12px;
+      border: 1px solid #bbb;
+      background: #f6f6f6;
+      color: #222;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #f8fbff; }
+    .muted { color: #666; }
+    .error { color: #a40000; margin-top: 12px; }
+    .status-failed { color: #a40000; }
+  </style>
+</head>
+<body>
+  <h1>Runs</h1>
+  <p class="muted">Minimal web UI for the existing run explorer API.</p>
+
+  <div class="toolbar">
+    <label>Status <input id="statusFilter" placeholder="success / failed"></label>
+    <label>Repo <input id="repoFilter" placeholder="sample"></label>
+    <button id="refreshButton" type="button">Refresh</button>
+    <a class="link-button" href="./create.html">Create Run</a>
+    <a class="link-button" href="./repos.html">Repos</a>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Run ID</th>
+        <th>Status</th>
+        <th>Goal</th>
+        <th>Branch</th>
+        <th>PR</th>
+        <th>Review</th>
+      </tr>
+    </thead>
+    <tbody id="runsBody">
+      <tr><td colspan="6">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <div id="errorBox" class="error"></div>
+
+  <script>
+    const config = window.APP_CONFIG || { apiBaseUrl: "", defaultHeaders: {} };
+
+    function buildUrl(path, params) {
+      const base = (config.apiBaseUrl || "").replace(/\/$/, "");
+      const url = new URL((base ? base : window.location.origin) + path, window.location.origin);
+      Object.entries(params || {}).forEach(([key, value]) => {
+        if (value) {
+          url.searchParams.set(key, value);
+        }
+      });
+      return url.toString();
+    }
+
+    async function fetchJson(path, options = {}) {
+      const response = await fetch(buildUrl(path, options.query), {
+        method: options.method || "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.defaultHeaders || {}),
+          ...(options.headers || {})
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail?.message || payload?.detail?.error || "Request failed");
+      }
+      return payload;
+    }
+
+    function renderRuns(runs) {
+      const tbody = document.getElementById("runsBody");
+      tbody.innerHTML = "";
+      if (!runs.length) {
+        tbody.innerHTML = "<tr><td colspan=\"6\">No runs found.</td></tr>";
+        return;
+      }
+      runs.forEach((run) => {
+        const branchName = run?.scm?.branch_name || "-";
+        const prCell = run?.pr_url
+          ? `<a href="${run.pr_url}" target="_blank" rel="noopener noreferrer">Open</a>`
+          : "-";
+        let reviewCell = "-";
+        if (run?.review_url) {
+          reviewCell = `<a href="${run.review_url}" target="_blank" rel="noopener noreferrer">Open</a>`;
+        } else if ((run?.failure_summary?.failed_step || "") === "review") {
+          reviewCell = `<span class="status-failed">Failed</span>`;
+        }
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${run.run_id || ""}</td>
+          <td>${run.status || ""}</td>
+          <td>${run.goal || ""}</td>
+          <td>${branchName}</td>
+          <td>${prCell}</td>
+          <td>${reviewCell}</td>
+        `;
+        row.addEventListener("click", () => {
+          window.location.href = `./run.html?id=${encodeURIComponent(run.run_id || "")}`;
+        });
+        tbody.appendChild(row);
+      });
+    }
+
+    async function loadRuns() {
+      const errorBox = document.getElementById("errorBox");
+      errorBox.textContent = "";
+      try {
+        const payload = await fetchJson("/runs", {
+          query: {
+            status: document.getElementById("statusFilter").value.trim(),
+            repo_id: document.getElementById("repoFilter").value.trim()
+          }
+        });
+        renderRuns(payload.runs || []);
+      } catch (error) {
+        document.getElementById("runsBody").innerHTML = "<tr><td colspan=\"6\">Failed to load runs.</td></tr>";
+        errorBox.textContent = error.message;
+      }
+    }
+
+    document.getElementById("refreshButton").addEventListener("click", loadRuns);
+    loadRuns();
+  </script>
+</body>
+</html>

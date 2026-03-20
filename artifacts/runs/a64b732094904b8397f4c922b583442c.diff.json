@@ -1,0 +1,14 @@
+{
+  "repo_id": "sample",
+  "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/implementation-mode-faba3e703b91400c9f9e3d8449143215/sample-repo",
+  "dry_run": false,
+  "files": [
+    {
+      "relative_path": "src/app.py",
+      "operation_type": "update",
+      "diff": "--- a/src/app.py\n+++ b/src/app.py\n@@ -1,2 +1,2 @@\n def run() -> str:\n-    return 'ok'\n+    return 'updated'",
+      "status": "modified"
+    }
+  ],
+  "warnings": []
+}

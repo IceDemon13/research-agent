@@ -14,28 +14,41 @@ class RepoMetadata:
     default_branch: str
     indexed_at: str
     status: str
+    remote_url: str = ""
+    local_path: str = ""
 
     @classmethod
     def from_dict(cls, payload: dict | None) -> "RepoMetadata":
         item = payload if isinstance(payload, dict) else {}
+        local_path = str(item.get("local_path", "") or item.get("root_path", "")).strip()
+        root_path = str(item.get("root_path", "") or local_path).strip()
         return cls(
             repo_id=str(item.get("repo_id", "")).strip(),
-            root_path=str(item.get("root_path", "")).strip(),
+            root_path=root_path,
             display_name=str(item.get("display_name", "")).strip(),
             default_branch=str(item.get("default_branch", "")).strip(),
             indexed_at=str(item.get("indexed_at", "")).strip(),
             status=str(item.get("status", "")).strip(),
+            remote_url=str(item.get("remote_url", "")).strip(),
+            local_path=local_path,
         )
 
     def to_dict(self) -> dict[str, str]:
+        local_path = self.resolved_local_path
         return {
             "repo_id": self.repo_id,
-            "root_path": self.root_path,
+            "root_path": local_path,
+            "local_path": local_path,
+            "remote_url": self.remote_url,
             "display_name": self.display_name,
             "default_branch": self.default_branch,
             "indexed_at": self.indexed_at,
             "status": self.status,
         }
+
+    @property
+    def resolved_local_path(self) -> str:
+        return str(self.local_path or self.root_path or "").strip()
 
 
 @dataclass(frozen=True, slots=True)

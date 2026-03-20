@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run Detail</title>
+  <script src="./config.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    button, a { padding: 8px 12px; border: 1px solid #bbb; background: #f6f6f6; color: #222; text-decoration: none; cursor: pointer; font: inherit; }
+    .card { border: 1px solid #ddd; padding: 16px; margin-bottom: 16px; }
+    .timeline-item { border-left: 3px solid #ccc; padding-left: 12px; margin-bottom: 12px; }
+    .error { color: #a40000; }
+    .status-failed { color: #a40000; }
+    .status-skipped { color: #8a5a00; }
+    .status-success { color: #0a6b2d; }
+    .status-added { color: #0a6b2d; }
+    .status-modified { color: #1b4d8a; }
+    .status-deleted { color: #a40000; }
+    .hidden { display: none; }
+    ul { margin: 8px 0 0 18px; }
+    code { background: #f5f5f5; padding: 1px 4px; }
+    details { margin-bottom: 12px; }
+    summary { cursor: pointer; }
+    .diff-block { background: #f8f8f8; border: 1px solid #ddd; padding: 12px; overflow-x: auto; white-space: pre-wrap; font-family: Consolas, "Courier New", monospace; }
+    .diff-line-added { background: #e9f7ec; color: #0a6b2d; }
+    .diff-line-removed { background: #fdeeee; color: #a40000; }
+    .diff-line-header { color: #555; }
+    .diff-warning { color: #8a5a00; }
+    .severity-info { color: #3a3a3a; background: #f1f1f1; padding: 2px 6px; }
+    .severity-warning { color: #8a5a00; background: #fff4db; padding: 2px 6px; }
+    .severity-risk { color: #a40000; background: #fdeeee; padding: 2px 6px; }
+    .comment-file-group { margin-bottom: 16px; }
+    .comment-item { border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="./index.html">Back to Runs</a>
+    <a href="./create.html">Create Run</a>
+    <button id="retryButton" type="button">Retry</button>
+    <button id="cancelButton" type="button">Cancel</button>
+    <button id="approveButton" type="button">Approve</button>
+    <button id="rejectButton" type="button">Reject</button>
+  </div>
+
+  <div id="errorBox" class="error"></div>
+
+  <div class="card">
+    <h1 id="runTitle">Run</h1>
+    <div id="runMeta">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Failure Summary</h2>
+    <div id="failureSummary">Loading...</div>
+  </div>
+
+  <div id="publicationCard" class="card hidden">
+    <h2>Publication</h2>
+    <div id="publicationBlock"></div>
+  </div>
+
+  <div class="card">
+    <h2>Diff</h2>
+    <div id="diffBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>AI Review Comments</h2>
+    <div id="commentsBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Steps Timeline</h2>
+    <div id="stepsTimeline">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Policy Decisions</h2>
+    <div id="policyList">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Errors</h2>
+    <div id="errorsBox">Loading...</div>
+  </div>
+
+  <script>
+    const config = window.APP_CONFIG || { apiBaseUrl: "", defaultHeaders: {} };
+    const runId = new URLSearchParams(window.location.search).get("id") || "";
+
+    function buildUrl(path) {
+      const base = (config.apiBaseUrl || "").replace(/\/$/, "");
+      return (base ? base : window.location.origin) + path;
+    }
+
+    async function fetchJson(path, options = {}) {
+      const response = await fetch(buildUrl(path), {
+        method: options.method || "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.defaultHeaders || {}),
+          ...(options.headers || {})
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail?.message || payload?.detail?.error || "Request failed");
+      }
+      return payload;
+    }
+
+    function renderRun(run) {
+      document.getElementById("runTitle").textContent = `Run ${run.run_id || ""}`;
+      document.getElementById("runMeta").innerHTML = `
+        <p><strong>Status:</strong> ${run.status || ""}</p>
+        <p><strong>Goal:</strong> ${run.goal || ""}</p>
+        <p><strong>Repo:</strong> ${run.repo_id || "-"}</p>
+        <p><strong>Started:</strong> ${run.started_at || "-"}</p>
+        <p><strong>Finished:</strong> ${run.finished_at || "-"}</p>
+        <p><strong>Decision:</strong> ${run.decision || "pending"}</p>
+        <p><strong>Decided At:</strong> ${run.decided_at || "-"}</p>
+        <p><strong>Decided By:</strong> ${run.decided_by || "-"}</p>
+      `;
+      const failure = run.failure_summary || {};
+      document.getElementById("failureSummary").innerHTML = `
+        <p><strong>Failed Step:</strong> ${failure.failed_step || "-"}</p>
+        <p><strong>Failure Code:</strong> ${failure.failure_code || "-"}</p>
+        <p><strong>Failure Reason:</strong> ${failure.failure_reason || "-"}</p>
+      `;
+    }
+
+    function derivePublicationState(run, errorsPayload, policyPayload) {
+      const branchName = run?.scm?.branch_name || "";
+      const prUrl = run?.pr_url || "";
+      const reviewUrl = run?.review_url || "";
+      const stepErrors = errorsPayload?.step_errors || [];
+      const policyDenials = policyPayload?.policy_decisions || [];
+      const reviewError = stepErrors.find((item) => item.step_name === "review");
+      const reviewPolicy = policyDenials.find((item) => item.capability === "review.create" && item.allowed === false);
+
+      let reviewStatus = "";
+      let reviewMessage = "";
+      if (reviewUrl) {
+        reviewStatus = "success";
+      } else if (reviewError) {
+        reviewStatus = "failed";
+        reviewMessage = reviewError.error_message || reviewError.error_type || "";
+      } else if (reviewPolicy) {
+        reviewStatus = "skipped";
+        reviewMessage = reviewPolicy.reason || "";
+      } else if ((run?.failure_summary?.failed_step || "") === "review") {
+        reviewStatus = "failed";
+        reviewMessage = run?.failure_summary?.failure_reason || "";
+      }
+
+      return {
+        branchName,
+        prUrl,
+        reviewUrl,
+        reviewStatus,
+        reviewMessage
+      };
+    }
+
+    function renderPublication(run, errorsPayload, policyPayload) {
+      const card = document.getElementById("publicationCard");
+      const box = document.getElementById("publicationBlock");
+      const publication = derivePublicationState(run, errorsPayload, policyPayload);
+      const hasPublicationData = Boolean(
+        publication.branchName ||
+        publication.prUrl ||
+        publication.reviewUrl ||
+        publication.reviewStatus
+      );
+
+      if (!hasPublicationData) {
+        card.classList.add("hidden");
+        box.innerHTML = "";
+        return;
+      }
+
+      const reviewStatusClass = publication.reviewStatus
+        ? `status-${publication.reviewStatus}`
+        : "";
+
+      card.classList.remove("hidden");
+      box.innerHTML = `
+        <p><strong>Branch:</strong> ${publication.branchName || "-"}</p>
+        <p><strong>PR:</strong> ${
+          publication.prUrl
+            ? `<a href="${publication.prUrl}" target="_blank" rel="noopener noreferrer">Open PR</a>`
+            : "-"
+        }</p>
+        <p><strong>Review:</strong> ${
+          publication.reviewUrl
+            ? `<a href="${publication.reviewUrl}" target="_blank" rel="noopener noreferrer">Open Review</a>`
+            : "-"
+        }</p>
+        <p><strong>Review Status:</strong> <span class="${reviewStatusClass}">${publication.reviewStatus || "-"}</span></p>
+        <p><strong>Review Error:</strong> ${publication.reviewMessage || "-"}</p>
+      `;
+    }
+
+    function renderSteps(steps) {
+      const box = document.getElementById("stepsTimeline");
+      if (!steps.length) {
+        box.textContent = "No steps.";
+        return;
+      }
+      box.innerHTML = steps.map((step) => `
+        <div class="timeline-item">
+          <div><strong>${step.step_name}</strong> (${step.status})</div>
+          <div>Started: ${step.started_at || "-"}</div>
+          <div>Finished: ${step.finished_at || "-"}</div>
+          <div>${step.message || ""}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderPolicy(policyDecisions) {
+      const box = document.getElementById("policyList");
+      if (!policyDecisions.length) {
+        box.textContent = "No policy decisions.";
+        return;
+      }
+      box.innerHTML = `<ul>${policyDecisions.map((decision) => `
+        <li><code>${decision.capability}</code> | allowed=${decision.allowed} | code=${decision.deny_reason_code || "-"} | ${decision.reason}</li>
+      `).join("")}</ul>`;
+    }
+
+    function renderErrors(payload) {
+      const errors = payload.step_errors || [];
+      const denials = payload.policy_denials || [];
+      const box = document.getElementById("errorsBox");
+      if (!errors.length && !denials.length) {
+        box.textContent = "No errors.";
+        return;
+      }
+      let html = "";
+      if (errors.length) {
+        html += `<h3>Step Errors</h3><ul>${errors.map((error) => `
+          <li><strong>${error.step_name}</strong>: ${error.error_type || "-"} - ${error.error_message || ""}</li>
+        `).join("")}</ul>`;
+      }
+      if (denials.length) {
+        html += `<h3>Policy Denials</h3><ul>${denials.map((decision) => `
+          <li><code>${decision.capability}</code>: ${decision.reason}</li>
+        `).join("")}</ul>`;
+      }
+      box.innerHTML = html;
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function renderDiffText(diffText) {
+      const lines = String(diffText || "").split("\n");
+      return lines.map((line) => {
+        let className = "";
+        if (line.startsWith("+") && !line.startsWith("+++")) {
+          className = "diff-line-added";
+        } else if (line.startsWith("-") && !line.startsWith("---")) {
+          className = "diff-line-removed";
+        } else if (
+          line.startsWith("@@") ||
+          line.startsWith("diff --git") ||
+          line.startsWith("---") ||
+          line.startsWith("+++")
+        ) {
+          className = "diff-line-header";
+        }
+        const escaped = escapeHtml(line);
+        return className ? `<div class="${className}">${escaped}</div>` : `<div>${escaped}</div>`;
+      }).join("");
+    }
+
+    function renderDiff(payload) {
+      const box = document.getElementById("diffBox");
+      const files = payload?.files || [];
+      if (!payload?.diff_available || !files.length) {
+        box.textContent = "No diff available.";
+        return;
+      }
+
+      const warning = payload.truncated
+        ? `<p class="diff-warning"><strong>Warning:</strong> Diff preview is truncated.</p>`
+        : "";
+
+      box.innerHTML = `
+        ${warning}
+        ${files.map((file) => `
+          <details>
+            <summary>
+              <strong>${escapeHtml(file.relative_path || "-")}</strong>
+              <span class="status-${escapeHtml(file.status || "")}">(${escapeHtml(file.status || "-")})</span>
+            </summary>
+            <div class="diff-block">${renderDiffText(file.diff_text || "")}</div>
+          </details>
+        `).join("")}
+      `;
+    }
+
+    function renderComments(payload) {
+      const box = document.getElementById("commentsBox");
+      const comments = payload?.comments || [];
+      if (!payload?.comments_available || !comments.length) {
+        box.textContent = "No AI review comments.";
+        return;
+      }
+
+      const grouped = comments.reduce((acc, item) => {
+        const key = item.file_path || "-";
+        acc[key] = acc[key] || [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+
+      box.innerHTML = Object.entries(grouped).map(([filePath, items]) => `
+        <div class="comment-file-group">
+          <h3>${escapeHtml(filePath)}</h3>
+          ${items.map((item) => `
+            <div class="comment-item">
+              <p>
+                <span class="severity-${escapeHtml(item.severity || "info")}">${escapeHtml(item.severity || "info")}</span>
+                <strong>${escapeHtml(item.title || "")}</strong>
+                ${item.line_hint ? `<code>line ${escapeHtml(item.line_hint)}</code>` : ""}
+              </p>
+              <p>${escapeHtml(item.comment || "")}</p>
+              <p><strong>Suggested check:</strong> ${escapeHtml(item.suggested_check || "-")}</p>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
+    }
+
+    async function loadRun() {
+      const errorBox = document.getElementById("errorBox");
+      if (!runId) {
+        errorBox.textContent = "Missing run id.";
+        return;
+      }
+      errorBox.textContent = "";
+      try {
+        const [runPayload, stepsPayload, policyPayload, errorsPayload, diffPayload, commentsPayload] = await Promise.all([
+          fetchJson(`/runs/${encodeURIComponent(runId)}`),
+          fetchJson(`/runs/${encodeURIComponent(runId)}/steps`),
+          fetchJson(`/runs/${encodeURIComponent(runId)}/policy`),
+          fetchJson(`/runs/${encodeURIComponent(runId)}/errors`),
+          fetchJson(`/runs/${encodeURIComponent(runId)}/diff`),
+          fetchJson(`/runs/${encodeURIComponent(runId)}/comments`)
+        ]);
+        renderRun(runPayload.run || {});
+        renderPublication(runPayload.run || {}, errorsPayload || {}, policyPayload || {});
+        renderDiff(diffPayload || {});
+        renderComments(commentsPayload || {});
+        renderSteps(stepsPayload.steps || []);
+        renderPolicy(policyPayload.policy_decisions || []);
+        renderErrors(errorsPayload || {});
+      } catch (error) {
+        errorBox.textContent = error.message;
+      }
+    }
+
+    async function runAction(action) {
+      const errorBox = document.getElementById("errorBox");
+      errorBox.textContent = "";
+      try {
+        const payload = await fetchJson(`/runs/${encodeURIComponent(runId)}/${action}`, { method: "POST" });
+        if (action === "retry" && payload.new_run?.run_id) {
+          window.location.href = `./run.html?id=${encodeURIComponent(payload.new_run.run_id)}`;
+          return;
+        }
+        await loadRun();
+      } catch (error) {
+        errorBox.textContent = error.message;
+      }
+    }
+
+    document.getElementById("retryButton").addEventListener("click", () => runAction("retry"));
+    document.getElementById("cancelButton").addEventListener("click", () => runAction("cancel"));
+    document.getElementById("approveButton").addEventListener("click", () => runAction("approve"));
+    document.getElementById("rejectButton").addEventListener("click", () => runAction("reject"));
+    loadRun();
+  </script>
+</body>
+</html>

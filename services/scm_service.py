@@ -20,6 +20,12 @@ def build_feature_branch_name(goal: str, now: datetime | None = None) -> str:
     return f"feature/ai/{slug}-{timestamp}"
 
 
+def build_run_branch_name(run_id: str) -> str:
+    cleaned_run_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(run_id or "").strip()).strip("-")
+    cleaned_run_id = cleaned_run_id or "run"
+    return f"feature/ai/{cleaned_run_id}"
+
+
 class ScmService:
     def __init__(self, output_max_chars: int = DEFAULT_SCM_OUTPUT_MAX_CHARS) -> None:
         self._output_max_chars = max(0, int(output_max_chars))
@@ -32,6 +38,93 @@ class ScmService:
             return False
         result = self._run_git(repo_root, ["rev-parse", "--is-inside-work-tree"], "detect_git_repo")
         return result.success and result.stdout.strip().lower() == "true"
+
+    def clone_repo(
+        self,
+        remote_url: str,
+        target_path: str | Path,
+        *,
+        branch_name: str = "",
+    ) -> ScmOperationResult:
+        cleaned_remote_url = str(remote_url or "").strip()
+        resolved_target_path = Path(target_path).resolve()
+        cleaned_branch_name = str(branch_name or "").strip()
+        if not cleaned_remote_url:
+            return self._failure_result(
+                "clone_repo",
+                resolved_target_path.parent,
+                error="Remote URL is required.",
+            )
+        if resolved_target_path.exists():
+            return self._failure_result(
+                "clone_repo",
+                resolved_target_path.parent,
+                error=f"Target path already exists: {resolved_target_path.as_posix()}",
+            )
+        if not self._git_available():
+            return self._failure_result(
+                "clone_repo",
+                resolved_target_path.parent,
+                error="git is not available.",
+            )
+
+        resolved_target_path.parent.mkdir(parents=True, exist_ok=True)
+        command = ["git", "clone"]
+        if cleaned_branch_name:
+            command.extend(["--branch", cleaned_branch_name, "--single-branch"])
+        command.extend([cleaned_remote_url, resolved_target_path.as_posix()])
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=resolved_target_path.parent,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return self._failure_result(
+                "clone_repo",
+                resolved_target_path.parent,
+                command=command,
+                error=str(exc),
+            )
+
+        stdout = self._truncate_text(completed.stdout)
+        stderr = self._truncate_text(completed.stderr)
+        success = completed.returncode == 0
+        if success:
+            return ScmOperationResult(
+                operation="clone_repo",
+                repo_path=resolved_target_path.as_posix(),
+                success=True,
+                command=command,
+                exit_code=completed.returncode,
+                stdout=stdout,
+                stderr=stderr,
+                data={
+                    "remote_url": cleaned_remote_url,
+                    "branch_name": cleaned_branch_name,
+                    "local_path": resolved_target_path.as_posix(),
+                },
+            )
+        return ScmOperationResult(
+            operation="clone_repo",
+            repo_path=resolved_target_path.as_posix(),
+            success=False,
+            command=command,
+            exit_code=completed.returncode,
+            stdout=stdout,
+            stderr=stderr,
+            error=stderr or stdout or f"git clone failed with exit code {completed.returncode}",
+            data={
+                "remote_url": cleaned_remote_url,
+                "branch_name": cleaned_branch_name,
+                "local_path": resolved_target_path.as_posix(),
+            },
+        )
 
     def get_current_branch(self, repo_path: str | Path) -> ScmOperationResult:
         repo_root = Path(repo_path).resolve()

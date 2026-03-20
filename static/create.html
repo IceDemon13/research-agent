@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create Run</title>
+  <script src="./config.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
+    form { max-width: 640px; }
+    label { display: block; margin-bottom: 12px; }
+    input, select, textarea, button, a { font: inherit; }
+    input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+    textarea { min-height: 120px; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    button, a { padding: 8px 12px; border: 1px solid #bbb; background: #f6f6f6; color: #222; text-decoration: none; cursor: pointer; }
+    .error { color: #a40000; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Create Run</h1>
+  <form id="createForm">
+    <label>
+      Goal
+      <textarea id="goalInput" required placeholder="Describe the run goal"></textarea>
+    </label>
+    <label>
+      Repo ID
+      <input id="repoIdInput" placeholder="sample">
+    </label>
+    <label>
+      Jira Ticket
+      <input id="jiraTicketInput" placeholder="TEL-123">
+    </label>
+    <label>
+      Mode
+      <select id="modeInput">
+        <option value="research">research</option>
+        <option value="spec">spec</option>
+        <option value="implement">implement</option>
+        <option value="review">review</option>
+      </select>
+    </label>
+    <div class="toolbar">
+      <button type="submit">Create</button>
+      <a href="./index.html">Back to Runs</a>
+      <a href="./repos.html">Repos</a>
+    </div>
+  </form>
+  <div id="errorBox" class="error"></div>
+
+  <script>
+    const config = window.APP_CONFIG || { apiBaseUrl: "", defaultHeaders: {} };
+
+    function buildUrl(path) {
+      const base = (config.apiBaseUrl || "").replace(/\/$/, "");
+      return (base ? base : window.location.origin) + path;
+    }
+
+    async function fetchJson(path, options = {}) {
+      const response = await fetch(buildUrl(path), {
+        method: options.method || "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.defaultHeaders || {}),
+          ...(options.headers || {})
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail?.message || payload?.detail?.error || "Request failed");
+      }
+      return payload;
+    }
+
+    document.getElementById("createForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const errorBox = document.getElementById("errorBox");
+      errorBox.textContent = "";
+      try {
+        const payload = await fetchJson("/runs", {
+          method: "POST",
+          body: {
+            goal: document.getElementById("goalInput").value.trim(),
+            repo_id: document.getElementById("repoIdInput").value.trim(),
+            jira_ticket: document.getElementById("jiraTicketInput").value.trim(),
+            mode: document.getElementById("modeInput").value
+          }
+        });
+        window.location.href = `./run.html?id=${encodeURIComponent(payload.run_id)}`;
+      } catch (error) {
+        errorBox.textContent = error.message;
+      }
+    });
+  </script>
+</body>
+</html>

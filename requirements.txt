@@ -7,3 +7,7 @@ python-dotenv
 pydantic-settings
 ddgs
 trafilatura
+psycopg[binary]
+fastapi
+uvicorn
+httpx

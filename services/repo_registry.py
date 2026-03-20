@@ -7,6 +7,7 @@ from pathlib import Path
 
 from config import settings
 from contracts.repo_metadata import REGISTRY_VERSION, RepoMetadata, RepoRegistryState
+from services.db_service import DatabaseService
 
 
 DEFAULT_REPO_ID = "self"
@@ -21,6 +22,10 @@ def _normalize_repo_id(value: str) -> str:
     normalized = REPO_ID_RE.sub("-", lowered).strip("-")
     normalized = re.sub(r"-{2,}", "-", normalized)
     return normalized
+
+
+def normalize_repo_id(value: str) -> str:
+    return _normalize_repo_id(value)
 
 
 def _base_repo_id(root_path: Path, display_name: str, repo_id: str) -> str:
@@ -84,9 +89,17 @@ def _detect_status(root_path: Path, indexed_at: str) -> str:
 
 
 class RepositoryRegistryService:
-    def __init__(self, storage_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        storage_path: str | Path | None = None,
+        *,
+        db_service: DatabaseService | None = None,
+    ) -> None:
         resolved_storage_path = Path(storage_path or settings.runtime.repo_registry_path)
         self._storage_path = resolved_storage_path
+        self._db_service = db_service or DatabaseService()
+        if self._db_service.enabled:
+            self._db_service.bootstrap_schema()
 
     @property
     def storage_path(self) -> Path:
@@ -95,16 +108,18 @@ class RepositoryRegistryService:
     def register_repo(
         self,
         *,
-        root_path: str,
+        root_path: str = "",
+        local_path: str = "",
         repo_id: str = "",
         display_name: str = "",
         default_branch: str = "",
+        remote_url: str = "",
     ) -> RepoMetadata:
-        resolved_root_path = Path(root_path).expanduser().resolve()
+        resolved_root_path = Path(local_path or root_path).expanduser().resolve()
         if not resolved_root_path.exists():
-            raise ValueError(f"Root path does not exist: {root_path}")
+            raise ValueError(f"Root path does not exist: {local_path or root_path}")
         if not resolved_root_path.is_dir():
-            raise ValueError(f"Root path is not a directory: {root_path}")
+            raise ValueError(f"Root path is not a directory: {local_path or root_path}")
 
         state = self._load_state()
         existing_for_root = self._find_repo_by_root(state, str(resolved_root_path))
@@ -130,6 +145,7 @@ class RepositoryRegistryService:
             root_path=resolved_root_path,
             display_name=display_name,
             default_branch=default_branch,
+            remote_url=remote_url,
         )
         self._save_state(
             RepoRegistryState(
@@ -137,6 +153,7 @@ class RepositoryRegistryService:
                 repos=[*state.repos, metadata],
             )
         )
+        self._sync_repo_to_db(metadata)
         return metadata
 
     def ensure_default_repo(
@@ -178,15 +195,17 @@ class RepositoryRegistryService:
 
         refreshed = self._build_repo_metadata(
             repo_id=current.repo_id,
-            root_path=Path(current.root_path),
+            root_path=Path(current.resolved_local_path),
             display_name=current.display_name,
             default_branch=current.default_branch,
+            remote_url=current.remote_url,
         )
         updated_repos = [
             refreshed if repo.repo_id == refreshed.repo_id else repo
             for repo in state.repos
         ]
         self._save_state(RepoRegistryState(version=state.version, repos=updated_repos))
+        self._sync_repo_to_db(refreshed)
         return refreshed
 
     def resolve_repo_root(self, repo_id: str | None = None, fallback_root_path: str = ".") -> str:
@@ -194,7 +213,7 @@ class RepositoryRegistryService:
             repo = self.get_repo(repo_id)
             if repo is None:
                 raise KeyError(f"Unknown repo_id: {repo_id}")
-            return repo.root_path
+            return repo.resolved_local_path
         return str(Path(fallback_root_path).expanduser().resolve())
 
     def resolve_repo(
@@ -221,6 +240,7 @@ class RepositoryRegistryService:
         root_path: Path,
         display_name: str,
         default_branch: str,
+        remote_url: str,
     ) -> RepoMetadata:
         resolved_root_path = root_path.expanduser().resolve()
         detected_default_branch = _detect_default_branch(resolved_root_path) or (default_branch or "").strip()
@@ -229,6 +249,8 @@ class RepositoryRegistryService:
         return RepoMetadata(
             repo_id=repo_id,
             root_path=str(resolved_root_path),
+            local_path=str(resolved_root_path),
+            remote_url=str(remote_url or "").strip(),
             display_name=normalized_display_name,
             default_branch=detected_default_branch,
             indexed_at=indexed_at,
@@ -253,6 +275,10 @@ class RepositoryRegistryService:
             encoding="utf-8",
         )
 
+    def _sync_repo_to_db(self, metadata: RepoMetadata) -> None:
+        if self._db_service.enabled:
+            self._db_service.upsert_repo(metadata)
+
     @staticmethod
     def _find_repo_by_id(state: RepoRegistryState, repo_id: str) -> RepoMetadata | None:
         for repo in state.repos:
@@ -274,17 +300,21 @@ def build_repo_registry_service(storage_path: str | Path | None = None) -> Repos
 
 def register_repo(
     *,
-    root_path: str,
+    root_path: str = "",
+    local_path: str = "",
     repo_id: str = "",
     display_name: str = "",
     default_branch: str = "",
+    remote_url: str = "",
     storage_path: str | Path | None = None,
 ) -> RepoMetadata:
     return build_repo_registry_service(storage_path).register_repo(
         root_path=root_path,
+        local_path=local_path,
         repo_id=repo_id,
         display_name=display_name,
         default_branch=default_branch,
+        remote_url=remote_url,
     )
 
 

@@ -1,0 +1,48 @@
+{
+  "run_id": "6dcbb328447a47859e6135078ff90cdd",
+  "goal": "implement update src/app.py",
+  "status": "success",
+  "started_at": "2026-03-20T00:46:11.501842+00:00",
+  "repo_id": "sample",
+  "actor_context": {
+    "actor_id": "cli.local",
+    "actor_type": "cli",
+    "role": "admin",
+    "source_channel": "cli",
+    "display_name": "Local CLI",
+    "repo_allowlist": [],
+    "jira_project_allowlist": []
+  },
+  "finished_at": "2026-03-20T00:46:11.615529+00:00",
+  "steps": [
+    {
+      "name": "draft",
+      "status": "success",
+      "started_at": "2026-03-20T00:46:11.501842+00:00",
+      "finished_at": "2026-03-20T00:46:11.547135+00:00",
+      "message": "Prepared draft_set with 1 file(s).",
+      "error": null
+    },
+    {
+      "name": "validation",
+      "status": "success",
+      "started_at": "2026-03-20T00:46:11.548156+00:00",
+      "finished_at": "2026-03-20T00:46:11.611473+00:00",
+      "message": "Candidate workspace validation succeeded.",
+      "error": null
+    },
+    {
+      "name": "apply",
+      "status": "success",
+      "started_at": "2026-03-20T00:46:11.612503+00:00",
+      "finished_at": "2026-03-20T00:46:11.613514+00:00",
+      "message": "Dry-run apply completed safely.",
+      "error": null
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/6dcbb328447a47859e6135078ff90cdd.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": ""
+}

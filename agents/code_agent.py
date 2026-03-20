@@ -25,29 +25,29 @@ def _repo_context_repo_id(repo_context: dict | None) -> str | None:
 def _build_code_prompt_input_from_spec(data: SpecToCodeInput) -> str:
     spec = data.spec
 
-    scope_text = "\n".join(f"- {item}" for item in spec.scope) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
-    out_of_scope_text = "\n".join(f"- {item}" for item in spec.out_of_scope) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
-    requirements_text = "\n".join(f"- {item}" for item in spec.requirements) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
-    acceptance_text = "\n".join(f"- {item}" for item in spec.acceptance_criteria) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
-    risks_text = "\n".join(f"- {item}" for item in spec.risks) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
+    scope_text = "\n".join(f"- {item}" for item in spec.scope) or "- не вказано"
+    out_of_scope_text = "\n".join(f"- {item}" for item in spec.out_of_scope) or "- не вказано"
+    requirements_text = "\n".join(f"- {item}" for item in spec.requirements) or "- не вказано"
+    acceptance_text = "\n".join(f"- {item}" for item in spec.acceptance_criteria) or "- не вказано"
+    risks_text = "\n".join(f"- {item}" for item in spec.risks) or "- не вказано"
 
     repo_context = _build_repo_context_from_spec(data.original_request, data.repo_context)
     resolved_target_files = data.repo_context.get("resolved_target_files", []) if isinstance(data.repo_context, dict) else []
     target_files_text = "\n".join(f"- {path}" for path in resolved_target_files) or "- no strict target lock"
 
-    return f"""РџРѕР±СѓРґСѓР№ plan СЂРµР°Р»С–Р·Р°С†С–С— РЅР° РѕСЃРЅРѕРІС– РіРѕС‚РѕРІРѕРіРѕ spec.
+    return f"""Побудуй plan реалізації на основі готового spec.
 
-РћСЂРёРіС–РЅР°Р»СЊРЅРёР№ Р·Р°РїРёС‚:
+Оригінальний запит:
 {data.original_request}
 
 Spec title:
 {spec.title or "Spec"}
 
-РњРµС‚Р°:
-{spec.goal or "РЅРµ РІРєР°Р·Р°РЅРѕ"}
+Мета:
+{spec.goal or "не вказано"}
 
-РљРѕРЅС‚РµРєСЃС‚:
-{spec.context or "РЅРµ РІРєР°Р·Р°РЅРѕ"}
+Контекст:
+{spec.context or "не вказано"}
 
 Scope:
 {scope_text}
@@ -55,13 +55,13 @@ Scope:
 Out of scope:
 {out_of_scope_text}
 
-РћСЃРЅРѕРІРЅС– РІРёРјРѕРіРё:
+Основні вимоги:
 {requirements_text}
 
 Acceptance criteria:
 {acceptance_text}
 
-Р РёР·РёРєРё:
+Ризики:
 {risks_text}
 
 Repo context:
@@ -98,9 +98,9 @@ def _build_repo_context_from_spec(original_request: str, repo_context: dict | No
 
 def _extract_patch_plan(answer: str) -> PatchPlan:
     files = _extract_file_changes(answer)
-    risks = _extract_bullets(answer, "## 5. Р РёР·РёРєРё")
-    checks = _extract_bullets(answer, "## 6. Р©Рѕ РїРµСЂРµРІС–СЂРёС‚Рё РїС–СЃР»СЏ Р·РјС–РЅ")
-    goal = _extract_section_text(answer, "## 1. РњРµС‚Р° СЂРµР°Р»С–Р·Р°С†С–С—")
+    risks = _extract_bullets(answer, "## 5. Ризики")
+    checks = _extract_bullets(answer, "## 6. Що перевірити після змін")
+    goal = _extract_section_text(answer, "## 1. Мета реалізації")
 
     return PatchPlan(
         goal=goal,
@@ -111,7 +111,7 @@ def _extract_patch_plan(answer: str) -> PatchPlan:
 
 
 def _extract_file_changes(text: str) -> list[FileChangePlan]:
-    section = _extract_section_text(text, "## 2. РЇРєС– С„Р°Р№Р»Рё РїРѕС‚СЂС–Р±РЅРѕ Р·РјС–РЅРёС‚Рё")
+    section = _extract_section_text(text, "## 2. Які файли потрібно змінити")
     lines = [line.strip() for line in section.splitlines() if line.strip()]
     result: list[FileChangePlan] = []
 
@@ -135,7 +135,7 @@ def _extract_file_changes(text: str) -> list[FileChangePlan]:
                 FileChangePlan(
                     path=raw.strip().strip("`"),
                     change_type="modify",
-                    summary="РџРѕС‚СЂС–Р±РЅРѕ СѓС‚РѕС‡РЅРёС‚Рё Р·РјС–РЅСѓ.",
+                    summary="Потрібно уточнити зміну.",
                     checks=[],
                 )
             )

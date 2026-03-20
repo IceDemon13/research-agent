@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-research_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-research_agent}
+      POSTGRES_DB: ${POSTGRES_DB:-research_agent}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-research_agent} -d ${POSTGRES_DB:-research_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      MODEL_NAME: ${MODEL_NAME:-gpt-4o-mini}
+      STRONG_MODEL_NAME: ${STRONG_MODEL_NAME:-gpt-4o}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://research_agent:research_agent@postgres:5432/research_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-research_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-research_agent}
+      POSTGRES_DB: ${POSTGRES_DB:-research_agent}
+      POSTGRES_POOL_SIZE: ${POSTGRES_POOL_SIZE:-5}
+      DEFAULT_ACTOR_ROLE: ${DEFAULT_ACTOR_ROLE:-admin}
+      DEFAULT_ACTOR_DISPLAY_NAME: ${DEFAULT_ACTOR_DISPLAY_NAME:-Local CLI}
+      AUTO_PUBLISH_IMPLEMENTATION_RUNS: ${AUTO_PUBLISH_IMPLEMENTATION_RUNS:-false}
+      ALLOW_REAL_APPLY: ${ALLOW_REAL_APPLY:-false}
+      ALLOW_PR_CREATION: ${ALLOW_PR_CREATION:-false}
+      ALLOW_REVIEW_CREATION: ${ALLOW_REVIEW_CREATION:-false}
+      VALIDATION_BUILD_COMMAND: ${VALIDATION_BUILD_COMMAND:-}
+      VALIDATION_LINT_COMMAND: ${VALIDATION_LINT_COMMAND:-}
+      VALIDATION_TEST_COMMAND: ${VALIDATION_TEST_COMMAND:-}
+      REPO_CLONE_ROOT: ${REPO_CLONE_ROOT:-/repos}
+      BITBUCKET_API_BASE_URL: ${BITBUCKET_API_BASE_URL:-https://api.bitbucket.org/2.0}
+      BITBUCKET_USERNAME: ${BITBUCKET_USERNAME:-}
+      BITBUCKET_APP_PASSWORD: ${BITBUCKET_APP_PASSWORD:-}
+      BITBUCKET_API_TOKEN: ${BITBUCKET_API_TOKEN:-}
+      CRUCIBLE_BASE_URL: ${CRUCIBLE_BASE_URL:-}
+      CRUCIBLE_USERNAME: ${CRUCIBLE_USERNAME:-}
+      CRUCIBLE_PASSWORD: ${CRUCIBLE_PASSWORD:-}
+      CRUCIBLE_API_TOKEN: ${CRUCIBLE_API_TOKEN:-}
+      CRUCIBLE_PROJECT_KEY: ${CRUCIBLE_PROJECT_KEY:-}
+      CRUCIBLE_DEFAULT_REVIEWERS: ${CRUCIBLE_DEFAULT_REVIEWERS:-}
+      PYTHONUTF8: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_artifacts:/app/artifacts
+      - app_logs:/app/logs
+      - app_index:/app/index
+      - app_data:/app/data
+      - app_repos:/repos
+
+volumes:
+  postgres_data:
+  app_artifacts:
+  app_logs:
+  app_index:
+  app_data:
+  app_repos:

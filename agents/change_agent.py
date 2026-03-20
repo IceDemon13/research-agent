@@ -802,9 +802,9 @@ Current content:
 """
         )
 
-    risks_text = "\n".join(f"- {item}" for item in patch_plan.risks) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
-    checks_text = "\n".join(f"- {item}" for item in patch_plan.checks) or "- РЅРµ РІРєР°Р·Р°РЅРѕ"
-    files_text = "\n".join(file_lines) or "- С„Р°Р№Р»Рё РЅРµ РІРёР·РЅР°С‡РµРЅС–"
+    risks_text = "\n".join(f"- {item}" for item in patch_plan.risks) or "- не вказано"
+    checks_text = "\n".join(f"- {item}" for item in patch_plan.checks) or "- не вказано"
+    files_text = "\n".join(file_lines) or "- файли не визначені"
 
     detailed_repo_context = "\n\n".join(repo_blocks).strip()
     if not detailed_repo_context:
@@ -824,9 +824,9 @@ Current content:
 
     return f"""{shared_context}
 
-РџРѕР±СѓРґСѓР№ proposed file changes РЅР° РѕСЃРЅРѕРІС– РіРѕС‚РѕРІРѕРіРѕ patch plan.
+Побудуй proposed file changes на основі готового patch plan.
 
-РћСЂРёРіС–РЅР°Р»СЊРЅРёР№ Р·Р°РїРёС‚:
+Оригінальний запит:
 {original_request}
 
 Task intent:
@@ -854,7 +854,7 @@ Target lock rules:
 - Do not introduce duplicate imports or replacement helpers when the existing file already contains them.
 
 Goal:
-{patch_plan.goal or "РЅРµ РІРєР°Р·Р°РЅРѕ"}
+{patch_plan.goal or "не вказано"}
 
 Files from patch plan:
 {files_text}
@@ -874,9 +874,9 @@ Debug context summary:
 
 
 def _extract_change_set(answer: str) -> ChangeSet:
-    goal = _extract_section_text(answer, "## 1. РњРµС‚Р°")
-    risks = _extract_bullets(answer, "## 3. Р РёР·РёРєРё")
-    checks = _extract_bullets(answer, "## 4. Р©Рѕ РїРµСЂРµРІС–СЂРёС‚Рё")
+    goal = _extract_section_text(answer, "## 1. Мета")
+    risks = _extract_bullets(answer, "## 3. Ризики")
+    checks = _extract_bullets(answer, "## 4. Що перевірити")
     files = _extract_files(answer)
 
     return ChangeSet(

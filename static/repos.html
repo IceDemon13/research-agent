@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Repos</title>
+  <script src="./config.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
+    form { max-width: 720px; margin-bottom: 24px; }
+    label { display: block; margin-bottom: 12px; }
+    input, button, a { font: inherit; }
+    input { width: 100%; padding: 8px; box-sizing: border-box; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    button, a { padding: 8px 12px; border: 1px solid #bbb; background: #f6f6f6; color: #222; text-decoration: none; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+    .error { color: #a40000; margin-top: 12px; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="./index.html">Back to Runs</a>
+    <a href="./create.html">Create Run</a>
+  </div>
+
+  <h1>Repositories</h1>
+  <p class="muted">Onboard a repo by remote Git URL and register it for repo-aware runs.</p>
+
+  <form id="repoForm">
+    <label>
+      Repo ID
+      <input id="repoIdInput" required placeholder="sample-repo">
+    </label>
+    <label>
+      Display Name
+      <input id="displayNameInput" required placeholder="Sample Repo">
+    </label>
+    <label>
+      Remote URL
+      <input id="remoteUrlInput" required placeholder="https://bitbucket.org/acme/sample-repo.git">
+    </label>
+    <label>
+      Default Branch
+      <input id="defaultBranchInput" placeholder="main">
+    </label>
+    <div class="toolbar">
+      <button type="submit">Onboard Repo</button>
+      <button id="refreshButton" type="button">Refresh</button>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Repo ID</th>
+        <th>Display Name</th>
+        <th>Remote URL</th>
+        <th>Local Path</th>
+        <th>Status</th>
+        <th>Default Branch</th>
+      </tr>
+    </thead>
+    <tbody id="reposBody">
+      <tr><td colspan="6">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <div id="errorBox" class="error"></div>
+
+  <script>
+    const config = window.APP_CONFIG || { apiBaseUrl: "", defaultHeaders: {} };
+
+    function buildUrl(path) {
+      const base = (config.apiBaseUrl || "").replace(/\/$/, "");
+      return (base ? base : window.location.origin) + path;
+    }
+
+    async function fetchJson(path, options = {}) {
+      const response = await fetch(buildUrl(path), {
+        method: options.method || "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.defaultHeaders || {}),
+          ...(options.headers || {})
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail?.message || payload?.detail?.error || "Request failed");
+      }
+      return payload;
+    }
+
+    function renderRepos(repos) {
+      const tbody = document.getElementById("reposBody");
+      tbody.innerHTML = "";
+      if (!repos.length) {
+        tbody.innerHTML = "<tr><td colspan=\"6\">No repos registered.</td></tr>";
+        return;
+      }
+      repos.forEach((repo) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${repo.repo_id || ""}</td>
+          <td>${repo.display_name || ""}</td>
+          <td>${repo.remote_url || "-"}</td>
+          <td>${repo.local_path || "-"}</td>
+          <td>${repo.status || "-"}</td>
+          <td>${repo.default_branch || "-"}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function loadRepos() {
+      const errorBox = document.getElementById("errorBox");
+      errorBox.textContent = "";
+      try {
+        const payload = await fetchJson("/repos");
+        renderRepos(payload.repos || []);
+      } catch (error) {
+        document.getElementById("reposBody").innerHTML = "<tr><td colspan=\"6\">Failed to load repos.</td></tr>";
+        errorBox.textContent = error.message;
+      }
+    }
+
+    document.getElementById("repoForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const errorBox = document.getElementById("errorBox");
+      errorBox.textContent = "";
+      try {
+        await fetchJson("/repos/onboard", {
+          method: "POST",
+          body: {
+            repo_id: document.getElementById("repoIdInput").value.trim(),
+            display_name: document.getElementById("displayNameInput").value.trim(),
+            remote_url: document.getElementById("remoteUrlInput").value.trim(),
+            default_branch: document.getElementById("defaultBranchInput").value.trim()
+          }
+        });
+        document.getElementById("repoForm").reset();
+        loadRepos();
+      } catch (error) {
+        errorBox.textContent = error.message;
+      }
+    });
+
+    document.getElementById("refreshButton").addEventListener("click", loadRepos);
+    loadRepos();
+  </script>
+</body>
+</html>

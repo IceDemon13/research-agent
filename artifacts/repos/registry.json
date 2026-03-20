@@ -4,6 +4,8 @@
     {
       "repo_id": "self",
       "root_path": "C:\\work\\my repositories\\research-agent",
+      "local_path": "C:\\work\\my repositories\\research-agent",
+      "remote_url": "",
       "display_name": "research-agent",
       "default_branch": "pre-flight",
       "indexed_at": "2026-03-19T16:05:37.924404+00:00",

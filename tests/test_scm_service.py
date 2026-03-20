@@ -10,7 +10,7 @@ from contracts.apply_contract import ApplyInput, ApplyOperation
 from services.apply_service import ApplyService
 from services.repo_registry import RepositoryRegistryService
 from contracts.scm_contract import ScmOperationResult
-from services.scm_service import ScmService, build_feature_branch_name
+from services.scm_service import ScmService, build_feature_branch_name, build_run_branch_name
 
 
 class ScmServiceTests(unittest.TestCase):
@@ -90,6 +90,9 @@ class ScmServiceTests(unittest.TestCase):
         self.assertEqual(current_branch.data.get("branch_name"), branch_name)
         self.assertTrue(branch_name.startswith("feature/ai/"))
         self.assertIn("-20260319210000", branch_name)
+
+    def test_build_run_branch_name(self) -> None:
+        self.assertEqual(build_run_branch_name("run-123"), "feature/ai/run-123")
 
     def test_commit_after_apply_and_status_detection(self) -> None:
         self._init_git_repo()

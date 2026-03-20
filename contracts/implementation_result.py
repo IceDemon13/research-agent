@@ -1,8 +1,12 @@
 from dataclasses import dataclass, field
 
+from dataclasses import dataclass, field
+
+from contracts.actor_contract import ActorContext
 from contracts.apply_contract import ApplyResult
 from contracts.crucible_review_contract import CrucibleReviewResult
 from contracts.diff_contract import DiffResult
+from contracts.permission_contract import PermissionDecision
 from contracts.pull_request_contract import PullRequestResult
 from contracts.run_contract import RunRecord
 from contracts.validation_contract import ValidationResult
@@ -31,17 +35,21 @@ class ImplementationResult:
     dry_run_apply_result: ApplyResult
     dry_run_diff_result: DiffResult
     validation_result: ValidationResult
+    actor_context: ActorContext | None = None
     candidate_apply_result: ApplyResult | None = None
     real_apply_result: ApplyResult | None = None
     final_diff_result: DiffResult | None = None
     temp_workspace_root: str = ""
     temp_workspace_warnings: list[str] = field(default_factory=list)
-    policy_decisions: list[str] = field(default_factory=list)
+    policy_decisions: list[PermissionDecision] = field(default_factory=list)
     scm_branch_name: str = ""
     scm_remote_url: str = ""
     scm_warnings: list[str] = field(default_factory=list)
     pull_request_result: PullRequestResult | None = None
     crucible_review_result: CrucibleReviewResult | None = None
+    review_status: str = ""
+    review_error: str = ""
+    publication_status: str = ""
     review_warnings: list[str] = field(default_factory=list)
     run_record: RunRecord | None = None
     final_status: str = "dry_run_only"
@@ -52,6 +60,11 @@ class ImplementationResult:
             "artifact_summary": self.artifact_summary.to_dict(),
             "dry_run_apply_result": self.dry_run_apply_result.to_dict(),
             "dry_run_diff_result": self.dry_run_diff_result.to_dict(),
+            "actor_context": (
+                self.actor_context.to_dict()
+                if self.actor_context is not None
+                else None
+            ),
             "candidate_apply_result": (
                 self.candidate_apply_result.to_dict()
                 if self.candidate_apply_result is not None
@@ -70,7 +83,7 @@ class ImplementationResult:
             ),
             "temp_workspace_root": self.temp_workspace_root,
             "temp_workspace_warnings": list(self.temp_workspace_warnings),
-            "policy_decisions": list(self.policy_decisions),
+            "policy_decisions": [decision.to_dict() for decision in list(self.policy_decisions)],
             "scm_branch_name": self.scm_branch_name,
             "scm_remote_url": self.scm_remote_url,
             "scm_warnings": list(self.scm_warnings),
@@ -84,6 +97,19 @@ class ImplementationResult:
                 if self.crucible_review_result is not None
                 else None
             ),
+            "pr_url": (
+                self.pull_request_result.url
+                if self.pull_request_result is not None
+                else ""
+            ),
+            "review_url": (
+                self.crucible_review_result.url
+                if self.crucible_review_result is not None
+                else ""
+            ),
+            "review_status": self.review_status,
+            "review_error": self.review_error,
+            "publication_status": self.publication_status,
             "review_warnings": list(self.review_warnings),
             "run_record": (
                 self.run_record.to_dict()

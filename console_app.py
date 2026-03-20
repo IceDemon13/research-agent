@@ -8,6 +8,13 @@ from output_formatters import split_answer_and_sources
 from retriever import detect_language
 
 
+EMPTY_SOURCES_BLOCKS = {
+    "",
+    "no sources found",
+    "джерела не знайдено",
+}
+
+
 def _configure_console_output() -> None:
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
@@ -90,7 +97,7 @@ def main() -> None:
     print()
     print(f"{answer_label}:")
     print(answer)
-    if not _answer_already_contains_sources(answer):
+    if not _answer_already_contains_sources(answer) and not _is_empty_sources_block(sources):
         print()
         print(f"{sources_label}:")
         print(sources)
@@ -100,4 +107,9 @@ def main() -> None:
 
 def _answer_already_contains_sources(answer: str) -> bool:
     lowered = (answer or "").lower()
-    return "sources:" in lowered or "джерела:" in lowered or "äæåðåëà:" in lowered or "ð”ð¶ðµñ€ðµð»ð°:" in lowered
+    return "sources:" in lowered or "джерела:" in lowered
+
+
+def _is_empty_sources_block(sources: str) -> bool:
+    normalized = str(sources or "").strip().lower()
+    return normalized in EMPTY_SOURCES_BLOCKS

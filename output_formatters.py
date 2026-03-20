@@ -49,9 +49,7 @@ def format_pipeline_output(text: str) -> str:
 def split_answer_and_sources(response: str) -> tuple[str, str]:
     markers = (
         ("\n\nSources:", "No sources found"),
-        ("\n\n" + "Джерела:", "Джерела не знайдено"),
-        ("\n\nÄæåðåëà:", "Äæåðåëà íå çíàéäåíî"),
-        ("\n\nÐ”Ð¶ÐµÑ€ÐµÐ»Ð°:", "Ð”Ð¶ÐµÑ€ÐµÐ»Ð° Ð½Ðµ Ð·Ð½Ð°Ð¹Ð´ÐµÐ½Ð¾"),
+        ("\n\nДжерела:", "Джерела не знайдено"),
     )
     for marker, fallback in markers:
         if marker in response:

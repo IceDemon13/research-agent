@@ -19,10 +19,9 @@ FORBIDDEN_DEBUG_FRAGMENTS = (
 )
 
 MOJIBAKE_FRAGMENTS = (
-    "Р СџРЎР‚",
-    "Р В©Р С•",
-    "Р вЂ™Р В°Р В¶",
-    "Р СљР ВµРЎвЂљР В°",
+    "\u00d0",
+    "\u00d1",
+    "\u00c3",
 )
 
 TRUNCATION_FRAGMENTS = (

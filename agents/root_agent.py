@@ -10,6 +10,7 @@ from agents.research_agent import inspect_research_query, run_research_agent
 from agents.review_agent import run_review_agent
 from agents.spec_agent import run_spec_agent
 from contracts.agent_result import AgentResult
+from contracts.actor_contract import ActorContext
 from contracts.apply_contract import ApplyInput, ApplyResult
 from contracts.change_set import ChangeSet
 from contracts.crucible_review_contract import CrucibleReviewResult
@@ -19,6 +20,13 @@ from contracts.implementation_result import (
     ImplementationArtifactSummary,
     ImplementationResult,
 )
+from contracts.permission_contract import PermissionDecision
+from contracts.permission_contract import DENY_REASON_DIRTY_REPO
+from contracts.permission_contract import DENY_REASON_MISSING_REMOTE
+from contracts.permission_contract import DENY_REASON_MISSING_VALIDATION
+from contracts.permission_contract import DENY_REASON_POLICY_BLOCK
+from contracts.permission_contract import DENY_REASON_PR_REQUIRED
+from contracts.permission_contract import PermissionScope
 from contracts.pull_request_contract import PullRequestResult
 from contracts.repo_context_contract import normalize_repo_context
 from contracts.run_contract import RunRecord
@@ -48,8 +56,10 @@ from services.repo_context_rules import (
     run_repo_context_rule_pipeline,
 )
 from services.repo_registry import RepositoryRegistryService, resolve_repo
+from services.permission_service import PermissionService, default_actor_context
+from services.review_comment_service import ReviewCommentService
 from services.run_service import RunService
-from services.scm_service import ScmService, build_feature_branch_name
+from services.scm_service import ScmService, build_feature_branch_name, build_run_branch_name
 from services.temp_workspace_service import TempWorkspaceService
 from services.validation_service import ValidationService
 from tools.repo_tools import (
@@ -74,6 +84,7 @@ class RootAgentAdapter:
         create_pr: bool = False,
         create_review: bool = False,
         run_log: bool = False,
+        actor_context: ActorContext | None = None,
     ) -> str:
         return run_root_agent(
             query,
@@ -83,6 +94,7 @@ class RootAgentAdapter:
             create_pr=create_pr,
             create_review=create_review,
             run_log=run_log,
+            actor_context=actor_context,
         ).output_text
 
     def inspect_query(self, query: str, repo_id: str | None = None) -> dict:
@@ -818,7 +830,20 @@ def _assert_not_review_only_pipeline(user_input: str, stage_name: str) -> None:
         raise AssertionError(f"review_only pipeline must not enter {stage_name}")
 
 
-def run_lightweight_review_pipeline(user_input: str, repo_id: str | None = None) -> AgentResult:
+def run_lightweight_review_pipeline(
+    user_input: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["task.review", "repo.context.read"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        return _permission_block_result(denied.capability, denied)
     repo_execution, _bound_read_file_range, _bound_validate_manifest_file_path = _resolve_repo_execution(repo_id)
     task_intent = _detect_and_log_task_intent(user_input, command_mode="review")
     parsed_query = parse_repo_query(_with_command_mode(user_input, "review"))
@@ -1025,6 +1050,714 @@ def route_request(user_input: str) -> RouteResult:
     return RouteResult(route="research", reason="Default route.")
 
 
+def _extract_jira_project(user_input: str) -> str:
+    match = ISSUE_KEY_RE.search(user_input or "")
+    if match is None:
+        return ""
+    return str(match.group(0).split("-")[0] or "").strip().upper()
+
+
+def _resolve_actor(actor_context: ActorContext | None) -> ActorContext:
+    return actor_context or default_actor_context()
+
+
+def _build_permission_scope(
+    actor_context: ActorContext,
+    *,
+    repo_id: str = "",
+    jira_project: str = "",
+    branch_name: str = "",
+    branch_type: str = "",
+) -> PermissionScope:
+    return PermissionScope(
+        repo_id=str(repo_id or "").strip(),
+        jira_project=str(jira_project or "").strip().upper(),
+        branch_name=str(branch_name or "").strip(),
+        branch_type=str(branch_type or "").strip(),
+        source_channel=str(actor_context.source_channel or "").strip(),
+    )
+
+
+def _permission_block_result(
+    capability: str,
+    decision: PermissionDecision,
+    *,
+    repo_context: dict | None = None,
+) -> AgentResult:
+    return AgentResult(
+        agent_name="policy",
+        output_text=(
+            "# Access Denied\n"
+            f"Capability: {capability}\n"
+            f"Reason: {decision.reason}\n"
+            f"Code: {decision.deny_reason_code or 'POLICY_BLOCK'}"
+        ),
+        success=False,
+        task_intent="read",
+        repo_context=repo_context or {},
+        metadata={
+            "artifact_type": "permission_decision",
+            "permission_decision": decision,
+        },
+    )
+
+
+def _enforce_capabilities(
+    actor_context: ActorContext,
+    capabilities: list[str],
+    *,
+    repo_id: str = "",
+    jira_project: str = "",
+    branch_name: str = "",
+    branch_type: str = "",
+    metadata: dict | None = None,
+) -> PermissionDecision | None:
+    permission_service = PermissionService()
+    scope = _build_permission_scope(
+        actor_context,
+        repo_id=repo_id,
+        jira_project=jira_project,
+        branch_name=branch_name,
+        branch_type=branch_type,
+    )
+    for capability in list(capabilities):
+        decision = permission_service.evaluate(
+            actor_context,
+            capability,
+            scope=scope,
+            metadata=metadata,
+        )
+        if not decision.allowed:
+            return decision
+    return None
+
+
+def _parse_run_explorer_command(user_input: str) -> dict | None:
+    tokens = [token for token in str(user_input or "").strip().split() if token]
+    if not tokens:
+        return None
+    if tokens[0].lower() not in {"runs", "/runs"}:
+        return None
+
+    action = "list"
+    if len(tokens) >= 2:
+        action = str(tokens[1] or "").strip().lower()
+
+    command = {
+        "action": action,
+        "run_id": "",
+        "filters": {
+            "status": "",
+            "repo_id": "",
+            "actor_id": "",
+            "role": "",
+        },
+    }
+
+    index = 2
+    if action in {"show", "retry", "cancel", "review", "approve", "reject"}:
+        if len(tokens) >= 3 and not str(tokens[2]).startswith("--"):
+            command["run_id"] = str(tokens[2]).strip()
+            index = 3
+        else:
+            return command
+
+    option_map = {
+        "--status": "status",
+        "--repo-id": "repo_id",
+        "--actor-id": "actor_id",
+        "--role": "role",
+    }
+    while index < len(tokens):
+        token = str(tokens[index] or "").strip()
+        option_key = option_map.get(token.lower())
+        if option_key and (index + 1) < len(tokens):
+            command["filters"][option_key] = str(tokens[index + 1] or "").strip()
+            index += 2
+            continue
+        index += 1
+    return command
+
+
+def _build_run_actor_label(run_record: RunRecord) -> str:
+    actor = run_record.actor_context
+    if actor is None:
+        return "unknown"
+    display_name = str(actor.display_name or "").strip()
+    actor_id = str(actor.actor_id or "").strip()
+    role = str(actor.role or "").strip()
+    if display_name and actor_id:
+        return f"{display_name} ({actor_id}, role={role or 'unknown'})"
+    if actor_id:
+        return f"{actor_id} (role={role or 'unknown'})"
+    if display_name:
+        return f"{display_name} (role={role or 'unknown'})"
+    return role or "unknown"
+
+
+def _failure_summary_for_run(run_service: RunService, run_record: RunRecord) -> dict:
+    return run_service.get_failure_summary(run_record)
+
+
+def _format_run_list_output(
+    runs: list[RunRecord],
+    *,
+    run_service: RunService,
+    filters: dict | None = None,
+) -> str:
+    resolved_filters = {
+        "status": str((filters or {}).get("status", "") or "").strip(),
+        "repo_id": str((filters or {}).get("repo_id", "") or "").strip(),
+        "actor_id": str((filters or {}).get("actor_id", "") or "").strip(),
+        "role": str((filters or {}).get("role", "") or "").strip(),
+    }
+    filter_pairs = [
+        f"{key}={value}"
+        for key, value in resolved_filters.items()
+        if value
+    ]
+    lines = [
+        "# Runs",
+        f"- count: {len(runs)}",
+        f"- filters: {', '.join(filter_pairs) if filter_pairs else 'none'}",
+    ]
+    if not runs:
+        lines.append("- no runs found")
+        return "\n".join(lines)
+
+    lines.append("")
+    for run in list(runs):
+        failure_summary = _failure_summary_for_run(run_service, run)
+        lines.append(
+            f"- {run.run_id} | status={run.status} | repo={run.repo_id or '-'} | actor={_build_run_actor_label(run)}"
+        )
+        lines.append(
+            f"  goal={run.goal or '-'} | started={run.started_at or '-'} | finished={run.finished_at or '-'} | "
+            f"failed_step={failure_summary.get('failed_step') or '-'} | "
+            f"failure_code={failure_summary.get('failure_code') or '-'} | "
+            f"failure_reason={failure_summary.get('failure_reason') or '-'}"
+        )
+    return "\n".join(lines)
+
+
+def _format_run_detail_output(run_record: RunRecord, *, run_service: RunService) -> str:
+    failure_summary = _failure_summary_for_run(run_service, run_record)
+    lines = [
+        "# Run Detail",
+        f"- run_id: {run_record.run_id}",
+        f"- goal: {run_record.goal or '-'}",
+        f"- status: {run_record.status or '-'}",
+        f"- parent_run_id: {run_record.parent_run_id or '-'}",
+        f"- actor: {_build_run_actor_label(run_record)}",
+        f"- repo_id: {run_record.repo_id or '-'}",
+        f"- started_at: {run_record.started_at or '-'}",
+        f"- finished_at: {run_record.finished_at or '-'}",
+        f"- failed_step: {failure_summary.get('failed_step') or '-'}",
+        f"- failure_code: {failure_summary.get('failure_code') or '-'}",
+        f"- failure_reason: {failure_summary.get('failure_reason') or '-'}",
+        f"- log_path: {run_record.log_path or '-'}",
+    ]
+
+    lines.extend(
+        [
+            "",
+            "## SCM",
+            f"- branch: {str(run_record.scm.get('branch_name', '') or '-').strip()}",
+            f"- commit: {str(run_record.scm.get('commit_hash', '') or '-').strip()}",
+            f"- remote: {str(run_record.scm.get('remote_url', '') or '-').strip()}",
+            f"- repo_path: {str(run_record.scm.get('repo_path', '') or '-').strip()}",
+            f"- pr_url: {run_record.pr_url or '-'}",
+            f"- review_url: {run_record.review_url or '-'}",
+        ]
+    )
+
+    lines.append("")
+    lines.append("## Steps")
+    if not list(run_record.steps):
+        lines.append("- none")
+    else:
+        for step in list(run_record.steps):
+            lines.append(
+                f"- {step.name} | status={step.status} | started={step.started_at or '-'} | finished={step.finished_at or '-'}"
+            )
+            if step.message:
+                lines.append(f"  message={step.message}")
+            if step.error is not None:
+                lines.append(
+                    f"  error={step.error.type or 'unexpected'}: {step.error.message}"
+                )
+
+    lines.append("")
+    lines.append("## Policy Decisions")
+    if not list(run_record.policy_decisions):
+        lines.append("- none")
+    else:
+        for decision in list(run_record.policy_decisions):
+            lines.append(
+                f"- {decision.capability} | allowed={decision.allowed} | code={decision.deny_reason_code or '-'} | reason={decision.reason}"
+            )
+
+    return "\n".join(lines)
+
+
+def _run_not_found_result(run_id: str) -> AgentResult:
+    resolved_run_id = str(run_id or "").strip()
+    return AgentResult(
+        agent_name="runs",
+        output_text=(
+            "# Run Not Found\n"
+            f"run_id: {resolved_run_id or '-'}"
+        ),
+        success=False,
+        task_intent="read",
+        repo_context={},
+        metadata={
+            "artifact_type": "run_lookup",
+            "run_id": resolved_run_id,
+        },
+    )
+
+
+def _run_usage_result() -> AgentResult:
+    return AgentResult(
+        agent_name="runs",
+        output_text=(
+            "# Run Explorer\n"
+            "Usage:\n"
+            "- runs list [--status <status>] [--repo-id <repo_id>] [--actor-id <actor_id>] [--role <role>]\n"
+            "- runs show <run_id>\n"
+            "- runs retry <run_id>\n"
+            "- runs cancel <run_id>\n"
+            "- runs review <run_id>\n"
+            "- runs approve <run_id>\n"
+            "- runs reject <run_id>"
+        ),
+        success=False,
+        task_intent="read",
+        repo_context={},
+        metadata={"artifact_type": "run_explorer_usage"},
+    )
+
+
+def _run_explorer_result(
+    *,
+    output_text: str,
+    success: bool,
+    metadata: dict | None = None,
+) -> AgentResult:
+    return AgentResult(
+        agent_name="runs",
+        output_text=output_text,
+        success=success,
+        task_intent="read",
+        repo_context={},
+        metadata=dict(metadata or {}),
+    )
+
+
+def _ensure_run_record_access(
+    *,
+    permission_service: PermissionService,
+    actor_context: ActorContext,
+    run_record: RunRecord,
+) -> PermissionDecision | None:
+    run_actor_id = (
+        str(run_record.actor_context.actor_id or "").strip()
+        if run_record.actor_context is not None
+        else ""
+    )
+    if run_actor_id and run_actor_id == str(actor_context.actor_id or "").strip():
+        return None
+    return permission_service.evaluate(
+        actor_context,
+        "run.read_all",
+        scope=_build_permission_scope(
+            actor_context,
+            repo_id=run_record.repo_id,
+        ),
+    )
+
+
+def _format_retry_result_output(
+    *,
+    source_run_id: str,
+    retried_result: AgentResult,
+) -> str:
+    run_record = retried_result.metadata.get("run_record")
+    new_run_id = ""
+    final_status = "unknown"
+    if isinstance(run_record, RunRecord):
+        new_run_id = run_record.run_id
+        final_status = run_record.status or "unknown"
+    return "\n".join(
+        [
+            "# Run Retry",
+            f"- source_run_id: {source_run_id}",
+            f"- new_run_id: {new_run_id or '-'}",
+            f"- status: {final_status}",
+            "",
+            "Retry executed through the canonical root agent implementation flow.",
+        ]
+    )
+
+
+def _format_cancel_result_output(run_record: RunRecord, *, run_service: RunService) -> str:
+    failure_summary = _failure_summary_for_run(run_service, run_record)
+    return "\n".join(
+        [
+            "# Run Cancelled",
+            f"- run_id: {run_record.run_id}",
+            f"- status: {run_record.status or '-'}",
+            f"- finished_at: {run_record.finished_at or '-'}",
+            f"- failure_code: {failure_summary.get('failure_code') or '-'}",
+            f"- failure_reason: {failure_summary.get('failure_reason') or '-'}",
+            "",
+            "Cancellation is a soft run-state update unless an execution loop adds active interruption support.",
+        ]
+    )
+
+
+def _format_review_result_output(
+    run_record: RunRecord,
+    *,
+    review_url: str,
+    status: str,
+) -> str:
+    return "\n".join(
+        [
+            "# Run Review",
+            f"- run_id: {run_record.run_id}",
+            f"- status: {status}",
+            f"- review_url: {review_url or '-'}",
+        ]
+    )
+
+
+def _format_decision_result_output(run_record: RunRecord) -> str:
+    return "\n".join(
+        [
+            "# Run Decision",
+            f"- run_id: {run_record.run_id}",
+            f"- decision: {run_record.decision or 'pending'}",
+            f"- decided_at: {run_record.decided_at or '-'}",
+            f"- decided_by: {run_record.decided_by or '-'}",
+        ]
+    )
+
+
+def _create_review_for_run(
+    *,
+    run_service: RunService,
+    permission_service: PermissionService,
+    actor_context: ActorContext,
+    run_record: RunRecord,
+) -> AgentResult:
+    branch_name = str(run_record.scm.get("branch_name", "") or "").strip()
+    scope = _build_permission_scope(
+        actor_context,
+        repo_id=run_record.repo_id,
+        branch_name=branch_name,
+    )
+    review_decision = permission_service.evaluate(
+        actor_context,
+        "review.create",
+        scope=scope,
+    )
+    if not review_decision.allowed:
+        run_service.record_policy_decision(run_record.run_id, review_decision)
+        return _permission_block_result("review.create", review_decision)
+
+    if str(run_record.status or "").strip().lower() != "success":
+        return _run_explorer_result(
+            output_text=(
+                "# Run Review Failed\n"
+                f"- run_id: {run_record.run_id}\n"
+                "- reason: only successful published implementation runs can create a review"
+            ),
+            success=False,
+            metadata={
+                "artifact_type": "run_review",
+                "run_record": run_record,
+            },
+        )
+    if not branch_name:
+        return _run_explorer_result(
+            output_text=(
+                "# Run Review Failed\n"
+                f"- run_id: {run_record.run_id}\n"
+                "- reason: branch_name is missing"
+            ),
+            success=False,
+            metadata={
+                "artifact_type": "run_review",
+                "run_record": run_record,
+            },
+        )
+    if not str(run_record.pr_url or "").strip():
+        blocked_decision = _manual_policy_decision(
+            actor_context,
+            "review.create",
+            False,
+            "Crucible review requires a successful pull request for the selected run.",
+            scope=scope,
+            deny_reason_code=DENY_REASON_PR_REQUIRED,
+        )
+        run_service.record_policy_decision(run_record.run_id, blocked_decision)
+        return _permission_block_result("review.create", blocked_decision)
+    if str(run_record.review_url or "").strip():
+        return _run_explorer_result(
+            output_text=_format_review_result_output(
+                run_record,
+                review_url=str(run_record.review_url or "").strip(),
+                status="already_exists",
+            ),
+            success=True,
+            metadata={
+                "artifact_type": "run_review",
+                "run_record": run_record,
+                "review_url": str(run_record.review_url or "").strip(),
+                "review_status": "already_exists",
+            },
+        )
+
+    resolved_repo = resolve_repo(repo_id=run_record.repo_id or None, fallback_root_path=".")
+    review_result = CrucibleService().create_review(
+        _review_repo_name(resolved_repo),
+        branch_name,
+        f"AI Review: {run_record.goal or 'repository update'}",
+        _build_existing_run_review_description(run_record),
+        _configured_crucible_reviewers(),
+    )
+    updated_run_record = run_record
+    if review_result.success and str(review_result.url or "").strip():
+        updated_run_record = run_service.attach_publication(
+            run_record.run_id,
+            review_url=str(review_result.url or "").strip(),
+        )
+    review_status = "created"
+    if review_result.duplicate:
+        review_status = "duplicate"
+    if not review_result.success:
+        review_status = "failed"
+    return _run_explorer_result(
+        output_text=_format_review_result_output(
+            updated_run_record,
+            review_url=str(review_result.url or "").strip(),
+            status=review_status,
+        ),
+        success=review_result.success,
+        metadata={
+            "artifact_type": "run_review",
+            "run_record": updated_run_record,
+            "review_result": review_result,
+            "review_url": str(review_result.url or "").strip(),
+            "review_status": review_status,
+        },
+    )
+
+
+def run_run_explorer_command(
+    user_input: str,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
+    command = _parse_run_explorer_command(user_input)
+    if command is None:
+        return _run_usage_result()
+
+    run_service = RunService(persist=True)
+    filters = dict(command.get("filters", {}) or {})
+    action = str(command.get("action", "") or "").strip().lower()
+    permission_service = PermissionService()
+    own_scope = _build_permission_scope(resolved_actor_context)
+    own_decision = permission_service.evaluate(
+        resolved_actor_context,
+        "run.read_own",
+        scope=own_scope,
+    )
+    if not own_decision.allowed:
+        return _permission_block_result("run.read_own", own_decision)
+
+    if action == "list":
+        requested_actor_id = str(filters.get("actor_id", "") or "").strip()
+        requested_role = str(filters.get("role", "") or "").strip().lower()
+        requires_read_all = bool(requested_role) or (
+            requested_actor_id and requested_actor_id != str(resolved_actor_context.actor_id or "").strip()
+        )
+        if requires_read_all:
+            read_all_decision = permission_service.evaluate(
+                resolved_actor_context,
+                "run.read_all",
+                scope=own_scope,
+            )
+            if not read_all_decision.allowed:
+                return _permission_block_result("run.read_all", read_all_decision)
+        elif not requested_actor_id:
+            filters["actor_id"] = str(resolved_actor_context.actor_id or "").strip()
+
+        runs = run_service.list_runs(
+            status=str(filters.get("status", "") or "").strip(),
+            repo_id=str(filters.get("repo_id", "") or "").strip(),
+            actor_id=str(filters.get("actor_id", "") or "").strip(),
+            role=str(filters.get("role", "") or "").strip(),
+        )
+        return _run_explorer_result(
+            output_text=_format_run_list_output(runs, filters=filters, run_service=run_service),
+            success=True,
+            metadata={
+                "artifact_type": "run_list",
+                "filters": filters,
+                "runs": runs,
+            },
+        )
+
+    if action in {"show", "retry", "cancel", "review", "approve", "reject"}:
+        resolved_run_id = str(command.get("run_id", "") or "").strip()
+        if not resolved_run_id:
+            return _run_usage_result()
+        run_record = (
+            run_service.retry_run(resolved_run_id, resolved_actor_context)
+            if action == "retry"
+            else run_service.load_run(resolved_run_id)
+        )
+        if run_record is None:
+            return _run_not_found_result(resolved_run_id)
+
+        access_decision = _ensure_run_record_access(
+            permission_service=permission_service,
+            actor_context=resolved_actor_context,
+            run_record=run_record,
+        )
+        if access_decision is not None and not access_decision.allowed:
+            return _permission_block_result("run.read_all", access_decision)
+
+        if action == "show":
+            return _run_explorer_result(
+                output_text=_format_run_detail_output(run_record, run_service=run_service),
+                success=True,
+                metadata={
+                    "artifact_type": "run_detail",
+                    "run_record": run_record,
+                },
+            )
+
+        if action == "review":
+            return _create_review_for_run(
+                run_service=run_service,
+                permission_service=permission_service,
+                actor_context=resolved_actor_context,
+                run_record=run_record,
+            )
+
+        if action in {"approve", "reject"}:
+            if str(run_record.status or "").strip().lower() in {"running", "pending"} or not str(run_record.finished_at or "").strip():
+                return _run_explorer_result(
+                    output_text=(
+                        "# Run Decision Failed\n"
+                        f"- run_id: {run_record.run_id}\n"
+                        f"- status: {run_record.status or '-'}\n"
+                        "- reason: only completed runs can be approved or rejected"
+                    ),
+                    success=False,
+                    metadata={
+                        "artifact_type": "run_decision",
+                        "run_record": run_record,
+                    },
+                )
+            decided_run = run_service.decide_run(
+                run_record.run_id,
+                decision=action,
+                actor_context=resolved_actor_context,
+            )
+            if decided_run is None:
+                return _run_not_found_result(run_record.run_id)
+            return _run_explorer_result(
+                output_text=_format_decision_result_output(decided_run),
+                success=True,
+                metadata={
+                    "artifact_type": "run_decision",
+                    "run_record": decided_run,
+                },
+            )
+
+        if action == "retry":
+            retry_decision = permission_service.evaluate(
+                resolved_actor_context,
+                "run.retry",
+                scope=_build_permission_scope(
+                    resolved_actor_context,
+                    repo_id=run_record.repo_id,
+                ),
+            )
+            if not retry_decision.allowed:
+                return _permission_block_result("run.retry", retry_decision)
+
+            retried_result = run_implementation_pipeline(
+                run_record.goal,
+                repo_id=run_record.repo_id or None,
+                real_apply=False,
+                create_pr=False,
+                create_review=False,
+                run_log=True,
+                actor_context=resolved_actor_context,
+                parent_run_id=run_record.run_id,
+            )
+            new_run_record = retried_result.metadata.get("run_record")
+            return _run_explorer_result(
+                output_text=_format_retry_result_output(
+                    source_run_id=run_record.run_id,
+                    retried_result=retried_result,
+                ),
+                success=retried_result.success,
+                metadata={
+                    "artifact_type": "run_retry",
+                    "source_run": run_record,
+                    "retried_result": retried_result,
+                    "run_record": new_run_record,
+                },
+            )
+
+        cancel_decision = permission_service.evaluate(
+            resolved_actor_context,
+            "run.cancel",
+            scope=_build_permission_scope(
+                resolved_actor_context,
+                repo_id=run_record.repo_id,
+            ),
+        )
+        if not cancel_decision.allowed:
+            return _permission_block_result("run.cancel", cancel_decision)
+        if str(run_record.status or "").strip().lower() not in {"running", "pending"}:
+            return _run_explorer_result(
+                output_text=(
+                    "# Run Cancel Failed\n"
+                    f"- run_id: {run_record.run_id}\n"
+                    f"- status: {run_record.status or '-'}\n"
+                    "- reason: only running or pending runs can be cancelled"
+                ),
+                success=False,
+                metadata={
+                    "artifact_type": "run_cancel",
+                    "run_record": run_record,
+                },
+            )
+        cancelled_run = run_service.cancel_run(run_record.run_id, resolved_actor_context)
+        if cancelled_run is None:
+            return _run_not_found_result(run_record.run_id)
+
+        return _run_explorer_result(
+            output_text=_format_cancel_result_output(cancelled_run, run_service=run_service),
+            success=True,
+            metadata={
+                "artifact_type": "run_cancel",
+                "run_record": cancelled_run,
+            },
+        )
+
+    return _run_usage_result()
+
+
 def run_root_agent(
     user_input: str,
     repo_id: str | None = None,
@@ -1034,7 +1767,9 @@ def run_root_agent(
     create_pr: bool = False,
     create_review: bool = False,
     run_log: bool = False,
+    actor_context: ActorContext | None = None,
 ) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
     if implementation_mode or _is_implementation_command(user_input):
         log_line("ROOT AGENT: selected pipeline mode implementation")
         return run_implementation_pipeline(
@@ -1044,21 +1779,51 @@ def run_root_agent(
             create_pr=create_pr,
             create_review=create_review,
             run_log=run_log,
+            actor_context=resolved_actor_context,
+        )
+
+    if _parse_run_explorer_command(user_input) is not None:
+        log_line("ROOT AGENT: selected pipeline mode runs")
+        return run_run_explorer_command(
+            user_input,
+            actor_context=resolved_actor_context,
         )
 
     if _is_lightweight_review_command(user_input):
+        denied = _enforce_capabilities(
+            resolved_actor_context,
+            ["task.review"],
+            repo_id=str(repo_id or "").strip(),
+        )
+        if denied is not None:
+            return _permission_block_result("task.review", denied)
         log_line("ROOT AGENT: selected pipeline mode review_only")
         log_line("ROOT AGENT: /review mode runs spec_agent -> code_agent -> review_agent only")
-        return run_lightweight_review_pipeline(user_input, repo_id=repo_id)
+        return run_lightweight_review_pipeline(user_input, repo_id=repo_id, actor_context=resolved_actor_context)
 
     route = route_request(user_input)
     task_intent = _detect_and_log_task_intent(user_input)
     repo_context = _build_shared_repo_context(user_input, repo_id=repo_id)
 
     if route.route == "jira":
+        denied = _enforce_capabilities(
+            resolved_actor_context,
+            ["task.read", "jira.read"],
+            repo_id=str(repo_id or "").strip(),
+            jira_project=_extract_jira_project(user_input),
+        )
+        if denied is not None:
+            return _permission_block_result(denied.capability, denied, repo_context=repo_context)
         return run_jira_agent(user_input)
 
     if route.route == "spec":
+        denied = _enforce_capabilities(
+            resolved_actor_context,
+            ["spec.generate", "repo.context.read"],
+            repo_id=str(repo_id or "").strip(),
+        )
+        if denied is not None:
+            return _permission_block_result(denied.capability, denied, repo_context=repo_context)
         return _run_spec_agent_with_finalized_repo_context(
             user_input,
             task_intent=task_intent,
@@ -1067,12 +1832,39 @@ def run_root_agent(
         )
 
     if route.route == "code":
+        denied = _enforce_capabilities(
+            resolved_actor_context,
+            ["plan.generate", "repo.context.read"],
+            repo_id=str(repo_id or "").strip(),
+        )
+        if denied is not None:
+            return _permission_block_result(denied.capability, denied, repo_context=repo_context)
         return run_code_agent(user_input, task_intent=task_intent, repo_context=repo_context)
 
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["task.analyze"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        return _permission_block_result(denied.capability, denied, repo_context=repo_context)
     return run_research_agent(user_input)
 
 
-def run_spec_only_pipeline(user_input: str, repo_id: str | None = None) -> AgentResult:
+def run_spec_only_pipeline(
+    user_input: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["spec.generate", "repo.context.read"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        return _permission_block_result(denied.capability, denied)
     task_intent = _detect_and_log_task_intent(user_input, command_mode="spec")
     repo_context = _build_shared_repo_context(user_input, command_mode="spec", repo_id=repo_id)
     log_line("ROOT AGENT: resolved mode spec_only")
@@ -1090,8 +1882,18 @@ def run_spec_to_code_pipeline(
     task_intent: str | None = None,
     command_mode: str = "",
     repo_id: str | None = None,
+    actor_context: ActorContext | None = None,
 ) -> tuple[AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "spec_to_code helper")
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["spec.generate", "plan.generate", "repo.context.read"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        blocked_result = _permission_block_result(denied.capability, denied)
+        return blocked_result, blocked_result
     resolved_task_intent = task_intent or _detect_and_log_task_intent(user_input, command_mode=command_mode)
     repo_context = _build_shared_repo_context(user_input, command_mode=command_mode, repo_id=repo_id)
     log_line("ROOT AGENT: resolved mode spec_to_code")
@@ -1144,8 +1946,18 @@ def run_full_change_pipeline(
     task_intent: str | None = None,
     command_mode: str = "changes",
     repo_id: str | None = None,
+    actor_context: ActorContext | None = None,
 ) -> tuple[AgentResult, AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "change_agent")
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["change.generate"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        blocked_result = _permission_block_result(denied.capability, denied)
+        return blocked_result, blocked_result, blocked_result
     resolved_task_intent = task_intent or _detect_and_log_task_intent(user_input, command_mode=command_mode)
     log_line("ROOT AGENT: resolved mode changes")
     spec_result, code_result = run_spec_to_code_pipeline(
@@ -1153,6 +1965,7 @@ def run_full_change_pipeline(
         task_intent=resolved_task_intent,
         command_mode=command_mode,
         repo_id=repo_id,
+        actor_context=resolved_actor_context,
     )
     repo_context = (
         spec_result.repo_context
@@ -1202,8 +2015,22 @@ def run_full_change_pipeline(
     return spec_result, code_result, change_result
 
 
-def run_full_draft_pipeline(user_input: str, repo_id: str | None = None) -> tuple[AgentResult, AgentResult, AgentResult, AgentResult]:
+def run_full_draft_pipeline(
+    user_input: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> tuple[AgentResult, AgentResult, AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "draft_agent")
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["draft.generate"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        blocked_result = _permission_block_result(denied.capability, denied)
+        return blocked_result, blocked_result, blocked_result, blocked_result
     task_intent = _detect_and_log_task_intent(user_input, command_mode="drafts")
     log_line("ROOT AGENT: resolved mode drafts")
     spec_result, code_result, change_result = run_full_change_pipeline(
@@ -1211,6 +2038,7 @@ def run_full_draft_pipeline(user_input: str, repo_id: str | None = None) -> tupl
         task_intent=task_intent,
         command_mode="drafts",
         repo_id=repo_id,
+        actor_context=resolved_actor_context,
     )
     repo_context = (
         spec_result.repo_context
@@ -1417,6 +2245,12 @@ def _format_run_record_section(run_record: RunRecord | None) -> str:
     ]
     if failed_step:
         lines.append(f"- failed_step: {failed_step}")
+    if run_record.repo_id:
+        lines.append(f"- repo_id: {run_record.repo_id}")
+    if run_record.actor_context is not None:
+        lines.append(f"- actor_id: {run_record.actor_context.actor_id}")
+        lines.append(f"- actor_role: {run_record.actor_context.role}")
+        lines.append(f"- actor_channel: {run_record.actor_context.source_channel}")
     if run_record.log_path:
         lines.append(f"- log_path: {run_record.log_path}")
     if dict(run_record.scm):
@@ -1441,6 +2275,16 @@ def _format_run_record_section(run_record: RunRecord | None) -> str:
                 lines.append(f"  message: {step.message}")
             if step.error is not None:
                 lines.append(f"  error: {step.error.type}: {step.error.message}")
+    if list(run_record.policy_decisions):
+        lines.append("")
+        lines.append("### Policy")
+        for decision in list(run_record.policy_decisions):
+            marker = "allow" if decision.allowed else "deny"
+            lines.append(
+                f"- {decision.capability}: {marker} :: {decision.reason}"
+            )
+            if decision.deny_reason_code:
+                lines.append(f"  code: {decision.deny_reason_code}")
     return "\n".join(lines)
 
 
@@ -1470,6 +2314,12 @@ def _resolve_run_status(implementation_result: ImplementationResult) -> str:
     }:
         base_status = "partial"
 
+    if (
+        base_status == "success"
+        and str(implementation_result.publication_status or "").strip().lower() in {"partial", "failed"}
+    ):
+        base_status = "partial"
+
     run_record = implementation_result.run_record
     if run_record is None:
         return base_status
@@ -1478,6 +2328,27 @@ def _resolve_run_status(implementation_result: ImplementationResult) -> str:
     if base_status == "success" and any(status in {"failed", "partial"} for status in step_statuses):
         return "partial"
     return base_status
+
+
+def _update_publication_status(implementation_result: ImplementationResult) -> None:
+    pr_failed = bool(
+        implementation_result.pull_request_result is not None
+        and not implementation_result.pull_request_result.success
+    )
+    review_failed = bool(str(implementation_result.review_status or "").strip().lower() == "failed")
+    if pr_failed:
+        implementation_result.publication_status = "failed"
+        return
+    if review_failed:
+        implementation_result.publication_status = "partial"
+        return
+    if (
+        implementation_result.pull_request_result is not None
+        and implementation_result.pull_request_result.success
+    ):
+        implementation_result.publication_status = "success"
+        return
+    implementation_result.publication_status = ""
 
 
 def _real_apply_succeeded(apply_result: ApplyResult | None) -> bool:
@@ -1531,7 +2402,7 @@ def _short_diff_summary(diff_result) -> list[str]:
     ]
 
 
-def _build_pull_request_description(result: ImplementationResult) -> str:
+def _build_pull_request_description(result: ImplementationResult, *, run_id: str = "") -> str:
     artifact_summary = result.artifact_summary
     validation_status = result.validation_result.overall_status
     changed_files = artifact_summary.file_paths or [
@@ -1541,8 +2412,20 @@ def _build_pull_request_description(result: ImplementationResult) -> str:
     ]
     changed_files_block = "\n".join(f"- {path}" for path in changed_files) or "- none"
     diff_summary_block = "\n".join(_short_diff_summary(result.final_diff_result or result.dry_run_diff_result))
+    resolved_run_id = str(run_id or "").strip() or (
+        str(result.run_record.run_id).strip()
+        if result.run_record is not None
+        else ""
+    )
     return "\n".join(
         [
+            "## Run",
+            f"- run_id: {resolved_run_id or 'not available'}",
+            f"- status: {result.final_status or 'unknown'}",
+            "",
+            "## Summary",
+            f"- summary: Implement {artifact_summary.goal or 'repository change'}",
+            "",
             "## Artifact Summary",
             f"- type: {artifact_summary.artifact_type}",
             f"- goal: {artifact_summary.goal or 'not specified'}",
@@ -1560,8 +2443,14 @@ def _build_pull_request_description(result: ImplementationResult) -> str:
     )
 
 
-def _build_crucible_review_description(result: ImplementationResult) -> str:
+def _build_crucible_review_description(result: ImplementationResult, *, run_id: str = "") -> str:
     artifact_summary = result.artifact_summary
+    resolved_run_id = str(run_id or "").strip() or (
+        str(result.run_record.run_id).strip()
+        if result.run_record is not None
+        else ""
+    )
+    branch_name = str(result.scm_branch_name or "").strip()
     changed_files = artifact_summary.file_paths or [
         str(item.relative_path).strip()
         for item in list(result.real_apply_result.applied_files if result.real_apply_result is not None else [])
@@ -1574,6 +2463,11 @@ def _build_crucible_review_description(result: ImplementationResult) -> str:
         else ""
     )
     lines = [
+        "## Run",
+        f"- run_id: {resolved_run_id or 'not available'}",
+        f"- summary: Implement {artifact_summary.goal or 'repository change'}",
+        f"- branch_name: {branch_name or 'not available'}",
+        "",
         "## Change Summary",
         f"- goal: {artifact_summary.goal or 'not specified'}",
         f"- artifact_type: {artifact_summary.artifact_type}",
@@ -1595,6 +2489,34 @@ def _build_crucible_review_description(result: ImplementationResult) -> str:
         [
             "## Changed Files",
             changed_files_block,
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _build_existing_run_review_description(run_record: RunRecord) -> str:
+    branch_name = str(run_record.scm.get("branch_name", "") or "").strip()
+    step_summaries = [
+        f"- {step.name}: {step.message}"
+        for step in list(run_record.steps)
+        if str(step.message or "").strip()
+    ]
+    if not step_summaries:
+        step_summaries = ["- no step summary available"]
+
+    lines = [
+        "## Run",
+        f"- run_id: {run_record.run_id}",
+        f"- summary: Implement {run_record.goal or 'repository change'}",
+        f"- branch_name: {branch_name or 'not available'}",
+    ]
+    if run_record.pr_url:
+        lines.append(f"- pr_url: {run_record.pr_url}")
+    lines.extend(
+        [
+            "",
+            "## Implementation Summary",
+            *step_summaries[:5],
         ]
     )
     return "\n".join(lines)
@@ -1631,16 +2553,61 @@ def _implementation_permissions() -> dict[str, bool]:
 
 def _record_policy_decision(
     implementation_result: ImplementationResult,
-    message: str,
+    run_service: RunService,
+    run_id: str,
+    decision: PermissionDecision,
 ) -> None:
-    normalized_message = str(message or "").strip()
-    if normalized_message and normalized_message not in implementation_result.policy_decisions:
-        implementation_result.policy_decisions.append(normalized_message)
+    normalized_decision = PermissionDecision(
+        capability=str(decision.capability or "").strip(),
+        actor_id=str(decision.actor_id or "").strip(),
+        actor_role=str(decision.actor_role or "").strip(),
+        allowed=bool(decision.allowed),
+        reason=str(decision.reason or "").strip(),
+        deny_reason_code=str(decision.deny_reason_code or "").strip(),
+        scope=PermissionScope(
+            repo_id=str(decision.scope.repo_id or "").strip(),
+            jira_project=str(decision.scope.jira_project or "").strip(),
+            branch_name=str(decision.scope.branch_name or "").strip(),
+            branch_type=str(decision.scope.branch_type or "").strip(),
+            source_channel=str(decision.scope.source_channel or "").strip(),
+        ),
+        source=str(decision.source or "").strip(),
+        details=dict(decision.details),
+    )
+    if not any(existing.to_dict() == normalized_decision.to_dict() for existing in list(implementation_result.policy_decisions)):
+        implementation_result.policy_decisions.append(normalized_decision)
+    run_service.record_policy_decision(run_id, normalized_decision)
+
+
+def _manual_policy_decision(
+    actor_context: ActorContext,
+    capability: str,
+    allowed: bool,
+    reason: str,
+    *,
+    scope: PermissionScope | None = None,
+    source: str = "pipeline_policy",
+    details: dict | None = None,
+    deny_reason_code: str = "",
+) -> PermissionDecision:
+    return PermissionDecision(
+        capability=str(capability or "").strip(),
+        actor_id=str(actor_context.actor_id or "").strip(),
+        actor_role=str(actor_context.role or "").strip(),
+        allowed=bool(allowed),
+        reason=str(reason or "").strip(),
+        deny_reason_code=str(deny_reason_code or "").strip(),
+        scope=scope or PermissionScope(source_channel=str(actor_context.source_channel or "").strip()),
+        source=str(source or "").strip(),
+        details=dict(details or {}),
+    )
 
 
 def _ensure_published_change_branch(
     resolved_repo,
     implementation_result: ImplementationResult,
+    *,
+    run_id: str = "",
 ) -> tuple[ImplementationResult, bool, dict]:
     if not _real_apply_succeeded(implementation_result.real_apply_result):
         implementation_result.scm_warnings.append(
@@ -1674,7 +2641,11 @@ def _ensure_published_change_branch(
     branch_name = current_branch
 
     if not branch_name or branch_name == target_branch:
-        branch_name = build_feature_branch_name(implementation_result.artifact_summary.goal or "change")
+        branch_name = (
+            build_run_branch_name(run_id)
+            if str(run_id or "").strip()
+            else build_feature_branch_name(implementation_result.artifact_summary.goal or "change")
+        )
         create_result = scm_service.create_branch(repo_root, branch_name)
         if not create_result.success:
             implementation_result.scm_warnings.append(
@@ -1706,7 +2677,7 @@ def _ensure_published_change_branch(
         implementation_result.scm_warnings.append(add_result.error or "Failed to stage changes for publication.")
         return implementation_result, False, {}
 
-    commit_message = f"AI: {implementation_result.artifact_summary.goal or 'Update repository'}"
+    commit_message = f"AI: implement {implementation_result.artifact_summary.goal or 'repository update'}"
     commit_result = scm_service.commit(repo_root, commit_message)
     if not commit_result.success:
         implementation_result.scm_warnings.append(commit_result.error or "Failed to create commit for publication.")
@@ -1730,6 +2701,8 @@ def _ensure_published_change_branch(
 def _maybe_create_pull_request(
     resolved_repo,
     implementation_result: ImplementationResult,
+    *,
+    run_id: str = "",
 ) -> ImplementationResult:
     branch_name = str(implementation_result.scm_branch_name or "").strip()
     remote_url = str(implementation_result.scm_remote_url or "").strip()
@@ -1745,8 +2718,8 @@ def _maybe_create_pull_request(
         remote_url,
         branch_name,
         target_branch,
-        f"AI: {implementation_result.artifact_summary.goal or 'Update repository'}",
-        _build_pull_request_description(implementation_result),
+        f"AI Implementation: {implementation_result.artifact_summary.goal or 'repository update'}",
+        _build_pull_request_description(implementation_result, run_id=run_id),
     )
     implementation_result.pull_request_result = pull_request_result
     if not pull_request_result.success:
@@ -1759,6 +2732,8 @@ def _maybe_create_pull_request(
 def _maybe_create_crucible_review(
     resolved_repo,
     implementation_result: ImplementationResult,
+    *,
+    run_id: str = "",
 ) -> ImplementationResult:
     if not _real_apply_succeeded(implementation_result.real_apply_result):
         implementation_result.review_warnings.append(
@@ -1778,7 +2753,7 @@ def _maybe_create_crucible_review(
         _review_repo_name(resolved_repo),
         branch_name,
         f"AI Review: {implementation_result.artifact_summary.goal or 'Update repository'}",
-        _build_crucible_review_description(implementation_result),
+        _build_crucible_review_description(implementation_result, run_id=run_id),
         _configured_crucible_reviewers(),
     )
     implementation_result.crucible_review_result = review_result
@@ -1802,6 +2777,11 @@ def _format_implementation_result_text(result: ImplementationResult) -> str:
     lines = [
         "# Implementation Result",
         f"Status: {result.final_status}",
+        "",
+        "## Actor",
+        f"- actor_id: {result.actor_context.actor_id if result.actor_context is not None else 'n/a'}",
+        f"- role: {result.actor_context.role if result.actor_context is not None else 'n/a'}",
+        f"- source_channel: {result.actor_context.source_channel if result.actor_context is not None else 'n/a'}",
         "",
         "## Artifact",
         f"- type: {artifact_summary.artifact_type}",
@@ -1835,7 +2815,10 @@ def _format_implementation_result_text(result: ImplementationResult) -> str:
             ]
         )
         for decision in list(result.policy_decisions):
-            lines.append(f"- {decision}")
+            marker = "allow" if decision.allowed else "deny"
+            lines.append(f"- {decision.capability}: {marker} :: {decision.reason}")
+            if decision.deny_reason_code:
+                lines.append(f"  code: {decision.deny_reason_code}")
 
     if result.real_apply_result is not None:
         lines.extend(
@@ -1892,6 +2875,7 @@ def _build_failed_implementation_agent_result(
     repo_context: dict | None,
     run_record: RunRecord,
     message: str,
+    permission_decision: PermissionDecision | None = None,
 ) -> AgentResult:
     output_lines = [
         "# Implementation Result",
@@ -1910,6 +2894,7 @@ def _build_failed_implementation_agent_result(
         metadata={
             "artifact_type": "implementation_run_failure",
             "run_record": run_record,
+            "permission_decision": permission_decision,
         },
     )
 
@@ -1918,16 +2903,30 @@ def run_implementation_pipeline(
     user_input: str,
     *,
     repo_id: str | None = None,
+    parent_run_id: str = "",
     real_apply: bool = False,
     create_pr: bool = False,
     create_review: bool = False,
     run_log: bool = False,
+    actor_context: ActorContext | None = None,
 ) -> AgentResult:
     implementation_request = _strip_implementation_prefix(user_input)
     resolved_repo = resolve_repo(repo_id=repo_id, fallback_root_path=".")
     resolved_repo_id = str(resolved_repo.repo_id).strip()
+    resolved_actor_context = actor_context or default_actor_context()
+    base_permission_scope = PermissionScope(
+        repo_id=resolved_repo_id,
+        source_channel=str(resolved_actor_context.source_channel or "").strip(),
+    )
+    permission_service = PermissionService()
     run_service = RunService(persist=run_log)
-    run_record = run_service.start_run(implementation_request or user_input)
+    run_record = run_service.start_run(
+        implementation_request or user_input,
+        parent_run_id=parent_run_id,
+        repo_id=resolved_repo_id,
+        actor_context=resolved_actor_context,
+        repo_metadata=resolved_repo,
+    )
     run_id = run_record.run_id
     temp_workspace_service = TempWorkspaceService()
     temp_workspace_context = None
@@ -1944,11 +2943,28 @@ def run_implementation_pipeline(
     spec_result = None
     implementation_result = None
     permissions = _implementation_permissions()
+    dry_run_decision = permission_service.evaluate(
+        resolved_actor_context,
+        "implementation.dry_run",
+        scope=base_permission_scope,
+    )
+    if not dry_run_decision.allowed:
+        run_service.record_policy_decision(run_id, dry_run_decision)
+        run_record = run_service.finish_run(run_id, "partial")
+        return _build_failed_implementation_agent_result(
+            repo_id=resolved_repo_id,
+            task_intent="modify",
+            repo_context={},
+            run_record=run_record,
+            message=f"Implementation dry-run denied: {dry_run_decision.reason}",
+            permission_decision=dry_run_decision,
+        )
     try:
         run_service.start_step(run_id, "draft")
         spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(
             implementation_request,
             repo_id=resolved_repo_id,
+            actor_context=resolved_actor_context,
         )
         artifact_summary, dry_run_apply_input, dry_run_apply_result = _prepare_implementation_apply_artifact(
             resolved_repo_id,
@@ -1977,84 +2993,111 @@ def run_implementation_pipeline(
             dry_run_diff_result=dry_run_diff_result,
             candidate_apply_result=candidate_apply_result,
             validation_result=validation_result,
+            actor_context=resolved_actor_context,
             temp_workspace_warnings=temp_workspace_warnings,
             policy_decisions=[],
+            publication_status="",
             final_status="dry_run_complete",
         )
 
+        validate_decision = permission_service.evaluate(
+            resolved_actor_context,
+            "implementation.validate",
+            scope=base_permission_scope,
+        )
         run_service.start_step(run_id, "validation")
-        scm_service = ScmService()
-        repo_root_path = str(getattr(resolved_repo, "root_path", "") or "").strip()
-        clean_result = None
-        if (Path(repo_root_path) / ".git").exists() and scm_service.detect_git_repo(repo_root_path):
-            clean_result = scm_service.is_clean(repo_root_path)
-        if clean_result is not None and not clean_result.success:
+        if not validate_decision.allowed:
+            _record_policy_decision(
+                implementation_result,
+                run_service,
+                run_id,
+                validate_decision,
+            )
             validation_result = _build_failed_validation_result(
                 resolved_repo_id,
-                clean_result.error or "Repository must be clean before apply.",
+                validate_decision.reason,
             )
-            temp_workspace_warnings.append(validation_result.errors[0])
-            if implementation_result is not None:
-                _record_policy_decision(
-                    implementation_result,
-                    validation_result.errors[0],
-                )
+            validation_path_exists = False
             run_service.fail_step(
                 run_id,
                 _build_execution_error(
-                    "dirty_repo",
-                    validation_result.errors[0],
+                    "validation_failed",
+                    validate_decision.reason,
                     "validation",
-                    details={
-                        "changed_files": list(clean_result.data.get("changed_files", [])),
-                    },
+                    details={"deny_reason_code": validate_decision.deny_reason_code},
                 ),
             )
         else:
-            try:
-                temp_workspace_context = temp_workspace_service.create_workspace(resolved_repo_id)
-                _artifact_summary, _candidate_apply_input, candidate_apply_result = _prepare_implementation_apply_artifact(
+            scm_service = ScmService()
+            repo_root_path = str(getattr(resolved_repo, "root_path", "") or "").strip()
+            clean_result = None
+            if (Path(repo_root_path) / ".git").exists() and scm_service.detect_git_repo(repo_root_path):
+                clean_result = scm_service.is_clean(repo_root_path)
+            if clean_result is not None and not clean_result.success:
+                validation_result = _build_failed_validation_result(
                     resolved_repo_id,
-                    change_result,
-                    draft_result,
-                    dry_run=False,
-                    allow_real_writes=True,
-                    storage_path=temp_workspace_context.registry_path,
+                    clean_result.error or "Repository must be clean before apply.",
                 )
-                validation_result = ValidationService(
-                    storage_path=temp_workspace_context.registry_path
-                ).run_validation(resolved_repo_id)
-                validation_path_exists = _validation_path_exists(validation_result)
-            except Exception as exc:
-                message = f"Temp workspace validation failed to start: {exc}"
-                validation_result = _build_failed_validation_result(resolved_repo_id, message)
-                temp_workspace_warnings.append(message)
+                temp_workspace_warnings.append(validation_result.errors[0])
+                if implementation_result is not None:
+                    _record_policy_decision(
+                        implementation_result,
+                        run_service,
+                        run_id,
+                        _manual_policy_decision(
+                            resolved_actor_context,
+                            "implementation.apply",
+                            False,
+                            validation_result.errors[0],
+                            scope=base_permission_scope,
+                            deny_reason_code=DENY_REASON_DIRTY_REPO,
+                            details={
+                                "changed_files": list(clean_result.data.get("changed_files", [])),
+                            },
+                        ),
+                    )
                 run_service.fail_step(
                     run_id,
                     _build_execution_error(
-                        "unexpected",
-                        message,
+                        "dirty_repo",
+                        validation_result.errors[0],
                         "validation",
-                        details={"exception_class": exc.__class__.__name__},
+                        details={
+                            "changed_files": list(clean_result.data.get("changed_files", [])),
+                        },
                     ),
                 )
+            else:
+                try:
+                    temp_workspace_context = temp_workspace_service.create_workspace(resolved_repo_id)
+                    _artifact_summary, _candidate_apply_input, candidate_apply_result = _prepare_implementation_apply_artifact(
+                        resolved_repo_id,
+                        change_result,
+                        draft_result,
+                        dry_run=False,
+                        allow_real_writes=True,
+                        storage_path=temp_workspace_context.registry_path,
+                    )
+                    validation_result = ValidationService(
+                        storage_path=temp_workspace_context.registry_path
+                    ).run_validation(resolved_repo_id)
+                    validation_path_exists = _validation_path_exists(validation_result)
+                except Exception as exc:
+                    message = f"Temp workspace validation failed to start: {exc}"
+                    validation_result = _build_failed_validation_result(resolved_repo_id, message)
+                    temp_workspace_warnings.append(message)
+                    run_service.fail_step(
+                        run_id,
+                        _build_execution_error(
+                            "unexpected",
+                            message,
+                            "validation",
+                            details={"exception_class": exc.__class__.__name__},
+                        ),
+                    )
 
-            validation_step_status, validation_step_message = _step_outcome(
-                "success"
-                if (
-                    candidate_apply_result is not None
-                    and not candidate_apply_result.errors
-                    and not candidate_apply_result.skipped_files
-                    and validation_path_exists
-                    and validation_result.overall_status == "success"
-                )
-                else (
-                    "failed"
-                    if validation_result.overall_status == "failed"
-                    else "partial"
-                ),
-                (
-                    "Candidate workspace validation succeeded."
+                validation_step_status, validation_step_message = _step_outcome(
+                    "success"
                     if (
                         candidate_apply_result is not None
                         and not candidate_apply_result.errors
@@ -2063,32 +3106,46 @@ def run_implementation_pipeline(
                         and validation_result.overall_status == "success"
                     )
                     else (
-                        "Candidate validation path is missing."
-                        if not validation_path_exists
-                        else (
-                            "Candidate apply was incomplete before validation."
-                            if candidate_apply_result is not None and (candidate_apply_result.errors or candidate_apply_result.skipped_files)
-                            else "; ".join(list(validation_result.errors) or list(validation_result.warnings) or ["Candidate validation did not succeed."])
+                        "failed"
+                        if validation_result.overall_status == "failed"
+                        else "partial"
+                    ),
+                    (
+                        "Candidate workspace validation succeeded."
+                        if (
+                            candidate_apply_result is not None
+                            and not candidate_apply_result.errors
+                            and not candidate_apply_result.skipped_files
+                            and validation_path_exists
+                            and validation_result.overall_status == "success"
                         )
-                    )
-                ),
-            )
-            current_run_record = run_service.get_run(run_id)
-            if list(current_run_record.steps) and current_run_record.steps[-1].status == "running":
-                if validation_step_status == "failed":
-                    run_service.fail_step(
-                        run_id,
-                        _build_execution_error(
-                            "validation_failed",
-                            validation_step_message,
-                            "validation",
-                            details={
-                                "validation_status": validation_result.overall_status,
-                            },
-                        ),
-                    )
-                else:
-                    run_service.finish_step(run_id, validation_step_status, validation_step_message)
+                        else (
+                            "Candidate validation path is missing."
+                            if not validation_path_exists
+                            else (
+                                "Candidate apply was incomplete before validation."
+                                if candidate_apply_result is not None and (candidate_apply_result.errors or candidate_apply_result.skipped_files)
+                                else "; ".join(list(validation_result.errors) or list(validation_result.warnings) or ["Candidate validation did not succeed."])
+                            )
+                        )
+                    ),
+                )
+                current_run_record = run_service.get_run(run_id)
+                if list(current_run_record.steps) and current_run_record.steps[-1].status == "running":
+                    if validation_step_status == "failed":
+                        run_service.fail_step(
+                            run_id,
+                            _build_execution_error(
+                                "validation_failed",
+                                validation_step_message,
+                                "validation",
+                                details={
+                                    "validation_status": validation_result.overall_status,
+                                },
+                            ),
+                        )
+                    else:
+                        run_service.finish_step(run_id, validation_step_status, validation_step_message)
 
         implementation_result.candidate_apply_result = candidate_apply_result
         implementation_result.validation_result = validation_result
@@ -2109,7 +3166,16 @@ def run_implementation_pipeline(
             if real_apply:
                 _record_policy_decision(
                     implementation_result,
-                    "Real apply blocked because no apply-ready file operations were produced.",
+                    run_service,
+                    run_id,
+                    _manual_policy_decision(
+                        resolved_actor_context,
+                        "implementation.apply",
+                        False,
+                        "Real apply blocked because no apply-ready file operations were produced.",
+                        scope=base_permission_scope,
+                        deny_reason_code=DENY_REASON_POLICY_BLOCK,
+                    ),
                 )
         elif candidate_apply_result is None:
             implementation_result.final_status = "dirty_repo_blocked" if validation_result.errors and any("clean" in item.lower() for item in validation_result.errors) else (
@@ -2120,7 +3186,16 @@ def run_implementation_pipeline(
             if real_apply and implementation_result.final_status != "dirty_repo_blocked":
                 _record_policy_decision(
                     implementation_result,
-                    "Real apply blocked because candidate validation could not be executed.",
+                    run_service,
+                    run_id,
+                    _manual_policy_decision(
+                        resolved_actor_context,
+                        "implementation.apply",
+                        False,
+                        "Real apply blocked because candidate validation could not be executed.",
+                        scope=base_permission_scope,
+                        deny_reason_code=DENY_REASON_POLICY_BLOCK,
+                    ),
                 )
         elif candidate_apply_result.errors or candidate_apply_result.skipped_files:
             implementation_result.final_status = (
@@ -2131,7 +3206,16 @@ def run_implementation_pipeline(
             if real_apply:
                 _record_policy_decision(
                     implementation_result,
-                    "Real apply blocked because candidate apply did not complete cleanly.",
+                    run_service,
+                    run_id,
+                    _manual_policy_decision(
+                        resolved_actor_context,
+                        "implementation.apply",
+                        False,
+                        "Real apply blocked because candidate apply did not complete cleanly.",
+                        scope=base_permission_scope,
+                        deny_reason_code=DENY_REASON_POLICY_BLOCK,
+                    ),
                 )
         elif not validation_path_exists:
             implementation_result.final_status = (
@@ -2142,7 +3226,16 @@ def run_implementation_pipeline(
             if real_apply:
                 _record_policy_decision(
                     implementation_result,
-                    "Real apply blocked because no runnable validation path was available.",
+                    run_service,
+                    run_id,
+                    _manual_policy_decision(
+                        resolved_actor_context,
+                        "implementation.apply",
+                        False,
+                        "Real apply blocked because no runnable validation path was available.",
+                        scope=base_permission_scope,
+                        deny_reason_code=DENY_REASON_MISSING_VALIDATION,
+                    ),
                 )
         elif validation_result.overall_status != "success":
             implementation_result.final_status = (
@@ -2153,168 +3246,314 @@ def run_implementation_pipeline(
             if real_apply:
                 _record_policy_decision(
                     implementation_result,
-                    "Real apply blocked because candidate validation did not succeed.",
+                    run_service,
+                    run_id,
+                    _manual_policy_decision(
+                        resolved_actor_context,
+                        "implementation.apply",
+                        False,
+                        "Real apply blocked because candidate validation did not succeed.",
+                        scope=base_permission_scope,
+                        deny_reason_code=DENY_REASON_MISSING_VALIDATION,
+                    ),
                 )
         elif not real_apply:
             implementation_result.final_status = "dry_run_complete"
-        elif not permissions["allow_real_apply"]:
-            implementation_result.final_status = "real_apply_blocked_permission_denied"
-            _record_policy_decision(
-                implementation_result,
-                "Real apply blocked by policy: allow_real_apply=false.",
-            )
         else:
-            _artifact_summary, real_apply_input, real_apply_result = _prepare_implementation_apply_artifact(
-                resolved_repo_id,
-                change_result,
-                draft_result,
-                dry_run=False,
-                allow_real_writes=True,
+            apply_decision = permission_service.evaluate(
+                resolved_actor_context,
+                "implementation.apply",
+                scope=base_permission_scope,
             )
-            final_diff_result = DiffService().build_diff(
-                repo_id=resolved_repo_id,
-                apply_input=real_apply_input,
-                apply_result=real_apply_result,
-            )
-            implementation_result.real_apply_result = real_apply_result
-            implementation_result.final_diff_result = final_diff_result
-            if not _real_apply_succeeded(real_apply_result):
-                implementation_result.final_status = "apply_failed"
-                run_service.fail_step(
+            if not permissions["allow_real_apply"]:
+                apply_decision = PermissionDecision(
+                    capability="implementation.apply",
+                    actor_id=resolved_actor_context.actor_id,
+                    actor_role=resolved_actor_context.role,
+                    allowed=False,
+                    reason="Real apply blocked by config: allow_real_apply=false.",
+                    deny_reason_code=DENY_REASON_POLICY_BLOCK,
+                    scope=base_permission_scope,
+                    source="config",
+                )
+            if not apply_decision.allowed:
+                implementation_result.final_status = "real_apply_blocked_permission_denied"
+                _record_policy_decision(
+                    implementation_result,
+                    run_service,
                     run_id,
-                    _build_execution_error(
-                        "apply_failed",
-                        "; ".join(list(real_apply_result.errors) or ["Real apply did not complete cleanly."]),
-                        "apply",
-                        details={
-                            "skipped_files": len(real_apply_result.skipped_files),
-                            "applied_files": len(real_apply_result.applied_files),
-                        },
-                    ),
+                    apply_decision,
                 )
             else:
-                implementation_result.final_status = "applied"
-                current_run_record = run_service.get_run(run_id)
-                if list(current_run_record.steps) and current_run_record.steps[-1].status == "running":
-                    run_service.finish_step(
+                _artifact_summary, real_apply_input, real_apply_result = _prepare_implementation_apply_artifact(
+                    resolved_repo_id,
+                    change_result,
+                    draft_result,
+                    dry_run=False,
+                    allow_real_writes=True,
+                )
+                final_diff_result = DiffService().build_diff(
+                    repo_id=resolved_repo_id,
+                    apply_input=real_apply_input,
+                    apply_result=real_apply_result,
+                )
+                implementation_result.real_apply_result = real_apply_result
+                implementation_result.final_diff_result = final_diff_result
+                if not _real_apply_succeeded(real_apply_result):
+                    implementation_result.final_status = "apply_failed"
+                    run_service.fail_step(
                         run_id,
-                        "success",
-                        f"Real apply completed with {len(real_apply_result.applied_files)} applied file(s).",
+                        _build_execution_error(
+                            "apply_failed",
+                            "; ".join(list(real_apply_result.errors) or ["Real apply did not complete cleanly."]),
+                            "apply",
+                            details={
+                                "skipped_files": len(real_apply_result.skipped_files),
+                                "applied_files": len(real_apply_result.applied_files),
+                            },
+                        ),
                     )
-                branch_ready = False
-                scm_data: dict = {}
-                pr_requested = bool(create_pr)
-                review_requested = bool(create_review)
-                pr_allowed = bool(pr_requested and permissions["allow_pr_creation"])
-                review_allowed = bool(review_requested and permissions["allow_review_creation"])
-                pr_created = False
-
-                if pr_requested and not permissions["allow_pr_creation"]:
-                    _record_policy_decision(
-                        implementation_result,
-                        "Pull request creation blocked by policy: allow_pr_creation=false.",
-                    )
-                if review_requested and not permissions["allow_review_creation"]:
-                    _record_policy_decision(
-                        implementation_result,
-                        "Crucible review creation blocked by policy: allow_review_creation=false.",
-                    )
-                if review_requested and pr_requested and not permissions["allow_pr_creation"]:
-                    _record_policy_decision(
-                        implementation_result,
-                        "Crucible review blocked because pull request creation was requested but is not permitted.",
-                    )
-                    review_allowed = False
-
-                if pr_allowed or review_allowed:
-                    run_service.start_step(run_id, "commit_push")
-                    implementation_result, branch_ready, scm_data = _ensure_published_change_branch(
-                        resolved_repo,
-                        implementation_result,
-                    )
-                    if branch_ready:
-                        run_service.attach_scm(run_id, scm_data)
+                else:
+                    implementation_result.final_status = "applied"
+                    current_run_record = run_service.get_run(run_id)
+                    if list(current_run_record.steps) and current_run_record.steps[-1].status == "running":
                         run_service.finish_step(
                             run_id,
                             "success",
-                            f"Published branch {implementation_result.scm_branch_name or 'n/a'} to {implementation_result.scm_remote_url or 'origin'}.",
+                            f"Real apply completed with {len(real_apply_result.applied_files)} applied file(s).",
                         )
-                    else:
+                    branch_ready = False
+                    scm_data: dict = {}
+                    pr_requested = bool(create_pr)
+                    review_requested = bool(create_review or pr_requested)
+                    pr_decision = permission_service.evaluate(
+                        resolved_actor_context,
+                        "pr.create",
+                        scope=base_permission_scope,
+                    )
+                    review_decision = permission_service.evaluate(
+                        resolved_actor_context,
+                        "review.create",
+                        scope=base_permission_scope,
+                    )
+                    if pr_requested and not permissions["allow_pr_creation"]:
+                        pr_decision = PermissionDecision(
+                            capability="pr.create",
+                            actor_id=resolved_actor_context.actor_id,
+                            actor_role=resolved_actor_context.role,
+                            allowed=False,
+                            reason="Pull request creation blocked by config: allow_pr_creation=false.",
+                            deny_reason_code=DENY_REASON_POLICY_BLOCK,
+                            scope=base_permission_scope,
+                            source="config",
+                        )
+                    if review_requested and not permissions["allow_review_creation"]:
+                        review_decision = PermissionDecision(
+                            capability="review.create",
+                            actor_id=resolved_actor_context.actor_id,
+                            actor_role=resolved_actor_context.role,
+                            allowed=False,
+                            reason="Crucible review creation blocked by config: allow_review_creation=false.",
+                            deny_reason_code=DENY_REASON_POLICY_BLOCK,
+                            scope=base_permission_scope,
+                            source="config",
+                        )
+                    pr_allowed = bool(pr_requested and pr_decision.allowed)
+                    review_allowed = bool(review_requested and review_decision.allowed)
+                    pr_created = False
+                    implementation_result.review_status = (
+                        "skipped"
+                        if review_requested
+                        else ""
+                    )
+                    implementation_result.review_error = ""
+
+                    if pr_requested and not pr_decision.allowed:
                         _record_policy_decision(
                             implementation_result,
-                            "; ".join(
-                                list(implementation_result.scm_warnings)
-                                or ["Publication skipped because no git remote or branch publication context was available."]
-                            ),
-                        )
-                        run_service.fail_step(
+                            run_service,
                             run_id,
-                            _build_execution_error(
-                                "scm_failed",
-                                "; ".join(list(implementation_result.scm_warnings) or ["Commit/push publication was not completed."]),
-                                "commit_push",
-                                details=scm_data,
-                            ),
+                            pr_decision,
                         )
-                if pr_requested and branch_ready and pr_allowed:
-                    run_service.start_step(run_id, "pull_request")
-                if pr_requested and branch_ready and pr_allowed:
-                    implementation_result = _maybe_create_pull_request(
-                        resolved_repo,
-                        implementation_result,
-                    )
-                if pr_requested and branch_ready and pr_allowed:
-                    if implementation_result.pull_request_result is not None and implementation_result.pull_request_result.success:
-                        pr_created = True
-                        run_service.finish_step(
-                            run_id,
-                            "success",
-                            implementation_result.pull_request_result.url or "Pull request created.",
-                        )
-                    else:
+                    if review_requested and not review_decision.allowed:
+                        implementation_result.review_status = "skipped"
+                        implementation_result.review_error = review_decision.reason
                         _record_policy_decision(
                             implementation_result,
-                            "Crucible review blocked because pull request creation failed.",
-                        )
-                        run_service.fail_step(
+                            run_service,
                             run_id,
-                            _build_execution_error(
-                                "pr_failed",
-                                "; ".join(list(implementation_result.scm_warnings) or ["Pull request was not created."]),
-                                "pull_request",
+                            review_decision,
+                        )
+                    if review_requested and pr_requested and not pr_decision.allowed:
+                        review_allowed = False
+                        implementation_result.review_status = "skipped"
+                        implementation_result.review_error = "Crucible review blocked because pull request creation was requested but denied."
+                        _record_policy_decision(
+                            implementation_result,
+                            run_service,
+                            run_id,
+                            _manual_policy_decision(
+                                resolved_actor_context,
+                                "review.create",
+                                False,
+                                "Crucible review blocked because pull request creation was requested but denied.",
+                                scope=base_permission_scope,
+                                deny_reason_code=DENY_REASON_PR_REQUIRED,
                             ),
                         )
-                review_ready = bool(review_requested and review_allowed and branch_ready)
-                if review_requested and pr_requested and not pr_created:
-                    review_ready = False
-                if review_requested and pr_requested and not pr_created:
-                    _record_policy_decision(
-                        implementation_result,
-                        "Crucible review skipped because no pull request was created successfully.",
-                    )
-                if review_requested and branch_ready and review_ready:
-                    run_service.start_step(run_id, "review")
-                if review_requested and branch_ready and review_ready:
-                    implementation_result = _maybe_create_crucible_review(
-                        resolved_repo,
-                        implementation_result,
-                    )
-                if review_requested and branch_ready and review_ready:
-                    if implementation_result.crucible_review_result is not None and implementation_result.crucible_review_result.success:
-                        run_service.finish_step(
-                            run_id,
-                            "success",
-                            implementation_result.crucible_review_result.url or "Crucible review created.",
+
+                    if pr_allowed or review_allowed:
+                        run_service.start_step(run_id, "commit_push")
+                        implementation_result, branch_ready, scm_data = _ensure_published_change_branch(
+                            resolved_repo,
+                            implementation_result,
+                            run_id=run_id,
                         )
-                    else:
-                        run_service.fail_step(
+                        if branch_ready:
+                            run_service.attach_scm(run_id, scm_data)
+                            run_service.finish_step(
+                                run_id,
+                                "success",
+                                f"Published branch {implementation_result.scm_branch_name or 'n/a'} to {implementation_result.scm_remote_url or 'origin'}.",
+                            )
+                        else:
+                            _record_policy_decision(
+                                implementation_result,
+                                run_service,
+                                run_id,
+                                _manual_policy_decision(
+                                    resolved_actor_context,
+                                    "scm.push",
+                                    False,
+                                    "; ".join(
+                                        list(implementation_result.scm_warnings)
+                                        or ["Publication skipped because no git remote or branch publication context was available."]
+                                    ),
+                                    scope=PermissionScope(
+                                        repo_id=resolved_repo_id,
+                                        branch_name=str(implementation_result.scm_branch_name or "").strip(),
+                                        source_channel=str(resolved_actor_context.source_channel or "").strip(),
+                                    ),
+                                    deny_reason_code=DENY_REASON_MISSING_REMOTE,
+                                    details=scm_data,
+                                ),
+                            )
+                            run_service.fail_step(
+                                run_id,
+                                _build_execution_error(
+                                    "scm_failed",
+                                    "; ".join(list(implementation_result.scm_warnings) or ["Commit/push publication was not completed."]),
+                                    "commit_push",
+                                    details=scm_data,
+                                ),
+                            )
+                    if pr_requested and branch_ready and pr_allowed:
+                        run_service.start_step(run_id, "pull_request")
+                    if pr_requested and branch_ready and pr_allowed:
+                        implementation_result = _maybe_create_pull_request(
+                            resolved_repo,
+                            implementation_result,
+                            run_id=run_id,
+                        )
+                    if pr_requested and branch_ready and pr_allowed:
+                        if implementation_result.pull_request_result is not None and implementation_result.pull_request_result.success:
+                            pr_created = True
+                            run_service.attach_publication(
+                                run_id,
+                                pr_url=implementation_result.pull_request_result.url,
+                            )
+                            run_service.finish_step(
+                                run_id,
+                                "success",
+                                implementation_result.pull_request_result.url or "Pull request created.",
+                            )
+                        else:
+                            implementation_result.review_status = "skipped"
+                            implementation_result.review_error = "Crucible review blocked because pull request creation failed."
+                            _record_policy_decision(
+                                implementation_result,
+                                run_service,
+                                run_id,
+                                _manual_policy_decision(
+                                    resolved_actor_context,
+                                    "review.create",
+                                    False,
+                                    "Crucible review blocked because pull request creation failed.",
+                                    scope=PermissionScope(
+                                        repo_id=resolved_repo_id,
+                                        branch_name=str(implementation_result.scm_branch_name or "").strip(),
+                                        source_channel=str(resolved_actor_context.source_channel or "").strip(),
+                                    ),
+                                    deny_reason_code=DENY_REASON_PR_REQUIRED,
+                                ),
+                            )
+                            run_service.fail_step(
+                                run_id,
+                                _build_execution_error(
+                                    "pr_failed",
+                                    "; ".join(list(implementation_result.scm_warnings) or ["Pull request was not created."]),
+                                    "pull_request",
+                                ),
+                            )
+                    review_ready = bool(review_requested and review_allowed and branch_ready)
+                    if review_requested and pr_requested and not pr_created:
+                        review_ready = False
+                        implementation_result.review_status = "skipped"
+                        implementation_result.review_error = "Crucible review skipped because no pull request was created successfully."
+                    if review_requested and pr_requested and not pr_created:
+                        _record_policy_decision(
+                            implementation_result,
+                            run_service,
                             run_id,
-                            _build_execution_error(
-                                "review_failed",
-                                "; ".join(list(implementation_result.review_warnings) or ["Crucible review was not created."]),
-                                "review",
+                            _manual_policy_decision(
+                                resolved_actor_context,
+                                "review.create",
+                                False,
+                                "Crucible review skipped because no pull request was created successfully.",
+                                scope=PermissionScope(
+                                    repo_id=resolved_repo_id,
+                                    branch_name=str(implementation_result.scm_branch_name or "").strip(),
+                                    source_channel=str(resolved_actor_context.source_channel or "").strip(),
+                                ),
+                                deny_reason_code=DENY_REASON_PR_REQUIRED,
                             ),
                         )
+                    if review_requested and branch_ready and review_ready:
+                        run_service.start_step(run_id, "review")
+                    if review_requested and branch_ready and review_ready:
+                        implementation_result = _maybe_create_crucible_review(
+                            resolved_repo,
+                            implementation_result,
+                            run_id=run_id,
+                        )
+                    if review_requested and branch_ready and review_ready:
+                        if implementation_result.crucible_review_result is not None and implementation_result.crucible_review_result.success:
+                            implementation_result.review_status = "success"
+                            implementation_result.review_error = ""
+                            run_service.attach_publication(
+                                run_id,
+                                review_url=implementation_result.crucible_review_result.url,
+                            )
+                            run_service.finish_step(
+                                run_id,
+                                "success",
+                                implementation_result.crucible_review_result.url or "Crucible review created.",
+                            )
+                        else:
+                            implementation_result.review_status = "failed"
+                            implementation_result.review_error = "; ".join(
+                                list(implementation_result.review_warnings)
+                                or ["Crucible review was not created."]
+                            )
+                            run_service.fail_step(
+                                run_id,
+                                _build_execution_error(
+                                    "review_failed",
+                                    "; ".join(list(implementation_result.review_warnings) or ["Crucible review was not created."]),
+                                    "review",
+                                ),
+                            )
+                    _update_publication_status(implementation_result)
     except Exception as exc:
         current_step = _current_step_name(run_service, run_id)
         current_run_record = run_service.get_run(run_id)
@@ -2381,7 +3620,14 @@ def run_implementation_pipeline(
         or spec_result.repo_context
         or {}
     )
+    _update_publication_status(implementation_result)
     implementation_result.run_record = run_service.get_run(run_id)
+    persisted_diff_result = implementation_result.final_diff_result or implementation_result.dry_run_diff_result
+    run_service.persist_diff_result(run_id, persisted_diff_result)
+    run_service.persist_review_comments(
+        run_id,
+        ReviewCommentService().generate_comments(persisted_diff_result),
+    )
     return AgentResult(
         agent_name="implementation",
         output_text=_format_implementation_result_text(implementation_result),
@@ -2396,6 +3642,8 @@ def run_implementation_pipeline(
             "artifact_type": "implementation_result",
             "implementation_result": implementation_result,
             "run_record": implementation_result.run_record,
+            "actor_context": implementation_result.actor_context,
+            "policy_decisions": implementation_result.policy_decisions,
             "spec_result": spec_result,
             "code_result": code_result,
             "change_result": change_result,
@@ -2479,12 +3727,27 @@ def _draft_means_already_applied(draft_result: AgentResult) -> bool:
 def run_full_review_pipeline(
     user_input: str,
     repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
 ) -> tuple[AgentResult, AgentResult, AgentResult, AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "repair/change/draft review pipeline")
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["task.review"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        blocked_result = _permission_block_result(denied.capability, denied)
+        return blocked_result, blocked_result, blocked_result, blocked_result, blocked_result
     task_intent = _detect_and_log_task_intent(user_input)
     log_line("ROOT AGENT: resolved mode full_review")
     max_repair_attempts = _max_repair_attempts_for_request(user_input)
-    spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(user_input, repo_id=repo_id)
+    spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(
+        user_input,
+        repo_id=repo_id,
+        actor_context=resolved_actor_context,
+    )
     repo_context = (
         spec_result.repo_context
         or code_result.repo_context
@@ -2646,8 +3909,17 @@ def run_full_review_pipeline(
     return spec_result, code_result, change_result, current_draft_result, current_review_result
 
 
-def run_brief_export_from_task_brief(task_brief: str, repo_id: str | None = None) -> AgentResult:
-    spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(task_brief, repo_id=repo_id)
+def run_brief_export_from_task_brief(
+    task_brief: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(
+        task_brief,
+        repo_id=repo_id,
+        actor_context=actor_context,
+    )
 
     if draft_result.success:
         return draft_result
@@ -2661,7 +3933,20 @@ def run_brief_export_from_task_brief(task_brief: str, repo_id: str | None = None
     return spec_result
 
 
-def run_review_spec_from_task_brief(task_brief: str, repo_id: str | None = None) -> AgentResult:
+def run_review_spec_from_task_brief(
+    task_brief: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["spec.generate", "repo.context.read"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        return _permission_block_result(denied.capability, denied)
     return _run_spec_agent_with_finalized_repo_context(
         task_brief,
         task_intent=_detect_and_log_task_intent(task_brief),
@@ -2670,7 +3955,20 @@ def run_review_spec_from_task_brief(task_brief: str, repo_id: str | None = None)
     )
 
 
-def run_spec_export_from_task_brief(task_brief: str, repo_id: str | None = None) -> AgentResult:
+def run_spec_export_from_task_brief(
+    task_brief: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["spec.generate", "repo.context.read"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        return _permission_block_result(denied.capability, denied)
     return _run_spec_agent_with_finalized_repo_context(
         task_brief,
         task_intent=_detect_and_log_task_intent(task_brief),
@@ -2679,7 +3977,20 @@ def run_spec_export_from_task_brief(task_brief: str, repo_id: str | None = None)
     )
 
 
-def run_task_intake(task_brief: str, repo_id: str | None = None) -> AgentResult:
+def run_task_intake(
+    task_brief: str,
+    repo_id: str | None = None,
+    *,
+    actor_context: ActorContext | None = None,
+) -> AgentResult:
+    resolved_actor_context = _resolve_actor(actor_context)
+    denied = _enforce_capabilities(
+        resolved_actor_context,
+        ["spec.generate", "repo.context.read"],
+        repo_id=str(repo_id or "").strip(),
+    )
+    if denied is not None:
+        return _permission_block_result(denied.capability, denied)
     return _run_spec_agent_with_finalized_repo_context(
         task_brief,
         task_intent=_detect_and_log_task_intent(task_brief),
@@ -2701,6 +4012,7 @@ def answer_question(
     create_pr: bool = False,
     create_review: bool = False,
     run_log: bool = False,
+    actor_context: ActorContext | None = None,
 ) -> str:
     return build_agent().answer(
         query,
@@ -2710,4 +4022,5 @@ def answer_question(
         create_pr=create_pr,
         create_review=create_review,
         run_log=run_log,
+        actor_context=actor_context,
     )

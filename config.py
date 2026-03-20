@@ -34,9 +34,14 @@ class _LoadedSettings(BaseSettings):
     bitbucket_username: str = ""
     bitbucket_app_password: str = ""
     bitbucket_api_token: str = ""
+    auto_publish_implementation_runs: bool = False
     allow_real_apply: bool = False
     allow_pr_creation: bool = False
     allow_review_creation: bool = False
+    postgres_dsn: str = ""
+    postgres_pool_size: int = 5
+    default_actor_role: str = "admin"
+    default_actor_display_name: str = "Local CLI"
     crucible_base_url: str = ""
     crucible_username: str = ""
     crucible_password: str = ""
@@ -50,6 +55,7 @@ class _LoadedSettings(BaseSettings):
     DATA_DIR: str = "data"
     INDEX_DIR: str = "index"
     REPO_REGISTRY_PATH: str = "artifacts/repos/registry.json"
+    REPO_CLONE_ROOT: str = "repos"
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
     TOP_K_SEMANTIC: int = 5
@@ -137,9 +143,14 @@ class RuntimeSettings:
     bitbucket_username: str
     bitbucket_app_password: str
     bitbucket_api_token: str
+    auto_publish_implementation_runs: bool
     allow_real_apply: bool
     allow_pr_creation: bool
     allow_review_creation: bool
+    postgres_dsn: str
+    postgres_pool_size: int
+    default_actor_role: str
+    default_actor_display_name: str
     crucible_base_url: str
     crucible_username: str
     crucible_password: str
@@ -150,6 +161,7 @@ class RuntimeSettings:
     data_dir: str
     index_dir: str
     repo_registry_path: str
+    repo_clone_root: str
     chunk_size: int
     chunk_overlap: int
     top_k_semantic: int
@@ -218,9 +230,14 @@ class Settings:
             bitbucket_username=self._loaded.bitbucket_username,
             bitbucket_app_password=self._loaded.bitbucket_app_password,
             bitbucket_api_token=self._loaded.bitbucket_api_token,
+            auto_publish_implementation_runs=self._loaded.auto_publish_implementation_runs,
             allow_real_apply=self._loaded.allow_real_apply,
             allow_pr_creation=self._loaded.allow_pr_creation,
             allow_review_creation=self._loaded.allow_review_creation,
+            postgres_dsn=self._loaded.postgres_dsn,
+            postgres_pool_size=self._loaded.postgres_pool_size,
+            default_actor_role=self._loaded.default_actor_role,
+            default_actor_display_name=self._loaded.default_actor_display_name,
             crucible_base_url=self._loaded.crucible_base_url,
             crucible_username=self._loaded.crucible_username,
             crucible_password=self._loaded.crucible_password,
@@ -231,6 +248,7 @@ class Settings:
             data_dir=self._loaded.DATA_DIR,
             index_dir=self._loaded.INDEX_DIR,
             repo_registry_path=self._loaded.REPO_REGISTRY_PATH,
+            repo_clone_root=self._loaded.REPO_CLONE_ROOT,
             chunk_size=self._loaded.CHUNK_SIZE,
             chunk_overlap=self._loaded.CHUNK_OVERLAP,
             top_k_semantic=self._loaded.TOP_K_SEMANTIC,
