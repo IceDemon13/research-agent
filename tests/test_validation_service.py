@@ -157,6 +157,38 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertTrue(any("-m pytest" in command for command in commands))
         self.assertTrue(any("-m unittest" in command for command in commands))
 
+    def test_validation_service_parses_pytest_failure_summary(self) -> None:
+        script_path = self.repo_root / "emit_pytest_failure.py"
+        script_path.write_text(
+            "import sys\n"
+            "sys.stdout.write('============================= test session starts =============================\\n')\n"
+            "sys.stdout.write('collected 3 items\\n\\n')\n"
+            "sys.stdout.write('FAILED tests/test_math.py::test_addition - AssertionError: expected 4\\n')\n"
+            "sys.stdout.write('=========================== 1 failed, 2 passed in 0.12s ===========================\\n')\n"
+            "sys.exit(1)\n",
+            encoding="utf-8",
+        )
+
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[
+                ValidationCommand(
+                    name="test",
+                    command=f"\"{sys.executable}\" emit_pytest_failure.py",
+                )
+            ],
+        )
+
+        self.assertEqual(result.overall_status, "failed")
+        self.assertFalse(result.passed)
+        self.assertEqual(result.total_tests, 3)
+        self.assertEqual(result.passed_tests, 2)
+        self.assertEqual(result.failed_tests, 1)
+        self.assertEqual(result.failed_test_cases[0].name, "tests/test_math.py::test_addition")
+        self.assertEqual(result.failed_test_cases[0].error_type, "AssertionError")
+        self.assertIn("expected 4", result.failed_test_cases[0].message)
+        self.assertIn("1 failed, 2 passed", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

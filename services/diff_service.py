@@ -4,7 +4,7 @@ import difflib
 from pathlib import Path
 
 from contracts.apply_contract import ApplyInput, ApplyResult, normalize_relative_repo_path
-from contracts.diff_contract import DiffFile, DiffResult
+from contracts.diff_contract import DiffChunk, DiffFile, DiffResult
 from logger_utils import log_line
 from services.repo_registry import RepositoryRegistryService
 from services.scm_service import ScmService
@@ -58,6 +58,9 @@ class DiffService:
                         operation_type=operation_type,
                         diff="",
                         status="skipped",
+                        additions_count=0,
+                        deletions_count=0,
+                        diff_chunks=[],
                     )
                 )
                 continue
@@ -73,6 +76,9 @@ class DiffService:
                         operation_type=operation_type,
                         diff="",
                         status="skipped",
+                        additions_count=0,
+                        deletions_count=0,
+                        diff_chunks=[],
                     )
                 )
                 continue
@@ -102,12 +108,17 @@ class DiffService:
                     file_result=file_result,
                 )
 
+            truncated_diff = self._truncate_diff(diff_text, max_diff_chars)
+            additions_count, deletions_count, diff_chunks = self._parse_diff_preview(truncated_diff)
             diff_files.append(
                 DiffFile(
                     relative_path=relative_path,
                     operation_type=operation_type,
-                    diff=self._truncate_diff(diff_text, max_diff_chars),
+                    diff=truncated_diff,
                     status=self._diff_status(operation_type, file_result),
+                    additions_count=additions_count,
+                    deletions_count=deletions_count,
+                    diff_chunks=diff_chunks,
                 )
             )
 
@@ -123,6 +134,9 @@ class DiffService:
                         operation_type=str(item.operation_type or "").strip(),
                         diff="",
                         status="skipped",
+                        additions_count=0,
+                        deletions_count=0,
+                        diff_chunks=[],
                     )
                 )
                 if len(diff_files) >= max_files:
@@ -133,12 +147,25 @@ class DiffService:
                 f"Diff file list truncated to {max_files} entries out of {len(apply_input.operations)} operations."
             )
 
+        total_files_changed = len([item for item in diff_files if item.status != "skipped"])
+        total_additions = sum(int(item.additions_count or 0) for item in diff_files)
+        total_deletions = sum(int(item.deletions_count or 0) for item in diff_files)
+        truncated = any("[TRUNCATED]" in str(item.diff or "") for item in diff_files) or any(
+            "truncated" in str(warning or "").lower()
+            for warning in warnings
+        )
+
         return DiffResult(
             repo_id=repo_id,
             root_path=repo_root.as_posix(),
             dry_run=apply_input.dry_run,
             files=diff_files,
             warnings=warnings,
+            total_files_changed=total_files_changed,
+            total_additions=total_additions,
+            total_deletions=total_deletions,
+            truncated=truncated,
+            reason="" if diff_files else "no_changes",
         )
 
     @staticmethod
@@ -214,6 +241,40 @@ class DiffService:
         if max_diff_chars <= 0 or len(value) <= max_diff_chars:
             return value
         return value[: max_diff_chars - 15].rstrip() + "\n...[TRUNCATED]"
+
+    @staticmethod
+    def _parse_diff_preview(diff_text: str) -> tuple[int, int, list[DiffChunk]]:
+        additions_count = 0
+        deletions_count = 0
+        chunks: list[DiffChunk] = []
+        current_chunk: DiffChunk | None = None
+
+        for raw_line in str(diff_text or "").splitlines():
+            if raw_line.startswith("@@"):
+                current_chunk = DiffChunk(header=raw_line, lines=[])
+                chunks.append(current_chunk)
+                continue
+            if raw_line.startswith("diff --git") or raw_line.startswith("index "):
+                continue
+            if raw_line.startswith("---") or raw_line.startswith("+++"):
+                continue
+            line_type = "context"
+            if raw_line.startswith("+") and not raw_line.startswith("+++"):
+                line_type = "added"
+                additions_count += 1
+            elif raw_line.startswith("-") and not raw_line.startswith("---"):
+                line_type = "removed"
+                deletions_count += 1
+            if current_chunk is None:
+                current_chunk = DiffChunk(header="preview", lines=[])
+                chunks.append(current_chunk)
+            current_chunk.lines.append(
+                {
+                    "type": line_type,
+                    "text": raw_line,
+                }
+            )
+        return additions_count, deletions_count, chunks
 
     @staticmethod
     def _diff_status(operation_type: str, file_result: object | None) -> str:

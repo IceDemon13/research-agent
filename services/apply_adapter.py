@@ -198,12 +198,25 @@ class ApplyAdapterService:
 
     @staticmethod
     def _merge_preparation(result: ApplyResult, preparation: ApplyPreparation) -> ApplyResult:
+        skipped_files = [*preparation.skipped_files, *list(result.skipped_files)]
+        files_failed = len([item for item in skipped_files if item.status == "failed"]) + int(result.files_failed or 0)
+        applied_files = list(result.applied_files)
+        skip_reason = str(result.skip_reason or "").strip()
+        if not preparation.apply_input.operations:
+            skip_reason = skip_reason or "no_changes"
+        elif skipped_files and not applied_files and not skip_reason:
+            skip_reason = "partial_skip"
         return ApplyResult(
             repo_id=result.repo_id,
             root_path=result.root_path,
             dry_run=result.dry_run,
-            applied_files=list(result.applied_files),
-            skipped_files=[*preparation.skipped_files, *list(result.skipped_files)],
+            applied_files=applied_files,
+            skipped_files=skipped_files,
+            applied=bool(applied_files) and not result.errors and files_failed == 0,
+            files_written=int(result.files_written or len(applied_files)),
+            files_failed=files_failed,
+            skipped=bool(skipped_files) or bool(result.skipped) or not bool(applied_files),
+            skip_reason=skip_reason,
             warnings=[*preparation.warnings, *list(result.warnings)],
             errors=[*preparation.errors, *list(result.errors)],
         )

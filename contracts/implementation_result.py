@@ -18,6 +18,11 @@ class ImplementationArtifactSummary:
     goal: str
     file_count: int
     file_paths: list[str] = field(default_factory=list)
+    files_count: int = 0
+    files_changed: int = 0
+    files_created: int = 0
+    files_deleted: int = 0
+    reason_if_empty: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -25,6 +30,11 @@ class ImplementationArtifactSummary:
             "goal": self.goal,
             "file_count": self.file_count,
             "file_paths": list(self.file_paths),
+            "files_count": self.files_count,
+            "files_changed": self.files_changed,
+            "files_created": self.files_created,
+            "files_deleted": self.files_deleted,
+            "reason_if_empty": self.reason_if_empty,
         }
 
 
@@ -50,6 +60,7 @@ class ImplementationResult:
     review_status: str = ""
     review_error: str = ""
     publication_status: str = ""
+    root_cause_summary: str = ""
     review_warnings: list[str] = field(default_factory=list)
     run_record: RunRecord | None = None
     final_status: str = "dry_run_only"
@@ -110,6 +121,7 @@ class ImplementationResult:
             "review_status": self.review_status,
             "review_error": self.review_error,
             "publication_status": self.publication_status,
+            "root_cause_summary": self.root_cause_summary,
             "review_warnings": list(self.review_warnings),
             "run_record": (
                 self.run_record.to_dict()

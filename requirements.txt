@@ -8,6 +8,8 @@ pydantic-settings
 ddgs
 trafilatura
 psycopg[binary]
+psycopg2-binary
 fastapi
 uvicorn
 httpx
+requests

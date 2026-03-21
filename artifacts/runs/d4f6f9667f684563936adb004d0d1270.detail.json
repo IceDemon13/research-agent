@@ -1,0 +1,300 @@
+{
+  "mode": "implement",
+  "goal": "implement update src/app.py",
+  "repo_id": "sample",
+  "jira_ticket": "",
+  "spec_result": null,
+  "review_result": null,
+  "research_result": null,
+  "implementation_result": {
+    "repo_id": "sample",
+    "artifact_summary": {
+      "artifact_type": "draft_set",
+      "goal": "Update run output",
+      "file_count": 1,
+      "file_paths": [
+        "src/app.py"
+      ],
+      "files_count": 1,
+      "files_changed": 1,
+      "files_created": 0,
+      "files_deleted": 0,
+      "reason_if_empty": ""
+    },
+    "dry_run_apply_result": {
+      "repo_id": "sample",
+      "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/implementation-mode-b5bf50d14a734f5fa5b3ca3af7a1c62e/sample-repo",
+      "dry_run": true,
+      "applied_files": [],
+      "skipped_files": [
+        {
+          "relative_path": "src/app.py",
+          "operation_type": "update",
+          "status": "dry_run",
+          "message": "Dry run only; no file was written.",
+          "expected_hash": "",
+          "previous_hash": "b3938c1c7365e30d22a16b32beeb6118ac4542ae06f24e9911a96dd0a7af9d1d",
+          "current_hash": "b3938c1c7365e30d22a16b32beeb6118ac4542ae06f24e9911a96dd0a7af9d1d",
+          "new_hash": "5367e47e7afa82ef399960033565221d71f8e403f156610dfd0fe3f14afff64d"
+        }
+      ],
+      "applied": false,
+      "files_written": 0,
+      "files_failed": 0,
+      "skipped": true,
+      "skip_reason": "apply_not_executed",
+      "warnings": [],
+      "errors": []
+    },
+    "dry_run_diff_result": {
+      "repo_id": "sample",
+      "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/implementation-mode-b5bf50d14a734f5fa5b3ca3af7a1c62e/sample-repo",
+      "dry_run": true,
+      "files": [
+        {
+          "relative_path": "src/app.py",
+          "operation_type": "update",
+          "diff": "--- a/src/app.py\n+++ b/src/app.py\n@@ -1,2 +1,2 @@\n def run() -> str:\n-    return 'ok'\n+    return 'updated'",
+          "status": "modified"
+        }
+      ],
+      "warnings": []
+    },
+    "actor_context": {
+      "actor_id": "cli.local",
+      "actor_type": "cli",
+      "role": "admin",
+      "source_channel": "cli",
+      "display_name": "Local CLI",
+      "repo_allowlist": [],
+      "repo_denylist": [],
+      "jira_project_allowlist": [],
+      "jira_project_denylist": [],
+      "dry_run_only": false
+    },
+    "candidate_apply_result": null,
+    "validation_result": {
+      "repo_id": "sample",
+      "overall_status": "failed",
+      "steps": [],
+      "passed": false,
+      "total_tests": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "failed_test_cases": [],
+      "stdout": "",
+      "stderr": "",
+      "errors": [
+        "Repository must be clean before apply."
+      ],
+      "warnings": []
+    },
+    "real_apply_result": null,
+    "final_diff_result": null,
+    "temp_workspace_root": "",
+    "temp_workspace_warnings": [
+      "Repository must be clean before apply."
+    ],
+    "policy_decisions": [
+      {
+        "capability": "implementation.apply",
+        "actor_id": "cli.local",
+        "actor_role": "admin",
+        "allowed": false,
+        "reason": "Repository must be clean before apply.",
+        "deny_reason_code": "DIRTY_REPO",
+        "scope": {
+          "repo_id": "sample",
+          "jira_project": "",
+          "branch_name": "",
+          "branch_type": "",
+          "source_channel": "cli"
+        },
+        "source": "pipeline_policy",
+        "details": {
+          "changed_files": [
+            "src/app.py"
+          ]
+        }
+      }
+    ],
+    "scm_branch_name": "",
+    "scm_remote_url": "",
+    "scm_warnings": [],
+    "pull_request_result": null,
+    "crucible_review_result": null,
+    "pr_url": "",
+    "review_url": "",
+    "review_status": "",
+    "review_error": "",
+    "publication_status": "",
+    "root_cause_summary": "Repository must be clean before apply.",
+    "review_warnings": [],
+    "run_record": {
+      "run_id": "d4f6f9667f684563936adb004d0d1270",
+      "goal": "implement update src/app.py",
+      "status": "failed",
+      "started_at": "2026-03-21T07:53:56.510989+00:00",
+      "parent_run_id": "",
+      "repo_id": "sample",
+      "actor_context": {
+        "actor_id": "cli.local",
+        "actor_type": "cli",
+        "role": "admin",
+        "source_channel": "cli",
+        "display_name": "Local CLI",
+        "repo_allowlist": [],
+        "repo_denylist": [],
+        "jira_project_allowlist": [],
+        "jira_project_denylist": [],
+        "dry_run_only": false
+      },
+      "finished_at": "2026-03-21T07:53:56.551035+00:00",
+      "steps": [
+        {
+          "name": "draft",
+          "status": "success",
+          "started_at": "2026-03-21T07:53:56.510989+00:00",
+          "finished_at": "2026-03-21T07:53:56.551035+00:00",
+          "message": "1 file(s) generated by agent",
+          "error": null
+        },
+        {
+          "name": "validation",
+          "status": "failed",
+          "started_at": "2026-03-21T07:53:56.551035+00:00",
+          "finished_at": "2026-03-21T07:53:56.551035+00:00",
+          "message": "",
+          "error": {
+            "type": "dirty_repo",
+            "message": "Repository must be clean before apply.",
+            "step": "validation",
+            "details": {
+              "changed_files": [
+                "src/app.py"
+              ]
+            }
+          }
+        },
+        {
+          "name": "apply",
+          "status": "partial",
+          "started_at": "2026-03-21T07:53:56.551035+00:00",
+          "finished_at": "2026-03-21T07:53:56.551035+00:00",
+          "message": "dirty repo blocked",
+          "error": null
+        }
+      ],
+      "policy_decisions": [
+        {
+          "capability": "implementation.apply",
+          "actor_id": "cli.local",
+          "actor_role": "admin",
+          "allowed": false,
+          "reason": "Repository must be clean before apply.",
+          "deny_reason_code": "DIRTY_REPO",
+          "scope": {
+            "repo_id": "sample",
+            "jira_project": "",
+            "branch_name": "",
+            "branch_type": "",
+            "source_channel": "cli"
+          },
+          "source": "pipeline_policy",
+          "details": {
+            "changed_files": [
+              "src/app.py"
+            ]
+          }
+        }
+      ],
+      "log_path": "",
+      "scm": {},
+      "pr_url": "",
+      "review_url": "",
+      "decision": "pending",
+      "decided_at": "",
+      "decided_by": ""
+    },
+    "final_status": "dirty_repo_blocked"
+  },
+  "publication_result": {
+    "branch_name": "",
+    "commit_hash": "",
+    "remote_url": "",
+    "repo_path": "",
+    "pr_url": "",
+    "review_url": "",
+    "review_status": "",
+    "review_error": "",
+    "publication_status": ""
+  },
+  "validation_result": {
+    "repo_id": "sample",
+    "overall_status": "failed",
+    "steps": [],
+    "passed": false,
+    "total_tests": 0,
+    "passed_tests": 0,
+    "failed_tests": 0,
+    "failed_test_cases": [],
+    "stdout": "",
+    "stderr": "",
+    "errors": [
+      "Repository must be clean before apply."
+    ],
+    "warnings": []
+  },
+  "diff_result": {
+    "repo_id": "sample",
+    "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/implementation-mode-b5bf50d14a734f5fa5b3ca3af7a1c62e/sample-repo",
+    "dry_run": true,
+    "files": [
+      {
+        "relative_path": "src/app.py",
+        "operation_type": "update",
+        "diff": "--- a/src/app.py\n+++ b/src/app.py\n@@ -1,2 +1,2 @@\n def run() -> str:\n-    return 'ok'\n+    return 'updated'",
+        "status": "modified"
+      }
+    ],
+    "warnings": [],
+    "reason": ""
+  },
+  "review_comments": [],
+  "policy_decisions": [
+    {
+      "capability": "implementation.apply",
+      "actor_id": "cli.local",
+      "actor_role": "admin",
+      "allowed": false,
+      "reason": "Repository must be clean before apply.",
+      "deny_reason_code": "DIRTY_REPO",
+      "scope": {
+        "repo_id": "sample",
+        "jira_project": "",
+        "branch_name": "",
+        "branch_type": "",
+        "source_channel": "cli"
+      },
+      "source": "pipeline_policy",
+      "details": {
+        "changed_files": [
+          "src/app.py"
+        ]
+      }
+    }
+  ],
+  "sources": [],
+  "repo_context_summary": {
+    "files_used": [
+      "src/app.py"
+    ],
+    "resolved_target_files": [
+      "src/app.py"
+    ],
+    "resolved_symbols": {},
+    "chunk_count": 0
+  },
+  "root_cause_summary": "Repository must be clean before apply.",
+  "run_id": "d4f6f9667f684563936adb004d0d1270"
+}

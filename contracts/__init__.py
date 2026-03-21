@@ -11,6 +11,7 @@ from contracts.diff_contract import DiffFile, DiffResult
 from contracts.error_contract import ExecutionError
 from contracts.implementation_result import ImplementationArtifactSummary, ImplementationResult
 from contracts.permission_contract import PermissionDecision, PermissionScope, RolePolicy
+from contracts.publication_contract import PublicationResult
 from contracts.pull_request_contract import PullRequestResult
 from contracts.repo_index import (
     REPO_INDEX_VERSION,
@@ -25,8 +26,9 @@ from contracts.repo_onboarding_contract import RepoOnboardingResult
 from contracts.scm_contract import ScmOperationResult, ScmStatus
 from contracts.temp_workspace_contract import TempWorkspaceContext
 from contracts.run_contract import RunRecord, RunStep
+from contracts.run_detail_contract import RunDetail, RunDetailStep
 from contracts.review_comment_contract import AIReviewComment
-from contracts.validation_contract import ValidationCommand, ValidationResult, ValidationStepResult
+from contracts.validation_contract import FailedTestCase, ValidationCommand, ValidationResult, ValidationStepResult
 
 __all__ = [
     "ApplyFileResult",
@@ -39,16 +41,20 @@ __all__ = [
     "DiffFile",
     "DiffResult",
     "ExecutionError",
+    "FailedTestCase",
     "ImplementationArtifactSummary",
     "ImplementationResult",
     "PermissionDecision",
     "PermissionScope",
     "RolePolicy",
+    "PublicationResult",
     "PullRequestResult",
     "REGISTRY_VERSION",
     "REPO_INDEX_VERSION",
     "AIReviewComment",
     "RunRecord",
+    "RunDetail",
+    "RunDetailStep",
     "RunStep",
     "RepoFileIndex",
     "RepoFileIndexEntry",

@@ -31,10 +31,12 @@ class _LoadedSettings(BaseSettings):
     validation_output_max_chars: int = 4000
     validation_timeout_seconds: int = 120
     bitbucket_api_base_url: str = "https://api.bitbucket.org/2.0"
+    bitbucket_repo_token: str = ""
     bitbucket_username: str = ""
     bitbucket_app_password: str = ""
     bitbucket_api_token: str = ""
     auto_publish_implementation_runs: bool = False
+    max_retry_attempts: int = 3
     allow_real_apply: bool = False
     allow_pr_creation: bool = False
     allow_review_creation: bool = False
@@ -140,10 +142,12 @@ class RuntimeSettings:
     validation_output_max_chars: int
     validation_timeout_seconds: int
     bitbucket_api_base_url: str
+    bitbucket_repo_token: str
     bitbucket_username: str
     bitbucket_app_password: str
     bitbucket_api_token: str
     auto_publish_implementation_runs: bool
+    max_retry_attempts: int
     allow_real_apply: bool
     allow_pr_creation: bool
     allow_review_creation: bool
@@ -227,10 +231,12 @@ class Settings:
             validation_output_max_chars=self._loaded.validation_output_max_chars,
             validation_timeout_seconds=self._loaded.validation_timeout_seconds,
             bitbucket_api_base_url=self._loaded.bitbucket_api_base_url,
+            bitbucket_repo_token=self._loaded.bitbucket_repo_token,
             bitbucket_username=self._loaded.bitbucket_username,
             bitbucket_app_password=self._loaded.bitbucket_app_password,
             bitbucket_api_token=self._loaded.bitbucket_api_token,
             auto_publish_implementation_runs=self._loaded.auto_publish_implementation_runs,
+            max_retry_attempts=self._loaded.max_retry_attempts,
             allow_real_apply=self._loaded.allow_real_apply,
             allow_pr_creation=self._loaded.allow_pr_creation,
             allow_review_creation=self._loaded.allow_review_creation,

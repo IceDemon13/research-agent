@@ -11,6 +11,7 @@ from contracts.error_contract import ExecutionError
 from contracts.permission_contract import PermissionDecision, PermissionScope
 from contracts.repo_metadata import RepoMetadata
 from contracts.review_comment_contract import AIReviewComment
+from contracts.run_detail_contract import RunDetail, RunDetailStep
 from contracts.run_contract import RunRecord, RunStep
 from services.db_service import DatabaseService
 
@@ -18,6 +19,7 @@ from services.db_service import DatabaseService
 DEFAULT_RUN_LOG_DIR = Path("artifacts") / "runs"
 DIFF_ARTIFACT_SUFFIX = ".diff.json"
 COMMENTS_ARTIFACT_SUFFIX = ".comments.json"
+DETAIL_ARTIFACT_SUFFIX = ".detail.json"
 
 
 class RunService:
@@ -40,10 +42,15 @@ class RunService:
         self,
         goal: str,
         *,
+        attempt_index: int = 1,
+        total_attempts: int = 1,
         parent_run_id: str = "",
         repo_id: str = "",
         actor_context: ActorContext | None = None,
         repo_metadata: RepoMetadata | None = None,
+        retry_note: str = "",
+        retry_context_summary: str = "",
+        retry_context: dict | None = None,
     ) -> RunRecord:
         run_id = uuid.uuid4().hex
         run = RunRecord(
@@ -51,10 +58,15 @@ class RunService:
             goal=str(goal or "").strip(),
             status="running",
             started_at=self._timestamp(),
+            attempt_index=max(1, int(attempt_index or 1)),
+            total_attempts=max(1, int(total_attempts or 1)),
             parent_run_id=str(parent_run_id or "").strip(),
             repo_id=str(repo_id or "").strip(),
             actor_context=actor_context,
             log_path=(self._storage_dir / f"{run_id}.json").as_posix() if self._persist else "",
+            retry_note=str(retry_note or "").strip(),
+            retry_context_summary=str(retry_context_summary or "").strip(),
+            retry_context=dict(retry_context or {}),
         )
         self._runs[run_id] = run
         if repo_metadata is not None:
@@ -158,6 +170,7 @@ class RunService:
         *,
         decision: str,
         actor_context: ActorContext | None = None,
+        note: str = "",
     ) -> RunRecord | None:
         run = self.load_run(run_id)
         if run is None:
@@ -178,6 +191,8 @@ class RunService:
             if actor_context is not None
             else ""
         )
+        if str(note or "").strip():
+            run.decision_note = str(note or "").strip()
         self._runs[run.run_id] = self._clone_run(run)
         self._persist_run(run)
         return self._clone_run(run)
@@ -186,9 +201,26 @@ class RunService:
         self,
         run_id: str,
         actor_context: ActorContext | None = None,
+        note: str = "",
+        retry_context_summary: str = "",
+        retry_context: dict | None = None,
+        attempt_index: int = 1,
+        total_attempts: int = 1,
     ) -> RunRecord | None:
-        _ = actor_context
-        return self.load_run(run_id)
+        source_run = self.load_run(run_id)
+        if source_run is None:
+            return None
+        return self.start_run(
+            source_run.goal,
+            attempt_index=attempt_index,
+            total_attempts=total_attempts,
+            parent_run_id=source_run.run_id,
+            repo_id=source_run.repo_id,
+            actor_context=actor_context,
+            retry_note=str(note or "").strip(),
+            retry_context_summary=str(retry_context_summary or "").strip(),
+            retry_context=dict(retry_context or {}),
+        )
 
     def cancel_run(
         self,
@@ -398,6 +430,168 @@ class RunService:
             return []
         return [dict(item) for item in comments if isinstance(item, dict)]
 
+    def persist_run_detail(
+        self,
+        run_id: str,
+        detail: RunDetail | dict | None,
+        *,
+        log_path: str = "",
+    ) -> str:
+        resolved_run_id = str(run_id or "").strip()
+        if not resolved_run_id or detail is None:
+            return ""
+        payload = detail.to_dict() if isinstance(detail, RunDetail) else dict(detail or {})
+        payload["run_id"] = resolved_run_id
+        target_path = self._detail_artifact_path(resolved_run_id, log_path=log_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return target_path.as_posix()
+
+    def load_run_detail(
+        self,
+        run_id: str,
+        *,
+        run_record: RunRecord | None = None,
+        log_path: str = "",
+    ) -> RunDetail | None:
+        resolved_run_id = str(run_id or "").strip()
+        if not resolved_run_id:
+            return None
+        resolved_run = run_record or self.load_run(resolved_run_id)
+        if resolved_run is None:
+            return None
+
+        detail_payload = self._load_run_detail_payload(
+            resolved_run_id,
+            log_path=log_path or resolved_run.log_path,
+        )
+        implementation_payload = self._normalize_implementation_payload(
+            detail_payload.get("implementation_result"),
+        )
+        validation_payload = self._normalize_validation_payload(
+            detail_payload.get("validation_result"),
+        )
+        diff_payload = detail_payload.get("diff_result")
+        if not isinstance(diff_payload, dict):
+            diff_payload = self.load_diff_result(
+                resolved_run_id,
+                log_path=log_path or resolved_run.log_path,
+            )
+        normalized_diff_payload = self._normalize_diff_payload(
+            diff_payload,
+            implementation_payload=implementation_payload,
+            validation_payload=validation_payload,
+        )
+
+        comments_payload = detail_payload.get("review_comments")
+        if not isinstance(comments_payload, list):
+            comments_payload = self.load_review_comments(
+                resolved_run_id,
+                log_path=log_path or resolved_run.log_path,
+            )
+
+        policy_payload = detail_payload.get("policy_decisions")
+        if not isinstance(policy_payload, list):
+            policy_payload = [decision.to_dict() for decision in list(resolved_run.policy_decisions)]
+
+        failure_summary = self.get_failure_summary(resolved_run)
+        root_cause_summary = str(detail_payload.get("root_cause_summary", "") or "").strip()
+        if not root_cause_summary:
+            root_cause_summary = self._compute_root_cause_summary(
+                implementation_payload=implementation_payload,
+                validation_payload=validation_payload,
+                failure_summary=failure_summary,
+            )
+        step_payloads = [self._detail_step_from_run_step(step).to_dict() for step in list(resolved_run.steps)]
+        step_errors = [
+            {
+                "step_name": step.name,
+                "error_code": str(step.error.type or "").strip(),
+                "error_message": str(step.error.message or "").strip(),
+                "details": dict(step.error.details),
+            }
+            for step in list(resolved_run.steps)
+            if step.error is not None
+        ]
+
+        detail = RunDetail.from_dict(
+            {
+                "run_id": resolved_run.run_id,
+                "mode": self._infer_mode(resolved_run, detail_payload),
+                "goal": detail_payload.get("goal", resolved_run.goal),
+                "attempt_index": resolved_run.attempt_index,
+                "total_attempts": resolved_run.total_attempts,
+                "parent_run_id": resolved_run.parent_run_id,
+                "repo_id": detail_payload.get("repo_id", resolved_run.repo_id),
+                "jira_ticket": str(detail_payload.get("jira_ticket", "") or "").strip(),
+                "status": resolved_run.status,
+                "started_at": resolved_run.started_at,
+                "finished_at": resolved_run.finished_at,
+                "actor": self._normalize_actor_payload(resolved_run),
+                "decision": resolved_run.decision or "pending",
+                "decided_by": resolved_run.decided_by,
+                "decided_at": resolved_run.decided_at,
+                "decision_note": resolved_run.decision_note,
+                "retry_note": resolved_run.retry_note,
+                "retry_context_summary": resolved_run.retry_context_summary,
+                "retry_strategy": str(resolved_run.retry_context.get("retry_strategy", "") or "").strip(),
+                "retry_strategy_reason": str(resolved_run.retry_context.get("retry_strategy_reason", "") or "").strip(),
+                "repeated_failure_detected": bool(resolved_run.retry_context.get("repeated_failure_detected", False)),
+                "retry_context": dict(resolved_run.retry_context or {}),
+                "failed_step": failure_summary.get("failed_step", ""),
+                "failure_code": failure_summary.get("failure_code", ""),
+                "failure_reason": failure_summary.get("failure_reason", ""),
+                "root_cause_summary": root_cause_summary,
+                "log_path": resolved_run.log_path,
+                "pr_url": resolved_run.pr_url,
+                "review_url": resolved_run.review_url,
+                "parent_run": self._related_run_summary(resolved_run.parent_run_id),
+                "child_runs": [
+                    self._run_child_summary(child_run)
+                    for child_run in self.list_child_runs(resolved_run.run_id)
+                ],
+                "steps": step_payloads,
+                "spec_result": detail_payload.get("spec_result"),
+                "review_result": detail_payload.get("review_result"),
+                "research_result": detail_payload.get("research_result"),
+                "implementation_result": implementation_payload,
+                "publication_result": self._normalize_publication_payload(resolved_run, detail_payload),
+                "validation_result": validation_payload,
+                "diff_result": normalized_diff_payload,
+                "review_comments": [
+                    dict(item or {})
+                    for item in list(comments_payload or [])
+                    if isinstance(item, dict)
+                ],
+                "policy_decisions": [
+                    dict(item or {})
+                    for item in list(policy_payload or [])
+                    if isinstance(item, dict)
+                ],
+                "step_errors": step_errors,
+                "sources": [
+                    dict(item or {})
+                    for item in list(detail_payload.get("sources", []) or [])
+                    if isinstance(item, dict)
+                ],
+                "repo_context_summary": detail_payload.get("repo_context_summary"),
+            }
+        )
+        return detail
+
+    def list_child_runs(self, parent_run_id: str) -> list[RunRecord]:
+        resolved_parent_run_id = str(parent_run_id or "").strip()
+        if not resolved_parent_run_id:
+            return []
+        return [
+            self._clone_run(run)
+            for run in self.list_runs()
+            if str(run.parent_run_id or "").strip() == resolved_parent_run_id
+        ]
+
     def _persist_run(self, run: RunRecord) -> None:
         if self._persist:
             self._storage_dir.mkdir(parents=True, exist_ok=True)
@@ -432,7 +626,7 @@ class RunService:
     @staticmethod
     def _normalize_status(value: str, *, fallback: str) -> str:
         normalized = str(value or "").strip().lower()
-        if normalized in {"pending", "running", "success", "failed", "partial", "cancelled"}:
+        if normalized in {"pending", "running", "success", "failed", "partial", "cancelled", "skipped", "no_changes"}:
             return normalized
         return fallback
 
@@ -556,6 +750,8 @@ class RunService:
             goal=str(row.get("goal", "") or "").strip(),
             status=str(row.get("status", "") or "").strip(),
             started_at=str(row.get("started_at", "") or "").strip(),
+            attempt_index=int(row.get("attempt_index", 1) or 1),
+            total_attempts=int(row.get("total_attempts", 1) or 1),
             parent_run_id=str(row.get("parent_run_id", "") or "").strip(),
             repo_id=str(row.get("repo_id", "") or "").strip(),
             actor_context=actor_context,
@@ -572,6 +768,10 @@ class RunService:
             decision=str(row.get("decision", "pending") or "pending").strip() or "pending",
             decided_at=str(row.get("decided_at", "") or "").strip(),
             decided_by=str(row.get("decided_by", "") or "").strip(),
+            decision_note=str(row.get("decision_note", "") or "").strip(),
+            retry_note=str(row.get("retry_note", "") or "").strip(),
+            retry_context_summary=str(row.get("retry_context_summary", "") or "").strip(),
+            retry_context=DatabaseService._load_json_dict(str(row.get("retry_context_json", "{}") or "{}")),
         )
 
     def _list_runs_from_files(
@@ -661,6 +861,8 @@ class RunService:
             goal=str(payload.get("goal", "") or "").strip(),
             status=str(payload.get("status", "") or "").strip(),
             started_at=str(payload.get("started_at", "") or "").strip(),
+            attempt_index=int(payload.get("attempt_index", 1) or 1),
+            total_attempts=int(payload.get("total_attempts", 1) or 1),
             parent_run_id=str(payload.get("parent_run_id", "") or "").strip(),
             repo_id=str(payload.get("repo_id", "") or "").strip(),
             actor_context=actor_context,
@@ -682,6 +884,10 @@ class RunService:
             decision=str(payload.get("decision", "pending") or "pending").strip() or "pending",
             decided_at=str(payload.get("decided_at", "") or "").strip(),
             decided_by=str(payload.get("decided_by", "") or "").strip(),
+            decision_note=str(payload.get("decision_note", "") or "").strip(),
+            retry_note=str(payload.get("retry_note", "") or "").strip(),
+            retry_context_summary=str(payload.get("retry_context_summary", "") or "").strip(),
+            retry_context=dict(payload.get("retry_context", {}) or {}) if isinstance(payload.get("retry_context"), dict) else {},
         )
 
     @staticmethod
@@ -744,6 +950,49 @@ class RunService:
             parent_run_id=run.parent_run_id,
         )
 
+    def _related_run_summary(self, run_id: str) -> dict | None:
+        related_run = self.load_run(run_id)
+        if related_run is None:
+            return None
+        failure_summary = self.get_failure_summary(related_run)
+        return {
+            "run_id": related_run.run_id,
+            "goal": related_run.goal,
+            "status": related_run.status,
+            "attempt_index": related_run.attempt_index,
+            "total_attempts": related_run.total_attempts,
+            "started_at": related_run.started_at,
+            "finished_at": related_run.finished_at,
+            "decision": related_run.decision,
+            "retry_strategy": str(related_run.retry_context.get("retry_strategy", "") or "").strip(),
+            "retry_strategy_reason": str(related_run.retry_context.get("retry_strategy_reason", "") or "").strip(),
+            "repeated_failure_detected": bool(related_run.retry_context.get("repeated_failure_detected", False)),
+            "failed_step": failure_summary.get("failed_step", ""),
+            "failure_code": failure_summary.get("failure_code", ""),
+            "failure_reason": failure_summary.get("failure_reason", ""),
+            "retry_context": dict(related_run.retry_context or {}),
+        }
+
+    def _run_child_summary(self, run: RunRecord) -> dict:
+        failure_summary = self.get_failure_summary(run)
+        return {
+            "run_id": run.run_id,
+            "goal": run.goal,
+            "status": run.status,
+            "attempt_index": run.attempt_index,
+            "total_attempts": run.total_attempts,
+            "started_at": run.started_at,
+            "finished_at": run.finished_at,
+            "decision": run.decision,
+            "retry_strategy": str(run.retry_context.get("retry_strategy", "") or "").strip(),
+            "retry_strategy_reason": str(run.retry_context.get("retry_strategy_reason", "") or "").strip(),
+            "repeated_failure_detected": bool(run.retry_context.get("repeated_failure_detected", False)),
+            "failed_step": failure_summary.get("failed_step", ""),
+            "failure_code": failure_summary.get("failure_code", ""),
+            "failure_reason": failure_summary.get("failure_reason", ""),
+            "retry_context": dict(run.retry_context or {}),
+        }
+
     def _diff_artifact_path(
         self,
         run_id: str,
@@ -767,3 +1016,366 @@ class RunService:
         if resolved_log_path is not None:
             return resolved_log_path.with_name(f"{resolved_run_id}{COMMENTS_ARTIFACT_SUFFIX}")
         return self._storage_dir / f"{resolved_run_id}{COMMENTS_ARTIFACT_SUFFIX}"
+
+    def _detail_artifact_path(
+        self,
+        run_id: str,
+        *,
+        log_path: str = "",
+    ) -> Path:
+        resolved_run_id = str(run_id or "").strip()
+        resolved_log_path = Path(str(log_path or "").strip()) if str(log_path or "").strip() else None
+        if resolved_log_path is not None:
+            return resolved_log_path.with_name(f"{resolved_run_id}{DETAIL_ARTIFACT_SUFFIX}")
+        return self._storage_dir / f"{resolved_run_id}{DETAIL_ARTIFACT_SUFFIX}"
+
+    def _load_run_detail_payload(
+        self,
+        run_id: str,
+        *,
+        log_path: str = "",
+    ) -> dict:
+        target_path = self._detail_artifact_path(run_id, log_path=log_path)
+        if not target_path.exists():
+            return {}
+        try:
+            payload = json.loads(target_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _normalize_actor_payload(run_record: RunRecord) -> dict | None:
+        if run_record.actor_context is None:
+            return None
+        return run_record.actor_context.to_dict()
+
+    @staticmethod
+    def _detail_step_from_run_step(step: RunStep) -> RunDetailStep:
+        return RunDetailStep(
+            name=str(step.name or "").strip(),
+            status=str(step.status or "").strip(),
+            started_at=str(step.started_at or "").strip(),
+            finished_at=str(step.finished_at or "").strip(),
+            message=str(step.message or "").strip(),
+            error_code=str(step.error.type or "").strip() if step.error is not None else "",
+            error_message=str(step.error.message or "").strip() if step.error is not None else "",
+        )
+
+    @staticmethod
+    def _normalize_validation_payload(validation_payload: dict | None) -> dict | None:
+        payload = dict(validation_payload or {}) if isinstance(validation_payload, dict) else {}
+        if not payload:
+            return None
+        failed_cases = []
+        for item in list(payload.get("failed_test_cases", []) or []):
+            if not isinstance(item, dict):
+                continue
+            failed_cases.append(
+                {
+                    "name": str(item.get("name", "") or "").strip(),
+                    "error_type": str(item.get("error_type", "") or "").strip(),
+                    "message": str(item.get("message", "") or "").strip(),
+                }
+            )
+        return {
+            "repo_id": str(payload.get("repo_id", "") or "").strip(),
+            "overall_status": str(payload.get("overall_status", "") or "").strip(),
+            "passed": bool(payload.get("passed", False)),
+            "total_tests": int(payload.get("total_tests", 0) or 0),
+            "passed_tests": int(payload.get("passed_tests", 0) or 0),
+            "failed_tests": int(payload.get("failed_tests", 0) or 0),
+            "failed_test_cases": failed_cases,
+            "stdout": str(payload.get("stdout", "") or "").strip(),
+            "stderr": str(payload.get("stderr", "") or "").strip(),
+            "steps": [
+                dict(item or {})
+                for item in list(payload.get("steps", []) or [])
+                if isinstance(item, dict)
+            ],
+            "errors": [
+                str(item or "").strip()
+                for item in list(payload.get("errors", []) or [])
+                if str(item or "").strip()
+            ],
+            "warnings": [
+                str(item or "").strip()
+                for item in list(payload.get("warnings", []) or [])
+                if str(item or "").strip()
+            ],
+        }
+
+    @staticmethod
+    def _normalize_apply_payload(payload: dict | None) -> dict | None:
+        item = dict(payload or {}) if isinstance(payload, dict) else {}
+        if not item:
+            return None
+        return {
+            "repo_id": str(item.get("repo_id", "") or "").strip(),
+            "root_path": str(item.get("root_path", "") or "").strip(),
+            "dry_run": bool(item.get("dry_run", False)),
+            "applied_files": [
+                dict(file_payload or {})
+                for file_payload in list(item.get("applied_files", []) or [])
+                if isinstance(file_payload, dict)
+            ],
+            "skipped_files": [
+                dict(file_payload or {})
+                for file_payload in list(item.get("skipped_files", []) or [])
+                if isinstance(file_payload, dict)
+            ],
+            "applied": bool(item.get("applied", False)),
+            "files_written": int(item.get("files_written", len(list(item.get("applied_files", []) or []))) or 0),
+            "files_failed": int(item.get("files_failed", 0) or 0),
+            "skipped": bool(item.get("skipped", False)),
+            "skip_reason": str(item.get("skip_reason", "") or "").strip(),
+            "warnings": [
+                str(value or "").strip()
+                for value in list(item.get("warnings", []) or [])
+                if str(value or "").strip()
+            ],
+            "errors": [
+                str(value or "").strip()
+                for value in list(item.get("errors", []) or [])
+                if str(value or "").strip()
+            ],
+        }
+
+    def _normalize_implementation_payload(self, implementation_payload: dict | None) -> dict | None:
+        payload = dict(implementation_payload or {}) if isinstance(implementation_payload, dict) else {}
+        if not payload:
+            return None
+        artifact_summary = dict(payload.get("artifact_summary", {}) or {})
+        file_paths = [
+            str(item or "").strip()
+            for item in list(artifact_summary.get("file_paths", []) or [])
+            if str(item or "").strip()
+        ]
+        file_count = int(artifact_summary.get("file_count", artifact_summary.get("files_count", len(file_paths))) or 0)
+        files_count = int(artifact_summary.get("files_count", file_count) or 0)
+        files_created = int(artifact_summary.get("files_created", 0) or 0)
+        files_deleted = int(artifact_summary.get("files_deleted", 0) or 0)
+        files_changed = int(artifact_summary.get("files_changed", max(0, files_count - files_created - files_deleted)) or 0)
+        reason_if_empty = str(artifact_summary.get("reason_if_empty", "") or "").strip()
+        if files_count == 0 and not reason_if_empty:
+            reason_if_empty = "agent produced no changes"
+        return {
+            **payload,
+            "artifact_summary": {
+                "artifact_type": str(artifact_summary.get("artifact_type", "") or "").strip(),
+                "goal": str(artifact_summary.get("goal", "") or "").strip(),
+                "file_count": file_count,
+                "file_paths": file_paths,
+                "files_count": files_count,
+                "files_changed": files_changed,
+                "files_created": files_created,
+                "files_deleted": files_deleted,
+                "reason_if_empty": reason_if_empty,
+            },
+            "dry_run_apply_result": self._normalize_apply_payload(payload.get("dry_run_apply_result")),
+            "candidate_apply_result": self._normalize_apply_payload(payload.get("candidate_apply_result")),
+            "real_apply_result": self._normalize_apply_payload(payload.get("real_apply_result")),
+            "validation_result": self._normalize_validation_payload(payload.get("validation_result")),
+            "root_cause_summary": str(payload.get("root_cause_summary", "") or "").strip(),
+        }
+
+    @staticmethod
+    def _compute_root_cause_summary(
+        *,
+        implementation_payload: dict | None,
+        validation_payload: dict | None,
+        failure_summary: dict,
+    ) -> str:
+        implementation = dict(implementation_payload or {}) if isinstance(implementation_payload, dict) else {}
+        artifact_summary = dict(implementation.get("artifact_summary", {}) or {})
+        files_count = int(artifact_summary.get("files_count", artifact_summary.get("file_count", 0)) or 0)
+        if files_count == 0:
+            return str(artifact_summary.get("reason_if_empty", "") or "No changes generated by agent").strip()
+
+        validation = dict(validation_payload or {}) if isinstance(validation_payload, dict) else {}
+        failed_tests = int(validation.get("failed_tests", 0) or 0)
+        if failed_tests > 0:
+            return f"Validation failed: {failed_tests} test(s) failed"
+        if str(validation.get("overall_status", "") or "").strip().lower() == "failed":
+            return "; ".join(list(validation.get("errors", []) or []) or [str(failure_summary.get("failure_reason", "") or "Validation failed").strip()])
+
+        dry_run_apply = dict(implementation.get("dry_run_apply_result", {}) or {})
+        if bool(dry_run_apply.get("skipped", False)):
+            reason = str(dry_run_apply.get("skip_reason", "") or "").strip()
+            if reason == "no_changes":
+                return "No changes generated by agent"
+            if reason == "validation_failed":
+                return "Apply skipped because validation failed"
+            if reason:
+                return f"Apply skipped: {reason.replace('_', ' ')}"
+
+        return str(implementation.get("root_cause_summary", "") or failure_summary.get("failure_reason", "") or "").strip()
+
+    @staticmethod
+    def _normalize_diff_payload(
+        diff_payload: dict | None,
+        *,
+        implementation_payload: dict | None = None,
+        validation_payload: dict | None = None,
+    ) -> dict:
+        payload = dict(diff_payload or {}) if isinstance(diff_payload, dict) else {}
+        files = []
+        for item in list(payload.get("files", []) or []):
+            if not isinstance(item, dict):
+                continue
+            diff_text = str(item.get("diff_text", item.get("diff", "")) or "")
+            diff_chunks = []
+            for chunk_payload in list(item.get("diff_chunks", []) or []):
+                if not isinstance(chunk_payload, dict):
+                    continue
+                diff_chunks.append(
+                    {
+                        "header": str(chunk_payload.get("header", "") or "").strip(),
+                        "lines": [
+                            {
+                                "type": str(line_payload.get("type", "") or "").strip(),
+                                "text": str(line_payload.get("text", "") or ""),
+                            }
+                            for line_payload in list(chunk_payload.get("lines", []) or [])
+                            if isinstance(line_payload, dict)
+                        ],
+                    }
+                )
+            if not diff_chunks and diff_text:
+                diff_chunks = [{"header": "preview", "lines": []}]
+                for raw_line in diff_text.splitlines():
+                    line_type = "context"
+                    if raw_line.startswith("+") and not raw_line.startswith("+++"):
+                        line_type = "added"
+                    elif raw_line.startswith("-") and not raw_line.startswith("---"):
+                        line_type = "removed"
+                    diff_chunks[0]["lines"].append({"type": line_type, "text": raw_line})
+            additions_count = int(item.get("additions_count", 0) or 0)
+            deletions_count = int(item.get("deletions_count", 0) or 0)
+            if (additions_count <= 0 and deletions_count <= 0) and diff_text:
+                additions_count = len(
+                    [
+                        line
+                        for line in diff_text.splitlines()
+                        if line.startswith("+") and not line.startswith("+++")
+                    ]
+                )
+                deletions_count = len(
+                    [
+                        line
+                        for line in diff_text.splitlines()
+                        if line.startswith("-") and not line.startswith("---")
+                    ]
+                )
+            files.append(
+                {
+                    "file_path": str(item.get("file_path", item.get("relative_path", "")) or "").strip(),
+                    "relative_path": str(item.get("relative_path", "") or "").strip(),
+                    "change_type": str(item.get("change_type", item.get("status", "")) or "").strip(),
+                    "status": str(item.get("status", "") or "").strip(),
+                    "operation_type": str(item.get("operation_type", "") or "").strip(),
+                    "diff_text": diff_text,
+                    "additions_count": additions_count,
+                    "deletions_count": deletions_count,
+                    "diff_chunks": diff_chunks,
+                }
+            )
+        warnings = [
+            str(item or "").strip()
+            for item in list(payload.get("warnings", []) or [])
+            if str(item or "").strip()
+        ]
+        diff_available = bool(files)
+        truncated = bool(payload.get("truncated", False)) or any("[TRUNCATED]" in str(item.get("diff_text", "") or "") for item in files) or any(
+            "truncated" in item.lower()
+            for item in warnings
+        )
+        total_files_changed = int(payload.get("total_files_changed", 0) or 0)
+        if total_files_changed <= 0 and files:
+            total_files_changed = len(
+                [item for item in files if str(item.get("status", "") or "").strip() != "skipped"]
+            )
+        total_additions = int(payload.get("total_additions", 0) or 0)
+        if total_additions <= 0 and files:
+            total_additions = sum(int(item.get("additions_count", 0) or 0) for item in files)
+        total_deletions = int(payload.get("total_deletions", 0) or 0)
+        if total_deletions <= 0 and files:
+            total_deletions = sum(int(item.get("deletions_count", 0) or 0) for item in files)
+        if not diff_available:
+            reason = str(payload.get("reason", "") or "").strip()
+            if not reason:
+                implementation = dict(implementation_payload or {}) if isinstance(implementation_payload, dict) else {}
+                validation = dict(validation_payload or {}) if isinstance(validation_payload, dict) else {}
+                dry_run_apply = dict(implementation.get("dry_run_apply_result", {}) or {})
+                if str(dry_run_apply.get("skip_reason", "") or "").strip() == "validation_failed":
+                    reason = "validation_failed_before_apply"
+                elif str(dry_run_apply.get("skip_reason", "") or "").strip():
+                    reason = str(dry_run_apply.get("skip_reason", "") or "").strip()
+                elif str(validation.get("overall_status", "") or "").strip().lower() == "failed":
+                    reason = "validation_failed_before_apply"
+                elif int(dict(implementation.get("artifact_summary", {}) or {}).get("files_count", 0) or 0) == 0:
+                    reason = "no_changes"
+                else:
+                    reason = "apply_not_executed"
+            return {
+                "diff_available": False,
+                "files": [],
+                "truncated": truncated,
+                "reason": reason,
+                "total_files_changed": 0,
+                "total_additions": 0,
+                "total_deletions": 0,
+            }
+        return {
+            "diff_available": True,
+            "files": files,
+            "truncated": truncated,
+            "reason": str(payload.get("reason", "") or "").strip(),
+            "total_files_changed": total_files_changed,
+            "total_additions": total_additions,
+            "total_deletions": total_deletions,
+        }
+
+    @staticmethod
+    def _normalize_publication_payload(run_record: RunRecord, detail_payload: dict) -> dict | None:
+        payload = (
+            dict(detail_payload.get("publication_result", {}) or {})
+            if isinstance(detail_payload.get("publication_result"), dict)
+            else {}
+        )
+        payload["branch_name"] = str(payload.get("branch_name", run_record.scm.get("branch_name", "")) or "").strip()
+        payload["commit_hash"] = str(payload.get("commit_hash", run_record.scm.get("commit_hash", "")) or "").strip()
+        payload["remote_url"] = str(payload.get("remote_url", run_record.scm.get("remote_url", "")) or "").strip()
+        payload["repo_path"] = str(payload.get("repo_path", run_record.scm.get("repo_path", "")) or "").strip()
+        payload["pr_url"] = str(payload.get("pr_url", run_record.pr_url) or "").strip()
+        payload["review_url"] = str(payload.get("review_url", run_record.review_url) or "").strip()
+        payload["review_status"] = str(payload.get("review_status", "") or "").strip()
+        payload["review_error"] = str(payload.get("review_error", "") or "").strip()
+        payload["publication_status"] = str(payload.get("publication_status", "") or "").strip()
+        if any(str(value or "").strip() for value in payload.values()):
+            return payload
+        return None
+
+    @staticmethod
+    def _infer_mode(run_record: RunRecord, detail_payload: dict) -> str:
+        explicit_mode = str(detail_payload.get("mode", "") or "").strip().lower()
+        if explicit_mode:
+            return explicit_mode
+        if isinstance(detail_payload.get("implementation_result"), dict):
+            return "implement"
+        if isinstance(detail_payload.get("spec_result"), dict):
+            return "spec"
+        if isinstance(detail_payload.get("review_result"), dict):
+            return "review"
+        if isinstance(detail_payload.get("research_result"), dict):
+            return "research"
+        step_names = {str(step.name or "").strip().lower() for step in list(run_record.steps)}
+        if {"draft", "validation", "apply"} & step_names:
+            return "implement"
+        if "spec" in step_names:
+            return "spec"
+        if "review" in step_names:
+            return "review"
+        if "research" in step_names:
+            return "research"
+        return "unknown"

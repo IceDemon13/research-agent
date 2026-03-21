@@ -33,6 +33,9 @@
     .severity-risk { color: #a40000; background: #fdeeee; padding: 2px 6px; }
     .comment-file-group { margin-bottom: 16px; }
     .comment-item { border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; }
+    .empty-state { color: #666; font-style: italic; }
+    .action-result { border: 1px solid #ddd; background: #f9f9f9; padding: 12px; margin-bottom: 16px; }
+    .diff-summary { margin-bottom: 12px; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -46,6 +49,7 @@
   </div>
 
   <div id="errorBox" class="error"></div>
+  <div id="actionResultBox" class="action-result hidden"></div>
 
   <div class="card">
     <h1 id="runTitle">Run</h1>
@@ -57,9 +61,49 @@
     <div id="failureSummary">Loading...</div>
   </div>
 
-  <div id="publicationCard" class="card hidden">
+  <div class="card">
+    <h2>Root Cause</h2>
+    <div id="rootCauseBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Draft Summary</h2>
+    <div id="draftBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Validation</h2>
+    <div id="validationBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Apply Summary</h2>
+    <div id="applyBox">Loading...</div>
+  </div>
+
+  <div id="publicationCard" class="card">
     <h2>Publication</h2>
     <div id="publicationBlock"></div>
+  </div>
+
+  <div class="card">
+    <h2>Spec</h2>
+    <div id="specBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Review Analysis</h2>
+    <div id="reviewBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Research</h2>
+    <div id="researchBox">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Repo Context</h2>
+    <div id="repoContextBox">Loading...</div>
   </div>
 
   <div class="card">
@@ -90,6 +134,8 @@
   <script>
     const config = window.APP_CONFIG || { apiBaseUrl: "", defaultHeaders: {} };
     const runId = new URLSearchParams(window.location.search).get("id") || "";
+    let currentRun = null;
+    let currentDiff = null;
 
     function buildUrl(path) {
       const base = (config.apiBaseUrl || "").replace(/\/$/, "");
@@ -114,94 +160,201 @@
     }
 
     function renderRun(run) {
+      currentRun = run || {};
       document.getElementById("runTitle").textContent = `Run ${run.run_id || ""}`;
       document.getElementById("runMeta").innerHTML = `
+        <p><strong>Mode:</strong> ${run.mode || "-"}</p>
+        <p><strong>Attempt:</strong> ${(run.attempt_index || 1)}/${(run.total_attempts || 1)}${run.retry_strategy ? ` (${escapeHtml(run.retry_strategy)} mode)` : ""}</p>
         <p><strong>Status:</strong> ${run.status || ""}</p>
         <p><strong>Goal:</strong> ${run.goal || ""}</p>
         <p><strong>Repo:</strong> ${run.repo_id || "-"}</p>
+        <p><strong>Jira Ticket:</strong> ${run.jira_ticket || "-"}</p>
+        <p><strong>Actor:</strong> ${run.actor?.display_name || run.actor?.actor_id || "-"}</p>
         <p><strong>Started:</strong> ${run.started_at || "-"}</p>
         <p><strong>Finished:</strong> ${run.finished_at || "-"}</p>
         <p><strong>Decision:</strong> ${run.decision || "pending"}</p>
         <p><strong>Decided At:</strong> ${run.decided_at || "-"}</p>
         <p><strong>Decided By:</strong> ${run.decided_by || "-"}</p>
+        <p><strong>Decision Note:</strong> ${escapeHtml(run.decision_note || "-")}</p>
+        <p><strong>Retry Note:</strong> ${escapeHtml(run.retry_note || "-")}</p>
+        <p><strong>Retry Context:</strong> ${escapeHtml(run.retry_context_summary || "-")}</p>
+        <p><strong>Retry Strategy:</strong> ${escapeHtml(run.retry_strategy || "-")}</p>
+        <p><strong>Strategy Reason:</strong> ${escapeHtml(run.retry_strategy_reason || "-")}</p>
+        <p><strong>Repeated Failure Detected:</strong> ${run.repeated_failure_detected ? "true" : "false"}</p>
+        <p><strong>Retry Reason:</strong> ${escapeHtml(run.retry_context?.retry_reason || "-")}</p>
+        <p><strong>Retry Instructions:</strong> ${(run.retry_context?.instructions || []).length ? (run.retry_context.instructions || []).map((item) => escapeHtml(item)).join("; ") : "-"}</p>
+        <p><strong>Parent Run:</strong> ${
+          run.parent_run?.run_id
+            ? `<a href="./run.html?id=${encodeURIComponent(run.parent_run.run_id)}">${escapeHtml(run.parent_run.run_id)}</a>`
+            : "-"
+        }</p>
+        <p><strong>Child Runs:</strong> ${
+          (run.child_runs || []).length
+            ? (run.child_runs || []).map((child) => `<a href="./run.html?id=${encodeURIComponent(child.run_id || "")}">${escapeHtml(child.run_id || "-")}</a>`).join(", ")
+            : "-"
+        }</p>
       `;
-      const failure = run.failure_summary || {};
       document.getElementById("failureSummary").innerHTML = `
-        <p><strong>Failed Step:</strong> ${failure.failed_step || "-"}</p>
-        <p><strong>Failure Code:</strong> ${failure.failure_code || "-"}</p>
-        <p><strong>Failure Reason:</strong> ${failure.failure_reason || "-"}</p>
+        <p><strong>Failed Step:</strong> ${run.failed_step || "-"}</p>
+        <p><strong>Failure Code:</strong> ${run.failure_code || "-"}</p>
+        <p><strong>Failure Reason:</strong> ${run.failure_reason || "-"}</p>
+      `;
+      document.getElementById("rootCauseBox").innerHTML = `
+        <p><strong>Summary:</strong> ${escapeHtml(run.root_cause_summary || "-")}</p>
+      `;
+      updateApproveState(run, currentDiff || {});
+    }
+
+    function renderDraftSummary(run) {
+      const box = document.getElementById("draftBox");
+      const artifact = run?.implementation_result?.artifact_summary;
+      if (!artifact) {
+        box.innerHTML = `<p class="empty-state">No draft summary for this run mode.</p>`;
+        return;
+      }
+      box.innerHTML = `
+        <p><strong>Artifact Type:</strong> ${escapeHtml(artifact.artifact_type || "-")}</p>
+        <p><strong>Goal:</strong> ${escapeHtml(artifact.goal || "-")}</p>
+        <p><strong>Files Count:</strong> ${artifact.files_count ?? artifact.file_count ?? 0}</p>
+        <p><strong>Files Changed:</strong> ${artifact.files_changed ?? 0}</p>
+        <p><strong>Files Created:</strong> ${artifact.files_created ?? 0}</p>
+        <p><strong>Files Deleted:</strong> ${artifact.files_deleted ?? 0}</p>
+        <p><strong>Reason If Empty:</strong> ${escapeHtml(artifact.reason_if_empty || "-")}</p>
       `;
     }
 
-    function derivePublicationState(run, errorsPayload, policyPayload) {
-      const branchName = run?.scm?.branch_name || "";
-      const prUrl = run?.pr_url || "";
-      const reviewUrl = run?.review_url || "";
-      const stepErrors = errorsPayload?.step_errors || [];
-      const policyDenials = policyPayload?.policy_decisions || [];
-      const reviewError = stepErrors.find((item) => item.step_name === "review");
-      const reviewPolicy = policyDenials.find((item) => item.capability === "review.create" && item.allowed === false);
-
-      let reviewStatus = "";
-      let reviewMessage = "";
-      if (reviewUrl) {
-        reviewStatus = "success";
-      } else if (reviewError) {
-        reviewStatus = "failed";
-        reviewMessage = reviewError.error_message || reviewError.error_type || "";
-      } else if (reviewPolicy) {
-        reviewStatus = "skipped";
-        reviewMessage = reviewPolicy.reason || "";
-      } else if ((run?.failure_summary?.failed_step || "") === "review") {
-        reviewStatus = "failed";
-        reviewMessage = run?.failure_summary?.failure_reason || "";
+    function renderValidation(run) {
+      const box = document.getElementById("validationBox");
+      const validation = run?.validation_result;
+      if (!validation) {
+        box.innerHTML = `<p class="empty-state">No validation result for this run.</p>`;
+        return;
       }
-
-      return {
-        branchName,
-        prUrl,
-        reviewUrl,
-        reviewStatus,
-        reviewMessage
-      };
+      const failedCases = validation.failed_test_cases || [];
+      box.innerHTML = `
+        <p><strong>Status:</strong> ${escapeHtml(validation.overall_status || "-")}</p>
+        <p><strong>Passed:</strong> ${validation.passed ? "true" : "false"}</p>
+        <p><strong>Total Tests:</strong> ${validation.total_tests ?? 0}</p>
+        <p><strong>Passed Tests:</strong> ${validation.passed_tests ?? 0}</p>
+        <p><strong>Failed Tests:</strong> ${validation.failed_tests ?? 0}</p>
+        <p><strong>Stdout:</strong></p>
+        <div class="diff-block">${escapeHtml(validation.stdout || "-")}</div>
+        <p><strong>Stderr:</strong></p>
+        <div class="diff-block">${escapeHtml(validation.stderr || "-")}</div>
+        ${
+          failedCases.length
+            ? `<h3>Failed Test Cases</h3><ul>${failedCases.map((item) => `
+                <li><strong>${escapeHtml(item.name || "-")}</strong> ${item.error_type ? `(${escapeHtml(item.error_type)})` : ""}<div>${escapeHtml(item.message || "-")}</div></li>
+              `).join("")}</ul>`
+            : `<p class="empty-state">No failed test cases.</p>`
+        }
+      `;
     }
 
-    function renderPublication(run, errorsPayload, policyPayload) {
-      const card = document.getElementById("publicationCard");
-      const box = document.getElementById("publicationBlock");
-      const publication = derivePublicationState(run, errorsPayload, policyPayload);
-      const hasPublicationData = Boolean(
-        publication.branchName ||
-        publication.prUrl ||
-        publication.reviewUrl ||
-        publication.reviewStatus
-      );
+    function renderApplySummary(run) {
+      const box = document.getElementById("applyBox");
+      const implementation = run?.implementation_result || {};
+      const apply = implementation.real_apply_result || implementation.dry_run_apply_result;
+      if (!apply) {
+        box.innerHTML = `<p class="empty-state">No apply result for this run.</p>`;
+        return;
+      }
+      box.innerHTML = `
+        <p><strong>Applied:</strong> ${apply.applied ? "true" : "false"}</p>
+        <p><strong>Files Written:</strong> ${apply.files_written ?? 0}</p>
+        <p><strong>Files Failed:</strong> ${apply.files_failed ?? 0}</p>
+        <p><strong>Skipped:</strong> ${apply.skipped ? "true" : "false"}</p>
+        <p><strong>Skip Reason:</strong> ${escapeHtml(apply.skip_reason || "-")}</p>
+        <p><strong>Warnings:</strong> ${(apply.warnings || []).length}</p>
+        <p><strong>Errors:</strong> ${(apply.errors || []).length}</p>
+      `;
+    }
 
+    function renderPublication(run) {
+      const box = document.getElementById("publicationBlock");
+      const publication = run?.publication_result || {};
+      const hasPublicationData = Boolean(Object.values(publication).some((value) => String(value || "").trim()));
       if (!hasPublicationData) {
-        card.classList.add("hidden");
-        box.innerHTML = "";
+        box.textContent = "No publication data.";
         return;
       }
 
-      const reviewStatusClass = publication.reviewStatus
-        ? `status-${publication.reviewStatus}`
+      const reviewStatusClass = publication.review_status
+        ? `status-${publication.review_status}`
         : "";
-
-      card.classList.remove("hidden");
       box.innerHTML = `
-        <p><strong>Branch:</strong> ${publication.branchName || "-"}</p>
+        <p><strong>Branch:</strong> ${publication.branch_name || "-"}</p>
+        <p><strong>Commit:</strong> ${publication.commit_hash || "-"}</p>
         <p><strong>PR:</strong> ${
-          publication.prUrl
-            ? `<a href="${publication.prUrl}" target="_blank" rel="noopener noreferrer">Open PR</a>`
+          publication.pr_url
+            ? `<a href="${publication.pr_url}" target="_blank" rel="noopener noreferrer">Open PR</a>`
             : "-"
         }</p>
         <p><strong>Review:</strong> ${
-          publication.reviewUrl
-            ? `<a href="${publication.reviewUrl}" target="_blank" rel="noopener noreferrer">Open Review</a>`
+          publication.review_url
+            ? `<a href="${publication.review_url}" target="_blank" rel="noopener noreferrer">Open Review</a>`
             : "-"
         }</p>
-        <p><strong>Review Status:</strong> <span class="${reviewStatusClass}">${publication.reviewStatus || "-"}</span></p>
-        <p><strong>Review Error:</strong> ${publication.reviewMessage || "-"}</p>
+        <p><strong>Review Status:</strong> <span class="${reviewStatusClass}">${publication.review_status || "-"}</span></p>
+        <p><strong>Review Error:</strong> ${publication.review_error || "-"}</p>
+        <p><strong>Publication Status:</strong> ${publication.publication_status || "-"}</p>
+      `;
+    }
+
+    function renderSpec(run) {
+      const box = document.getElementById("specBox");
+      const spec = run?.spec_result;
+      if (!spec) {
+        box.textContent = "No spec result.";
+        return;
+      }
+      box.innerHTML = `
+        <p><strong>Title:</strong> ${escapeHtml(spec.title || "-")}</p>
+        <p><strong>Goal:</strong> ${escapeHtml(spec.goal || "-")}</p>
+        <p><strong>Context:</strong> ${escapeHtml(spec.context || "-")}</p>
+        <p><strong>Requirements:</strong> ${(spec.requirements || []).length}</p>
+      `;
+    }
+
+    function renderReview(run) {
+      const box = document.getElementById("reviewBox");
+      const review = run?.review_result;
+      if (!review) {
+        box.textContent = "No review result.";
+        return;
+      }
+      box.innerHTML = `
+        <p><strong>Status:</strong> ${escapeHtml(review.status || "-")}</p>
+        <p><strong>Summary:</strong> ${escapeHtml(review.summary || "-")}</p>
+        <p><strong>Findings:</strong> ${(review.issues || []).length}</p>
+        <p><strong>Checks:</strong> ${(review.checks || []).length}</p>
+      `;
+    }
+
+    function renderResearch(run) {
+      const box = document.getElementById("researchBox");
+      const research = run?.research_result;
+      if (!research) {
+        box.textContent = "No research result.";
+        return;
+      }
+      box.innerHTML = `
+        <p><strong>Confidence:</strong> ${escapeHtml(research.confidence || "-")}</p>
+        <div>${escapeHtml(research.answer || "-")}</div>
+      `;
+    }
+
+    function renderRepoContext(run) {
+      const box = document.getElementById("repoContextBox");
+      const summary = run?.repo_context_summary;
+      if (!summary) {
+        box.textContent = "No repo context summary.";
+        return;
+      }
+      box.innerHTML = `
+        <p><strong>Files Used:</strong> ${(summary.files_used || []).join(", ") || "-"}</p>
+        <p><strong>Resolved Targets:</strong> ${(summary.resolved_target_files || []).join(", ") || "-"}</p>
+        <p><strong>Chunk Count:</strong> ${summary.chunk_count ?? 0}</p>
       `;
     }
 
@@ -217,6 +370,7 @@
           <div>Started: ${step.started_at || "-"}</div>
           <div>Finished: ${step.finished_at || "-"}</div>
           <div>${step.message || ""}</div>
+          <div class="error">${step.error_code ? `${step.error_code}: ${step.error_message || "-"}` : ""}</div>
         </div>
       `).join("");
     }
@@ -243,7 +397,7 @@
       let html = "";
       if (errors.length) {
         html += `<h3>Step Errors</h3><ul>${errors.map((error) => `
-          <li><strong>${error.step_name}</strong>: ${error.error_type || "-"} - ${error.error_message || ""}</li>
+          <li><strong>${error.step_name}</strong>: ${error.error_code || "-"} - ${error.error_message || ""}</li>
         `).join("")}</ul>`;
       }
       if (denials.length) {
@@ -283,10 +437,12 @@
     }
 
     function renderDiff(payload) {
+      currentDiff = payload || {};
+      updateApproveState(currentRun || {}, currentDiff);
       const box = document.getElementById("diffBox");
       const files = payload?.files || [];
       if (!payload?.diff_available || !files.length) {
-        box.textContent = "No diff available.";
+        box.innerHTML = `<p class="empty-state">No changes to preview.</p><p><strong>Reason:</strong> ${escapeHtml(payload?.reason || "no_diff")}</p>`;
         return;
       }
 
@@ -295,17 +451,63 @@
         : "";
 
       box.innerHTML = `
+        <div class="diff-summary">${payload.total_files_changed || files.length} files changed, +${payload.total_additions || 0} -${payload.total_deletions || 0}</div>
         ${warning}
         ${files.map((file) => `
           <details>
             <summary>
-              <strong>${escapeHtml(file.relative_path || "-")}</strong>
-              <span class="status-${escapeHtml(file.status || "")}">(${escapeHtml(file.status || "-")})</span>
+              <strong>${escapeHtml(file.file_path || file.relative_path || "-")}</strong>
+              <span class="status-${escapeHtml(file.status || "")}">(${escapeHtml(file.change_type || file.status || "-")})</span>
+              <span>+${file.additions_count || 0} -${file.deletions_count || 0}</span>
             </summary>
             <div class="diff-block">${renderDiffText(file.diff_text || "")}</div>
           </details>
         `).join("")}
       `;
+    }
+
+    function updateApproveState(run, diffPayload) {
+      const approveButton = document.getElementById("approveButton");
+      if (!approveButton) {
+        return;
+      }
+      approveButton.disabled = false;
+      approveButton.title = "";
+      const implementation = run?.implementation_result || {};
+      const validation = run?.validation_result || {};
+      const finalStatus = String(implementation.final_status || run?.status || "").toLowerCase();
+      if (finalStatus === "no_changes" || String(run?.status || "").toLowerCase() === "no_changes") {
+        approveButton.disabled = true;
+        approveButton.title = "Nothing to approve because no changes were generated.";
+        return;
+      }
+      if (String(validation.overall_status || "").toLowerCase() === "failed") {
+        approveButton.disabled = true;
+        approveButton.title = "Approval is blocked because validation failed.";
+        return;
+      }
+      if (!diffPayload?.diff_available) {
+        approveButton.title = "Diff preview is empty or unavailable.";
+      }
+    }
+
+    function buildApproveConfirmation(run, diffPayload) {
+      const publication = run?.publication_result || {};
+      const branchName = publication.branch_name || "-";
+      const totalFiles = diffPayload?.total_files_changed || 0;
+      const additions = diffPayload?.total_additions || 0;
+      const deletions = diffPayload?.total_deletions || 0;
+      return window.confirm(
+        [
+          "Approve this run?",
+          "",
+          `Branch: ${branchName}`,
+          `Files: ${totalFiles}`,
+          `Additions: +${additions}`,
+          `Deletions: -${deletions}`,
+          "PR will be created through the existing publication flow when enabled.",
+        ].join("\n")
+      );
     }
 
     function renderComments(payload) {
@@ -358,7 +560,14 @@
           fetchJson(`/runs/${encodeURIComponent(runId)}/comments`)
         ]);
         renderRun(runPayload.run || {});
-        renderPublication(runPayload.run || {}, errorsPayload || {}, policyPayload || {});
+        renderDraftSummary(runPayload.run || {});
+        renderValidation(runPayload.run || {});
+        renderApplySummary(runPayload.run || {});
+        renderPublication(runPayload.run || {});
+        renderSpec(runPayload.run || {});
+        renderReview(runPayload.run || {});
+        renderResearch(runPayload.run || {});
+        renderRepoContext(runPayload.run || {});
         renderDiff(diffPayload || {});
         renderComments(commentsPayload || {});
         renderSteps(stepsPayload.steps || []);
@@ -369,13 +578,58 @@
       }
     }
 
+    function showActionResult(payload) {
+      const box = document.getElementById("actionResultBox");
+      if (!payload) {
+        box.classList.add("hidden");
+        box.textContent = "";
+        return;
+      }
+      box.classList.remove("hidden");
+      box.innerHTML = `
+        <p><strong>Action:</strong> ${escapeHtml(payload.action || "-")}</p>
+        <p><strong>Success:</strong> ${payload.success ? "true" : "false"}</p>
+        <p><strong>Message:</strong> ${escapeHtml(payload.message || "-")}</p>
+        <p><strong>Blocked Reason:</strong> ${escapeHtml(payload.blocked_reason || "-")}</p>
+        ${payload.new_run_id ? `<p><strong>New Run:</strong> <a href="./run.html?id=${encodeURIComponent(payload.new_run_id)}">${escapeHtml(payload.new_run_id)}</a></p>` : ""}
+      `;
+    }
+
+    function buildActionBody(action) {
+      if (action === "reject") {
+        const note = window.prompt("Optional rejection reason:", "") || "";
+        return { note };
+      }
+      if (action === "approve") {
+        if (!buildApproveConfirmation(currentRun || {}, currentDiff || {})) {
+          return null;
+        }
+        const note = window.prompt("Optional approval note:", "") || "";
+        return { note };
+      }
+      if (action === "retry") {
+        const note = window.prompt("Optional retry note:", "") || "";
+        const refinementPrompt = window.prompt("Optional refinement prompt:", "") || "";
+        return { note, refinement_prompt: refinementPrompt };
+      }
+      return {};
+    }
+
     async function runAction(action) {
       const errorBox = document.getElementById("errorBox");
       errorBox.textContent = "";
       try {
-        const payload = await fetchJson(`/runs/${encodeURIComponent(runId)}/${action}`, { method: "POST" });
-        if (action === "retry" && payload.new_run?.run_id) {
-          window.location.href = `./run.html?id=${encodeURIComponent(payload.new_run.run_id)}`;
+        const actionBody = buildActionBody(action);
+        if (actionBody === null) {
+          return;
+        }
+        const payload = await fetchJson(`/runs/${encodeURIComponent(runId)}/${action}`, {
+          method: "POST",
+          body: actionBody
+        });
+        showActionResult(payload);
+        if (action === "retry" && payload.new_run_id) {
+          window.location.href = `./run.html?id=${encodeURIComponent(payload.new_run_id)}`;
           return;
         }
         await loadRun();

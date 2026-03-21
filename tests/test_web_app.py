@@ -13,6 +13,7 @@ from contracts.crucible_review_contract import CrucibleReviewResult
 from contracts.diff_contract import DiffFile, DiffResult
 from contracts.permission_contract import PermissionDecision, PermissionScope
 from contracts.repo_metadata import RepoMetadata
+from contracts.run_detail_contract import RunDetail
 from contracts.repo_onboarding_contract import RepoOnboardingResult
 from contracts.run_contract import RunRecord
 from services.run_service import RunService
@@ -55,12 +56,23 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(run_response.status_code, 200)
         self.assertIn("Run Detail", run_response.text)
         self.assertIn("Publication", run_response.text)
+        self.assertIn("Root Cause", run_response.text)
+        self.assertIn("Draft Summary", run_response.text)
+        self.assertIn("Validation", run_response.text)
+        self.assertIn("Apply Summary", run_response.text)
         self.assertIn("Diff", run_response.text)
         self.assertIn("AI Review Comments", run_response.text)
-        self.assertIn("No diff available", run_response.text)
+        self.assertIn("No changes to preview", run_response.text)
         self.assertIn("No AI review comments", run_response.text)
         self.assertIn("comment-file-group", run_response.text)
         self.assertIn("severity-risk", run_response.text)
+        self.assertIn("Approve this run?", run_response.text)
+        self.assertIn("files changed", run_response.text)
+        self.assertIn("Decision Note", run_response.text)
+        self.assertIn("Retry Note", run_response.text)
+        self.assertIn("Attempt:", run_response.text)
+        self.assertIn("Parent Run", run_response.text)
+        self.assertIn("Child Runs", run_response.text)
         self.assertIn("Approve", run_response.text)
         self.assertIn("Reject", run_response.text)
         self.assertIn("Open PR", run_response.text)
@@ -236,6 +248,239 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["run"]["run_id"], run.run_id)
+        self.assertEqual(response.json()["run"]["mode"], "unknown")
+
+    def test_show_run_detail_hydrates_implementation_sections(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="user",
+            role="techlead",
+            source_channel="api",
+            display_name="Tech Lead",
+        )
+        run = service.start_run("Implementation run", repo_id="sample", actor_context=actor)
+        service.attach_scm(
+            run.run_id,
+            {
+                "branch_name": "feature/ai/implementation-run",
+                "commit_hash": "abc123",
+                "remote_url": "https://bitbucket.org/acme/sample-repo.git",
+            },
+        )
+        service.attach_publication(
+            run.run_id,
+            pr_url="https://bitbucket.org/acme/sample-repo/pull-requests/1",
+            review_url="https://crucible.example.invalid/cru/CR-1",
+        )
+        finished_run = service.finish_run(run.run_id, "success")
+        service.persist_diff_result(
+            run.run_id,
+            {
+                "files": [
+                    {
+                        "relative_path": "src/app.py",
+                        "status": "modified",
+                        "diff": "--- a/src/app.py\n+++ b/src/app.py",
+                    }
+                ]
+            },
+        )
+        service.persist_review_comments(
+            run.run_id,
+            [{"file_path": "src/app.py", "severity": "warning", "title": "Check"}],
+        )
+        service.persist_run_detail(
+            run.run_id,
+            {
+                "mode": "implement",
+                "root_cause_summary": "Validation failed: 2 test(s) failed",
+                "implementation_result": {
+                    "final_status": "applied",
+                    "artifact_summary": {
+                        "artifact_type": "draft_set",
+                        "goal": "Implementation run",
+                        "file_count": 1,
+                        "files_count": 1,
+                        "file_paths": ["src/app.py"],
+                        "files_changed": 1,
+                        "files_created": 0,
+                        "files_deleted": 0,
+                    },
+                    "dry_run_apply_result": {
+                        "repo_id": "sample",
+                        "root_path": self.workspace_root.as_posix(),
+                        "dry_run": True,
+                        "applied_files": [],
+                        "skipped_files": [],
+                        "applied": False,
+                        "files_written": 0,
+                        "files_failed": 0,
+                        "skipped": True,
+                        "skip_reason": "validation_failed",
+                    },
+                },
+                "publication_result": {"publication_status": "success", "review_status": "success"},
+                "validation_result": {
+                    "overall_status": "failed",
+                    "passed": False,
+                    "total_tests": 2,
+                    "passed_tests": 0,
+                    "failed_tests": 2,
+                    "failed_test_cases": [{"name": "tests/test_app.py::test_run", "error_type": "AssertionError", "message": "boom"}],
+                    "stdout": "stdout",
+                    "stderr": "stderr",
+                },
+                "diff_result": {"files": [], "reason": "validation_failed_before_apply"},
+            },
+            log_path=finished_run.log_path,
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=service):
+            response = self.client.get(
+                f"/runs/{run.run_id}",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["run"]
+        self.assertEqual(payload["mode"], "implement")
+        self.assertEqual(payload["root_cause_summary"], "Validation failed: 2 test(s) failed")
+        self.assertEqual(payload["publication_result"]["branch_name"], "feature/ai/implementation-run")
+        self.assertFalse(payload["diff_result"]["diff_available"])
+        self.assertEqual(payload["diff_result"]["reason"], "validation_failed_before_apply")
+        self.assertEqual(payload["validation_result"]["failed_tests"], 2)
+        self.assertEqual(payload["implementation_result"]["dry_run_apply_result"]["skip_reason"], "validation_failed")
+        self.assertEqual(payload["review_comments"][0]["file_path"], "src/app.py")
+
+    def test_show_run_detail_hydrates_spec_review_and_research_sections(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="user",
+            role="techlead",
+            source_channel="api",
+            display_name="Tech Lead",
+        )
+        spec_run = service.start_run("Spec run", repo_id="sample", actor_context=actor)
+        spec_finished = service.finish_run(spec_run.run_id, "success")
+        service.persist_run_detail(
+            spec_run.run_id,
+            {
+                "mode": "spec",
+                "spec_result": {"title": "Spec Title", "goal": "Spec Goal"},
+                "repo_context_summary": {"files_used": ["src/app.py"], "chunk_count": 1},
+            },
+            log_path=spec_finished.log_path,
+        )
+        review_run = service.start_run("Review run", repo_id="sample", actor_context=actor)
+        review_finished = service.finish_run(review_run.run_id, "success")
+        service.persist_run_detail(
+            review_run.run_id,
+            {
+                "mode": "review",
+                "review_result": {"summary": "Review Summary", "issues": ["Issue A"]},
+            },
+            log_path=review_finished.log_path,
+        )
+        research_run = service.start_run("Research run", actor_context=actor)
+        research_finished = service.finish_run(research_run.run_id, "success")
+        service.persist_run_detail(
+            research_run.run_id,
+            {
+                "mode": "research",
+                "research_result": {"answer": "Research answer", "confidence": "high"},
+            },
+            log_path=research_finished.log_path,
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=service):
+            spec_response = self.client.get(f"/runs/{spec_run.run_id}", headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api"})
+            review_response = self.client.get(f"/runs/{review_run.run_id}", headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api"})
+            research_response = self.client.get(f"/runs/{research_run.run_id}", headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api"})
+
+        self.assertEqual(spec_response.json()["run"]["spec_result"]["title"], "Spec Title")
+        self.assertEqual(review_response.json()["run"]["review_result"]["issues"], ["Issue A"])
+        self.assertEqual(research_response.json()["run"]["research_result"]["confidence"], "high")
+
+    def test_show_run_detail_hydrates_no_changes_implementation_run(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="user",
+            role="techlead",
+            source_channel="api",
+            display_name="Tech Lead",
+        )
+        run = service.start_run("No changes run", repo_id="sample", actor_context=actor)
+        finished_run = service.finish_run(run.run_id, "no_changes")
+        service.persist_run_detail(
+            run.run_id,
+            {
+                "mode": "implement",
+                "root_cause_summary": "No changes generated by agent",
+                "implementation_result": {
+                    "final_status": "no_changes",
+                    "artifact_summary": {
+                        "artifact_type": "draft_set",
+                        "goal": "No changes run",
+                        "file_count": 0,
+                        "files_count": 0,
+                        "file_paths": [],
+                        "files_changed": 0,
+                        "files_created": 0,
+                        "files_deleted": 0,
+                        "reason_if_empty": "agent produced no changes",
+                    },
+                    "dry_run_apply_result": {
+                        "repo_id": "sample",
+                        "root_path": self.workspace_root.as_posix(),
+                        "dry_run": True,
+                        "applied_files": [],
+                        "skipped_files": [],
+                        "applied": False,
+                        "files_written": 0,
+                        "files_failed": 0,
+                        "skipped": True,
+                        "skip_reason": "no_changes",
+                    },
+                },
+                "validation_result": {
+                    "overall_status": "skipped",
+                    "passed": False,
+                    "total_tests": 0,
+                    "passed_tests": 0,
+                    "failed_tests": 0,
+                    "failed_test_cases": [],
+                    "stdout": "",
+                    "stderr": "",
+                    "warnings": ["Skipped because no changes were generated."],
+                },
+                "diff_result": {"files": [], "reason": "no_changes"},
+            },
+            log_path=finished_run.log_path,
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=service):
+            response = self.client.get(
+                f"/runs/{run.run_id}",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["run"]
+        self.assertEqual(payload["status"], "no_changes")
+        self.assertEqual(payload["implementation_result"]["final_status"], "no_changes")
+        self.assertEqual(payload["diff_result"]["reason"], "no_changes")
+        self.assertEqual(payload["root_cause_summary"], "No changes generated by agent")
 
     def test_create_run_endpoint_tracks_non_implementation_run(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -415,6 +660,7 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["steps"][0]["step_name"], "validation")
+        self.assertEqual(response.json()["steps"][0]["error_code"], "")
 
     def test_show_run_policy_endpoint(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -498,6 +744,7 @@ class WebAppTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["failure_summary"]["failure_code"], "MISSING_VALIDATION")
         self.assertEqual(payload["step_errors"][0]["step_name"], "validation")
+        self.assertEqual(payload["step_errors"][0]["error_code"], "unexpected")
 
     def test_show_run_diff_endpoint_returns_existing_diff_artifact(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -544,6 +791,11 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["files"][0]["relative_path"], "src/app.py")
         self.assertEqual(payload["files"][0]["status"], "modified")
         self.assertIn("return 'new'", payload["files"][0]["diff_text"])
+        self.assertEqual(payload["total_files_changed"], 1)
+        self.assertEqual(payload["total_additions"], 1)
+        self.assertEqual(payload["total_deletions"], 1)
+        self.assertEqual(payload["files"][0]["change_type"], "modified")
+        self.assertTrue(payload["files"][0]["diff_chunks"])
 
     def test_show_run_diff_endpoint_returns_empty_response_when_no_diff_exists(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -572,6 +824,7 @@ class WebAppTests(unittest.TestCase):
         self.assertFalse(payload["diff_available"])
         self.assertEqual(payload["files"], [])
         self.assertFalse(payload["truncated"])
+        self.assertEqual(payload["total_files_changed"], 0)
 
     def test_show_run_diff_endpoint_marks_truncated_preview(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -702,7 +955,15 @@ class WebAppTests(unittest.TestCase):
             display_name="Admin",
         )
         source_run = service.start_run("Retry run", repo_id="sample", actor_context=actor)
-        service.finish_run(source_run.run_id, "failed")
+        finished_source = service.finish_run(source_run.run_id, "failed")
+        service.persist_run_detail(
+            source_run.run_id,
+            {
+                "mode": "implement",
+                "root_cause_summary": "Validation failed: 1 test(s) failed",
+            },
+            log_path=finished_source.log_path,
+        )
         retried_run = RunRecord(
             run_id="retry-run-1",
             goal="Retry run",
@@ -911,6 +1172,7 @@ class WebAppTests(unittest.TestCase):
         with patch("web_app.root_agent.RunService", return_value=service):
             response = self.client.post(
                 f"/runs/{run.run_id}/approve",
+                json={"note": "Ship it."},
                 headers={
                     "X-Actor-Id": "lead-1",
                     "X-Actor-Role": "techlead",
@@ -920,8 +1182,11 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["action"], "approve")
+        self.assertTrue(payload["success"])
         self.assertEqual(payload["run"]["decision"], "approved")
         self.assertEqual(payload["run"]["decided_by"], "lead-1")
+        self.assertEqual(payload["run"]["decision_note"], "Ship it.")
         self.assertTrue(payload["run"]["decided_at"])
 
     def test_reject_endpoint_updates_run_decision(self) -> None:
@@ -939,6 +1204,7 @@ class WebAppTests(unittest.TestCase):
         with patch("web_app.root_agent.RunService", return_value=service):
             response = self.client.post(
                 f"/runs/{run.run_id}/reject",
+                json={"note": "Please refine the proposed changes."},
                 headers={
                     "X-Actor-Id": "lead-1",
                     "X-Actor-Role": "techlead",
@@ -948,8 +1214,11 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["action"], "reject")
+        self.assertTrue(payload["success"])
         self.assertEqual(payload["run"]["decision"], "rejected")
         self.assertEqual(payload["run"]["decided_by"], "lead-1")
+        self.assertEqual(payload["run"]["decision_note"], "Please refine the proposed changes.")
 
     def test_approve_endpoint_rejects_incomplete_run_state(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -972,7 +1241,165 @@ class WebAppTests(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["success"])
+        self.assertIn("only completed runs can be approved or rejected", response.json()["blocked_reason"])
+
+    def test_approve_endpoint_blocks_no_changes_implementation_run(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="user",
+            role="techlead",
+            source_channel="api",
+            display_name="Tech Lead",
+        )
+        run = service.start_run("No changes run", repo_id="sample", actor_context=actor)
+        finished_run = service.finish_run(run.run_id, "no_changes")
+        service.persist_run_detail(
+            run.run_id,
+            {
+                "mode": "implement",
+                "implementation_result": {"final_status": "no_changes"},
+            },
+            log_path=finished_run.log_path,
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=service):
+            response = self.client.post(
+                f"/runs/{run.run_id}/approve",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertIn("Nothing to approve", payload["blocked_reason"])
+
+    def test_approve_endpoint_blocks_validation_failed_implementation_run(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="user",
+            role="techlead",
+            source_channel="api",
+            display_name="Tech Lead",
+        )
+        run = service.start_run("Validation failed run", repo_id="sample", actor_context=actor)
+        finished_run = service.finish_run(run.run_id, "partial")
+        service.persist_run_detail(
+            run.run_id,
+            {
+                "mode": "implement",
+                "implementation_result": {"final_status": "candidate_validation_failed"},
+                "validation_result": {"overall_status": "failed"},
+            },
+            log_path=finished_run.log_path,
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=service):
+            response = self.client.post(
+                f"/runs/{run.run_id}/approve",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertIn("validation", payload["blocked_reason"].lower())
+
+    def test_retry_endpoint_returns_child_run_with_retry_note(self) -> None:
+        source_run = RunRecord(
+            run_id="parent-run-1",
+            goal="Implement update src/app.py",
+            status="failed",
+            started_at="2026-03-21T10:00:00+00:00",
+            finished_at="2026-03-21T10:10:00+00:00",
+            repo_id="sample",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        child_run = RunRecord(
+            run_id="child-run-1",
+            goal="Implement update src/app.py",
+            status="success",
+            started_at="2026-03-21T10:11:00+00:00",
+            finished_at="2026-03-21T10:15:00+00:00",
+            attempt_index=2,
+            total_attempts=3,
+            parent_run_id="parent-run-1",
+            repo_id="sample",
+            actor_context=source_run.actor_context,
+            retry_note="Try smaller change.",
+            retry_context_summary="Validation failed: 2 test(s) failed",
+            retry_context={"retry_reason": "validation_failed", "retry_strategy": "strict"},
+        )
+        with patch(
+            "web_app.root_agent.run_root_agent",
+            return_value=AgentResult(
+                agent_name="runs",
+                output_text="Retry executed.",
+                success=True,
+                task_intent="read",
+                repo_context={},
+                metadata={
+                    "artifact_type": "run_retry",
+                    "action": "retry",
+                    "source_run": source_run,
+                    "run_record": source_run,
+                    "new_run_record": child_run,
+                    "message": "Retry executed.",
+                    "blocked_reason": "",
+                    "success": True,
+                },
+            ),
+        ), patch("web_app._artifact_run_service") as mocked_artifact_service:
+            mocked_artifact_service.return_value.load_run_detail.return_value = RunDetail(
+                run_id="child-run-1",
+                mode="implement",
+                goal="Implement update src/app.py",
+                attempt_index=2,
+                total_attempts=3,
+                parent_run_id="parent-run-1",
+                repo_id="sample",
+                status="success",
+                retry_note="Try smaller change.",
+                retry_context_summary="Validation failed: 2 test(s) failed",
+                retry_strategy="strict",
+                retry_context={"retry_reason": "validation_failed", "retry_strategy": "strict"},
+            )
+            response = self.client.post(
+                "/runs/parent-run-1/retry",
+                json={"note": "Try smaller change.", "refinement_prompt": "Focus only on app.py"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["new_run_id"], "child-run-1")
+        self.assertEqual(payload["new_run"]["retry_note"], "Try smaller change.")
+        self.assertEqual(payload["new_run"]["attempt_index"], 2)
+        self.assertEqual(payload["new_run"]["total_attempts"], 3)
+        self.assertEqual(payload["new_run"]["retry_strategy"], "strict")
+        self.assertEqual(payload["new_run"]["retry_context"]["retry_reason"], "validation_failed")
 
 
 if __name__ == "__main__":

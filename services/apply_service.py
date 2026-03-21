@@ -90,7 +90,12 @@ class ApplyService:
                 root_path=repo_root.as_posix(),
                 dry_run=apply_input.dry_run,
                 errors=[f"Resolved repo root does not exist: {repo_root.as_posix()}"],
-        )
+                applied=False,
+                files_written=0,
+                files_failed=1,
+                skipped=False,
+                skip_reason="",
+            )
 
         for operation in apply_input.operations:
             current_content = ""
@@ -172,12 +177,29 @@ class ApplyService:
                 )
                 skipped_files.append(result)
 
+        files_written = len(applied_files)
+        files_failed = len([item for item in list(skipped_files) if item.status == "failed"])
+        skipped = bool(skipped_files) or not bool(applied_files)
+        skip_reason = ""
+        if not apply_input.operations:
+            skipped = True
+            skip_reason = "no_changes"
+        elif files_failed:
+            skip_reason = "files_failed"
+        elif skipped_files and not applied_files:
+            skip_reason = "partial_skip"
+
         return ApplyResult(
             repo_id=apply_input.repo_id,
             root_path=repo_root.as_posix(),
             dry_run=apply_input.dry_run,
             applied_files=applied_files,
             skipped_files=skipped_files,
+            applied=bool(applied_files) and not errors and files_failed == 0,
+            files_written=files_written,
+            files_failed=files_failed,
+            skipped=skipped,
+            skip_reason=skip_reason,
             warnings=warnings,
             errors=errors,
         )

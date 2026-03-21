@@ -55,6 +55,10 @@ class DiffServiceTests(unittest.TestCase):
         self.assertEqual(diff_result.files[0].status, "modified")
         self.assertIn("-    return 'ok'", diff_result.files[0].diff)
         self.assertIn("+    return 'updated'", diff_result.files[0].diff)
+        self.assertEqual(diff_result.total_files_changed, 1)
+        self.assertEqual(diff_result.total_additions, 1)
+        self.assertEqual(diff_result.total_deletions, 1)
+        self.assertTrue(diff_result.files[0].diff_chunks)
 
     def test_real_apply_diff_uses_git_when_repo_initialized(self) -> None:
         if shutil.which("git") is None:
@@ -104,6 +108,7 @@ class DiffServiceTests(unittest.TestCase):
         self.assertEqual(diff_result.files[0].status, "modified")
         self.assertIn("diff --git", diff_result.files[0].diff)
         self.assertIn("+    return 'git-updated'", diff_result.files[0].diff)
+        self.assertGreaterEqual(diff_result.files[0].additions_count, 1)
 
     def test_real_apply_diff_falls_back_without_git(self) -> None:
         apply_input = ApplyInput(
@@ -130,6 +135,7 @@ class DiffServiceTests(unittest.TestCase):
         self.assertIn("-    return 'ok'", diff_result.files[0].diff)
         self.assertIn("+    return 'fallback-updated'", diff_result.files[0].diff)
         self.assertTrue(any("Git diff unavailable" in warning for warning in diff_result.warnings))
+        self.assertEqual(diff_result.total_files_changed, 1)
 
     def test_diff_service_reports_create_update_delete_and_skipped(self) -> None:
         apply_input = ApplyInput(
@@ -173,3 +179,6 @@ class DiffServiceTests(unittest.TestCase):
         self.assertEqual(statuses["src/new_module.py"], "added")
         self.assertEqual(statuses["src/old_module.py"], "deleted")
         self.assertEqual(statuses["src/skipped.py"], "skipped")
+        self.assertEqual(diff_result.total_files_changed, 3)
+        self.assertGreaterEqual(diff_result.total_additions, 2)
+        self.assertGreaterEqual(diff_result.total_deletions, 1)

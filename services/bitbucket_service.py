@@ -1,4 +1,3 @@
-import base64
 import json
 import re
 from urllib import error, parse, request
@@ -6,6 +5,7 @@ from urllib import error, parse, request
 from config import settings
 from contracts.pull_request_contract import PullRequestResult
 from logger_utils import log_line
+from services.scm_service import build_bitbucket_basic_auth_header
 
 
 BITBUCKET_REPO_PATTERNS = (
@@ -154,13 +154,4 @@ class BitbucketService:
 
     @staticmethod
     def _build_auth_header() -> str:
-        username = str(settings.runtime.bitbucket_username or "").strip()
-        app_password = str(settings.runtime.bitbucket_app_password or "").strip()
-        api_token = str(settings.runtime.bitbucket_api_token or "").strip()
-
-        if username and app_password:
-            token = base64.b64encode(f"{username}:{app_password}".encode("utf-8")).decode("ascii")
-            return f"Basic {token}"
-        if api_token:
-            return f"Bearer {api_token}"
-        return ""
+        return build_bitbucket_basic_auth_header()

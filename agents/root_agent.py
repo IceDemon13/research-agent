@@ -15,6 +15,7 @@ from contracts.apply_contract import ApplyInput, ApplyResult
 from contracts.change_set import ChangeSet
 from contracts.crucible_review_contract import CrucibleReviewResult
 from contracts.draft_set import DraftSet
+from contracts.diff_contract import DiffResult
 from contracts.error_contract import ExecutionError
 from contracts.implementation_result import (
     ImplementationArtifactSummary,
@@ -57,6 +58,7 @@ from services.repo_context_rules import (
 )
 from services.repo_registry import RepositoryRegistryService, resolve_repo
 from services.permission_service import PermissionService, default_actor_context
+from services.publication_service import PublicationService
 from services.review_comment_service import ReviewCommentService
 from services.run_service import RunService
 from services.scm_service import ScmService, build_feature_branch_name, build_run_branch_name
@@ -1386,14 +1388,17 @@ def _format_retry_result_output(
     run_record = retried_result.metadata.get("run_record")
     new_run_id = ""
     final_status = "unknown"
+    attempt_label = "-"
     if isinstance(run_record, RunRecord):
         new_run_id = run_record.run_id
         final_status = run_record.status or "unknown"
+        attempt_label = f"{int(run_record.attempt_index or 1)}/{int(run_record.total_attempts or 1)}"
     return "\n".join(
         [
             "# Run Retry",
             f"- source_run_id: {source_run_id}",
             f"- new_run_id: {new_run_id or '-'}",
+            f"- attempt: {attempt_label}",
             f"- status: {final_status}",
             "",
             "Retry executed through the canonical root agent implementation flow.",
@@ -1434,15 +1439,934 @@ def _format_review_result_output(
 
 
 def _format_decision_result_output(run_record: RunRecord) -> str:
-    return "\n".join(
+    lines = [
+        "# Run Decision",
+        f"- run_id: {run_record.run_id}",
+        f"- decision: {run_record.decision or 'pending'}",
+        f"- decided_at: {run_record.decided_at or '-'}",
+        f"- decided_by: {run_record.decided_by or '-'}",
+    ]
+    if str(run_record.decision_note or "").strip():
+        lines.append(f"- decision_note: {run_record.decision_note}")
+    return "\n".join(lines)
+
+
+def _build_retry_context(
+    *,
+    run_record: RunRecord,
+    run_detail,
+    retry_note: str = "",
+    refinement_prompt: str = "",
+    attempt_index: int = 1,
+    total_attempts: int = 1,
+    previous_attempts: list[dict] | None = None,
+) -> dict:
+    detail = run_detail
+    implementation_payload = (
+        dict(detail.implementation_result or {})
+        if detail is not None and getattr(detail, "implementation_result", None) is not None
+        else {}
+    )
+    validation_payload = (
+        dict(detail.validation_result or {})
+        if detail is not None and getattr(detail, "validation_result", None) is not None
+        else {}
+    )
+    artifact_summary = dict(implementation_payload.get("artifact_summary", {}) or {})
+    failed_test_cases = []
+    for item in list(validation_payload.get("failed_test_cases", []) or []):
+        if not isinstance(item, dict):
+            continue
+        failed_test_cases.append(
+            {
+                "name": str(item.get("name", "") or "").strip(),
+                "error_type": str(item.get("error_type", "") or "").strip(),
+                "message": str(item.get("message", "") or "").strip(),
+            }
+        )
+    validation_errors = [
+        str(item or "").strip()
+        for item in list(validation_payload.get("errors", []) or [])
+        if str(item or "").strip()
+    ]
+    previous_attempt_changes = _summarize_previous_attempt_changes(detail)
+    files_count = int(artifact_summary.get("files_count", artifact_summary.get("file_count", 0)) or 0)
+    previous_status = str(run_record.status or "").strip().lower()
+    implementation_final_status = str(implementation_payload.get("final_status", "") or "").strip().lower()
+    root_cause_text = str(getattr(detail, "root_cause_summary", "") or "").strip().lower()
+    reason_if_empty = str(artifact_summary.get("reason_if_empty", "") or "").strip()
+    attempt_history = [
+        dict(item or {})
+        for item in list(previous_attempts or [])
+        if isinstance(item, dict)
+    ]
+    previous_attempt_comparison = attempt_history[-2] if len(attempt_history) >= 2 else {}
+    cumulative_failed_test_cases: list[dict] = []
+    seen_failed_cases: set[tuple[str, str, str]] = set()
+    for attempt in attempt_history:
+        for item in list(attempt.get("failed_test_cases", []) or []):
+            if not isinstance(item, dict):
+                continue
+            normalized = {
+                "name": str(item.get("name", "") or "").strip(),
+                "error_type": str(item.get("error_type", "") or "").strip(),
+                "message": str(item.get("message", "") or "").strip(),
+            }
+            signature = (
+                normalized["name"],
+                normalized["error_type"],
+                normalized["message"],
+            )
+            if signature in seen_failed_cases:
+                continue
+            seen_failed_cases.add(signature)
+            cumulative_failed_test_cases.append(normalized)
+    for item in list(failed_test_cases):
+        signature = (
+            str(item.get("name", "") or "").strip(),
+            str(item.get("error_type", "") or "").strip(),
+            str(item.get("message", "") or "").strip(),
+        )
+        if signature in seen_failed_cases:
+            continue
+        seen_failed_cases.add(signature)
+        cumulative_failed_test_cases.append(dict(item))
+    explicit_no_changes = (
+        previous_status == "no_changes"
+        or implementation_final_status == "no_changes"
+        or (
+            bool(artifact_summary)
+            and files_count == 0
+            and (bool(reason_if_empty) or "no changes" in root_cause_text)
+        )
+    )
+    validation_failed = str(validation_payload.get("overall_status", "") or "").strip().lower() == "failed" or (
+        "validation failed" in root_cause_text or "test(s) failed" in root_cause_text
+    )
+    failure_type = _classify_retry_failure_type(
+        failed_test_cases=failed_test_cases,
+        validation_errors=validation_errors,
+        root_cause_text=root_cause_text,
+        explicit_no_changes=explicit_no_changes,
+    )
+    result_analysis = _build_retry_result_analysis(
+        failed_test_cases=failed_test_cases,
+        validation_errors=validation_errors,
+        failure_type=failure_type,
+        previous_failed_tests=int(previous_attempt_comparison.get("failed_tests", 0) or 0),
+        current_failed_tests=int(validation_payload.get("failed_tests", len(failed_test_cases)) or len(failed_test_cases)),
+    )
+    repeated_failure_detected = _detect_repeated_ineffective_retry(
+        failure_type=failure_type,
+        failed_test_cases=failed_test_cases,
+        previous_attempt_changes=previous_attempt_changes,
+        previous_attempt_comparison=previous_attempt_comparison,
+    )
+    retry_strategy, retry_strategy_reason, strategy_instructions = _select_retry_strategy(
+        failure_type=failure_type,
+        repeated_failure_detected=repeated_failure_detected,
+        attempt_index=attempt_index,
+    )
+    context = {
+        "parent_run_id": str(run_record.run_id or "").strip(),
+        "attempt_index": max(1, int(attempt_index or 1)),
+        "total_attempts": max(1, int(total_attempts or 1)),
+        "retry_strategy": retry_strategy,
+        "retry_strategy_reason": retry_strategy_reason,
+        "repeated_failure_detected": repeated_failure_detected,
+        "previous_status": str(run_record.status or "").strip(),
+        "root_cause_summary": str(getattr(detail, "root_cause_summary", "") or "").strip(),
+        "previous_attempt_failure": str(getattr(detail, "root_cause_summary", "") or "").strip(),
+        "decision": str(run_record.decision or "").strip(),
+        "decision_note": str(run_record.decision_note or "").strip(),
+        "retry_note": str(retry_note or "").strip(),
+        "refinement_prompt": str(refinement_prompt or "").strip(),
+        "validation_failed": validation_failed,
+        "failure_type": failure_type,
+        "failed_test_cases": failed_test_cases,
+        "cumulative_failed_test_cases": cumulative_failed_test_cases,
+        "validation_errors": validation_errors,
+        "previous_attempt_changes": previous_attempt_changes,
+        "previous_attempt_result": result_analysis,
+        "draft_issues": {
+            "files_count": files_count,
+            "reason_if_empty": reason_if_empty,
+        },
+        "previous_attempts": attempt_history,
+        "retry_reason": "",
+        "instructions": list(strategy_instructions),
+    }
+
+    if str(run_record.decision or "").strip().lower() == "rejected":
+        context["retry_reason"] = "rejected"
+        context["instructions"].append("Address reviewer feedback from the previous run.")
+        if str(run_record.decision_note or "").strip():
+            context["instructions"].append("Follow the rejection note closely and adjust the implementation accordingly.")
+    elif context["validation_failed"]:
+        context["retry_reason"] = "validation_failed"
+        context["instructions"].append("Fix previous validation failures before expanding scope.")
+        if failed_test_cases:
+            context["instructions"].append("Prioritize the failing tests listed below.")
+    elif explicit_no_changes:
+        context["retry_reason"] = "no_changes"
+        context["instructions"].append("Generate at least 1 concrete file change in this retry.")
+        context["instructions"].append("Do not return an empty draft or no-op change set.")
+    else:
+        context["retry_reason"] = "improve_previous_result"
+        context["instructions"].append("Fix previous issues and improve the result.")
+    if context["attempt_index"] > 1:
+        context["instructions"].append(
+            f"This is attempt #{context['attempt_index']} of {context['total_attempts']}."
+        )
+    if retry_strategy_reason:
+        context["instructions"].append(retry_strategy_reason)
+    if str(context.get("previous_attempt_failure", "") or "").strip():
+        context["instructions"].append(
+            f"Previous attempt failed because: {str(context['previous_attempt_failure']).strip()}"
+        )
+
+    return context
+
+
+def _build_retry_goal(goal: str, retry_context: dict | None = None) -> str:
+    resolved_goal = str(goal or "").strip()
+    context = dict(retry_context or {})
+    if not context:
+        return resolved_goal
+
+    lines = [resolved_goal, "", "Retry Guidance:"]
+    for item in list(context.get("instructions", []) or []):
+        if str(item or "").strip():
+            lines.append(f"- {str(item).strip()}")
+
+    root_cause_summary = str(context.get("root_cause_summary", "") or "").strip()
+    previous_attempt_failure = str(context.get("previous_attempt_failure", "") or "").strip()
+    retry_strategy = str(context.get("retry_strategy", "") or "").strip()
+    retry_strategy_reason = str(context.get("retry_strategy_reason", "") or "").strip()
+    decision_note = str(context.get("decision_note", "") or "").strip()
+    retry_note = str(context.get("retry_note", "") or "").strip()
+    refinement_prompt = str(context.get("refinement_prompt", "") or "").strip()
+    draft_issues = dict(context.get("draft_issues", {}) or {})
+    failed_test_cases = list(context.get("failed_test_cases", []) or [])
+    cumulative_failed_test_cases = list(context.get("cumulative_failed_test_cases", []) or [])
+    validation_errors = list(context.get("validation_errors", []) or [])
+    previous_attempts = list(context.get("previous_attempts", []) or [])
+    previous_attempt_changes = dict(context.get("previous_attempt_changes", {}) or {})
+    previous_attempt_result = dict(context.get("previous_attempt_result", {}) or {})
+
+    lines.extend(
         [
-            "# Run Decision",
-            f"- run_id: {run_record.run_id}",
-            f"- decision: {run_record.decision or 'pending'}",
-            f"- decided_at: {run_record.decided_at or '-'}",
-            f"- decided_by: {run_record.decided_by or '-'}",
+            "",
+            f"Attempt #{int(context.get('attempt_index', 1) or 1)} of {int(context.get('total_attempts', 1) or 1)}",
+            f"Retry Strategy: {retry_strategy or '-'}",
+            f"Retry Strategy Reason: {retry_strategy_reason or '-'}",
+            "",
+            "Previous Run Context:",
+            f"- previous_status: {str(context.get('previous_status', '') or '').strip() or '-'}",
+            f"- retry_reason: {str(context.get('retry_reason', '') or '').strip() or '-'}",
+            f"- root_cause_summary: {root_cause_summary or '-'}",
+            f"- repeated_failure_detected: {'true' if bool(context.get('repeated_failure_detected', False)) else 'false'}",
         ]
     )
+    if previous_attempt_failure:
+        lines.append(f"- previous_attempt_failed_because: {previous_attempt_failure}")
+    if decision_note:
+        lines.append(f"- rejection_feedback: {decision_note}")
+    if retry_note:
+        lines.append(f"- retry_note: {retry_note}")
+    if refinement_prompt:
+        lines.append(f"- refinement_prompt: {refinement_prompt}")
+    if int(draft_issues.get("files_count", 0) or 0) == 0:
+        lines.append(
+            f"- previous_draft_issue: {str(draft_issues.get('reason_if_empty', '') or 'agent produced no changes').strip()}"
+        )
+    if list(previous_attempt_changes.get("summary_lines", []) or []):
+        lines.append("")
+        lines.append("Previous Attempt Changes:")
+        for item in list(previous_attempt_changes.get("summary_lines", []) or [])[:8]:
+            if str(item or "").strip():
+                lines.append(f"- {str(item).strip()}")
+    if list(previous_attempt_result.get("lines", []) or []):
+        lines.append("")
+        lines.append("Result:")
+        for item in list(previous_attempt_result.get("lines", []) or [])[:8]:
+            if str(item or "").strip():
+                lines.append(f"- {str(item).strip()}")
+    if failed_test_cases:
+        lines.append("")
+        lines.append("Failing Tests To Fix:")
+        for item in failed_test_cases[:10]:
+            lines.append(
+                f"- {str(item.get('name', '') or '').strip() or 'unknown'}"
+                f" [{str(item.get('error_type', '') or '').strip() or 'error'}]: "
+                f"{str(item.get('message', '') or '').strip() or '-'}"
+            )
+    if cumulative_failed_test_cases and not failed_test_cases:
+        lines.append("")
+        lines.append("Cumulative Failing Tests To Keep In Mind:")
+        for item in cumulative_failed_test_cases[:10]:
+            lines.append(
+                f"- {str(item.get('name', '') or '').strip() or 'unknown'}"
+                f" [{str(item.get('error_type', '') or '').strip() or 'error'}]: "
+                f"{str(item.get('message', '') or '').strip() or '-'}"
+            )
+    if validation_errors:
+        lines.append("")
+        lines.append("Validation Errors:")
+        for item in validation_errors[:10]:
+            lines.append(f"- {str(item).strip()}")
+    if previous_attempts:
+        lines.append("")
+        lines.append("Previous Attempts:")
+        for item in previous_attempts[-5:]:
+            lines.append(
+                f"- attempt {int(item.get('attempt_index', 0) or 0)}/{int(item.get('total_attempts', 0) or 0)}"
+                f" | strategy={str(item.get('retry_strategy', '') or '-').strip()}"
+                f" | status={str(item.get('status', '') or '').strip() or '-'}"
+                f" | reason={str(item.get('root_cause_summary', '') or item.get('failure_reason', '') or '-').strip()}"
+            )
+    return "\n".join(lines).strip()
+
+
+def _summarize_previous_attempt_changes(run_detail) -> dict:
+    if run_detail is None:
+        return {
+            "file_paths": [],
+            "affected_symbols": [],
+            "summary_lines": [],
+        }
+    diff_payload = (
+        dict(run_detail.diff_result or {})
+        if getattr(run_detail, "diff_result", None) is not None
+        else {}
+    )
+    files = [
+        dict(item or {})
+        for item in list(diff_payload.get("files", []) or [])
+        if isinstance(item, dict)
+    ]
+    if not files:
+        return {
+            "file_paths": [],
+            "affected_symbols": [],
+            "summary_lines": [],
+        }
+
+    file_paths: list[str] = []
+    affected_symbols: list[str] = []
+    summary_lines: list[str] = []
+    seen_symbols: set[str] = set()
+    seen_summaries: set[str] = set()
+
+    for item in files[:5]:
+        relative_path = str(item.get("file_path", item.get("relative_path", "")) or "").strip()
+        if relative_path:
+            file_paths.append(relative_path)
+            change_type = str(item.get("change_type", item.get("status", "modified")) or "modified").strip().lower() or "modified"
+            file_summary = f"{change_type} {relative_path}"
+            if file_summary not in seen_summaries:
+                seen_summaries.add(file_summary)
+                summary_lines.append(file_summary)
+        diff_text = str(item.get("diff_text", item.get("diff", "")) or "")
+        extracted_symbols = _extract_symbols_from_diff(diff_text)
+        for symbol in extracted_symbols[:3]:
+            if symbol in seen_symbols:
+                continue
+            seen_symbols.add(symbol)
+            affected_symbols.append(symbol)
+            symbol_summary = f"updated function {symbol}()"
+            if symbol_summary not in seen_summaries:
+                seen_summaries.add(symbol_summary)
+                summary_lines.append(symbol_summary)
+        for summary in _extract_change_bullets_from_diff(diff_text):
+            if summary in seen_summaries:
+                continue
+            seen_summaries.add(summary)
+            summary_lines.append(summary)
+            if len(summary_lines) >= 8:
+                break
+        if len(summary_lines) >= 8:
+            break
+
+    return {
+        "file_paths": file_paths[:5],
+        "affected_symbols": affected_symbols[:5],
+        "summary_lines": summary_lines[:8],
+    }
+
+
+def _classify_retry_failure_type(
+    *,
+    failed_test_cases: list[dict],
+    validation_errors: list[str],
+    root_cause_text: str,
+    explicit_no_changes: bool,
+) -> str:
+    if explicit_no_changes:
+        return "no_changes"
+    error_text = " ".join(
+        [
+            root_cause_text,
+            " ".join(str(item.get("error_type", "") or "") for item in list(failed_test_cases)),
+            " ".join(str(item.get("message", "") or "") for item in list(failed_test_cases)),
+            " ".join(str(item or "") for item in list(validation_errors)),
+        ]
+    ).lower()
+    if "assertionerror" in error_text or "assert " in error_text:
+        return "assertion_error"
+    if "syntaxerror" in error_text or "syntax error" in error_text:
+        return "syntax_error"
+    if "importerror" in error_text or "modulenotfounderror" in error_text or "cannot import" in error_text:
+        return "import_error"
+    if error_text.strip():
+        return "runtime_error"
+    return ""
+
+
+def _build_retry_result_analysis(
+    *,
+    failed_test_cases: list[dict],
+    validation_errors: list[str],
+    failure_type: str,
+    previous_failed_tests: int,
+    current_failed_tests: int,
+) -> dict:
+    lines: list[str] = []
+    if str(failure_type or "").strip():
+        lines.append(f"failure_type: {str(failure_type).strip()}")
+    if previous_failed_tests > current_failed_tests >= 0:
+        lines.append(f"number of failing tests reduced from {previous_failed_tests} -> {current_failed_tests}")
+    for item in list(failed_test_cases)[:5]:
+        name = str(item.get("name", "") or "").strip() or "unknown test"
+        error_type = str(item.get("error_type", "") or "").strip() or "error"
+        message = str(item.get("message", "") or "").strip() or "-"
+        lines.append(f"test {name} still failing ({error_type}: {message})")
+    if validation_errors and not failed_test_cases:
+        lines.append(f"validation still failing ({str(validation_errors[0]).strip()})")
+    if failure_type == "no_changes":
+        lines.append("issue not resolved because no changes were generated")
+    elif failed_test_cases or validation_errors:
+        lines.append("issue not resolved")
+    return {
+        "failure_type": str(failure_type or "").strip(),
+        "lines": lines[:8],
+    }
+
+
+def _summarize_failed_test_names(failed_test_cases: list[dict]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in list(failed_test_cases):
+        name = str(item.get("name", "") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names[:10]
+
+
+def _change_summary_signature(summary_lines: list[str]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for item in list(summary_lines or []):
+        value = str(item or "").strip().lower()
+        if value:
+            normalized.append(value)
+    return tuple(normalized[:6])
+
+
+def _detect_repeated_ineffective_retry(
+    *,
+    failure_type: str,
+    failed_test_cases: list[dict],
+    previous_attempt_changes: dict,
+    previous_attempt_comparison: dict,
+) -> bool:
+    previous_failure_type = str(previous_attempt_comparison.get("failure_type", "") or "").strip()
+    if not previous_failure_type or previous_failure_type != str(failure_type or "").strip():
+        return False
+    current_failed_test_names = set(_summarize_failed_test_names(failed_test_cases))
+    previous_failed_test_names = {
+        str(item or "").strip()
+        for item in list(previous_attempt_comparison.get("failed_test_names", []) or [])
+        if str(item or "").strip()
+    }
+    same_failed_tests = bool(current_failed_test_names) and current_failed_test_names == previous_failed_test_names
+    current_change_signature = _change_summary_signature(list(previous_attempt_changes.get("summary_lines", []) or []))
+    previous_change_signature = _change_summary_signature(
+        list(previous_attempt_comparison.get("change_summary_lines", []) or [])
+    )
+    same_change_set = bool(current_change_signature) and current_change_signature == previous_change_signature
+    return same_failed_tests and same_change_set
+
+
+def _select_retry_strategy(
+    *,
+    failure_type: str,
+    repeated_failure_detected: bool,
+    attempt_index: int,
+) -> tuple[str, str, list[str]]:
+    resolved_attempt_index = max(1, int(attempt_index or 1))
+    strategy = "default"
+    reason = "Adaptive strategy selected: default because no specific failure pattern was detected."
+    instructions: list[str] = []
+
+    if failure_type == "syntax_error":
+        strategy = "aggressive"
+        reason = "Adaptive strategy selected: aggressive because syntax_error was detected."
+        instructions = [
+            "AGGRESSIVE MODE:",
+            "Syntax errors were detected.",
+            "You may rewrite the affected function or module if needed.",
+            "Prioritize restoring a valid, runnable implementation first.",
+        ]
+    elif failure_type == "no_changes":
+        strategy = "aggressive"
+        reason = "Adaptive strategy selected: aggressive because no_changes was detected."
+        instructions = [
+            "AGGRESSIVE MODE:",
+            "The previous attempt produced no meaningful changes.",
+            "Generate at least 1 meaningful file change.",
+            "Do not return an empty draft or no-op change set.",
+        ]
+    elif failure_type == "import_error":
+        strategy = "aggressive" if repeated_failure_detected else "strict"
+        reason = (
+            "Escalated from strict to aggressive because the same import_error repeated after a similar change set."
+            if repeated_failure_detected
+            else "Adaptive strategy selected: strict because import_error was detected."
+        )
+        instructions = [
+            "STRICT MODE:" if strategy == "strict" else "AGGRESSIVE MODE:",
+            "Focus on imports, module wiring, and symbol resolution.",
+            "Prefer the smallest fix that restores import correctness."
+            if strategy == "strict"
+            else "You may reorganize imports or module wiring more broadly if needed.",
+        ]
+    elif failure_type == "assertion_error":
+        strategy = "aggressive" if repeated_failure_detected else "strict"
+        reason = (
+            "Escalated from strict to aggressive because the same assertion_error repeated after a similar change set."
+            if repeated_failure_detected
+            else "Adaptive strategy selected: strict because assertion_error was detected."
+        )
+        instructions = [
+            "STRICT MODE:" if strategy == "strict" else "AGGRESSIVE MODE:",
+            "Focus only on the failing tests and their directly related logic."
+            if strategy == "strict"
+            else "Broader fixes are allowed if the same failing assertion keeps repeating.",
+            "Do not modify unrelated logic."
+            if strategy == "strict"
+            else "Prioritize passing the failing tests over minimal diff size.",
+            "Keep changes minimal." if strategy == "strict" else "You may rewrite the affected function or module if needed.",
+        ]
+    elif failure_type == "runtime_error":
+        strategy = "aggressive" if repeated_failure_detected else "strict"
+        reason = (
+            "Escalated from strict to aggressive because the same runtime_error repeated after a similar change set."
+            if repeated_failure_detected
+            else "Adaptive strategy selected: strict because runtime_error was detected."
+        )
+        instructions = [
+            "STRICT MODE:" if strategy == "strict" else "AGGRESSIVE MODE:",
+            "Focus on the runtime failure path first.",
+            "Keep the fix narrow and targeted."
+            if strategy == "strict"
+            else "Broader control-flow fixes are allowed to eliminate the repeated runtime failure.",
+        ]
+    elif resolved_attempt_index == 2:
+        strategy = "strict"
+        reason = "Adaptive strategy selected: strict as the first bounded retry strategy."
+        instructions = [
+            "STRICT MODE:",
+            "Only fix failing tests.",
+            "Do not modify unrelated logic.",
+            "Keep changes minimal.",
+        ]
+    elif resolved_attempt_index >= 3:
+        strategy = "aggressive"
+        reason = "Adaptive strategy selected: aggressive because multiple attempts have already been used."
+        instructions = [
+            "AGGRESSIVE MODE:",
+            "You may rewrite the function or module if needed.",
+            "Broader fixes are allowed.",
+            "Prioritize passing all failing tests over minimal diff size.",
+        ]
+
+    return strategy, reason, instructions
+
+
+def _extract_symbols_from_diff(diff_text: str) -> list[str]:
+    symbols: list[str] = []
+    seen: set[str] = set()
+    patterns = [
+        re.compile(r"^[\+\-\s]*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\("),
+        re.compile(r"^[\+\-\s]*class\s+([A-Za-z_][A-Za-z0-9_]*)\b"),
+        re.compile(r"^[\+\-\s]*(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\("),
+        re.compile(r"^[\+\-\s]*(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?\("),
+    ]
+    for raw_line in str(diff_text or "").splitlines():
+        for pattern in patterns:
+            match = pattern.match(raw_line)
+            if not match:
+                continue
+            symbol = str(match.group(1) or "").strip()
+            if not symbol or symbol in seen:
+                continue
+            seen.add(symbol)
+            symbols.append(symbol)
+            break
+        if len(symbols) >= 5:
+            break
+    return symbols
+
+
+def _extract_change_bullets_from_diff(diff_text: str) -> list[str]:
+    added_lines = [
+        line[1:].strip()
+        for line in str(diff_text or "").splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    ]
+    removed_lines = [
+        line[1:].strip()
+        for line in str(diff_text or "").splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    ]
+    summaries: list[str] = []
+    if any(line.startswith("if ") or line.startswith("if(") for line in added_lines):
+        summaries.append("added conditional logic")
+    if any("return " in line for line in added_lines) and any("return " in line for line in removed_lines):
+        summaries.append("updated return logic")
+    elif any("return " in line for line in added_lines):
+        summaries.append("added new return logic")
+    if any(line.startswith("import ") or line.startswith("from ") for line in added_lines + removed_lines):
+        summaries.append("updated imports")
+    if any("raise " in line or "throw " in line for line in added_lines + removed_lines):
+        summaries.append("changed error handling")
+    if any("except" in line or "catch" in line for line in added_lines + removed_lines):
+        summaries.append("updated exception handling")
+    return summaries[:4]
+
+
+def _max_retry_attempts() -> int:
+    try:
+        configured = int(getattr(settings, "max_retry_attempts", 3) or 3)
+    except (TypeError, ValueError):
+        configured = 3
+    return max(1, configured)
+
+
+def _retry_attempt_summary(run_record: RunRecord, run_detail) -> dict:
+    validation_payload = (
+        dict(run_detail.validation_result or {})
+        if run_detail is not None and getattr(run_detail, "validation_result", None) is not None
+        else {}
+    )
+    failed_test_cases = [
+        {
+            "name": str(item.get("name", "") or "").strip(),
+            "error_type": str(item.get("error_type", "") or "").strip(),
+            "message": str(item.get("message", "") or "").strip(),
+        }
+        for item in list(validation_payload.get("failed_test_cases", []) or [])
+        if isinstance(item, dict)
+    ]
+    failure_code = str(getattr(run_detail, "failure_code", "") or "").strip() if run_detail is not None else ""
+    failure_reason = str(getattr(run_detail, "failure_reason", "") or "").strip() if run_detail is not None else ""
+    root_cause_summary = str(getattr(run_detail, "root_cause_summary", "") or "").strip() if run_detail is not None else ""
+    implementation_payload = (
+        dict(run_detail.implementation_result or {})
+        if run_detail is not None and getattr(run_detail, "implementation_result", None) is not None
+        else {}
+    )
+    artifact_summary = dict(implementation_payload.get("artifact_summary", {}) or {})
+    root_cause_text = root_cause_summary.lower()
+    explicit_no_changes = (
+        str(getattr(run_detail, "status", "") or "").strip().lower() == "no_changes"
+        or str(implementation_payload.get("final_status", "") or "").strip().lower() == "no_changes"
+        or (
+            bool(artifact_summary)
+            and int(artifact_summary.get("files_count", artifact_summary.get("file_count", 0)) or 0) == 0
+            and (
+                str(artifact_summary.get("reason_if_empty", "") or "").strip()
+                or "no changes" in root_cause_text
+            )
+        )
+    )
+    validation_errors = [
+        str(item or "").strip()
+        for item in list(validation_payload.get("errors", []) or [])
+        if str(item or "").strip()
+    ]
+    failure_type = _classify_retry_failure_type(
+        failed_test_cases=failed_test_cases,
+        validation_errors=validation_errors,
+        root_cause_text=root_cause_text,
+        explicit_no_changes=explicit_no_changes,
+    )
+    previous_attempt_changes = _summarize_previous_attempt_changes(run_detail)
+    return {
+        "run_id": str(run_record.run_id or "").strip(),
+        "attempt_index": int(run_record.attempt_index or 1),
+        "total_attempts": int(run_record.total_attempts or 1),
+        "status": str(run_record.status or "").strip(),
+        "retry_strategy": str(getattr(run_detail, "retry_strategy", "") or run_record.retry_context.get("retry_strategy", "") or "").strip(),
+        "retry_strategy_reason": str(
+            getattr(run_detail, "retry_strategy_reason", "")
+            or run_record.retry_context.get("retry_strategy_reason", "")
+            or ""
+        ).strip(),
+        "root_cause_summary": root_cause_summary,
+        "failure_code": failure_code,
+        "failure_reason": failure_reason,
+        "failure_type": failure_type,
+        "failed_tests": int(validation_payload.get("failed_tests", len(failed_test_cases)) or len(failed_test_cases)),
+        "failed_test_names": _summarize_failed_test_names(failed_test_cases),
+        "failed_test_cases": failed_test_cases,
+        "change_summary_lines": list(previous_attempt_changes.get("summary_lines", []) or [])[:8],
+    }
+
+
+def _retry_failure_signature(run_detail) -> tuple[str, str, str]:
+    if run_detail is None:
+        return ("", "", "")
+    return (
+        str(getattr(run_detail, "status", "") or "").strip().lower(),
+        str(getattr(run_detail, "failure_code", "") or "").strip(),
+        str(getattr(run_detail, "root_cause_summary", "") or "").strip(),
+    )
+
+
+def _is_retryable_validation_failure(run_detail) -> bool:
+    if run_detail is None:
+        return False
+    validation_payload = (
+        dict(run_detail.validation_result or {})
+        if getattr(run_detail, "validation_result", None) is not None
+        else {}
+    )
+    implementation_payload = (
+        dict(run_detail.implementation_result or {})
+        if getattr(run_detail, "implementation_result", None) is not None
+        else {}
+    )
+    final_status = str(
+        implementation_payload.get("final_status", "") or getattr(run_detail, "status", "") or ""
+    ).strip().lower()
+    if str(validation_payload.get("overall_status", "") or "").strip().lower() == "failed":
+        return True
+    return final_status in {
+        "candidate_validation_failed",
+        "real_apply_blocked_validation_failed",
+    }
+
+
+def _run_context_aware_retry_loop(
+    *,
+    source_run: RunRecord,
+    source_detail,
+    resolved_actor_context: ActorContext,
+    retry_note: str,
+    refinement_prompt: str,
+) -> tuple[AgentResult, list[dict]]:
+    total_attempts = max(_max_retry_attempts(), int(source_run.attempt_index or 1))
+    next_attempt_index = int(source_run.attempt_index or 1) + 1
+    if next_attempt_index > total_attempts:
+        return (
+            _run_action_result(
+                artifact_type="run_retry",
+                action="retry",
+                run_record=source_run,
+                success=False,
+                message=f"Retry blocked because the run already reached the maximum of {total_attempts} attempts.",
+                blocked_reason=f"maximum retry attempts reached ({total_attempts})",
+            ),
+            [],
+        )
+
+    previous_attempts: list[dict] = [_retry_attempt_summary(source_run, source_detail)]
+    current_source_run = source_run
+    current_source_detail = source_detail
+    last_result = None
+    last_signature: tuple[str, str, str] = ("", "", "")
+    repeated_failure_count = 0
+
+    for attempt_index in range(next_attempt_index, total_attempts + 1):
+        retry_context_summary = (
+            str(getattr(current_source_detail, "root_cause_summary", "") or "").strip()
+            if current_source_detail is not None
+            else ""
+        )
+        retry_context = _build_retry_context(
+            run_record=current_source_run,
+            run_detail=current_source_detail,
+            retry_note=retry_note,
+            refinement_prompt=refinement_prompt,
+            attempt_index=attempt_index,
+            total_attempts=total_attempts,
+            previous_attempts=previous_attempts,
+        )
+        retry_goal = _build_retry_goal(source_run.goal, retry_context)
+        last_result = run_implementation_pipeline(
+            retry_goal,
+            repo_id=current_source_run.repo_id or None,
+            real_apply=False,
+            create_pr=False,
+            create_review=False,
+            run_log=True,
+            actor_context=resolved_actor_context,
+            parent_run_id=current_source_run.run_id,
+            retry_note=retry_note,
+            retry_context_summary=retry_context_summary,
+            retry_context=retry_context,
+            run_goal=source_run.goal,
+            attempt_index=attempt_index,
+            total_attempts=total_attempts,
+        )
+        new_run_record = last_result.metadata.get("run_record")
+        if not isinstance(new_run_record, RunRecord):
+            break
+        detail_service = RunService(persist=True)
+        new_run_detail = detail_service.load_run_detail(
+            new_run_record.run_id,
+            run_record=new_run_record,
+            log_path=new_run_record.log_path,
+        )
+        previous_attempts.append(_retry_attempt_summary(new_run_record, new_run_detail))
+
+        implementation_result = last_result.metadata.get("implementation_result")
+        final_status = ""
+        if implementation_result is not None:
+            final_status = str(getattr(implementation_result, "final_status", "") or "").strip().lower()
+        if final_status in {"dry_run_complete", "applied"}:
+            break
+        if final_status == "no_changes" or (
+            new_run_detail is not None and str(getattr(new_run_detail, "status", "") or "").strip().lower() == "no_changes"
+        ):
+            break
+        if not _is_retryable_validation_failure(new_run_detail):
+            break
+
+        signature = _retry_failure_signature(new_run_detail)
+        if signature == last_signature and any(part for part in signature):
+            repeated_failure_count += 1
+        else:
+            repeated_failure_count = 1
+        last_signature = signature
+        if repeated_failure_count >= 2:
+            break
+
+        current_source_run = new_run_record
+        current_source_detail = new_run_detail
+
+    if last_result is None:
+        return (
+            _run_action_result(
+                artifact_type="run_retry",
+                action="retry",
+                run_record=source_run,
+                success=False,
+                message="Retry could not be started.",
+                blocked_reason="retry could not be started",
+            ),
+            previous_attempts,
+        )
+    last_result.metadata["attempts_history"] = previous_attempts
+    return last_result, previous_attempts
+
+
+def _run_action_result(
+    *,
+    artifact_type: str,
+    action: str,
+    run_record: RunRecord,
+    success: bool,
+    message: str,
+    blocked_reason: str = "",
+    new_run_record: RunRecord | None = None,
+    extra_metadata: dict | None = None,
+) -> AgentResult:
+    metadata = {
+        "artifact_type": artifact_type,
+        "action": str(action or "").strip(),
+        "run_record": run_record,
+        "message": str(message or "").strip(),
+        "blocked_reason": str(blocked_reason or "").strip(),
+        "success": bool(success),
+    }
+    if new_run_record is not None:
+        metadata["new_run_record"] = new_run_record
+        metadata["new_run_id"] = str(new_run_record.run_id or "").strip()
+    metadata.update(dict(extra_metadata or {}))
+    return _run_explorer_result(
+        output_text=message,
+        success=success,
+        metadata=metadata,
+    )
+
+
+def _implementation_approval_block_reason(
+    *,
+    run_detail,
+    actor_context: ActorContext,
+    permission_service: PermissionService,
+) -> tuple[str, PermissionDecision | None]:
+    implementation_payload = (
+        dict(run_detail.implementation_result or {})
+        if getattr(run_detail, "implementation_result", None) is not None
+        else {}
+    )
+    final_status = str(
+        implementation_payload.get("final_status", "") or run_detail.status or ""
+    ).strip().lower()
+    validation_payload = (
+        dict(run_detail.validation_result or {})
+        if getattr(run_detail, "validation_result", None) is not None
+        else {}
+    )
+    if final_status == "no_changes" or str(run_detail.status or "").strip().lower() == "no_changes":
+        return "Nothing to approve because no changes were generated.", None
+    if str(validation_payload.get("overall_status", "") or "").strip().lower() == "failed":
+        return "Approval blocked because validation did not succeed.", None
+    if final_status in {
+        "candidate_validation_failed",
+        "real_apply_blocked_validation_failed",
+        "apply_failed",
+        "dirty_repo_blocked",
+    }:
+        return "Approval blocked because validation or apply did not succeed.", None
+    if final_status not in {"dry_run_complete", "applied", "success"}:
+        return (
+            "Approval blocked because the implementation run is not in a publishable state.",
+            None,
+        )
+    if not run_detail.repo_id:
+        return "Approval blocked because the run is missing repo context.", None
+    if not _implementation_permissions()["allow_real_apply"]:
+        blocked = PermissionDecision(
+            capability="implementation.apply",
+            actor_id=actor_context.actor_id,
+            actor_role=actor_context.role,
+            allowed=False,
+            reason="Approval blocked by config: allow_real_apply=false.",
+            deny_reason_code=DENY_REASON_POLICY_BLOCK,
+            scope=PermissionScope(
+                repo_id=str(run_detail.repo_id or "").strip(),
+                source_channel=str(actor_context.source_channel or "").strip(),
+            ),
+            source="config",
+        )
+        return blocked.reason, blocked
+    decision = permission_service.evaluate(
+        actor_context,
+        "implementation.apply",
+        scope=PermissionScope(
+            repo_id=str(run_detail.repo_id or "").strip(),
+            source_channel=str(actor_context.source_channel or "").strip(),
+        ),
+    )
+    if not decision.allowed:
+        return decision.reason, decision
+    return "", None
 
 
 def _create_review_for_run(
@@ -1560,6 +2484,7 @@ def run_run_explorer_command(
     user_input: str,
     *,
     actor_context: ActorContext | None = None,
+    action_payload: dict | None = None,
 ) -> AgentResult:
     resolved_actor_context = _resolve_actor(actor_context)
     command = _parse_run_explorer_command(user_input)
@@ -1569,6 +2494,7 @@ def run_run_explorer_command(
     run_service = RunService(persist=True)
     filters = dict(command.get("filters", {}) or {})
     action = str(command.get("action", "") or "").strip().lower()
+    action_data = dict(action_payload or {})
     permission_service = PermissionService()
     own_scope = _build_permission_scope(resolved_actor_context)
     own_decision = permission_service.evaluate(
@@ -1616,11 +2542,7 @@ def run_run_explorer_command(
         resolved_run_id = str(command.get("run_id", "") or "").strip()
         if not resolved_run_id:
             return _run_usage_result()
-        run_record = (
-            run_service.retry_run(resolved_run_id, resolved_actor_context)
-            if action == "retry"
-            else run_service.load_run(resolved_run_id)
-        )
+        run_record = run_service.load_run(resolved_run_id)
         if run_record is None:
             return _run_not_found_result(resolved_run_id)
 
@@ -1652,33 +2574,78 @@ def run_run_explorer_command(
 
         if action in {"approve", "reject"}:
             if str(run_record.status or "").strip().lower() in {"running", "pending"} or not str(run_record.finished_at or "").strip():
-                return _run_explorer_result(
-                    output_text=(
-                        "# Run Decision Failed\n"
-                        f"- run_id: {run_record.run_id}\n"
-                        f"- status: {run_record.status or '-'}\n"
-                        "- reason: only completed runs can be approved or rejected"
-                    ),
+                return _run_action_result(
+                    artifact_type="run_decision",
+                    action=action,
+                    run_record=run_record,
                     success=False,
-                    metadata={
-                        "artifact_type": "run_decision",
-                        "run_record": run_record,
-                    },
+                    message="Only completed runs can be approved or rejected.",
+                    blocked_reason="only completed runs can be approved or rejected",
                 )
+            decision_note = str(action_data.get("note", "") or "").strip()
+            if action == "approve" and str(run_record.decision or "").strip().lower() == "approved":
+                return _run_action_result(
+                    artifact_type="run_decision",
+                    action=action,
+                    run_record=run_record,
+                    success=True,
+                    message="Run is already approved.",
+                )
+            if action == "reject" and str(run_record.decision or "").strip().lower() == "rejected":
+                return _run_action_result(
+                    artifact_type="run_decision",
+                    action=action,
+                    run_record=run_record,
+                    success=True,
+                    message="Run is already rejected.",
+                )
+            run_detail = run_service.load_run_detail(
+                run_record.run_id,
+                run_record=run_record,
+                log_path=run_record.log_path,
+            )
+            if action == "approve" and run_detail is not None and str(run_detail.mode or "").strip().lower() == "implement":
+                blocked_reason, blocked_decision = _implementation_approval_block_reason(
+                    run_detail=run_detail,
+                    actor_context=resolved_actor_context,
+                    permission_service=permission_service,
+                )
+                if blocked_decision is not None:
+                    run_service.record_policy_decision(run_record.run_id, blocked_decision)
+                if blocked_reason:
+                    updated_run = run_service.load_run(run_record.run_id) or run_record
+                    return _run_action_result(
+                        artifact_type="run_decision",
+                        action=action,
+                        run_record=updated_run,
+                        success=False,
+                        message=blocked_reason,
+                        blocked_reason=blocked_reason,
+                    )
             decided_run = run_service.decide_run(
                 run_record.run_id,
                 decision=action,
                 actor_context=resolved_actor_context,
+                note=decision_note,
             )
             if decided_run is None:
                 return _run_not_found_result(run_record.run_id)
-            return _run_explorer_result(
-                output_text=_format_decision_result_output(decided_run),
+            action_message = (
+                "Run approved and ready for the existing safe publication/apply flow."
+                if action == "approve" and run_detail is not None and str(run_detail.mode or "").strip().lower() == "implement"
+                else (
+                    "Run approved."
+                    if action == "approve"
+                    else "Run rejected."
+                )
+            )
+            return _run_action_result(
+                artifact_type="run_decision",
+                action=action,
+                run_record=decided_run,
                 success=True,
-                metadata={
-                    "artifact_type": "run_decision",
-                    "run_record": decided_run,
-                },
+                message=action_message,
+                extra_metadata={"decision": decided_run.decision},
             )
 
         if action == "retry":
@@ -1692,29 +2659,82 @@ def run_run_explorer_command(
             )
             if not retry_decision.allowed:
                 return _permission_block_result("run.retry", retry_decision)
-
-            retried_result = run_implementation_pipeline(
-                run_record.goal,
-                repo_id=run_record.repo_id or None,
-                real_apply=False,
-                create_pr=False,
-                create_review=False,
-                run_log=True,
-                actor_context=resolved_actor_context,
-                parent_run_id=run_record.run_id,
+            retry_note = str(action_data.get("note", "") or "").strip()
+            refinement_prompt = str(action_data.get("refinement_prompt", "") or "").strip()
+            force_mode = str(action_data.get("force_mode", "") or "").strip().lower()
+            source_detail = run_service.load_run_detail(
+                run_record.run_id,
+                run_record=run_record,
+                log_path=run_record.log_path,
             )
+            source_mode = (
+                str(source_detail.mode or "").strip().lower()
+                if source_detail is not None
+                else ""
+            )
+            effective_mode = force_mode or source_mode or "implement"
+            if force_mode and force_mode != source_mode:
+                return _run_action_result(
+                    artifact_type="run_retry",
+                    action=action,
+                    run_record=run_record,
+                    success=False,
+                    message="Retry blocked because force_mode override is not supported safely for this run.",
+                    blocked_reason="force_mode override is not supported safely for this run",
+                )
+            retry_context_summary = (
+                str(source_detail.root_cause_summary or "").strip()
+                if source_detail is not None
+                else ""
+            ) or str(run_service.get_failure_summary(run_record).get("failure_reason", "") or "").strip()
+            retry_context = _build_retry_context(
+                run_record=run_record,
+                run_detail=source_detail,
+                retry_note=retry_note,
+                refinement_prompt=refinement_prompt,
+            )
+            attempts_history: list[dict] = []
+            if effective_mode != "implement":
+                retried_result = _run_action_result(
+                    artifact_type="run_retry",
+                    action=action,
+                    run_record=run_record,
+                    success=False,
+                    message="Retry is currently supported only for implementation runs.",
+                    blocked_reason="retry is currently supported only for implementation runs",
+                )
+            else:
+                retried_result, attempts_history = _run_context_aware_retry_loop(
+                    source_run=run_record,
+                    source_detail=source_detail,
+                    resolved_actor_context=resolved_actor_context,
+                    retry_note=retry_note,
+                    refinement_prompt=refinement_prompt,
+                )
             new_run_record = retried_result.metadata.get("run_record")
-            return _run_explorer_result(
-                output_text=_format_retry_result_output(
-                    source_run_id=run_record.run_id,
-                    retried_result=retried_result,
-                ),
+            created_child_run = isinstance(new_run_record, RunRecord) and new_run_record.run_id != run_record.run_id
+            return _run_action_result(
+                artifact_type="run_retry",
+                action=action,
+                run_record=run_record,
                 success=retried_result.success,
-                metadata={
-                    "artifact_type": "run_retry",
+                message=(
+                    _format_retry_result_output(
+                        source_run_id=run_record.run_id,
+                        retried_result=retried_result,
+                    )
+                    if created_child_run
+                    else str(retried_result.output_text or "").strip()
+                ),
+                blocked_reason="" if retried_result.success else str(retried_result.output_text or "").strip(),
+                new_run_record=new_run_record if created_child_run else None,
+                extra_metadata={
                     "source_run": run_record,
                     "retried_result": retried_result,
-                    "run_record": new_run_record,
+                    "retry_note": retry_note,
+                    "retry_context_summary": retry_context_summary,
+                    "retry_context": retry_context,
+                    "attempts_history": attempts_history if effective_mode == "implement" else [],
                 },
             )
 
@@ -1768,6 +2788,7 @@ def run_root_agent(
     create_review: bool = False,
     run_log: bool = False,
     actor_context: ActorContext | None = None,
+    action_payload: dict | None = None,
 ) -> AgentResult:
     resolved_actor_context = _resolve_actor(actor_context)
     if implementation_mode or _is_implementation_command(user_input):
@@ -1787,6 +2808,7 @@ def run_root_agent(
         return run_run_explorer_command(
             user_input,
             actor_context=resolved_actor_context,
+            action_payload=action_payload,
         )
 
     if _is_lightweight_review_command(user_input):
@@ -2096,30 +3118,60 @@ def _build_implementation_artifact_summary(
 ) -> ImplementationArtifactSummary:
     draft_set = draft_result.metadata.get("draft_set")
     if isinstance(draft_set, DraftSet):
-        file_paths = [
-            str(file_draft.relative_path).strip()
-            for file_draft in list(draft_set.files)
-            if str(file_draft.relative_path).strip()
-        ]
+        file_paths = []
+        files_changed = 0
+        files_created = 0
+        files_deleted = 0
+        for file_draft in list(draft_set.files):
+            relative_path = str(file_draft.relative_path).strip()
+            if relative_path:
+                file_paths.append(relative_path)
+            operation_type = str(file_draft.operation_type or "").strip().lower()
+            if operation_type == "create":
+                files_created += 1
+            elif operation_type == "delete":
+                files_deleted += 1
+            else:
+                files_changed += 1
         return ImplementationArtifactSummary(
             artifact_type="draft_set",
             goal=str(draft_set.goal or "").strip(),
             file_count=len(file_paths),
             file_paths=file_paths,
+            files_count=len(file_paths),
+            files_changed=files_changed,
+            files_created=files_created,
+            files_deleted=files_deleted,
+            reason_if_empty="agent produced no changes" if not file_paths else "",
         )
 
     change_set = change_result.metadata.get("change_set")
     if isinstance(change_set, ChangeSet):
-        file_paths = [
-            str(file_change.relative_path).strip()
-            for file_change in list(change_set.files)
-            if str(file_change.relative_path).strip()
-        ]
+        file_paths = []
+        files_changed = 0
+        files_created = 0
+        files_deleted = 0
+        for file_change in list(change_set.files):
+            relative_path = str(file_change.relative_path).strip()
+            if relative_path:
+                file_paths.append(relative_path)
+            operation_type = str(file_change.operation_type or "").strip().lower()
+            if operation_type == "create":
+                files_created += 1
+            elif operation_type == "delete":
+                files_deleted += 1
+            else:
+                files_changed += 1
         return ImplementationArtifactSummary(
             artifact_type="change_set",
             goal=str(change_set.goal or "").strip(),
             file_count=len(file_paths),
             file_paths=file_paths,
+            files_count=len(file_paths),
+            files_changed=files_changed,
+            files_created=files_created,
+            files_deleted=files_deleted,
+            reason_if_empty="agent produced no changes" if not file_paths else "",
         )
 
     return ImplementationArtifactSummary(
@@ -2127,7 +3179,103 @@ def _build_implementation_artifact_summary(
         goal="",
         file_count=0,
         file_paths=[],
+        files_count=0,
+        files_changed=0,
+        files_created=0,
+        files_deleted=0,
+        reason_if_empty="agent produced no changes",
     )
+
+
+def _human_draft_step_message(artifact_summary: ImplementationArtifactSummary) -> str:
+    file_count = int(artifact_summary.files_count or artifact_summary.file_count or 0)
+    if file_count <= 0:
+        return "0 files generated by agent"
+    return f"{file_count} file(s) generated by agent"
+
+
+def _human_validation_step_message(
+    validation_result: ValidationResult,
+    *,
+    validation_path_exists: bool,
+    candidate_apply_result: ApplyResult | None,
+) -> str:
+    if not validation_path_exists:
+        return "validation path missing"
+    if candidate_apply_result is not None and candidate_apply_result.errors:
+        return "candidate apply failed before validation"
+    if int(getattr(validation_result, "failed_tests", 0) or 0) > 0:
+        return f"{int(validation_result.failed_tests)} tests failed"
+    if int(getattr(validation_result, "total_tests", 0) or 0) > 0:
+        return f"{int(validation_result.passed_tests)} of {int(validation_result.total_tests)} tests passed"
+    if validation_result.overall_status == "success":
+        return "validation passed"
+    return "; ".join(list(validation_result.errors) or list(validation_result.warnings) or ["validation did not succeed"])
+
+
+def _enrich_apply_result(
+    apply_result: ApplyResult,
+    *,
+    skip_reason: str = "",
+) -> ApplyResult:
+    resolved_skip_reason = str(skip_reason or apply_result.skip_reason or "").strip()
+    if not resolved_skip_reason:
+        if not apply_result.applied_files and not apply_result.skipped_files:
+            resolved_skip_reason = "no_changes"
+        elif apply_result.errors:
+            resolved_skip_reason = "files_failed"
+        elif apply_result.skipped_files and not apply_result.applied_files:
+            resolved_skip_reason = "partial_skip"
+    files_failed = len([item for item in list(apply_result.skipped_files) if item.status == "failed"])
+    return ApplyResult(
+        repo_id=apply_result.repo_id,
+        root_path=apply_result.root_path,
+        dry_run=apply_result.dry_run,
+        applied_files=list(apply_result.applied_files),
+        skipped_files=list(apply_result.skipped_files),
+        applied=bool(apply_result.applied_files) and not apply_result.errors and files_failed == 0,
+        files_written=len(list(apply_result.applied_files)),
+        files_failed=files_failed,
+        skipped=bool(apply_result.skipped_files) or not bool(apply_result.applied_files),
+        skip_reason=resolved_skip_reason,
+        warnings=list(apply_result.warnings),
+        errors=list(apply_result.errors),
+    )
+
+
+def _build_diff_payload(
+    diff_result,
+    *,
+    reason: str = "",
+) -> dict:
+    payload = diff_result.to_dict() if hasattr(diff_result, "to_dict") else dict(diff_result or {})
+    files = list(payload.get("files", []) or [])
+    resolved_reason = str(reason or payload.get("reason", "") or "").strip()
+    if not files and not resolved_reason:
+        resolved_reason = "no_changes"
+    payload["reason"] = resolved_reason
+    return payload
+
+
+def _build_root_cause_summary(result: ImplementationResult) -> str:
+    artifact_summary = result.artifact_summary
+    if int(artifact_summary.files_count or artifact_summary.file_count or 0) == 0:
+        return "No changes generated by agent"
+    if int(getattr(result.validation_result, "failed_tests", 0) or 0) > 0:
+        return f"Validation failed: {int(result.validation_result.failed_tests)} test(s) failed"
+    if result.validation_result.overall_status == "failed":
+        return "; ".join(list(result.validation_result.errors) or ["Validation failed"])
+    apply_result = result.real_apply_result or result.dry_run_apply_result
+    if apply_result is not None and bool(getattr(apply_result, "skipped", False)):
+        reason = str(getattr(apply_result, "skip_reason", "") or "").strip() or "unknown"
+        if reason == "no_changes":
+            return "No changes generated by agent"
+        if reason == "validation_failed":
+            return "Apply skipped because validation failed"
+        return f"Apply skipped: {reason.replace('_', ' ')}"
+    if result.final_status and result.final_status not in {"dry_run_complete", "applied"}:
+        return str(result.final_status or "").replace("_", " ").strip()
+    return ""
 
 
 def _prepare_implementation_apply_artifact(
@@ -2195,6 +3343,13 @@ def _build_failed_validation_result(repo_id: str, message: str) -> ValidationRes
     return ValidationResult(
         repo_id=repo_id,
         overall_status="failed",
+        passed=False,
+        total_tests=0,
+        passed_tests=0,
+        failed_tests=0,
+        failed_test_cases=[],
+        stdout="",
+        stderr="",
         errors=[message],
     )
 
@@ -2290,7 +3445,7 @@ def _format_run_record_section(run_record: RunRecord | None) -> str:
 
 def _step_outcome(status: str, message: str) -> tuple[str, str]:
     normalized_status = str(status or "").strip().lower()
-    if normalized_status not in {"success", "failed", "partial"}:
+    if normalized_status not in {"success", "failed", "partial", "skipped", "no_changes"}:
         normalized_status = "partial"
     return normalized_status, str(message or "").strip()
 
@@ -2299,6 +3454,8 @@ def _resolve_run_status(implementation_result: ImplementationResult) -> str:
     base_status = "failed"
     if implementation_result.final_status in {"applied", "dry_run_complete"}:
         base_status = "success"
+    elif implementation_result.final_status == "no_changes":
+        base_status = "no_changes"
     elif implementation_result.final_status in {
         "dry_run_complete_missing_validation_path",
         "dry_run_missing_apply_operations",
@@ -2522,6 +3679,67 @@ def _build_existing_run_review_description(run_record: RunRecord) -> str:
     return "\n".join(lines)
 
 
+def _repo_context_summary_payload(repo_context: dict | None) -> dict:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    return {
+        "files_used": [
+            str(item).strip()
+            for item in list(context.get("files_used", []) or [])
+            if str(item).strip()
+        ],
+        "resolved_target_files": [
+            str(item).strip()
+            for item in list(context.get("resolved_target_files", []) or [])
+            if str(item).strip()
+        ],
+        "resolved_symbols": dict(context.get("resolved_symbols", {}) or {}),
+        "chunk_count": len(list(context.get("chunks", []) or [])),
+    }
+
+
+def _spec_result_payload(spec_result: AgentResult | None) -> dict | None:
+    if spec_result is None:
+        return None
+    spec = spec_result.metadata.get("spec") if isinstance(spec_result.metadata, dict) else None
+    if spec is None:
+        return None
+    return {
+        "title": str(getattr(spec, "title", "") or "").strip(),
+        "goal": str(getattr(spec, "goal", "") or "").strip(),
+        "context": str(getattr(spec, "context", "") or "").strip(),
+        "scope": list(getattr(spec, "scope", []) or []),
+        "out_of_scope": list(getattr(spec, "out_of_scope", []) or []),
+        "requirements": list(getattr(spec, "requirements", []) or []),
+        "acceptance_criteria": list(getattr(spec, "acceptance_criteria", []) or []),
+        "risks": list(getattr(spec, "risks", []) or []),
+        "output_text": str(spec_result.output_text or "").strip(),
+    }
+
+
+def _implementation_publication_payload(implementation_result: ImplementationResult) -> dict:
+    run_record = implementation_result.run_record
+    scm_payload = dict(run_record.scm) if run_record is not None else {}
+    return {
+        "branch_name": str(implementation_result.scm_branch_name or scm_payload.get("branch_name", "") or "").strip(),
+        "commit_hash": str(scm_payload.get("commit_hash", "") or "").strip(),
+        "remote_url": str(implementation_result.scm_remote_url or scm_payload.get("remote_url", "") or "").strip(),
+        "repo_path": str(scm_payload.get("repo_path", "") or "").strip(),
+        "pr_url": (
+            str(implementation_result.pull_request_result.url or "").strip()
+            if implementation_result.pull_request_result is not None
+            else str(getattr(run_record, "pr_url", "") or "").strip()
+        ),
+        "review_url": (
+            str(implementation_result.crucible_review_result.url or "").strip()
+            if implementation_result.crucible_review_result is not None
+            else str(getattr(run_record, "review_url", "") or "").strip()
+        ),
+        "review_status": str(implementation_result.review_status or "").strip(),
+        "review_error": str(implementation_result.review_error or "").strip(),
+        "publication_status": str(implementation_result.publication_status or "").strip(),
+    }
+
+
 def _target_branch_name_for_repo(repo) -> str:
     return str(getattr(repo, "default_branch", "") or "").strip() or "main"
 
@@ -2614,87 +3832,38 @@ def _ensure_published_change_branch(
             "SCM publication skipped: real apply did not complete cleanly."
         )
         return implementation_result, False, {}
-
-    repo_root = str(getattr(resolved_repo, "root_path", "") or "").strip()
-    scm_service = ScmService()
-
-    if not scm_service.detect_git_repo(repo_root):
-        implementation_result.scm_warnings.append("SCM publication skipped: git repository not available.")
-        return implementation_result, False, {}
-
-    remote_result = scm_service.get_remote(repo_root)
-    if not remote_result.success:
-        implementation_result.scm_warnings.append(
-            remote_result.error or "SCM publication skipped: remote origin not available."
-        )
-        return implementation_result, False, {}
-
-    remote_url = str(remote_result.data.get("remote_url", "") or "").strip()
-    implementation_result.scm_remote_url = remote_url
-    if not remote_url:
-        implementation_result.scm_warnings.append("SCM publication skipped: remote origin URL is empty.")
-        return implementation_result, False, {}
-
-    branch_result = scm_service.get_current_branch(repo_root)
-    current_branch = str(branch_result.data.get("branch_name", "") or "").strip()
-    target_branch = _target_branch_name_for_repo(resolved_repo)
-    branch_name = current_branch
-
-    if not branch_name or branch_name == target_branch:
-        branch_name = (
-            build_run_branch_name(run_id)
-            if str(run_id or "").strip()
-            else build_feature_branch_name(implementation_result.artifact_summary.goal or "change")
-        )
-        create_result = scm_service.create_branch(repo_root, branch_name)
-        if not create_result.success:
-            implementation_result.scm_warnings.append(
-                create_result.error or f"Failed to create branch {branch_name}."
-            )
-            return implementation_result, False, {}
-        checkout_result = scm_service.checkout_branch(repo_root, branch_name)
-        if not checkout_result.success:
-            implementation_result.scm_warnings.append(
-                checkout_result.error or f"Failed to checkout branch {branch_name}."
-            )
-            return implementation_result, False, {}
-
-    implementation_result.scm_branch_name = branch_name
-    status_result = scm_service.get_status(repo_root)
-    if not status_result.is_git_repo:
-        implementation_result.scm_warnings.append(
-            status_result.error or "SCM publication skipped: git status is unavailable."
-        )
-        return implementation_result, False, {}
-    if not status_result.has_changes:
-        implementation_result.scm_warnings.append(
-            "SCM publication skipped: no commits or pending changes were available for publication."
-        )
-        return implementation_result, False, {}
-
-    add_result = scm_service.add_all_changes(repo_root)
-    if not add_result.success:
-        implementation_result.scm_warnings.append(add_result.error or "Failed to stage changes for publication.")
-        return implementation_result, False, {}
-
-    commit_message = f"AI: implement {implementation_result.artifact_summary.goal or 'repository update'}"
-    commit_result = scm_service.commit(repo_root, commit_message)
-    if not commit_result.success:
-        implementation_result.scm_warnings.append(commit_result.error or "Failed to create commit for publication.")
-        return implementation_result, False, {}
-
-    head_result = scm_service.get_head_commit_hash(repo_root)
-    commit_hash = str(head_result.data.get("commit_hash", "") or "").strip() if head_result.success else ""
-
-    push_result = scm_service.push(repo_root, branch_name)
-    if not push_result.success:
-        implementation_result.scm_warnings.append(push_result.error or "Failed to push branch for publication.")
-        return implementation_result, False, {}
+    registry_service = type(
+        "_ResolvedRepoRegistry",
+        (),
+        {
+            "resolve_repo": lambda self, repo_id=None, root_path=None: resolved_repo,
+        },
+    )()
+    publication_result = PublicationService(
+        registry_service=registry_service,
+        scm_service=ScmService(),
+    ).publish_existing_changes(
+        resolved_repo.repo_id,
+        run_id,
+        summary=f"implement {implementation_result.artifact_summary.goal or 'repository update'}",
+        create_pull_request=False,
+    )
+    implementation_result.scm_branch_name = str(publication_result.branch_name or "").strip()
+    implementation_result.scm_remote_url = str(publication_result.remote_url or "").strip()
+    implementation_result.scm_warnings.extend(list(publication_result.warnings))
+    if list(publication_result.errors):
+        implementation_result.scm_warnings.extend(list(publication_result.errors))
+        return implementation_result, False, {
+            "branch_name": publication_result.branch_name,
+            "commit_hash": publication_result.commit_hash,
+            "repo_path": str(getattr(resolved_repo, "root_path", "") or "").strip(),
+            "remote_url": publication_result.remote_url,
+        }
     return implementation_result, True, {
-        "branch_name": branch_name,
-        "commit_hash": commit_hash,
-        "repo_path": repo_root,
-        "remote_url": remote_url,
+        "branch_name": publication_result.branch_name,
+        "commit_hash": publication_result.commit_hash,
+        "repo_path": str(getattr(resolved_repo, "root_path", "") or "").strip(),
+        "remote_url": publication_result.remote_url,
     }
 
 
@@ -2903,7 +4072,13 @@ def run_implementation_pipeline(
     user_input: str,
     *,
     repo_id: str | None = None,
+    attempt_index: int = 1,
+    total_attempts: int = 1,
     parent_run_id: str = "",
+    retry_note: str = "",
+    retry_context_summary: str = "",
+    retry_context: dict | None = None,
+    run_goal: str | None = None,
     real_apply: bool = False,
     create_pr: bool = False,
     create_review: bool = False,
@@ -2921,11 +4096,16 @@ def run_implementation_pipeline(
     permission_service = PermissionService()
     run_service = RunService(persist=run_log)
     run_record = run_service.start_run(
-        implementation_request or user_input,
+        str(run_goal or implementation_request or user_input).strip(),
+        attempt_index=attempt_index,
+        total_attempts=total_attempts,
         parent_run_id=parent_run_id,
         repo_id=resolved_repo_id,
         actor_context=resolved_actor_context,
         repo_metadata=resolved_repo,
+        retry_note=retry_note,
+        retry_context_summary=retry_context_summary,
+        retry_context=retry_context,
     )
     run_id = run_record.run_id
     temp_workspace_service = TempWorkspaceService()
@@ -2972,18 +4152,28 @@ def run_implementation_pipeline(
             draft_result,
             dry_run=True,
         )
-        dry_run_diff_result = DiffService().build_diff(
-            repo_id=resolved_repo_id,
-            apply_input=dry_run_apply_input,
-            apply_result=dry_run_apply_result,
+        no_changes_generated = (
+            int(artifact_summary.files_count or artifact_summary.file_count or 0) == 0
+            or not list(dry_run_apply_input.operations)
         )
+        if no_changes_generated:
+            dry_run_diff_result = DiffResult(
+                repo_id=resolved_repo_id,
+                root_path=str(getattr(resolved_repo, "root_path", "") or "").strip(),
+                dry_run=True,
+                files=[],
+                warnings=[],
+            )
+        else:
+            dry_run_diff_result = DiffService().build_diff(
+                repo_id=resolved_repo_id,
+                apply_input=dry_run_apply_input,
+                apply_result=dry_run_apply_result,
+            )
         run_service.finish_step(
             run_id,
             "success",
-            (
-                f"Prepared {artifact_summary.artifact_type} "
-                f"with {artifact_summary.file_count} file(s)."
-            ),
+            _human_draft_step_message(artifact_summary),
         )
 
         implementation_result = ImplementationResult(
@@ -3000,118 +4190,144 @@ def run_implementation_pipeline(
             final_status="dry_run_complete",
         )
 
-        validate_decision = permission_service.evaluate(
-            resolved_actor_context,
-            "implementation.validate",
-            scope=base_permission_scope,
-        )
-        run_service.start_step(run_id, "validation")
-        if not validate_decision.allowed:
-            _record_policy_decision(
-                implementation_result,
-                run_service,
+        if no_changes_generated:
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason="no_changes",
+            )
+            implementation_result.validation_result = ValidationResult(
+                repo_id=resolved_repo_id,
+                overall_status="skipped",
+                passed=False,
+                total_tests=0,
+                passed_tests=0,
+                failed_tests=0,
+                failed_test_cases=[],
+                stdout="",
+                stderr="",
+                warnings=["Skipped because no changes were generated."],
+            )
+            run_service.start_step(run_id, "validation")
+            run_service.finish_step(
                 run_id,
-                validate_decision,
+                "skipped",
+                "Skipped because no changes were generated.",
             )
-            validation_result = _build_failed_validation_result(
-                resolved_repo_id,
-                validate_decision.reason,
-            )
-            validation_path_exists = False
-            run_service.fail_step(
+            run_service.start_step(run_id, "apply")
+            run_service.finish_step(
                 run_id,
-                _build_execution_error(
-                    "validation_failed",
-                    validate_decision.reason,
-                    "validation",
-                    details={"deny_reason_code": validate_decision.deny_reason_code},
-                ),
+                "skipped",
+                "Skipped because no changes were generated.",
             )
+            if real_apply or create_pr or create_review:
+                run_service.start_step(run_id, "commit_push")
+                run_service.finish_step(
+                    run_id,
+                    "skipped",
+                    "Skipped because no changes were generated.",
+                )
+            implementation_result.final_status = "no_changes"
+            implementation_result.root_cause_summary = "No changes generated by agent"
         else:
-            scm_service = ScmService()
-            repo_root_path = str(getattr(resolved_repo, "root_path", "") or "").strip()
-            clean_result = None
-            if (Path(repo_root_path) / ".git").exists() and scm_service.detect_git_repo(repo_root_path):
-                clean_result = scm_service.is_clean(repo_root_path)
-            if clean_result is not None and not clean_result.success:
+
+            validate_decision = permission_service.evaluate(
+                resolved_actor_context,
+                "implementation.validate",
+                scope=base_permission_scope,
+            )
+            run_service.start_step(run_id, "validation")
+            if not validate_decision.allowed:
+                _record_policy_decision(
+                    implementation_result,
+                    run_service,
+                    run_id,
+                    validate_decision,
+                )
                 validation_result = _build_failed_validation_result(
                     resolved_repo_id,
-                    clean_result.error or "Repository must be clean before apply.",
+                    validate_decision.reason,
                 )
-                temp_workspace_warnings.append(validation_result.errors[0])
-                if implementation_result is not None:
-                    _record_policy_decision(
-                        implementation_result,
-                        run_service,
+                validation_path_exists = False
+                run_service.fail_step(
+                    run_id,
+                    _build_execution_error(
+                        "validation_failed",
+                        validate_decision.reason,
+                        "validation",
+                        details={"deny_reason_code": validate_decision.deny_reason_code},
+                    ),
+                )
+            else:
+                scm_service = ScmService()
+                repo_root_path = str(getattr(resolved_repo, "root_path", "") or "").strip()
+                clean_result = None
+                if (Path(repo_root_path) / ".git").exists() and scm_service.detect_git_repo(repo_root_path):
+                    clean_result = scm_service.is_clean(repo_root_path)
+                if clean_result is not None and not clean_result.success:
+                    validation_result = _build_failed_validation_result(
+                        resolved_repo_id,
+                        clean_result.error or "Repository must be clean before apply.",
+                    )
+                    temp_workspace_warnings.append(validation_result.errors[0])
+                    if implementation_result is not None:
+                        _record_policy_decision(
+                            implementation_result,
+                            run_service,
+                            run_id,
+                            _manual_policy_decision(
+                                resolved_actor_context,
+                                "implementation.apply",
+                                False,
+                                validation_result.errors[0],
+                                scope=base_permission_scope,
+                                deny_reason_code=DENY_REASON_DIRTY_REPO,
+                                details={
+                                    "changed_files": list(clean_result.data.get("changed_files", [])),
+                                },
+                            ),
+                        )
+                    run_service.fail_step(
                         run_id,
-                        _manual_policy_decision(
-                            resolved_actor_context,
-                            "implementation.apply",
-                            False,
+                        _build_execution_error(
+                            "dirty_repo",
                             validation_result.errors[0],
-                            scope=base_permission_scope,
-                            deny_reason_code=DENY_REASON_DIRTY_REPO,
+                            "validation",
                             details={
                                 "changed_files": list(clean_result.data.get("changed_files", [])),
                             },
                         ),
                     )
-                run_service.fail_step(
-                    run_id,
-                    _build_execution_error(
-                        "dirty_repo",
-                        validation_result.errors[0],
-                        "validation",
-                        details={
-                            "changed_files": list(clean_result.data.get("changed_files", [])),
-                        },
-                    ),
-                )
-            else:
-                try:
-                    temp_workspace_context = temp_workspace_service.create_workspace(resolved_repo_id)
-                    _artifact_summary, _candidate_apply_input, candidate_apply_result = _prepare_implementation_apply_artifact(
-                        resolved_repo_id,
-                        change_result,
-                        draft_result,
-                        dry_run=False,
-                        allow_real_writes=True,
-                        storage_path=temp_workspace_context.registry_path,
-                    )
-                    validation_result = ValidationService(
-                        storage_path=temp_workspace_context.registry_path
-                    ).run_validation(resolved_repo_id)
-                    validation_path_exists = _validation_path_exists(validation_result)
-                except Exception as exc:
-                    message = f"Temp workspace validation failed to start: {exc}"
-                    validation_result = _build_failed_validation_result(resolved_repo_id, message)
-                    temp_workspace_warnings.append(message)
-                    run_service.fail_step(
-                        run_id,
-                        _build_execution_error(
-                            "unexpected",
-                            message,
-                            "validation",
-                            details={"exception_class": exc.__class__.__name__},
-                        ),
-                    )
+                else:
+                    try:
+                        temp_workspace_context = temp_workspace_service.create_workspace(resolved_repo_id)
+                        _artifact_summary, _candidate_apply_input, candidate_apply_result = _prepare_implementation_apply_artifact(
+                            resolved_repo_id,
+                            change_result,
+                            draft_result,
+                            dry_run=False,
+                            allow_real_writes=True,
+                            storage_path=temp_workspace_context.registry_path,
+                        )
+                        validation_result = ValidationService(
+                            storage_path=temp_workspace_context.registry_path
+                        ).run_validation(resolved_repo_id)
+                        validation_path_exists = _validation_path_exists(validation_result)
+                    except Exception as exc:
+                        message = f"Temp workspace validation failed to start: {exc}"
+                        validation_result = _build_failed_validation_result(resolved_repo_id, message)
+                        temp_workspace_warnings.append(message)
+                        run_service.fail_step(
+                            run_id,
+                            _build_execution_error(
+                                "unexpected",
+                                message,
+                                "validation",
+                                details={"exception_class": exc.__class__.__name__},
+                            ),
+                        )
 
-                validation_step_status, validation_step_message = _step_outcome(
-                    "success"
-                    if (
-                        candidate_apply_result is not None
-                        and not candidate_apply_result.errors
-                        and not candidate_apply_result.skipped_files
-                        and validation_path_exists
-                        and validation_result.overall_status == "success"
-                    )
-                    else (
-                        "failed"
-                        if validation_result.overall_status == "failed"
-                        else "partial"
-                    ),
-                    (
-                        "Candidate workspace validation succeeded."
+                    validation_step_status, validation_step_message = _step_outcome(
+                        "success"
                         if (
                             candidate_apply_result is not None
                             and not candidate_apply_result.errors
@@ -3120,32 +4336,32 @@ def run_implementation_pipeline(
                             and validation_result.overall_status == "success"
                         )
                         else (
-                            "Candidate validation path is missing."
-                            if not validation_path_exists
-                            else (
-                                "Candidate apply was incomplete before validation."
-                                if candidate_apply_result is not None and (candidate_apply_result.errors or candidate_apply_result.skipped_files)
-                                else "; ".join(list(validation_result.errors) or list(validation_result.warnings) or ["Candidate validation did not succeed."])
+                            "failed"
+                            if validation_result.overall_status == "failed"
+                            else "partial"
+                        ),
+                        _human_validation_step_message(
+                            validation_result,
+                            validation_path_exists=validation_path_exists,
+                            candidate_apply_result=candidate_apply_result,
+                        ),
+                    )
+                    current_run_record = run_service.get_run(run_id)
+                    if list(current_run_record.steps) and current_run_record.steps[-1].status == "running":
+                        if validation_step_status == "failed":
+                            run_service.fail_step(
+                                run_id,
+                                _build_execution_error(
+                                    "validation_failed",
+                                    validation_step_message,
+                                    "validation",
+                                    details={
+                                        "validation_status": validation_result.overall_status,
+                                    },
+                                ),
                             )
-                        )
-                    ),
-                )
-                current_run_record = run_service.get_run(run_id)
-                if list(current_run_record.steps) and current_run_record.steps[-1].status == "running":
-                    if validation_step_status == "failed":
-                        run_service.fail_step(
-                            run_id,
-                            _build_execution_error(
-                                "validation_failed",
-                                validation_step_message,
-                                "validation",
-                                details={
-                                    "validation_status": validation_result.overall_status,
-                                },
-                            ),
-                        )
-                    else:
-                        run_service.finish_step(run_id, validation_step_status, validation_step_message)
+                        else:
+                            run_service.finish_step(run_id, validation_step_status, validation_step_message)
 
         implementation_result.candidate_apply_result = candidate_apply_result
         implementation_result.validation_result = validation_result
@@ -3155,9 +4371,26 @@ def run_implementation_pipeline(
             else ""
         )
         implementation_result.temp_workspace_warnings = temp_workspace_warnings
+        implementation_result.dry_run_apply_result = _enrich_apply_result(
+            implementation_result.dry_run_apply_result,
+            skip_reason=(
+                "no_changes"
+                if no_changes_generated
+                else implementation_result.dry_run_apply_result.skip_reason
+            ),
+        )
+        if implementation_result.candidate_apply_result is not None:
+            implementation_result.candidate_apply_result = _enrich_apply_result(
+                implementation_result.candidate_apply_result,
+            )
 
-        run_service.start_step(run_id, "apply")
-        if artifact_summary.artifact_type == "unavailable" or not list(dry_run_apply_input.operations):
+        if not no_changes_generated:
+            run_service.start_step(run_id, "apply")
+        if not no_changes_generated and (artifact_summary.artifact_type == "unavailable" or not list(dry_run_apply_input.operations)):
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason="no_changes",
+            )
             implementation_result.final_status = (
                 "real_apply_blocked_missing_apply_operations"
                 if real_apply
@@ -3177,7 +4410,11 @@ def run_implementation_pipeline(
                         deny_reason_code=DENY_REASON_POLICY_BLOCK,
                     ),
                 )
-        elif candidate_apply_result is None:
+        elif not no_changes_generated and candidate_apply_result is None:
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason="apply_not_executed",
+            )
             implementation_result.final_status = "dirty_repo_blocked" if validation_result.errors and any("clean" in item.lower() for item in validation_result.errors) else (
                 "real_apply_blocked_candidate_validation_unavailable"
                 if real_apply
@@ -3197,7 +4434,11 @@ def run_implementation_pipeline(
                         deny_reason_code=DENY_REASON_POLICY_BLOCK,
                     ),
                 )
-        elif candidate_apply_result.errors or candidate_apply_result.skipped_files:
+        elif not no_changes_generated and (candidate_apply_result.errors or candidate_apply_result.skipped_files):
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason="apply_not_executed",
+            )
             implementation_result.final_status = (
                 "real_apply_blocked_candidate_apply_incomplete"
                 if real_apply
@@ -3217,7 +4458,11 @@ def run_implementation_pipeline(
                         deny_reason_code=DENY_REASON_POLICY_BLOCK,
                     ),
                 )
-        elif not validation_path_exists:
+        elif not no_changes_generated and not validation_path_exists:
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason="validation_failed",
+            )
             implementation_result.final_status = (
                 "real_apply_blocked_missing_validation_path"
                 if real_apply
@@ -3237,7 +4482,11 @@ def run_implementation_pipeline(
                         deny_reason_code=DENY_REASON_MISSING_VALIDATION,
                     ),
                 )
-        elif validation_result.overall_status != "success":
+        elif not no_changes_generated and validation_result.overall_status != "success":
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason="validation_failed",
+            )
             implementation_result.final_status = (
                 "real_apply_blocked_validation_failed"
                 if real_apply
@@ -3257,9 +4506,12 @@ def run_implementation_pipeline(
                         deny_reason_code=DENY_REASON_MISSING_VALIDATION,
                     ),
                 )
-        elif not real_apply:
+        elif not no_changes_generated and not real_apply:
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+            )
             implementation_result.final_status = "dry_run_complete"
-        else:
+        elif not no_changes_generated:
             apply_decision = permission_service.evaluate(
                 resolved_actor_context,
                 "implementation.apply",
@@ -3277,6 +4529,10 @@ def run_implementation_pipeline(
                     source="config",
                 )
             if not apply_decision.allowed:
+                implementation_result.dry_run_apply_result = _enrich_apply_result(
+                    implementation_result.dry_run_apply_result,
+                    skip_reason="apply_not_executed",
+                )
                 implementation_result.final_status = "real_apply_blocked_permission_denied"
                 _record_policy_decision(
                     implementation_result,
@@ -3297,7 +4553,9 @@ def run_implementation_pipeline(
                     apply_input=real_apply_input,
                     apply_result=real_apply_result,
                 )
-                implementation_result.real_apply_result = real_apply_result
+                implementation_result.real_apply_result = _enrich_apply_result(
+                    real_apply_result,
+                )
                 implementation_result.final_diff_result = final_diff_result
                 if not _real_apply_succeeded(real_apply_result):
                     implementation_result.final_status = "apply_failed"
@@ -3581,6 +4839,11 @@ def run_implementation_pipeline(
         )
     finally:
         if implementation_result is not None:
+            implementation_result.dry_run_apply_result = _enrich_apply_result(
+                implementation_result.dry_run_apply_result,
+                skip_reason=implementation_result.dry_run_apply_result.skip_reason,
+            )
+            implementation_result.root_cause_summary = _build_root_cause_summary(implementation_result)
             apply_status, apply_message = _step_outcome(
                 (
                     "success"
@@ -3588,12 +4851,20 @@ def run_implementation_pipeline(
                     else "partial"
                 ),
                 (
-                    "Dry-run apply completed safely."
-                    if implementation_result.final_status == "dry_run_complete"
+                    "skipped: no changes"
+                    if implementation_result.dry_run_apply_result.skip_reason == "no_changes"
                     else (
-                        f"Real apply completed with {len(implementation_result.real_apply_result.applied_files) if implementation_result.real_apply_result is not None else 0} applied file(s)."
-                        if implementation_result.final_status == "applied"
-                        else implementation_result.final_status
+                        "skipped: validation failed"
+                        if implementation_result.dry_run_apply_result.skip_reason == "validation_failed"
+                        else (
+                            "Dry-run apply completed safely."
+                            if implementation_result.final_status == "dry_run_complete"
+                            else (
+                                f"Real apply completed with {len(implementation_result.real_apply_result.applied_files) if implementation_result.real_apply_result is not None else 0} applied file(s)."
+                                if implementation_result.final_status == "applied"
+                                else implementation_result.final_status.replace('_', ' ')
+                            )
+                        )
                     )
                 ),
             )
@@ -3623,10 +4894,51 @@ def run_implementation_pipeline(
     _update_publication_status(implementation_result)
     implementation_result.run_record = run_service.get_run(run_id)
     persisted_diff_result = implementation_result.final_diff_result or implementation_result.dry_run_diff_result
+    diff_reason = ""
+    if not getattr(persisted_diff_result, "files", None):
+        if implementation_result.dry_run_apply_result.skip_reason == "validation_failed":
+            diff_reason = "validation_failed_before_apply"
+        elif implementation_result.dry_run_apply_result.skip_reason:
+            diff_reason = implementation_result.dry_run_apply_result.skip_reason
+        elif int(implementation_result.artifact_summary.files_count or implementation_result.artifact_summary.file_count or 0) == 0:
+            diff_reason = "no_changes"
+        else:
+            diff_reason = "apply_not_executed"
     run_service.persist_diff_result(run_id, persisted_diff_result)
-    run_service.persist_review_comments(
+    review_comments = ReviewCommentService().generate_comments(persisted_diff_result)
+    run_service.persist_review_comments(run_id, review_comments)
+    run_service.persist_run_detail(
         run_id,
-        ReviewCommentService().generate_comments(persisted_diff_result),
+        {
+            "mode": "implement",
+            "goal": implementation_request or user_input,
+            "attempt_index": implementation_result.run_record.attempt_index if implementation_result.run_record is not None else max(1, int(attempt_index or 1)),
+            "total_attempts": implementation_result.run_record.total_attempts if implementation_result.run_record is not None else max(1, int(total_attempts or 1)),
+            "repo_id": resolved_repo_id,
+            "jira_ticket": "",
+            "spec_result": _spec_result_payload(spec_result),
+            "review_result": None,
+            "research_result": None,
+            "implementation_result": implementation_result.to_dict(),
+            "publication_result": _implementation_publication_payload(implementation_result),
+            "validation_result": implementation_result.validation_result.to_dict(),
+            "diff_result": _build_diff_payload(
+                persisted_diff_result,
+                reason=diff_reason,
+            ),
+            "review_comments": [
+                item.to_dict() if hasattr(item, "to_dict") else dict(item or {})
+                for item in list(review_comments or [])
+            ],
+            "policy_decisions": [
+                decision.to_dict()
+                for decision in list(implementation_result.policy_decisions or [])
+            ],
+            "sources": [],
+            "repo_context_summary": _repo_context_summary_payload(repo_context),
+            "root_cause_summary": implementation_result.root_cause_summary,
+        },
+        log_path=implementation_result.run_record.log_path if implementation_result.run_record is not None else "",
     )
     return AgentResult(
         agent_name="implementation",
@@ -3634,6 +4946,7 @@ def run_implementation_pipeline(
         success=implementation_result.final_status in {
             "dry_run_complete",
             "applied",
+            "no_changes",
             "dry_run_complete_missing_validation_path",
         },
         task_intent=draft_result.task_intent or change_result.task_intent or "modify",

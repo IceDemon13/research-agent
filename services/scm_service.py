@@ -1,9 +1,12 @@
+import base64
 import re
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
+from config import settings
 from contracts.scm_contract import ScmOperationResult, ScmStatus
 from logger_utils import log_line
 
@@ -11,6 +14,8 @@ from logger_utils import log_line
 DEFAULT_SCM_OUTPUT_MAX_CHARS = 8000
 BRANCH_SLUG_MAX_CHARS = 48
 TRUNCATION_SUFFIX = "\n...[TRUNCATED]"
+BITBUCKET_HOST = "bitbucket.org"
+REDACTED = "<redacted>"
 
 
 def build_feature_branch_name(goal: str, now: datetime | None = None) -> str:
@@ -24,6 +29,62 @@ def build_run_branch_name(run_id: str) -> str:
     cleaned_run_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(run_id or "").strip()).strip("-")
     cleaned_run_id = cleaned_run_id or "run"
     return f"feature/ai/{cleaned_run_id}"
+
+
+def sanitize_remote_url(value: str) -> str:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return ""
+    try:
+        parts = urlsplit(candidate)
+    except ValueError:
+        return candidate
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        return candidate
+    clean_netloc = str(parts.hostname or "").strip()
+    if parts.port:
+        clean_netloc = f"{clean_netloc}:{parts.port}"
+    sanitized_parts = SplitResult(
+        scheme=parts.scheme,
+        netloc=clean_netloc,
+        path=parts.path,
+        query=parts.query,
+        fragment=parts.fragment,
+    )
+    return urlunsplit(sanitized_parts)
+
+
+def resolve_bitbucket_auth_credentials() -> tuple[str, str] | None:
+    repo_token = str(getattr(settings.runtime, "bitbucket_repo_token", "") or "").strip()
+    api_token = str(settings.runtime.bitbucket_api_token or "").strip()
+    username = str(settings.runtime.bitbucket_username or "").strip()
+    app_password = str(settings.runtime.bitbucket_app_password or "").strip()
+    token_value = repo_token or api_token
+    if token_value:
+        return ("x-token-auth", token_value)
+    if username and app_password:
+        return (username, app_password)
+    return None
+
+
+def build_bitbucket_basic_auth_header() -> str:
+    credentials = resolve_bitbucket_auth_credentials()
+    if credentials is None:
+        return ""
+    username, password = credentials
+    encoded = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+    return f"Basic {encoded}"
+
+
+def _is_bitbucket_https_remote(remote_url: str) -> bool:
+    sanitized_remote_url = sanitize_remote_url(remote_url)
+    if not sanitized_remote_url:
+        return False
+    try:
+        parts = urlsplit(sanitized_remote_url)
+    except ValueError:
+        return False
+    return parts.scheme == "https" and str(parts.hostname or "").strip().lower() == BITBUCKET_HOST
 
 
 class ScmService:
@@ -46,7 +107,7 @@ class ScmService:
         *,
         branch_name: str = "",
     ) -> ScmOperationResult:
-        cleaned_remote_url = str(remote_url or "").strip()
+        cleaned_remote_url = sanitize_remote_url(remote_url)
         resolved_target_path = Path(target_path).resolve()
         cleaned_branch_name = str(branch_name or "").strip()
         if not cleaned_remote_url:
@@ -69,62 +130,26 @@ class ScmService:
             )
 
         resolved_target_path.parent.mkdir(parents=True, exist_ok=True)
-        command = ["git", "clone"]
+        command = ["clone"]
         if cleaned_branch_name:
             command.extend(["--branch", cleaned_branch_name, "--single-branch"])
         command.extend([cleaned_remote_url, resolved_target_path.as_posix()])
-        try:
-            completed = subprocess.run(
-                command,
-                cwd=resolved_target_path.parent,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=60,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            return self._failure_result(
-                "clone_repo",
-                resolved_target_path.parent,
-                command=command,
-                error=str(exc),
-            )
-
-        stdout = self._truncate_text(completed.stdout)
-        stderr = self._truncate_text(completed.stderr)
-        success = completed.returncode == 0
-        if success:
-            return ScmOperationResult(
-                operation="clone_repo",
-                repo_path=resolved_target_path.as_posix(),
-                success=True,
-                command=command,
-                exit_code=completed.returncode,
-                stdout=stdout,
-                stderr=stderr,
-                data={
-                    "remote_url": cleaned_remote_url,
-                    "branch_name": cleaned_branch_name,
-                    "local_path": resolved_target_path.as_posix(),
-                },
-            )
-        return ScmOperationResult(
+        result = self._execute_git(
+            cwd=resolved_target_path.parent,
+            repo_path=resolved_target_path,
+            args=command,
             operation="clone_repo",
-            repo_path=resolved_target_path.as_posix(),
-            success=False,
-            command=command,
-            exit_code=completed.returncode,
-            stdout=stdout,
-            stderr=stderr,
-            error=stderr or stdout or f"git clone failed with exit code {completed.returncode}",
-            data={
+            remote_url=cleaned_remote_url,
+            timeout_seconds=60,
+        )
+        result.data.update(
+            {
                 "remote_url": cleaned_remote_url,
                 "branch_name": cleaned_branch_name,
                 "local_path": resolved_target_path.as_posix(),
-            },
+            }
         )
+        return result
 
     def get_current_branch(self, repo_path: str | Path) -> ScmOperationResult:
         repo_root = Path(repo_path).resolve()
@@ -133,21 +158,48 @@ class ScmService:
             result.data["branch_name"] = result.stdout.strip()
         return result
 
-    def create_branch(self, repo_path: str | Path, branch_name: str) -> ScmOperationResult:
+    def create_branch(self, repo_path: str | Path, branch_name: str, base: str = "") -> ScmOperationResult:
         cleaned_branch_name = str(branch_name or "").strip()
+        cleaned_base = str(base or "").strip()
         if not cleaned_branch_name:
             return self._failure_result(
                 "create_branch",
                 Path(repo_path).resolve(),
                 error="Branch name is required.",
             )
+        repo_root = Path(repo_path).resolve()
+        current_branch_result = self.get_current_branch(repo_root)
+        current_branch = str(current_branch_result.data.get("branch_name", "") or "").strip()
+        if current_branch == cleaned_branch_name:
+            return ScmOperationResult(
+                operation="create_branch",
+                repo_path=repo_root.as_posix(),
+                success=True,
+                data={"branch_name": cleaned_branch_name, "reused": True},
+            )
+        branch_exists_result = self._run_git(
+            repo_root,
+            ["branch", "--list", cleaned_branch_name],
+            "create_branch",
+        )
+        if branch_exists_result.success and str(branch_exists_result.stdout or "").strip():
+            return ScmOperationResult(
+                operation="create_branch",
+                repo_path=repo_root.as_posix(),
+                success=True,
+                data={"branch_name": cleaned_branch_name, "reused": True},
+            )
+        branch_args = ["branch", cleaned_branch_name]
+        if cleaned_base:
+            branch_args.append(cleaned_base)
         result = self._run_git(
-            Path(repo_path).resolve(),
-            ["branch", cleaned_branch_name],
+            repo_root,
+            branch_args,
             "create_branch",
         )
         if result.success:
             result.data["branch_name"] = cleaned_branch_name
+            result.data["reused"] = False
         return result
 
     def checkout_branch(self, repo_path: str | Path, branch_name: str) -> ScmOperationResult:
@@ -169,6 +221,20 @@ class ScmService:
 
     def add_all_changes(self, repo_path: str | Path) -> ScmOperationResult:
         return self._run_git(Path(repo_path).resolve(), ["add", "-A"], "add_all_changes")
+
+    def add_paths(self, repo_path: str | Path, paths: list[str]) -> ScmOperationResult:
+        normalized_paths = [str(path or "").strip() for path in list(paths or []) if str(path or "").strip()]
+        if not normalized_paths:
+            return self._failure_result(
+                "add_paths",
+                Path(repo_path).resolve(),
+                error="At least one path is required for staging.",
+            )
+        return self._run_git(
+            Path(repo_path).resolve(),
+            ["add", "-A", "--", *normalized_paths],
+            "add_paths",
+        )
 
     def commit(self, repo_path: str | Path, message: str) -> ScmOperationResult:
         cleaned_message = str(message or "").strip()
@@ -196,7 +262,7 @@ class ScmService:
         )
         if result.success:
             result.data["remote_name"] = cleaned_remote_name
-            result.data["remote_url"] = result.stdout.strip()
+            result.data["remote_url"] = sanitize_remote_url(result.stdout.strip())
         return result
 
     def is_clean(self, repo_path: str | Path) -> ScmOperationResult:
@@ -238,13 +304,34 @@ class ScmService:
                 Path(repo_path).resolve(),
                 error="Branch name is required.",
             )
+        remote_result = self.get_remote(repo_path, cleaned_remote_name)
+        remote_url = ""
+        if remote_result.success:
+            remote_url = str(remote_result.data.get("remote_url", "") or "").strip()
         result = self._run_git(
             Path(repo_path).resolve(),
             ["push", "-u", cleaned_remote_name, cleaned_branch_name],
             "push",
+            remote_url=remote_url,
         )
         if result.success:
             result.data["branch_name"] = cleaned_branch_name
+            result.data["remote_name"] = cleaned_remote_name
+        return result
+
+    def fetch(self, repo_path: str | Path, remote_name: str = "origin") -> ScmOperationResult:
+        cleaned_remote_name = str(remote_name or "").strip() or "origin"
+        remote_result = self.get_remote(repo_path, cleaned_remote_name)
+        remote_url = ""
+        if remote_result.success:
+            remote_url = str(remote_result.data.get("remote_url", "") or "").strip()
+        result = self._run_git(
+            Path(repo_path).resolve(),
+            ["fetch", cleaned_remote_name],
+            "fetch",
+            remote_url=remote_url,
+        )
+        if result.success:
             result.data["remote_name"] = cleaned_remote_name
         return result
 
@@ -309,6 +396,7 @@ class ScmService:
         repo_root: Path,
         args: list[str],
         operation: str,
+        remote_url: str = "",
     ) -> ScmOperationResult:
         if not self._git_available():
             return self._failure_result(
@@ -326,39 +414,59 @@ class ScmService:
                 error=f"Repo path does not exist: {repo_root.as_posix()}",
             )
 
-        command = ["git", *args]
+        return self._execute_git(
+            cwd=repo_root,
+            repo_path=repo_root,
+            args=args,
+            operation=operation,
+            remote_url=remote_url,
+        )
+
+    def _execute_git(
+        self,
+        *,
+        cwd: Path,
+        repo_path: Path,
+        args: list[str],
+        operation: str,
+        remote_url: str = "",
+        timeout_seconds: int = 20,
+    ) -> ScmOperationResult:
+        auth_args = self._build_git_auth_args(remote_url)
+        command = ["git", *auth_args, *args]
+        sanitized_command = self._sanitize_command(command)
         try:
             completed = subprocess.run(
                 command,
-                cwd=repo_root,
+                cwd=cwd,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=20,
+                timeout=timeout_seconds,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             return self._failure_result(
                 operation,
-                repo_root,
-                command=command,
-                error=str(exc),
+                repo_path,
+                command=sanitized_command,
+                error=self._sanitize_text(str(exc)),
             )
 
-        stdout = self._truncate_text(completed.stdout)
-        stderr = self._truncate_text(completed.stderr)
+        stdout = self._truncate_text(self._sanitize_text(completed.stdout))
+        stderr = self._truncate_text(self._sanitize_text(completed.stderr))
         success = completed.returncode == 0
         if success:
             log_line(
                 "SCM SERVICE SUCCESS: "
-                f"operation={operation} repo={repo_root.as_posix()} exit_code={completed.returncode}"
+                f"operation={operation} repo={repo_path.as_posix()} exit_code={completed.returncode}"
             )
             return ScmOperationResult(
                 operation=operation,
-                repo_path=repo_root.as_posix(),
+                repo_path=repo_path.as_posix(),
                 success=True,
-                command=command,
+                command=sanitized_command,
                 exit_code=completed.returncode,
                 stdout=stdout,
                 stderr=stderr,
@@ -367,14 +475,14 @@ class ScmService:
         error_text = stderr or stdout or f"git command failed with exit code {completed.returncode}"
         log_line(
             "SCM SERVICE FAILURE: "
-            f"operation={operation} repo={repo_root.as_posix()} exit_code={completed.returncode} "
+            f"operation={operation} repo={repo_path.as_posix()} exit_code={completed.returncode} "
             f"error={error_text}"
         )
         return ScmOperationResult(
             operation=operation,
-            repo_path=repo_root.as_posix(),
+            repo_path=repo_path.as_posix(),
             success=False,
-            command=command,
+            command=sanitized_command,
             exit_code=completed.returncode,
             stdout=stdout,
             stderr=stderr,
@@ -393,9 +501,61 @@ class ScmService:
             operation=operation,
             repo_path=repo_root.as_posix(),
             success=False,
-            command=list(command or []),
-            error=str(error or "").strip(),
+            command=self._sanitize_command(list(command or [])),
+            error=self._sanitize_text(str(error or "").strip()),
         )
+
+    def _build_git_auth_args(self, remote_url: str) -> list[str]:
+        cleaned_remote_url = sanitize_remote_url(remote_url)
+        if not _is_bitbucket_https_remote(cleaned_remote_url):
+            return []
+        auth_header = build_bitbucket_basic_auth_header()
+        if not auth_header:
+            return []
+        return ["-c", f"http.extraHeader=Authorization: {auth_header}"]
+
+    def _sanitize_command(self, command: list[str]) -> list[str]:
+        sanitized_items: list[str] = []
+        for item in list(command or []):
+            text = str(item or "")
+            if text.startswith("http.extraHeader=Authorization:"):
+                sanitized_items.append("http.extraHeader=Authorization: Basic <redacted>")
+                continue
+            sanitized_items.append(self._sanitize_text(text))
+        return sanitized_items
+
+    def _sanitize_text(self, value: str) -> str:
+        text = str(value or "")
+        if not text:
+            return ""
+
+        credentials = resolve_bitbucket_auth_credentials()
+        if credentials is not None:
+            username, password = credentials
+            raw_pair = f"{username}:{password}"
+            encoded_pair = base64.b64encode(raw_pair.encode("utf-8")).decode("ascii")
+            if password:
+                text = text.replace(password, REDACTED)
+            if raw_pair:
+                text = text.replace(raw_pair, f"{username}:{REDACTED}")
+            if encoded_pair:
+                text = text.replace(encoded_pair, REDACTED)
+
+        for secret_value in (
+            str(getattr(settings.runtime, "bitbucket_repo_token", "") or "").strip(),
+            str(settings.runtime.bitbucket_api_token or "").strip(),
+            str(settings.runtime.bitbucket_app_password or "").strip(),
+        ):
+            if secret_value:
+                text = text.replace(secret_value, REDACTED)
+
+        text = re.sub(
+            r"https?://[^\s/@:]+:[^\s/@]+@bitbucket\.org/[^\s'\"<>]+",
+            lambda match: sanitize_remote_url(match.group(0)),
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text
 
     def _truncate_text(self, value: str) -> str:
         text = str(value or "")

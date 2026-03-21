@@ -2,6 +2,20 @@ from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
+class FailedTestCase:
+    name: str = ""
+    error_type: str = ""
+    message: str = ""
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "name": self.name,
+            "error_type": self.error_type,
+            "message": self.message,
+        }
+
+
+@dataclass(slots=True)
 class ValidationCommand:
     name: str
     command: str
@@ -44,6 +58,13 @@ class ValidationResult:
     repo_id: str
     overall_status: str
     steps: list[ValidationStepResult] = field(default_factory=list)
+    passed: bool = False
+    total_tests: int = 0
+    passed_tests: int = 0
+    failed_tests: int = 0
+    failed_test_cases: list[FailedTestCase] = field(default_factory=list)
+    stdout: str = ""
+    stderr: str = ""
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -52,6 +73,13 @@ class ValidationResult:
             "repo_id": self.repo_id,
             "overall_status": self.overall_status,
             "steps": [item.to_dict() for item in self.steps],
+            "passed": self.passed,
+            "total_tests": self.total_tests,
+            "passed_tests": self.passed_tests,
+            "failed_tests": self.failed_tests,
+            "failed_test_cases": [item.to_dict() for item in self.failed_test_cases],
+            "stdout": self.stdout,
+            "stderr": self.stderr,
             "errors": list(self.errors),
             "warnings": list(self.warnings),
         }

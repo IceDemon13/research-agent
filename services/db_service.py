@@ -98,6 +98,8 @@ class DatabaseService:
                 run_id TEXT PRIMARY KEY,
                 goal TEXT NOT NULL,
                 status TEXT NOT NULL,
+                attempt_index INTEGER NOT NULL,
+                total_attempts INTEGER NOT NULL,
                 parent_run_id TEXT NOT NULL,
                 actor_id TEXT NOT NULL,
                 repo_id TEXT NOT NULL,
@@ -109,7 +111,11 @@ class DatabaseService:
                 review_url TEXT NOT NULL,
                 decision TEXT NOT NULL,
                 decided_at TEXT NOT NULL,
-                decided_by TEXT NOT NULL
+                decided_by TEXT NOT NULL,
+                decision_note TEXT NOT NULL,
+                retry_note TEXT NOT NULL,
+                retry_context_summary TEXT NOT NULL,
+                retry_context_json TEXT NOT NULL
             )
             """,
             """
@@ -161,6 +167,18 @@ class DatabaseService:
             self._ensure_column(
                 cursor,
                 "runs",
+                "attempt_index",
+                "INTEGER NOT NULL DEFAULT 1",
+            )
+            self._ensure_column(
+                cursor,
+                "runs",
+                "total_attempts",
+                "INTEGER NOT NULL DEFAULT 1",
+            )
+            self._ensure_column(
+                cursor,
+                "runs",
                 "parent_run_id",
                 "TEXT NOT NULL DEFAULT ''",
             )
@@ -181,6 +199,30 @@ class DatabaseService:
                 "runs",
                 "decided_by",
                 "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "runs",
+                "decision_note",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "runs",
+                "retry_note",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "runs",
+                "retry_context_summary",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "runs",
+                "retry_context_json",
+                "TEXT NOT NULL DEFAULT '{}'",
             )
         self._bootstrapped = True
         if role_capability_map:
@@ -404,13 +446,16 @@ class DatabaseService:
                 self._sql(
                     """
                     INSERT INTO runs (
-                        run_id, goal, status, parent_run_id, actor_id, repo_id, started_at, finished_at,
-                        scm_branch, scm_commit, pr_url, review_url, decision, decided_at, decided_by
+                        run_id, goal, status, attempt_index, total_attempts, parent_run_id, actor_id, repo_id, started_at, finished_at,
+                        scm_branch, scm_commit, pr_url, review_url, decision, decided_at, decided_by,
+                        decision_note, retry_note, retry_context_summary, retry_context_json
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(run_id) DO UPDATE SET
                         goal = excluded.goal,
                         status = excluded.status,
+                        attempt_index = excluded.attempt_index,
+                        total_attempts = excluded.total_attempts,
                         parent_run_id = excluded.parent_run_id,
                         actor_id = excluded.actor_id,
                         repo_id = excluded.repo_id,
@@ -422,13 +467,19 @@ class DatabaseService:
                         review_url = excluded.review_url,
                         decision = excluded.decision,
                         decided_at = excluded.decided_at,
-                        decided_by = excluded.decided_by
+                        decided_by = excluded.decided_by,
+                        decision_note = excluded.decision_note,
+                        retry_note = excluded.retry_note,
+                        retry_context_summary = excluded.retry_context_summary,
+                        retry_context_json = excluded.retry_context_json
                     """
                 ),
                 self._params(
                     run.run_id,
                     run.goal,
                     run.status,
+                    int(run.attempt_index or 1),
+                    int(run.total_attempts or 1),
                     run.parent_run_id,
                     actor_id,
                     run.repo_id,
@@ -441,6 +492,10 @@ class DatabaseService:
                     str(run.decision or "pending"),
                     str(run.decided_at or ""),
                     str(run.decided_by or ""),
+                    str(run.decision_note or ""),
+                    str(run.retry_note or ""),
+                    str(run.retry_context_summary or ""),
+                    json.dumps(dict(run.retry_context or {}), ensure_ascii=False, sort_keys=True),
                 ),
             )
 
@@ -517,7 +572,9 @@ class DatabaseService:
         return self._fetch_one(
             """
             SELECT run_id, goal, status, parent_run_id, actor_id, repo_id, started_at, finished_at,
-                   scm_branch, scm_commit, pr_url, review_url, decision, decided_at, decided_by
+                   attempt_index, total_attempts,
+                   scm_branch, scm_commit, pr_url, review_url, decision, decided_at, decided_by,
+                   decision_note, retry_note, retry_context_summary, retry_context_json
             FROM runs
             WHERE run_id = ?
             """,
@@ -564,9 +621,10 @@ class DatabaseService:
 
         return self._fetch_all(
             f"""
-            SELECT runs.run_id, runs.goal, runs.status, runs.parent_run_id, runs.actor_id, runs.repo_id,
+            SELECT runs.run_id, runs.goal, runs.status, runs.attempt_index, runs.total_attempts, runs.parent_run_id, runs.actor_id, runs.repo_id,
                    runs.started_at, runs.finished_at, runs.scm_branch, runs.scm_commit,
                    runs.pr_url, runs.review_url, runs.decision, runs.decided_at, runs.decided_by,
+                   runs.decision_note, runs.retry_note, runs.retry_context_summary, runs.retry_context_json,
                    users.display_name, users.role, users.actor_type
             FROM runs
             LEFT JOIN users ON users.user_id = runs.actor_id
@@ -632,12 +690,13 @@ class DatabaseService:
             connection.row_factory = sqlite3.Row
         elif self._backend == "postgres":
             try:
-                import psycopg
+                import psycopg2
+                from psycopg2.extras import RealDictCursor
             except ImportError as exc:
                 raise RuntimeError(
-                    "psycopg is required for postgres_dsn connections. Install psycopg to enable Postgres metadata persistence."
+                    "psycopg2-binary is required for postgres_dsn connections. Install psycopg2-binary to enable Postgres metadata persistence."
                 ) from exc
-            connection = psycopg.connect(self._dsn)
+            connection = psycopg2.connect(self._dsn, cursor_factory=RealDictCursor)
         else:
             raise RuntimeError("Database service is not enabled.")
 
@@ -677,12 +736,16 @@ class DatabaseService:
 
     @staticmethod
     def _row_value(row, key: str):
+        if isinstance(row, dict):
+            return row.get(key)
         if isinstance(row, sqlite3.Row):
             return row[key]
         return row[key]
 
     @staticmethod
     def _row_to_dict(row) -> dict:
+        if isinstance(row, dict):
+            return dict(row)
         if isinstance(row, sqlite3.Row):
             return {key: row[key] for key in row.keys()}
         return dict(row)

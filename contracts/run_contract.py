@@ -31,6 +31,8 @@ class RunRecord:
     goal: str
     status: str
     started_at: str
+    attempt_index: int = 1
+    total_attempts: int = 1
     parent_run_id: str = ""
     repo_id: str = ""
     actor_context: ActorContext | None = None
@@ -44,6 +46,10 @@ class RunRecord:
     decision: str = "pending"
     decided_at: str = ""
     decided_by: str = ""
+    decision_note: str = ""
+    retry_note: str = ""
+    retry_context_summary: str = ""
+    retry_context: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -51,6 +57,8 @@ class RunRecord:
             "goal": self.goal,
             "status": self.status,
             "started_at": self.started_at,
+            "attempt_index": int(self.attempt_index or 1),
+            "total_attempts": int(self.total_attempts or 1),
             "parent_run_id": self.parent_run_id,
             "repo_id": self.repo_id,
             "actor_context": (
@@ -68,4 +76,8 @@ class RunRecord:
             "decision": self.decision,
             "decided_at": self.decided_at,
             "decided_by": self.decided_by,
+            "decision_note": self.decision_note,
+            "retry_note": self.retry_note,
+            "retry_context_summary": self.retry_context_summary,
+            "retry_context": dict(self.retry_context or {}),
         }

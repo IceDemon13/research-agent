@@ -7,7 +7,7 @@ from config import settings
 from contracts.repo_metadata import RepoMetadata
 from contracts.repo_onboarding_contract import RepoOnboardingResult
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
-from services.scm_service import ScmService
+from services.scm_service import ScmService, sanitize_remote_url
 
 
 _HTTP_REMOTE_RE = re.compile(r"^https?://", re.IGNORECASE)
@@ -16,7 +16,7 @@ _FILE_REMOTE_RE = re.compile(r"^file://", re.IGNORECASE)
 
 
 def _normalize_remote_url(value: str) -> str:
-    return str(value or "").strip()
+    return sanitize_remote_url(value)
 
 
 def _is_supported_remote_url(value: str) -> bool:
@@ -29,7 +29,7 @@ def _is_supported_remote_url(value: str) -> bool:
 
 
 def _canonical_remote_url(value: str) -> str:
-    candidate = _normalize_remote_url(value)
+    candidate = sanitize_remote_url(value)
     if not candidate:
         return ""
     if _FILE_REMOTE_RE.match(candidate):

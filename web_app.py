@@ -15,6 +15,7 @@ from contracts.agent_result import AgentResult
 from contracts.error_contract import ExecutionError
 from contracts.permission_contract import PermissionDecision, PermissionScope
 from contracts.repo_metadata import RepoMetadata
+from contracts.run_detail_contract import RunDetail
 from contracts.run_contract import RunRecord, RunStep
 from config import settings
 from services.permission_service import PermissionService
@@ -41,6 +42,16 @@ class RepoOnboardRequest(BaseModel):
     default_branch: str = ""
 
 
+class RunDecisionRequest(BaseModel):
+    note: str = ""
+
+
+class RunRetryRequest(BaseModel):
+    note: str = ""
+    refinement_prompt: str = ""
+    force_mode: str = ""
+
+
 def _build_actor_context(request: Request) -> ActorContext:
     headers = request.headers
     actor_id = str(headers.get("X-Actor-Id", "api.local") or "").strip() or "api.local"
@@ -61,28 +72,174 @@ def _serialize_run_step(step: RunStep) -> dict[str, Any]:
     return payload
 
 
-def _serialize_run(run_record: RunRecord) -> dict[str, Any]:
-    failure_summary = _failure_summary_service.get_failure_summary(run_record)
+def _serialize_run_detail(detail: RunDetail) -> dict[str, Any]:
+    return detail.to_dict()
+
+
+def _artifact_run_service(run_record: RunRecord) -> RunService:
+    artifact_dir = _artifact_storage_dir(run_record)
+    if artifact_dir is not None:
+        return RunService(storage_dir=artifact_dir)
+    return RunService()
+
+
+def _load_visible_run_detail(run_id: str, actor_context: ActorContext) -> RunDetail:
+    run_record = _load_visible_run(run_id, actor_context)
+    detail = _artifact_run_service(run_record).load_run_detail(
+        run_record.run_id,
+        run_record=run_record,
+        log_path=run_record.log_path,
+    )
+    if detail is None:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "unexpected_response_shape",
+                "message": "Run detail could not be loaded.",
+            },
+        )
+    return detail
+
+
+def _repo_context_summary(repo_context: dict | None) -> dict:
+    context = repo_context if isinstance(repo_context, dict) else {}
     return {
-        "run_id": run_record.run_id,
-        "goal": run_record.goal,
-        "status": run_record.status,
-        "parent_run_id": run_record.parent_run_id,
-        "repo_id": run_record.repo_id,
-        "actor_context": run_record.actor_context.to_dict() if run_record.actor_context is not None else None,
-        "started_at": run_record.started_at,
-        "finished_at": run_record.finished_at,
-        "steps": [_serialize_run_step(step) for step in list(run_record.steps)],
-        "policy_decisions": [decision.to_dict() for decision in list(run_record.policy_decisions)],
-        "failure_summary": failure_summary,
-        "log_path": run_record.log_path,
-        "scm": dict(run_record.scm),
-        "pr_url": run_record.pr_url,
-        "review_url": run_record.review_url,
-        "decision": run_record.decision,
-        "decided_at": run_record.decided_at,
-        "decided_by": run_record.decided_by,
+        "files_used": [
+            str(item).strip()
+            for item in list(context.get("files_used", []) or [])
+            if str(item).strip()
+        ],
+        "resolved_target_files": [
+            str(item).strip()
+            for item in list(context.get("resolved_target_files", []) or [])
+            if str(item).strip()
+        ],
+        "resolved_symbols": dict(context.get("resolved_symbols", {}) or {}),
+        "chunk_count": len(list(context.get("chunks", []) or [])),
     }
+
+
+def _spec_result_payload(result: AgentResult) -> dict | None:
+    spec = result.metadata.get("spec") if isinstance(result.metadata, dict) else None
+    if spec is None:
+        return None
+    return {
+        "title": str(getattr(spec, "title", "") or "").strip(),
+        "goal": str(getattr(spec, "goal", "") or "").strip(),
+        "context": str(getattr(spec, "context", "") or "").strip(),
+        "scope": list(getattr(spec, "scope", []) or []),
+        "out_of_scope": list(getattr(spec, "out_of_scope", []) or []),
+        "requirements": list(getattr(spec, "requirements", []) or []),
+        "acceptance_criteria": list(getattr(spec, "acceptance_criteria", []) or []),
+        "risks": list(getattr(spec, "risks", []) or []),
+        "output_text": str(result.output_text or "").strip(),
+    }
+
+
+def _review_result_payload(result: AgentResult) -> dict | None:
+    review = result.metadata.get("review_result") if isinstance(result.metadata, dict) else None
+    if review is None and isinstance(result.metadata.get("review_result"), dict):
+        review = result.metadata.get("review_result")
+    if isinstance(review, dict):
+        return dict(review)
+    if review is None:
+        return None
+    return {
+        "status": str(getattr(review, "status", "") or "").strip(),
+        "summary": str(getattr(review, "summary", "") or "").strip(),
+        "issues": list(getattr(review, "issues", []) or []),
+        "checks": list(getattr(review, "checks", []) or []),
+        "approved_files": list(getattr(review, "approved_files", []) or []),
+        "decision_source": str(getattr(review, "decision_source", "") or "").strip(),
+        "precheck_issues": list(getattr(review, "precheck_issues", []) or []),
+        "semantic_issues": list(getattr(review, "semantic_issues", []) or []),
+        "semantic_notes": list(getattr(review, "semantic_notes", []) or []),
+    }
+
+
+def _research_result_payload(result: AgentResult) -> dict:
+    return {
+        "answer": str(result.output_text or "").strip(),
+        "confidence": str(result.metadata.get("confidence", "") or "").strip(),
+        "retrieval_summary": dict(result.metadata.get("retrieval_summary", {}) or {}),
+    }
+
+
+def _default_diff_payload(reason: str) -> dict:
+    return {
+        "diff_available": False,
+        "files": [],
+        "truncated": False,
+        "reason": str(reason or "").strip(),
+    }
+
+
+def _persist_tracked_run_detail(
+    *,
+    run_service: RunService,
+    run_record: RunRecord,
+    request_body: RunCreateRequest,
+    result: AgentResult,
+) -> None:
+    mode = str(request_body.mode or "").strip().lower()
+    detail_payload = {
+        "mode": mode,
+        "goal": run_record.goal,
+        "repo_id": run_record.repo_id,
+        "jira_ticket": str(request_body.jira_ticket or "").strip(),
+        "spec_result": None,
+        "review_result": None,
+        "research_result": None,
+        "implementation_result": None,
+        "publication_result": None,
+        "validation_result": None,
+        "diff_result": _default_diff_payload("No diff produced for this run mode."),
+        "review_comments": [],
+        "policy_decisions": [decision.to_dict() for decision in list(run_record.policy_decisions)],
+        "sources": [],
+        "repo_context_summary": _repo_context_summary(result.repo_context),
+    }
+    if mode == "spec":
+        detail_payload["spec_result"] = _spec_result_payload(result)
+    elif mode == "review":
+        detail_payload["review_result"] = _review_result_payload(result)
+        detail_payload["spec_result"] = _spec_result_payload(result.metadata.get("spec_result")) if isinstance(result.metadata.get("spec_result"), AgentResult) else None
+    else:
+        detail_payload["research_result"] = _research_result_payload(result)
+    run_service.persist_run_detail(
+        run_record.run_id,
+        detail_payload,
+        log_path=run_record.log_path,
+    )
+
+
+def _persist_failed_tracked_run_detail(
+    *,
+    run_service: RunService,
+    run_record: RunRecord,
+    request_body: RunCreateRequest,
+) -> None:
+    run_service.persist_run_detail(
+        run_record.run_id,
+        {
+            "mode": str(request_body.mode or "").strip().lower(),
+            "goal": run_record.goal,
+            "repo_id": run_record.repo_id,
+            "jira_ticket": str(request_body.jira_ticket or "").strip(),
+            "spec_result": None,
+            "review_result": None,
+            "research_result": None,
+            "implementation_result": None,
+            "publication_result": None,
+            "validation_result": None,
+            "diff_result": _default_diff_payload("No diff produced for this run."),
+            "review_comments": [],
+            "policy_decisions": [decision.to_dict() for decision in list(run_record.policy_decisions)],
+            "sources": [],
+            "repo_context_summary": None,
+        },
+        log_path=run_record.log_path,
+    )
 
 
 def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
@@ -154,6 +311,31 @@ def _run_command(command: str, actor_context: ActorContext) -> AgentResult:
     if not result.success:
         _raise_from_agent_result(result)
     return result
+
+
+def _run_action_command(
+    command: str,
+    actor_context: ActorContext,
+    *,
+    action_payload: dict | None = None,
+) -> AgentResult:
+    try:
+        return root_agent.run_root_agent(
+            command,
+            actor_context=actor_context,
+            action_payload=action_payload,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "unexpected_error",
+                "message": str(exc),
+                "exception_type": exc.__class__.__name__,
+            },
+        ) from exc
 
 
 def _load_visible_run(run_id: str, actor_context: ActorContext) -> RunRecord:
@@ -274,6 +456,11 @@ def _execute_tracked_api_run(
             ),
         )
         finished_run = run_service.finish_run(run_id, "failed")
+        _persist_failed_tracked_run_detail(
+            run_service=run_service,
+            run_record=finished_run,
+            request_body=request_body,
+        )
         raise HTTPException(
             status_code=500,
             detail={
@@ -297,6 +484,11 @@ def _execute_tracked_api_run(
             ),
         )
         finished_run = run_service.finish_run(run_id, "failed")
+        _persist_failed_tracked_run_detail(
+            run_service=run_service,
+            run_record=finished_run,
+            request_body=request_body,
+        )
         raise HTTPException(
             status_code=403,
             detail={
@@ -310,7 +502,14 @@ def _execute_tracked_api_run(
     if str(result.output_text or "").strip():
         step_message = str(result.output_text or "").strip().splitlines()[0][:200]
     run_service.finish_step(run_id, "success" if result.success else "failed", step_message)
-    return run_service.finish_run(run_id, "success" if result.success else "failed")
+    finished_run = run_service.finish_run(run_id, "success" if result.success else "failed")
+    _persist_tracked_run_detail(
+        run_service=run_service,
+        run_record=finished_run,
+        request_body=request_body,
+        result=result,
+    )
+    return finished_run
 
 
 @app.get("/health")
@@ -395,11 +594,18 @@ def list_runs(
     if role:
         command_parts.extend(["--role", role])
     result = _run_command(" ".join(command_parts), actor_context)
-    runs = [
-        _serialize_run(run_record)
-        for run_record in list(result.metadata.get("runs", []) or [])
-        if isinstance(run_record, RunRecord)
-    ]
+    runs = []
+    for run_record in list(result.metadata.get("runs", []) or []):
+        if not isinstance(run_record, RunRecord):
+            continue
+        detail = _artifact_run_service(run_record).load_run_detail(
+            run_record.run_id,
+            run_record=run_record,
+            log_path=run_record.log_path,
+        )
+        if detail is None:
+            continue
+        runs.append(_serialize_run_detail(detail))
     return {
         "filters": dict(result.metadata.get("filters", {}) or {}),
         "count": len(runs),
@@ -410,8 +616,8 @@ def list_runs(
 @app.get("/runs/{run_id}")
 def show_run(run_id: str, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    run_record = _load_visible_run(run_id, actor_context)
-    return {"run": _serialize_run(run_record)}
+    detail = _load_visible_run_detail(run_id, actor_context)
+    return {"run": _serialize_run_detail(detail)}
 
 
 @app.post("/runs")
@@ -421,25 +627,32 @@ def create_run(payload: RunCreateRequest, request: Request) -> dict[str, Any]:
         request_body=payload,
         actor_context=actor_context,
     )
-    branch_name = str(run_record.scm.get("branch_name", "") or "").strip()
-    pr_url = str(run_record.pr_url or "").strip()
+    detail = _artifact_run_service(run_record).load_run_detail(
+        run_record.run_id,
+        run_record=run_record,
+        log_path=run_record.log_path,
+    )
+    publication = dict(detail.publication_result or {}) if detail is not None else {}
+    branch_name = str(publication.get("branch_name", "") or "").strip()
+    pr_url = str(publication.get("pr_url", "") or "").strip()
+    review_url = str(publication.get("review_url", "") or "").strip()
     return {
         "run_id": run_record.run_id,
         "status": run_record.status,
         "mode": payload.mode,
         "branch_name": branch_name,
         "pr_url": pr_url,
-        "review_url": str(run_record.review_url or "").strip(),
-        "run": _serialize_run(run_record),
+        "review_url": review_url,
+        "run": _serialize_run_detail(detail) if detail is not None else None,
     }
 
 
 @app.get("/runs/{run_id}/steps")
 def show_run_steps(run_id: str, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    run_record = _load_visible_run(run_id, actor_context)
+    detail = _load_visible_run_detail(run_id, actor_context)
     return {
-        "run_id": run_record.run_id,
+        "run_id": detail.run_id,
         "steps": [
             {
                 "step_name": step.name,
@@ -447,8 +660,10 @@ def show_run_steps(run_id: str, request: Request) -> dict[str, Any]:
                 "started_at": step.started_at,
                 "finished_at": step.finished_at,
                 "message": step.message,
+                "error_code": step.error_code,
+                "error_message": step.error_message,
             }
-            for step in list(run_record.steps)
+            for step in list(detail.steps)
         ],
     }
 
@@ -456,35 +671,29 @@ def show_run_steps(run_id: str, request: Request) -> dict[str, Any]:
 @app.get("/runs/{run_id}/policy")
 def show_run_policy(run_id: str, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    run_record = _load_visible_run(run_id, actor_context)
+    detail = _load_visible_run_detail(run_id, actor_context)
     return {
-        "run_id": run_record.run_id,
-        "policy_decisions": [decision.to_dict() for decision in list(run_record.policy_decisions)],
+        "run_id": detail.run_id,
+        "policy_decisions": [dict(item or {}) for item in list(detail.policy_decisions)],
     }
 
 
 @app.get("/runs/{run_id}/errors")
 def show_run_errors(run_id: str, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    run_record = _load_visible_run(run_id, actor_context)
-    failure_summary = _failure_summary_service.get_failure_summary(run_record)
+    detail = _load_visible_run_detail(run_id, actor_context)
     return {
-        "run_id": run_record.run_id,
-        "failure_summary": failure_summary,
-        "step_errors": [
-            {
-                "step_name": step.name,
-                "error_type": step.error.type,
-                "error_message": step.error.message,
-                "details": dict(step.error.details),
-            }
-            for step in list(run_record.steps)
-            if step.error is not None
-        ],
+        "run_id": detail.run_id,
+        "failure_summary": {
+            "failed_step": detail.failed_step,
+            "failure_code": detail.failure_code,
+            "failure_reason": detail.failure_reason,
+        },
+        "step_errors": [dict(item or {}) for item in list(detail.step_errors)],
         "policy_denials": [
-            decision.to_dict()
-            for decision in list(run_record.policy_decisions)
-            if not decision.allowed
+            dict(item or {})
+            for item in list(detail.policy_decisions)
+            if not bool(item.get("allowed", False))
         ],
     }
 
@@ -492,56 +701,27 @@ def show_run_errors(run_id: str, request: Request) -> dict[str, Any]:
 @app.get("/runs/{run_id}/diff")
 def show_run_diff(run_id: str, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    run_record = _load_visible_run(run_id, actor_context)
-    storage_dir = _artifact_storage_dir(run_record)
-    diff_payload = RunService(storage_dir=storage_dir).load_diff_result(
-        run_record.run_id,
-        log_path=run_record.log_path,
-    )
-    if not isinstance(diff_payload, dict):
-        return {
-            "run_id": run_record.run_id,
-            "diff_available": False,
-            "files": [],
-            "truncated": False,
-        }
-
-    files_payload = []
-    for item in list(diff_payload.get("files", []) or []):
-        if not isinstance(item, dict):
-            continue
-        files_payload.append(
-            {
-                "relative_path": str(item.get("relative_path", "") or "").strip(),
-                "status": str(item.get("status", "") or "").strip(),
-                "diff_text": str(item.get("diff", "") or ""),
-            }
-        )
-
-    warnings = [str(item or "").strip() for item in list(diff_payload.get("warnings", []) or []) if str(item or "").strip()]
-    truncated = any("[TRUNCATED]" in str(item.get("diff_text", "") or "") for item in files_payload) or any(
-        "truncated" in warning.lower()
-        for warning in warnings
-    )
+    detail = _load_visible_run_detail(run_id, actor_context)
+    diff_payload = dict(detail.diff_result or {})
     return {
-        "run_id": run_record.run_id,
-        "diff_available": bool(files_payload),
-        "files": files_payload,
-        "truncated": truncated,
+        "run_id": detail.run_id,
+        "diff_available": bool(diff_payload.get("diff_available", False)),
+        "files": [dict(item or {}) for item in list(diff_payload.get("files", []) or [])],
+        "truncated": bool(diff_payload.get("truncated", False)),
+        "reason": str(diff_payload.get("reason", "") or "").strip(),
+        "total_files_changed": int(diff_payload.get("total_files_changed", 0) or 0),
+        "total_additions": int(diff_payload.get("total_additions", 0) or 0),
+        "total_deletions": int(diff_payload.get("total_deletions", 0) or 0),
     }
 
 
 @app.get("/runs/{run_id}/comments")
 def show_run_comments(run_id: str, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    run_record = _load_visible_run(run_id, actor_context)
-    storage_dir = _artifact_storage_dir(run_record)
-    comments = RunService(storage_dir=storage_dir).load_review_comments(
-        run_record.run_id,
-        log_path=run_record.log_path,
-    )
+    detail = _load_visible_run_detail(run_id, actor_context)
+    comments = [dict(item or {}) for item in list(detail.review_comments)]
     return {
-        "run_id": run_record.run_id,
+        "run_id": detail.run_id,
         "comments_available": bool(comments),
         "comments": [
             {
@@ -559,16 +739,41 @@ def show_run_comments(run_id: str, request: Request) -> dict[str, Any]:
 
 
 @app.post("/runs/{run_id}/retry")
-def retry_run(run_id: str, request: Request) -> dict[str, Any]:
+def retry_run(run_id: str, request: Request, payload: RunRetryRequest | None = None) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    result = _run_command(f"runs retry {str(run_id or '').strip()}", actor_context)
+    resolved_payload = payload.model_dump() if payload is not None else {}
+    result = _run_action_command(
+        f"runs retry {str(run_id or '').strip()}",
+        actor_context,
+        action_payload=resolved_payload,
+    )
+    permission_decision = result.metadata.get("permission_decision")
+    if isinstance(permission_decision, PermissionDecision):
+        raise _permission_denied(permission_decision)
+    if result.metadata.get("artifact_type") == "run_lookup":
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "run_id": str(run_id or "").strip()},
+        )
     source_run = result.metadata.get("source_run")
-    new_run = result.metadata.get("run_record")
+    new_run = result.metadata.get("new_run_record") or result.metadata.get("run_record")
+    new_run_detail = None
+    if isinstance(new_run, RunRecord):
+        new_run_detail = _artifact_run_service(new_run).load_run_detail(
+            new_run.run_id,
+            run_record=new_run,
+            log_path=new_run.log_path,
+        )
     return {
+        "action": "retry",
         "source_run_id": source_run.run_id if isinstance(source_run, RunRecord) else str(run_id or "").strip(),
-        "new_run": _serialize_run(new_run) if isinstance(new_run, RunRecord) else None,
-        "summary": result.output_text,
-        "success": result.success,
+        "run_id": str(run_id or "").strip(),
+        "new_run_id": new_run.run_id if isinstance(new_run, RunRecord) else "",
+        "new_run": _serialize_run_detail(new_run_detail) if isinstance(new_run_detail, RunDetail) else None,
+        "decision": "",
+        "message": str(result.metadata.get("message", "") or result.output_text or "").strip(),
+        "blocked_reason": str(result.metadata.get("blocked_reason", "") or "").strip(),
+        "success": bool(result.metadata.get("success", result.success)),
     }
 
 
@@ -585,8 +790,13 @@ def cancel_run(run_id: str, request: Request) -> dict[str, Any]:
                 "message": "Run cancel response did not contain a run record.",
             },
         )
+    detail = _artifact_run_service(run_record).load_run_detail(
+        run_record.run_id,
+        run_record=run_record,
+        log_path=run_record.log_path,
+    )
     return {
-        "run": _serialize_run(run_record),
+        "run": _serialize_run_detail(detail) if detail is not None else None,
         "summary": result.output_text,
         "success": result.success,
     }
@@ -605,18 +815,36 @@ def create_run_review(run_id: str, request: Request) -> dict[str, Any]:
                 "message": "Run review response did not contain a run record.",
             },
         )
+    detail = _artifact_run_service(run_record).load_run_detail(
+        run_record.run_id,
+        run_record=run_record,
+        log_path=run_record.log_path,
+    )
     return {
         "run_id": run_record.run_id,
         "review_url": str(result.metadata.get("review_url", "") or run_record.review_url or "").strip(),
         "status": str(result.metadata.get("review_status", "") or "created").strip(),
-        "run": _serialize_run(run_record),
+        "run": _serialize_run_detail(detail) if detail is not None else None,
     }
 
 
 @app.post("/runs/{run_id}/approve")
-def approve_run(run_id: str, request: Request) -> dict[str, Any]:
+def approve_run(run_id: str, request: Request, payload: RunDecisionRequest | None = None) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    result = _run_command(f"runs approve {str(run_id or '').strip()}", actor_context)
+    resolved_payload = payload.model_dump() if payload is not None else {}
+    result = _run_action_command(
+        f"runs approve {str(run_id or '').strip()}",
+        actor_context,
+        action_payload=resolved_payload,
+    )
+    permission_decision = result.metadata.get("permission_decision")
+    if isinstance(permission_decision, PermissionDecision):
+        raise _permission_denied(permission_decision)
+    if result.metadata.get("artifact_type") == "run_lookup":
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "run_id": str(run_id or "").strip()},
+        )
     run_record = result.metadata.get("run_record")
     if not isinstance(run_record, RunRecord):
         raise HTTPException(
@@ -626,17 +854,39 @@ def approve_run(run_id: str, request: Request) -> dict[str, Any]:
                 "message": "Run approve response did not contain a run record.",
             },
         )
+    detail = _artifact_run_service(run_record).load_run_detail(
+        run_record.run_id,
+        run_record=run_record,
+        log_path=run_record.log_path,
+    )
     return {
-        "run": _serialize_run(run_record),
-        "summary": result.output_text,
-        "success": result.success,
+        "action": "approve",
+        "run_id": run_record.run_id,
+        "decision": str(run_record.decision or "").strip(),
+        "run": _serialize_run_detail(detail) if detail is not None else None,
+        "message": str(result.metadata.get("message", "") or result.output_text or "").strip(),
+        "blocked_reason": str(result.metadata.get("blocked_reason", "") or "").strip(),
+        "success": bool(result.metadata.get("success", result.success)),
     }
 
 
 @app.post("/runs/{run_id}/reject")
-def reject_run(run_id: str, request: Request) -> dict[str, Any]:
+def reject_run(run_id: str, request: Request, payload: RunDecisionRequest | None = None) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
-    result = _run_command(f"runs reject {str(run_id or '').strip()}", actor_context)
+    resolved_payload = payload.model_dump() if payload is not None else {}
+    result = _run_action_command(
+        f"runs reject {str(run_id or '').strip()}",
+        actor_context,
+        action_payload=resolved_payload,
+    )
+    permission_decision = result.metadata.get("permission_decision")
+    if isinstance(permission_decision, PermissionDecision):
+        raise _permission_denied(permission_decision)
+    if result.metadata.get("artifact_type") == "run_lookup":
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "run_id": str(run_id or "").strip()},
+        )
     run_record = result.metadata.get("run_record")
     if not isinstance(run_record, RunRecord):
         raise HTTPException(
@@ -646,10 +896,19 @@ def reject_run(run_id: str, request: Request) -> dict[str, Any]:
                 "message": "Run reject response did not contain a run record.",
             },
         )
+    detail = _artifact_run_service(run_record).load_run_detail(
+        run_record.run_id,
+        run_record=run_record,
+        log_path=run_record.log_path,
+    )
     return {
-        "run": _serialize_run(run_record),
-        "summary": result.output_text,
-        "success": result.success,
+        "action": "reject",
+        "run_id": run_record.run_id,
+        "decision": str(run_record.decision or "").strip(),
+        "run": _serialize_run_detail(detail) if detail is not None else None,
+        "message": str(result.metadata.get("message", "") or result.output_text or "").strip(),
+        "blocked_reason": str(result.metadata.get("blocked_reason", "") or "").strip(),
+        "success": bool(result.metadata.get("success", result.success)),
     }
 
 

@@ -124,6 +124,11 @@ class ApplyResult:
     dry_run: bool
     applied_files: list[ApplyFileResult] = field(default_factory=list)
     skipped_files: list[ApplyFileResult] = field(default_factory=list)
+    applied: bool = False
+    files_written: int = 0
+    files_failed: int = 0
+    skipped: bool = False
+    skip_reason: str = ""
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -134,6 +139,11 @@ class ApplyResult:
             "dry_run": self.dry_run,
             "applied_files": [item.to_dict() for item in self.applied_files],
             "skipped_files": [item.to_dict() for item in self.skipped_files],
+            "applied": self.applied,
+            "files_written": self.files_written,
+            "files_failed": self.files_failed,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
             "warnings": list(self.warnings),
             "errors": list(self.errors),
         }

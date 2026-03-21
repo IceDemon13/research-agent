@@ -1,10 +1,12 @@
 import subprocess
 import sys
 import time
+import re
 from pathlib import Path
 
 from config import settings
 from contracts.validation_contract import (
+    FailedTestCase,
     ValidationCommand,
     ValidationResult,
     ValidationStepResult,
@@ -14,6 +16,17 @@ from services.repo_registry import RepositoryRegistryService
 
 
 TRUNCATION_SUFFIX = "\n...[TRUNCATED]"
+PYTEST_SUMMARY_RE = re.compile(r"(?P<count>\d+)\s+(?P<label>passed|failed|error|errors|skipped|xfailed|xpassed)\b", re.IGNORECASE)
+PYTEST_FAILED_CASE_RE = re.compile(
+    r"^(?P<kind>FAILED|ERROR)\s+(?P<name>.+?)\s+-\s+(?P<message>.+)$",
+    re.MULTILINE,
+)
+UNITTEST_RAN_RE = re.compile(r"Ran\s+(?P<count>\d+)\s+tests?\s+in\s+", re.IGNORECASE)
+UNITTEST_FAILED_COUNTS_RE = re.compile(r"FAILED\s+\((?P<body>[^)]+)\)", re.IGNORECASE)
+UNITTEST_CASE_RE = re.compile(
+    r"^(?P<kind>FAIL|ERROR):\s+(?P<name>.+?)\n(?:.*\n)*?(?P<error_type>[A-Za-z_][\w.]*)\s*:\s*(?P<message>.+)$",
+    re.MULTILINE,
+)
 
 
 class ValidationService:
@@ -105,10 +118,21 @@ class ValidationService:
                 warnings.append(step.stderr)
 
         overall_status = self._overall_status(steps)
+        summary = self._summarize_test_results(
+            steps,
+            output_max_chars=effective_output_max_chars,
+        )
         return ValidationResult(
             repo_id=repo_id,
             overall_status=overall_status,
             steps=steps,
+            passed=overall_status == "success" and summary["failed_tests"] == 0 and summary["total_tests"] > 0,
+            total_tests=summary["total_tests"],
+            passed_tests=summary["passed_tests"],
+            failed_tests=summary["failed_tests"],
+            failed_test_cases=summary["failed_test_cases"],
+            stdout=summary["stdout"],
+            stderr=summary["stderr"],
             errors=errors,
             warnings=warnings,
         )
@@ -266,6 +290,154 @@ class ValidationService:
         if any(step.status == "success" for step in steps):
             return "success"
         return "skipped"
+
+    def _summarize_test_results(
+        self,
+        steps: list[ValidationStepResult],
+        *,
+        output_max_chars: int,
+    ) -> dict:
+        total_tests = 0
+        passed_tests = 0
+        failed_tests = 0
+        failed_test_cases: list[FailedTestCase] = []
+        stdout_parts: list[str] = []
+        stderr_parts: list[str] = []
+
+        for step in list(steps):
+            if step.stdout:
+                stdout_parts.append(f"[{step.name}] {step.stdout}".strip())
+            if step.stderr:
+                stderr_parts.append(f"[{step.name}] {step.stderr}".strip())
+            if step.name != "test":
+                continue
+
+            parsed = self._parse_test_step(step)
+            total_tests += int(parsed["total_tests"])
+            passed_tests += int(parsed["passed_tests"])
+            failed_tests += int(parsed["failed_tests"])
+            failed_test_cases.extend(list(parsed["failed_test_cases"]))
+
+        stdout = self._truncate_output("\n\n".join(part for part in stdout_parts if part), output_max_chars)
+        stderr = self._truncate_output("\n\n".join(part for part in stderr_parts if part), output_max_chars)
+        if total_tests == 0 and failed_tests == 0 and any(step.name == "test" and step.status == "failed" for step in steps):
+            failed_tests = 1
+
+        return {
+            "total_tests": total_tests,
+            "passed_tests": max(0, passed_tests),
+            "failed_tests": max(0, failed_tests),
+            "failed_test_cases": failed_test_cases,
+            "stdout": stdout,
+            "stderr": stderr,
+        }
+
+    def _parse_test_step(self, step: ValidationStepResult) -> dict:
+        combined_output = "\n".join(
+            part for part in [str(step.stdout or "").strip(), str(step.stderr or "").strip()] if part
+        )
+        pytest_summary = self._parse_pytest_summary(combined_output)
+        if pytest_summary["detected"]:
+            return pytest_summary
+        unittest_summary = self._parse_unittest_summary(combined_output, step)
+        if unittest_summary["detected"]:
+            return unittest_summary
+        return {
+            "detected": False,
+            "total_tests": 0,
+            "passed_tests": 0,
+            "failed_tests": 0,
+            "failed_test_cases": [],
+        }
+
+    @staticmethod
+    def _parse_pytest_summary(output: str) -> dict:
+        if "pytest" not in output.lower() and "::" not in output and "collected " not in output.lower():
+            return {
+                "detected": False,
+                "total_tests": 0,
+                "passed_tests": 0,
+                "failed_tests": 0,
+                "failed_test_cases": [],
+            }
+
+        passed_tests = 0
+        failed_tests = 0
+        for match in PYTEST_SUMMARY_RE.finditer(output):
+            label = str(match.group("label") or "").strip().lower()
+            count = int(match.group("count"))
+            if label == "passed":
+                passed_tests = max(passed_tests, count)
+            elif label in {"failed", "error", "errors"}:
+                failed_tests += count
+
+        failed_test_cases: list[FailedTestCase] = []
+        for match in PYTEST_FAILED_CASE_RE.finditer(output):
+            kind = str(match.group("kind") or "").strip().upper()
+            failed_test_cases.append(
+                FailedTestCase(
+                    name=str(match.group("name") or "").strip(),
+                    error_type="AssertionError" if kind == "FAILED" else kind,
+                    message=str(match.group("message") or "").strip(),
+                )
+            )
+
+        total_tests = passed_tests + failed_tests
+        detected = total_tests > 0 or bool(failed_test_cases)
+        if total_tests == 0 and failed_test_cases:
+            total_tests = len(failed_test_cases)
+            failed_tests = len(failed_test_cases)
+
+        return {
+            "detected": detected,
+            "total_tests": total_tests,
+            "passed_tests": max(0, total_tests - failed_tests) if passed_tests == 0 and total_tests > failed_tests else passed_tests,
+            "failed_tests": failed_tests,
+            "failed_test_cases": failed_test_cases,
+        }
+
+    @staticmethod
+    def _parse_unittest_summary(output: str, step: ValidationStepResult) -> dict:
+        ran_match = UNITTEST_RAN_RE.search(output)
+        failed_body = UNITTEST_FAILED_COUNTS_RE.search(output)
+        if ran_match is None and "unittest" not in step.command.lower() and "FAIL:" not in output and "ERROR:" not in output:
+            return {
+                "detected": False,
+                "total_tests": 0,
+                "passed_tests": 0,
+                "failed_tests": 0,
+                "failed_test_cases": [],
+            }
+
+        total_tests = int(ran_match.group("count")) if ran_match is not None else 0
+        failed_tests = 0
+        if failed_body is not None:
+            for item in str(failed_body.group("body") or "").split(","):
+                key, _, value = item.strip().partition("=")
+                if key.strip().lower() in {"failures", "errors"} and value.strip().isdigit():
+                    failed_tests += int(value.strip())
+
+        failed_test_cases: list[FailedTestCase] = []
+        for match in UNITTEST_CASE_RE.finditer(output):
+            failed_test_cases.append(
+                FailedTestCase(
+                    name=str(match.group("name") or "").strip(),
+                    error_type=str(match.group("error_type") or "").strip() or str(match.group("kind") or "").strip(),
+                    message=str(match.group("message") or "").strip(),
+                )
+            )
+
+        if failed_tests == 0 and failed_test_cases:
+            failed_tests = len(failed_test_cases)
+        passed_tests = max(0, total_tests - failed_tests)
+
+        return {
+            "detected": bool(ran_match or failed_test_cases or failed_body),
+            "total_tests": total_tests,
+            "passed_tests": passed_tests,
+            "failed_tests": failed_tests,
+            "failed_test_cases": failed_test_cases,
+        }
 
 
 def run_repo_validation(

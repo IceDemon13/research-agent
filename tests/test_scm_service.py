@@ -4,13 +4,15 @@ import unittest
 import uuid
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from contracts.apply_contract import ApplyInput, ApplyOperation
 from services.apply_service import ApplyService
 from services.repo_registry import RepositoryRegistryService
 from contracts.scm_contract import ScmOperationResult
-from services.scm_service import ScmService, build_feature_branch_name, build_run_branch_name
+import services.scm_service as scm_module
+from services.scm_service import ScmService, build_feature_branch_name, build_run_branch_name, sanitize_remote_url
 
 
 class ScmServiceTests(unittest.TestCase):
@@ -164,6 +166,15 @@ class ScmServiceTests(unittest.TestCase):
         remote_result = self.scm_service.get_remote(self.repo_root)
         with patch.object(
             self.scm_service,
+            "get_remote",
+            return_value=ScmOperationResult(
+                operation="get_remote",
+                repo_path=self.repo_root.as_posix(),
+                success=True,
+                data={"remote_url": remote_url},
+            ),
+        ), patch.object(
+            self.scm_service,
             "_run_git",
             return_value=ScmOperationResult(
                 operation="push",
@@ -180,7 +191,75 @@ class ScmServiceTests(unittest.TestCase):
             self.repo_root.resolve(),
             ["push", "-u", "origin", branch_name],
             "push",
+            remote_url=remote_url,
         )
+
+    def test_sanitize_remote_url_removes_embedded_credentials(self) -> None:
+        sanitized = sanitize_remote_url("https://x-token-auth:secret@bitbucket.org/acme/sample-repo.git")
+
+        self.assertEqual(sanitized, "https://bitbucket.org/acme/sample-repo.git")
+
+    def test_clone_repo_uses_runtime_bitbucket_auth_header(self) -> None:
+        target_path = self.workspace_root / "cloned-repo"
+        completed = SimpleNamespace(returncode=0, stdout="", stderr="")
+        fake_runtime = SimpleNamespace(
+            bitbucket_repo_token="tok/en:+?&=@",
+            bitbucket_api_token="",
+            bitbucket_username="",
+            bitbucket_app_password="",
+        )
+
+        with patch("services.scm_service.subprocess.run", return_value=completed) as mocked_run, patch.object(
+            scm_module.settings,
+            "runtime",
+            fake_runtime,
+        ):
+            result = self.scm_service.clone_repo(
+                "https://bitbucket.org/acme/sample-repo.git",
+                target_path,
+                branch_name="main",
+            )
+
+        self.assertTrue(result.success)
+        raw_command = mocked_run.call_args.args[0]
+        self.assertEqual(raw_command[0], "git")
+        self.assertEqual(raw_command[1], "-c")
+        self.assertIn("http.extraHeader=Authorization: Basic ", raw_command[2])
+        self.assertIn("https://bitbucket.org/acme/sample-repo.git", raw_command)
+        self.assertNotIn("tok/en:+?&=@", " ".join(result.command))
+        self.assertEqual(result.data["remote_url"], "https://bitbucket.org/acme/sample-repo.git")
+
+    def test_clone_repo_sanitizes_git_error_output(self) -> None:
+        target_path = self.workspace_root / "failed-clone"
+        fake_runtime = SimpleNamespace(
+            bitbucket_repo_token="secret-token",
+            bitbucket_api_token="",
+            bitbucket_username="",
+            bitbucket_app_password="",
+        )
+        completed = SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "fatal: could not read "
+                "https://x-token-auth:secret-token@bitbucket.org/acme/sample-repo.git"
+            ),
+        )
+
+        with patch("services.scm_service.subprocess.run", return_value=completed), patch.object(
+            scm_module.settings,
+            "runtime",
+            fake_runtime,
+        ):
+            result = self.scm_service.clone_repo(
+                "https://bitbucket.org/acme/sample-repo.git",
+                target_path,
+            )
+
+        self.assertFalse(result.success)
+        self.assertNotIn("secret-token", result.error)
+        self.assertNotIn("x-token-auth:", result.error)
+        self.assertIn("https://bitbucket.org/acme/sample-repo.git", result.error)
 
     def test_failure_when_git_not_present(self) -> None:
         with patch("services.scm_service.shutil.which", return_value=None):

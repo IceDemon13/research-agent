@@ -58,6 +58,12 @@ class DatabaseServiceTests(unittest.TestCase):
         self.assertEqual(service.list_repos()[0]["repo_id"], "sample")
         self.assertIn("implementation.validate", role_capabilities)
 
+    def test_row_helpers_support_dict_like_rows(self) -> None:
+        row = {"capability": "implementation.validate", "repo_id": "sample"}
+
+        self.assertEqual(DatabaseService._row_value(row, "capability"), "implementation.validate")
+        self.assertEqual(DatabaseService._row_to_dict(row)["repo_id"], "sample")
+
 
 if __name__ == "__main__":
     unittest.main()

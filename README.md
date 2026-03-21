@@ -76,6 +76,8 @@ Docker onboarding uses an internal clone root for registered repositories. The c
 /repos/<repo_id>
 ```
 
+The app container includes `git`, so repo onboarding can clone remote repositories directly inside Docker.
+
 ## Environment Setup
 
 Copy `.env.example` to `.env` and fill in the values you need.
@@ -103,6 +105,7 @@ Optional integration placeholders already supported by the app:
 
 ```dotenv
 BITBUCKET_API_BASE_URL=https://api.bitbucket.org/2.0
+BITBUCKET_REPO_TOKEN=
 BITBUCKET_USERNAME=
 BITBUCKET_APP_PASSWORD=
 BITBUCKET_API_TOKEN=
@@ -132,11 +135,40 @@ UI:
 http://127.0.0.1:8000/ui/repos.html
 ```
 
+Run detail pages now surface debugging data directly from canonical run metadata:
+- root cause summary
+- draft summary
+- validation summary with failed test cases and bounded stdout/stderr
+- apply summary
+- diff preview with explicit fallback reasons when no diff was produced
+
 Onboarding stores:
 - `remote_url`: the external Git URL used for cloning
 - `local_path`: the internal runtime path used by the app
 
 For Docker deployments, `local_path` is typically `/repos/<repo_id>`.
+
+Use a clean Bitbucket remote URL when onboarding:
+
+```text
+https://bitbucket.org/<workspace>/<repo>.git
+```
+
+Do not embed credentials or tokens in `remote_url`.
+
+Supported Bitbucket auth modes for clone/push/PR creation:
+- `BITBUCKET_REPO_TOKEN` or `BITBUCKET_API_TOKEN`
+  Runtime auth uses `x-token-auth` and injects credentials only while git/HTTP commands run.
+- `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`
+  Used as a fallback when token-based auth is not configured.
+- Public repository access
+  The clean remote URL is used without credentials.
+
+Credential precedence:
+1. `BITBUCKET_REPO_TOKEN`
+2. `BITBUCKET_API_TOKEN`
+3. `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`
+4. unauthenticated clean remote URL
 
 ## Metadata And Artifacts
 

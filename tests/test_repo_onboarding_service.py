@@ -154,6 +154,20 @@ class RepoOnboardingServiceTests(unittest.TestCase):
         self.assertEqual(first.local_path, second.local_path)
         self.assertEqual(second.status, "already_registered")
 
+    def test_onboard_repo_strips_embedded_credentials_before_persisting(self) -> None:
+        embedded_remote_url = "https://x-token-auth:secret-token@bitbucket.org/acme/secure-repo.git"
+
+        result = self.service.onboard_repo(
+            repo_id="secure",
+            display_name="Secure Repo",
+            remote_url=embedded_remote_url,
+            default_branch="main",
+        )
+
+        self.assertEqual(result.remote_url, "https://bitbucket.org/acme/secure-repo.git")
+        persisted_repo = self.db_service.fetch_repo("secure")
+        self.assertEqual(persisted_repo["remote_url"], "https://bitbucket.org/acme/secure-repo.git")
+
     def test_onboard_repo_rejects_invalid_remote_url(self) -> None:
         with self.assertRaisesRegex(ValueError, "remote_url must be a valid Git remote"):
             self.service.onboard_repo(
