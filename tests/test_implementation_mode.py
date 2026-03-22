@@ -109,6 +109,30 @@ class _RecordingScmService:
             data={"commit_hash": "abc123def456"},
         )
 
+    def fetch(self, repo_path, remote_name="origin"):
+        return ScmOperationResult(
+            operation="fetch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"remote_name": remote_name},
+        )
+
+    def get_ref_commit_hash(self, repo_path, ref_name):
+        return ScmOperationResult(
+            operation="get_ref_commit_hash",
+            repo_path=str(repo_path),
+            success=True,
+            data={"ref_name": ref_name, "commit_hash": "abc123def456"},
+        )
+
+    def sync_with_remote_branch(self, repo_path, branch_name, remote_name="origin"):
+        return ScmOperationResult(
+            operation="sync_with_remote_branch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": branch_name, "remote_name": remote_name},
+        )
+
     def push(self, repo_path, branch_name, remote_name="origin"):
         return ScmOperationResult(
             operation="push",
@@ -162,12 +186,13 @@ class _ScriptedValidationService:
         self._command = command
         self._result = result
 
-    def run_validation(self, repo_id: str):
+    def run_validation(self, repo_id: str, **kwargs):
         if self._result is not None:
             return self._result
         return ValidationService(storage_path=self._storage_path).run_validation(
             repo_id,
             commands=[ValidationCommand(name="test", command=self._command)],
+            changed_files=kwargs.get("changed_files"),
         )
 
 
@@ -200,6 +225,30 @@ class _SuccessfulScmService:
             repo_path=str(repo_path),
             success=True,
             data={"branch_name": "main"},
+        )
+
+    def fetch(self, repo_path, remote_name="origin"):
+        return ScmOperationResult(
+            operation="fetch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"remote_name": remote_name},
+        )
+
+    def get_ref_commit_hash(self, repo_path, ref_name):
+        return ScmOperationResult(
+            operation="get_ref_commit_hash",
+            repo_path=str(repo_path),
+            success=True,
+            data={"ref_name": ref_name, "commit_hash": "abc123def456"},
+        )
+
+    def sync_with_remote_branch(self, repo_path, branch_name, remote_name="origin"):
+        return ScmOperationResult(
+            operation="sync_with_remote_branch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": branch_name, "remote_name": remote_name},
         )
 
     def create_branch(self, repo_path, branch_name):
@@ -259,6 +308,24 @@ class _SuccessfulScmService:
         )
 
 
+class _RecordingIndexService:
+    def __init__(self, *, should_fail: bool = False) -> None:
+        self.should_fail = should_fail
+        self.calls: list[dict] = []
+
+    def ensure_index_for_head(self, repo_id: str, *, current_head: str, force: bool = False) -> dict:
+        self.calls.append({"repo_id": repo_id, "current_head": current_head, "force": force})
+        if self.should_fail:
+            raise RuntimeError("index rebuild failed")
+        return {
+            "rebuilt": bool(force),
+            "index_status": "ready",
+            "indexed_head": current_head,
+            "indexed_at": "2026-03-22T10:00:00+00:00",
+            "index_error": "",
+        }
+
+
 class _GitMissingScmService:
     def detect_git_repo(self, repo_path):
         return False
@@ -281,6 +348,36 @@ class _DirtyRepoScmService(_SuccessfulScmService):
             success=False,
             error="Repository must be clean before apply.",
             data={"is_clean": False, "changed_files": ["src/app.py"]},
+        )
+
+
+class _StaleMirrorScmService(_SuccessfulScmService):
+    def __init__(self) -> None:
+        self.synced = False
+
+    def get_head_commit_hash(self, repo_path):
+        return ScmOperationResult(
+            operation="get_head_commit_hash",
+            repo_path=str(repo_path),
+            success=True,
+            data={"commit_hash": "local-old"},
+        )
+
+    def get_ref_commit_hash(self, repo_path, ref_name):
+        return ScmOperationResult(
+            operation="get_ref_commit_hash",
+            repo_path=str(repo_path),
+            success=True,
+            data={"ref_name": ref_name, "commit_hash": "remote-new"},
+        )
+
+    def sync_with_remote_branch(self, repo_path, branch_name, remote_name="origin"):
+        self.synced = True
+        return ScmOperationResult(
+            operation="sync_with_remote_branch",
+            repo_path=str(repo_path),
+            success=True,
+            data={"branch_name": branch_name, "remote_name": remote_name},
         )
 
 
@@ -515,6 +612,8 @@ class ImplementationModeTests(unittest.TestCase):
         self,
         *,
         validation_factory,
+        scm_factory=None,
+        index_factory=None,
         real_apply: bool = False,
         create_pr: bool = False,
         create_review: bool = False,
@@ -549,6 +648,16 @@ class ImplementationModeTests(unittest.TestCase):
             ),
         ), patch.object(
             root_agent,
+            "_build_shared_repo_context",
+            return_value={
+                "repo_id": self.repo_metadata.repo_id,
+                "root_path": self.repo_metadata.root_path,
+                "files_used": ["src/app.py"],
+                "resolved_target_files": ["src/app.py"],
+                "chunks": [{"path": "src/app.py", "snippet": "def run() -> str:\n    return 'ok'\n"}],
+            },
+        ), patch.object(
+            root_agent,
             "TempWorkspaceService",
             side_effect=lambda *args, **kwargs: TempWorkspaceService(storage_path=self.registry_path),
         ), patch.object(
@@ -560,16 +669,40 @@ class ImplementationModeTests(unittest.TestCase):
             "_implementation_permissions",
             return_value=effective_permissions,
         ):
-            return root_agent.run_root_agent(
-                "implement update src/app.py",
-                repo_id=self.repo_metadata.repo_id,
-                implementation_mode=True,
-                real_apply=real_apply,
-                create_pr=create_pr,
-                create_review=create_review,
-                run_log=run_log,
-                actor_context=actor_context,
-            )
+            effective_scm_factory = scm_factory
+            existing_scm_symbol = getattr(root_agent, "ScmService", None)
+            if effective_scm_factory is None and "unittest.mock" not in type(existing_scm_symbol).__module__:
+                effective_scm_factory = lambda *args, **kwargs: _SuccessfulScmService()
+            scm_patch = patch.object(
+                root_agent,
+                "ScmService",
+                side_effect=effective_scm_factory,
+            ) if effective_scm_factory is not None else None
+            index_patch = patch.object(
+                root_agent,
+                "RepositoryIndexService",
+                side_effect=index_factory,
+            ) if index_factory is not None else None
+            if scm_patch is not None:
+                scm_patch.start()
+            if index_patch is not None:
+                index_patch.start()
+            try:
+                return root_agent.run_root_agent(
+                    "implement update src/app.py",
+                    repo_id=self.repo_metadata.repo_id,
+                    implementation_mode=True,
+                    real_apply=real_apply,
+                    create_pr=create_pr,
+                    create_review=create_review,
+                    run_log=run_log,
+                    actor_context=actor_context,
+                )
+            finally:
+                if scm_patch is not None:
+                    scm_patch.stop()
+                if index_patch is not None:
+                    index_patch.stop()
 
     def test_implementation_mode_dry_run_only_validates_candidate_state_without_mutating_repo(self) -> None:
         validation_command = f"\"{sys.executable}\" validate_candidate.py updated"
@@ -579,6 +712,7 @@ class ImplementationModeTests(unittest.TestCase):
                 storage_path=storage_path,
                 command=validation_command,
             ),
+            scm_factory=lambda *args, **kwargs: _SuccessfulScmService(),
             real_apply=False,
         )
 
@@ -596,6 +730,105 @@ class ImplementationModeTests(unittest.TestCase):
         self.assertIn("+    return 'updated'", implementation_result.dry_run_diff_result.files[0].diff)
         self.assertIn("return 'ok'", (self.repo_root / "src" / "app.py").read_text(encoding="utf-8"))
         self.assertFalse(Path(implementation_result.temp_workspace_root).exists())
+
+    def test_implementation_mode_syncs_stale_mirror_before_run(self) -> None:
+        scm_service = _StaleMirrorScmService()
+        index_service = _RecordingIndexService()
+
+        result = self._run_with_validation_service(
+            validation_factory=lambda storage_path=None: _ScriptedValidationService(
+                storage_path=storage_path,
+                result=ValidationResult(
+                    repo_id="sample",
+                    overall_status="success",
+                    outcome_type="validation_passed",
+                    validation_scope="changed_files",
+                    validation_profile_used="python_targeted",
+                    targeted_validation=True,
+                ),
+            ),
+            scm_factory=lambda *args, **kwargs: scm_service,
+            index_factory=lambda *args, **kwargs: index_service,
+            real_apply=False,
+        )
+
+        implementation_result = result.metadata["implementation_result"]
+        self.assertTrue(scm_service.synced)
+        self.assertEqual(implementation_result.sync_status, "synced")
+        self.assertEqual(implementation_result.local_head_before, "local-old")
+        self.assertEqual(implementation_result.remote_head, "remote-new")
+        self.assertTrue(implementation_result.synced_before_run)
+        self.assertEqual(len(index_service.calls), 1)
+        self.assertTrue(index_service.calls[0]["force"])
+
+    def test_sync_preflight_does_not_reindex_when_head_is_unchanged(self) -> None:
+        scm_service = _SuccessfulScmService()
+        index_service = _RecordingIndexService()
+        repo_metadata = self.repo_metadata.__class__(**{**self.repo_metadata.to_dict(), "indexed_head": "abc123def456", "index_status": "ready"})
+
+        with patch.object(root_agent, "ScmService", side_effect=lambda *args, **kwargs: scm_service), patch.object(
+            root_agent,
+            "RepositoryIndexService",
+            side_effect=lambda *args, **kwargs: index_service,
+        ):
+            sync_state = root_agent._sync_repo_before_repo_aware_run(repo_metadata)
+
+        self.assertEqual(sync_state["sync_status"], "up_to_date")
+        self.assertEqual(len(index_service.calls), 1)
+        self.assertFalse(index_service.calls[0]["force"])
+
+    def test_sync_preflight_blocks_when_reindex_fails(self) -> None:
+        scm_service = _StaleMirrorScmService()
+        index_service = _RecordingIndexService(should_fail=True)
+
+        with patch.object(root_agent, "ScmService", side_effect=lambda *args, **kwargs: scm_service), patch.object(
+            root_agent,
+            "RepositoryIndexService",
+            side_effect=lambda *args, **kwargs: index_service,
+        ):
+            sync_state = root_agent._sync_repo_before_repo_aware_run(self.repo_metadata)
+
+        self.assertEqual(sync_state["sync_status"], "repo_index_failed")
+        self.assertTrue(sync_state["errors"])
+
+    def test_implementation_mode_short_circuits_on_repo_mismatch(self) -> None:
+        with patch.object(
+            root_agent,
+            "_build_shared_repo_context",
+            return_value={
+                "repo_id": self.repo_metadata.repo_id,
+                "root_path": self.repo_metadata.root_path,
+                "files_used": [],
+                "resolved_target_files": [],
+                "chunks": [],
+            },
+        ), patch.object(
+            root_agent,
+            "run_full_draft_pipeline",
+        ) as mocked_draft_pipeline, patch.object(
+            root_agent,
+            "resolve_repo",
+            return_value=self.repo_metadata,
+        ), patch.object(
+            root_agent,
+            "ScmService",
+            side_effect=lambda *args, **kwargs: _SuccessfulScmService(),
+        ):
+            result = root_agent.run_root_agent(
+                "implement totally unrelated jira task",
+                repo_id=self.repo_metadata.repo_id,
+                implementation_mode=True,
+            )
+
+        implementation_result = result.metadata["implementation_result"]
+        self.assertFalse(mocked_draft_pipeline.called)
+        self.assertEqual(implementation_result.final_status, "repo_mismatch")
+        self.assertEqual(implementation_result.repo_relevance_status, "repo_mismatch")
+        self.assertIn("No relevant code files were found", implementation_result.repo_relevance_reason)
+        self.assertEqual(
+            [step.status for step in implementation_result.run_record.steps],
+            ["skipped", "skipped", "skipped"],
+        )
 
     def test_implementation_mode_stops_early_when_no_changes_are_generated(self) -> None:
         with patch.object(
@@ -622,7 +855,21 @@ class ImplementationModeTests(unittest.TestCase):
         ) as mocked_diff_service, patch.object(
             root_agent,
             "ValidationService",
-        ) as mocked_validation_service:
+        ) as mocked_validation_service, patch.object(
+            root_agent,
+            "ScmService",
+            side_effect=lambda *args, **kwargs: _SuccessfulScmService(),
+        ), patch.object(
+            root_agent,
+            "_build_shared_repo_context",
+            return_value={
+                "repo_id": self.repo_metadata.repo_id,
+                "root_path": self.repo_metadata.root_path,
+                "files_used": ["src/app.py"],
+                "resolved_target_files": ["src/app.py"],
+                "chunks": [{"path": "src/app.py", "snippet": "def run() -> str:\n    return 'ok'\n"}],
+            },
+        ):
             result = root_agent.run_root_agent(
                 "implement update src/app.py",
                 repo_id=self.repo_metadata.repo_id,
@@ -744,6 +991,20 @@ class ImplementationModeTests(unittest.TestCase):
             root_agent,
             "resolve_repo",
             return_value=self.repo_metadata,
+        ), patch.object(
+            root_agent,
+            "ScmService",
+            side_effect=lambda *args, **kwargs: _SuccessfulScmService(),
+        ), patch.object(
+            root_agent,
+            "_build_shared_repo_context",
+            return_value={
+                "repo_id": self.repo_metadata.repo_id,
+                "root_path": self.repo_metadata.root_path,
+                "files_used": ["src/app.py"],
+                "resolved_target_files": ["src/app.py"],
+                "chunks": [{"path": "src/app.py", "snippet": "def run() -> str:\n    return 'ok'\n"}],
+            },
         ):
             result = root_agent.run_root_agent(
                 "implement update src/app.py",

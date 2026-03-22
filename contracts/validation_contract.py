@@ -59,6 +59,14 @@ class ValidationResult:
     overall_status: str
     steps: list[ValidationStepResult] = field(default_factory=list)
     passed: bool = False
+    outcome_type: str = ""
+    validation_scope: str = ""
+    validation_profile_used: str = ""
+    targeted_validation: bool = False
+    environment_related_failure: bool = False
+    environment_prepared: bool = False
+    environment_setup_logs: str = ""
+    dependency_install_status: str = ""
     total_tests: int = 0
     passed_tests: int = 0
     failed_tests: int = 0
@@ -74,6 +82,14 @@ class ValidationResult:
             "overall_status": self.overall_status,
             "steps": [item.to_dict() for item in self.steps],
             "passed": self.passed,
+            "outcome_type": self.outcome_type,
+            "validation_scope": self.validation_scope,
+            "validation_profile_used": self.validation_profile_used,
+            "targeted_validation": self.targeted_validation,
+            "environment_related_failure": self.environment_related_failure,
+            "environment_prepared": self.environment_prepared,
+            "environment_setup_logs": self.environment_setup_logs,
+            "dependency_install_status": self.dependency_install_status,
             "total_tests": self.total_tests,
             "passed_tests": self.passed_tests,
             "failed_tests": self.failed_tests,

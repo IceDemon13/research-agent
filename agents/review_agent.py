@@ -782,6 +782,7 @@ def run_review_agent(
     draft_set: DraftSet,
     task_intent: str = "create",
     repo_context: dict | None = None,
+    routing_metadata: dict | None = None,
 ) -> AgentResult:
     resolved_repo_context = ensure_repo_context(
         original_request,
@@ -808,6 +809,7 @@ def run_review_agent(
             user_input=composed_input,
             memory=memory,
             agent_name="review_agent",
+            routing_metadata=dict(routing_metadata or {}),
         )
 
         normalized_answer = _normalize_review_answer(answer)
@@ -825,6 +827,7 @@ def run_review_agent(
             metadata={
                 "artifact_type": "review_result",
                 "review_result": review_result,
+                **dict(routing_metadata or {}),
             },
         )
 
@@ -884,6 +887,7 @@ def run_review_agent(
             metadata={
                 "artifact_type": "review_result",
                 "review_result": review_result,
+                **dict(routing_metadata or {}),
             },
         )
 
@@ -909,6 +913,7 @@ def run_review_agent(
         user_input=composed_input,
         memory=memory,
         agent_name="review_agent",
+        routing_metadata=dict(routing_metadata or {}),
     )
 
     normalized_answer = _normalize_review_answer(answer)
@@ -956,5 +961,6 @@ def run_review_agent(
         metadata={
             "artifact_type": "review_result",
             "review_result": review_result,
+            **dict(routing_metadata or {}),
         },
     )

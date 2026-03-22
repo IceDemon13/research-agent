@@ -180,6 +180,7 @@ def run_code_agent(
     user_input: str,
     task_intent: str = "create",
     repo_context: dict | None = None,
+    routing_metadata: dict | None = None,
 ) -> AgentResult:
     dummy_spec = SpecContract(
         title="Code request",
@@ -204,10 +205,10 @@ def run_code_agent(
         ),
     )
 
-    return run_code_agent_from_spec(code_input)
+    return run_code_agent_from_spec(code_input, routing_metadata=routing_metadata)
 
 
-def run_code_agent_from_spec(data: SpecToCodeInput) -> AgentResult:
+def run_code_agent_from_spec(data: SpecToCodeInput, routing_metadata: dict | None = None) -> AgentResult:
     memory = [
         {
             "role": "system",
@@ -221,6 +222,7 @@ def run_code_agent_from_spec(data: SpecToCodeInput) -> AgentResult:
         user_input=composed_input,
         memory=memory,
         agent_name="code_agent",
+        routing_metadata=dict(routing_metadata or {}),
     )
 
     patch_plan = _extract_patch_plan(answer)
@@ -236,5 +238,6 @@ def run_code_agent_from_spec(data: SpecToCodeInput) -> AgentResult:
             "source": "spec",
             "spec_title": data.spec.title,
             "patch_plan": patch_plan,
+            **dict(routing_metadata or {}),
         },
     )

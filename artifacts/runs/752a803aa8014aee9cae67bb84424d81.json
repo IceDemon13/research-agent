@@ -1,0 +1,45 @@
+{
+  "run_id": "752a803aa8014aee9cae67bb84424d81",
+  "goal": "Check readiness for review for TEL-789. Return an explicit verdict, blocking issues, exact files to inspect, and required fixes with file, what to fix, and why. Avoid generic wording.",
+  "status": "partial",
+  "started_at": "2026-03-22T21:10:45.764360+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "sample",
+  "actor_context": {
+    "actor_id": "lead-1",
+    "actor_type": "api",
+    "role": "techlead",
+    "source_channel": "api",
+    "display_name": "Local API Developer",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-03-22T21:10:45.767361+00:00",
+  "steps": [
+    {
+      "name": "review",
+      "status": "skipped",
+      "started_at": "2026-03-22T21:10:45.766362+00:00",
+      "finished_at": "2026-03-22T21:10:45.767361+00:00",
+      "message": "Skipped because no concrete implementation artifact or diff was available.",
+      "error": null
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/752a803aa8014aee9cae67bb84424d81.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}

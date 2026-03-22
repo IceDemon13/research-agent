@@ -2,78 +2,48 @@
   "version": 1,
   "repo_id": "self",
   "root_path": "C:/work/my repositories/research-agent",
-  "indexed_at": "2026-03-19T16:05:37.845738+00:00",
-  "file_count": 158,
+  "indexed_at": "2026-03-22T16:39:16.152548+00:00",
+  "file_count": 221,
   "files": [
     {
       "repo_id": "self",
-      "relative_path": ".env",
-      "language": "env",
-      "file_size": 600,
-      "content_hash": "223f6e0d26c52006afdf981abf6afb4f707a0b3fd443351724f7a40eeda8cf67",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773837045651809200,
-      "line_count": 16
-    },
-    {
-      "repo_id": "self",
-      "relative_path": ".env.example",
+      "relative_path": ".dockerignore",
       "language": "text",
-      "file_size": 0,
-      "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773311708681059100,
-      "line_count": 0
+      "file_size": 147,
+      "content_hash": "23ae643de5006fc02abb5399fa52833d5ef17bb2e79124f8f2bbd658b72e29c2",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522667050400,
+      "line_count": 16
     },
     {
       "repo_id": "self",
       "relative_path": ".github/workflows/python-tests.yml",
       "language": "yaml",
-      "file_size": 633,
-      "content_hash": "f4b1e474cf2087de768664c8b8a7bb34fe04fcb43c6876dc033193e9b9ca11b2",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773817480866520900,
+      "file_size": 663,
+      "content_hash": "bff9062d3db91155e1da8fb7b3c309720f3c10c8aa7c4d7e32db970904ac68ea",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786164691900,
       "line_count": 30
     },
     {
       "repo_id": "self",
-      "relative_path": ".gitignore",
-      "language": "text",
-      "file_size": 4916,
-      "content_hash": "9c2d84e74207ad18f76eaaffaa72eda8925184df324d9eaa7a14cdb6b3ba1894",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773331280637202600,
-      "line_count": 210
-    },
-    {
-      "repo_id": "self",
-      "relative_path": ".vs/VSWorkspaceState.json",
-      "language": "json",
-      "file_size": 78,
-      "content_hash": "f8315c8ace58425aeca40c1c17b3be8d50894c55f561cd7e36266da5d5ea3d72",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773311708685998700,
-      "line_count": 6
-    },
-    {
-      "repo_id": "self",
-      "relative_path": ".vs/research-agent.slnx/v18/DocumentLayout.json",
-      "language": "json",
-      "file_size": 557,
-      "content_hash": "8602027e32fc2c59e334b29ff17cbbdf0df428dd4c8ecb13687e4fb8c48026a3",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773311708699846800,
-      "line_count": 23
+      "relative_path": "Dockerfile",
+      "language": "docker",
+      "file_size": 529,
+      "content_hash": "5d27df9023cc4753f84b3c1c8d9a503e924e949c745d3aeec545e07645e8ae4d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774042336098997400,
+      "line_count": 22
     },
     {
       "repo_id": "self",
       "relative_path": "README.md",
       "language": "markdown",
-      "file_size": 48386,
-      "content_hash": "6e87cbe387a926b99da5be3d1da9429fd9bbb6ca0e4204271fbc35de988358f4",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936104570034600,
-      "line_count": 773
+      "file_size": 8223,
+      "content_hash": "0b388e95856a2e9eeba40135d98e3e6f71b7b737b7811b42e35a57648759c635",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774176540961535000,
+      "line_count": 305
     },
     {
       "repo_id": "self",
@@ -81,18 +51,18 @@
       "language": "text",
       "file_size": 5,
       "content_hash": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773933809319497800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786171205700,
       "line_count": 1
     },
     {
       "repo_id": "self",
       "relative_path": "agent.py",
       "language": "python",
-      "file_size": 141,
-      "content_hash": "cc4298318f3ddd32ded50fb210b781ce5c4cf92391bc463be989d7b0a81fffde",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773913502855294000,
+      "file_size": 146,
+      "content_hash": "694d4b4f6c9535e7f4624cb2b963695fc9e7653e5f27e33007c5d98abd33f28f",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786171205700,
       "line_count": 5
     },
     {
@@ -101,28 +71,28 @@
       "language": "python",
       "file_size": 0,
       "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773548046261280000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786172205300,
       "line_count": 0
     },
     {
       "repo_id": "self",
       "relative_path": "agents/change_agent.py",
       "language": "python",
-      "file_size": 47666,
-      "content_hash": "9ec6cdf532bf043d9c22bec428bf728dafab0602a697ecc3857c16fa1eb933b5",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935815158269700,
+      "file_size": 48703,
+      "content_hash": "a3645560b44768b2cbd3b1cd6d408a51da7a6d1f9ad99853f209b2cea79ea2d9",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522669558200,
       "line_count": 1260
     },
     {
       "repo_id": "self",
       "relative_path": "agents/code_agent.py",
       "language": "python",
-      "file_size": 7587,
-      "content_hash": "c4e62078f302c2b5b4e2d0b480c6432e0f07b592ac2e0fc40489f649696bf8ff",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936247312637500,
+      "file_size": 7333,
+      "content_hash": "048843906a00eb62aaf937f3a6a32e77bde2f3d9cc86c9c8ab9bea75a6891af3",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522670561300,
       "line_count": 240
     },
     {
@@ -131,18 +101,18 @@
       "language": "python",
       "file_size": 2373,
       "content_hash": "3f6c8204d9ac84751b08662a9449a6c9a55a752b34120d7dd069c4b1907c7504",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773750029358807300,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786173208300,
       "line_count": 80
     },
     {
       "repo_id": "self",
       "relative_path": "agents/draft_agent.py",
       "language": "python",
-      "file_size": 88593,
-      "content_hash": "db024fd4ddd4fd7974371af173a7879226fa0db33402d7802338be88b92f1aaf",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936190591231800,
+      "file_size": 90515,
+      "content_hash": "dfc0547179462252912559391b7ba23f91b83abd880d09128b7e7f6ac7a25893",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786174205600,
       "line_count": 2174
     },
     {
@@ -151,8 +121,8 @@
       "language": "python",
       "file_size": 584,
       "content_hash": "5fbf1f6d9a4a8de8638acc0ff63ec9efd3c94b622e501e83f0cb4fc09a6385f0",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554108486276400,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786174205600,
       "line_count": 26
     },
     {
@@ -161,58 +131,58 @@
       "language": "python",
       "file_size": 18518,
       "content_hash": "bd3012237989eb67d47b8bc24eefd68f225711cbddb0b4a9be1da12059279b9d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773923904743959100,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786175206200,
       "line_count": 460
     },
     {
       "repo_id": "self",
       "relative_path": "agents/repair_agent.py",
       "language": "python",
-      "file_size": 6884,
-      "content_hash": "872d0d317becdaee30c35c5b8208014a8cc81cef0f882532bb27165ff9d0d53c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936287918954400,
+      "file_size": 6929,
+      "content_hash": "948eb86e7a47b42fa86cb3d9f5d82ed8e25d90c1d4e9fc07ac69478223fa4a55",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786175206200,
       "line_count": 251
     },
     {
       "repo_id": "self",
       "relative_path": "agents/research_agent.py",
       "language": "python",
-      "file_size": 518,
-      "content_hash": "db9476379be9fe927a25b4b0526451cce4e369a5ecfdd2cad58965e70f6ef484",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773913444725147200,
+      "file_size": 537,
+      "content_hash": "21a81528204cfd3e38617b908f4f144de1e3d706e70f31e907410b6a365671f3",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786176207200,
       "line_count": 19
     },
     {
       "repo_id": "self",
       "relative_path": "agents/review_agent.py",
       "language": "python",
-      "file_size": 32120,
-      "content_hash": "ad03acda3d03f12115f8ee76ebceb9d6a5e5d5dcec8c5f36cdf00953c7a06fc7",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936278210930200,
+      "file_size": 32307,
+      "content_hash": "a8ed748e2f8077c567255ed7a6a16c033cdb619514883a2fd588d7d9ae426bf6",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786176207200,
       "line_count": 960
     },
     {
       "repo_id": "self",
       "relative_path": "agents/root_agent.py",
       "language": "python",
-      "file_size": 58706,
-      "content_hash": "fdd74a73489cf994b4a9fd12181927fb9f3220188a7b9250c6b7536ebcac7aa1",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936298961125700,
-      "line_count": 1484
+      "file_size": 251809,
+      "content_hash": "163225e21689c7a5c3304bf2db849458f423debe2b246cd000102d6bd90e706f",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197332274174700,
+      "line_count": 5947
     },
     {
       "repo_id": "self",
       "relative_path": "agents/spec_agent.py",
       "language": "python",
-      "file_size": 6769,
-      "content_hash": "a58a98004d924a5aa71336176c871bd382760b488e6ee5c524d41f1e6adf35d2",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936255245253900,
+      "file_size": 6938,
+      "content_hash": "9f4e4da6dc6abae820fe8645b5591c20db5ea4c2e64655cc7a149b93eff989d1",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786178205800,
       "line_count": 173
     },
     {
@@ -221,8 +191,8 @@
       "language": "python",
       "file_size": 1635,
       "content_hash": "c618a7f3df32e4f481009f5d1c00dfe7b1552093baa116feced6eb59a05eec9d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773681772774328200,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786178205800,
       "line_count": 69
     },
     {
@@ -231,8 +201,8 @@
       "language": "python",
       "file_size": 179,
       "content_hash": "69b4fd66d385b8e4f8a8c4d71e9ded6fbf5740144a9bf60b416e60975a0d4c4b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429745900000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786178205800,
       "line_count": 4
     },
     {
@@ -241,8 +211,8 @@
       "language": "python",
       "file_size": 2836,
       "content_hash": "90020390d2b7e1dca7b2a146cfa2640e5dd48caad7fbf0932604ff7672f3b49d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773685459359015100,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786179205000,
       "line_count": 116
     },
     {
@@ -251,8 +221,8 @@
       "language": "python",
       "file_size": 1002,
       "content_hash": "b38d1aa4e8bb980eb28a2d592fcc1c72d808310801e48f09ec5fe2d6520986d4",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429745900000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786179205000,
       "line_count": 34
     },
     {
@@ -261,8 +231,8 @@
       "language": "python",
       "file_size": 968,
       "content_hash": "0472b391596a612c0b89381e2c4d0290f2c886f067bc2d76b00a841b6085369f",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429735274800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786179205000,
       "line_count": 30
     },
     {
@@ -271,8 +241,8 @@
       "language": "python",
       "file_size": 1492,
       "content_hash": "fb4e05572dc721b10ba138ca2f411f0e044e38c8c831b118ede663bc63d61851",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546427941772000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786180219100,
       "line_count": 53
     },
     {
@@ -281,8 +251,8 @@
       "language": "python",
       "file_size": 2931,
       "content_hash": "fe8a8a19b8743905f800e22432c176c9beb5efe4de0dc4b83c02ac149a030c5b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554108480743000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786180219100,
       "line_count": 79
     },
     {
@@ -291,8 +261,8 @@
       "language": "python",
       "file_size": 831,
       "content_hash": "301a5368614017b01e1cb468706bd20b525ebe6a5954836c563b0e6885f21336",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554108485773100,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786181219300,
       "line_count": 26
     },
     {
@@ -301,8 +271,8 @@
       "language": "python",
       "file_size": 1549,
       "content_hash": "41454440aa2d96e4281d1afc181daf3941725b7de2c25df791288435205fa019",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429745400500,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786181219300,
       "line_count": 52
     },
     {
@@ -311,8 +281,8 @@
       "language": "python",
       "file_size": 570,
       "content_hash": "8ec771ca6efb1d67bccde67078d714cb580ef34e324503a4b103af5909d0d544",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546450189360100,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786182219100,
       "line_count": 24
     },
     {
@@ -321,8 +291,8 @@
       "language": "python",
       "file_size": 1960,
       "content_hash": "3ce6778de175ae66ae5197338313409588b8fd78f8d93ea05b5138cc19000924",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429743895400,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786182219100,
       "line_count": 52
     },
     {
@@ -331,8 +301,8 @@
       "language": "python",
       "file_size": 576,
       "content_hash": "ef36aa37a34278549b2295e3bf9120762526d1804a1c9fd4b8af09f60ed3525f",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429745900000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786182219100,
       "line_count": 30
     },
     {
@@ -341,8 +311,8 @@
       "language": "python",
       "file_size": 758,
       "content_hash": "e627d057608e3191721bf19d857ff063bff93fdf89121b949c6fa90114190784",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429747909000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786183219100,
       "line_count": 30
     },
     {
@@ -351,8 +321,8 @@
       "language": "python",
       "file_size": 4687,
       "content_hash": "9892909b739842eaac895bf459c8b5802e7404bff84839d3db60adcbbdc4e140",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773574003275385600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786183219100,
       "line_count": 158
     },
     {
@@ -361,8 +331,8 @@
       "language": "python",
       "file_size": 1210,
       "content_hash": "9b533d2b6ce5cda217ad36550973bd52f24894421d4956dbca986487e6876f5a",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524612820000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786183219100,
       "line_count": 42
     },
     {
@@ -371,69 +341,109 @@
       "language": "python",
       "file_size": 424,
       "content_hash": "a569f9b3ec3d86ade7f944c97062dd4218eb3084307790cfad4981d684fe28ae",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429745900000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786184722800,
       "line_count": 16
     },
     {
       "repo_id": "self",
-      "relative_path": "artifacts/repos/registry.json",
-      "language": "json",
-      "file_size": 320,
-      "content_hash": "60d02ed4bb312da02ae186227ca453aecea419ea147d19c57f438687b433649d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936337838392700,
-      "line_count": 13
+      "relative_path": "artifacts/test-temp/publication-service-3502affbd9a54f92a7e2fcc057d2fc14/sample-repo/src/app.py",
+      "language": "python",
+      "file_size": 36,
+      "content_hash": "b3938c1c7365e30d22a16b32beeb6118ac4542ae06f24e9911a96dd0a7af9d1d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774047275125513400,
+      "line_count": 2
     },
     {
       "repo_id": "self",
-      "relative_path": "artifacts/repos/repo-id-test-dd7706b3/repo_manifest.json",
-      "language": "json",
-      "file_size": 626,
-      "content_hash": "",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936337854739600,
-      "line_count": 22
+      "relative_path": "artifacts/test-temp/publication-service-7eebcc09f1624109b677c9356f051fc1/sample-repo/src/app.py",
+      "language": "python",
+      "file_size": 36,
+      "content_hash": "b3938c1c7365e30d22a16b32beeb6118ac4542ae06f24e9911a96dd0a7af9d1d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774047274738186500,
+      "line_count": 2
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "artifacts/test-temp/publication-service-acededeafb714fcc86f9cfcdd7b9df73/sample-repo/src/app.py",
+      "language": "python",
+      "file_size": 36,
+      "content_hash": "b3938c1c7365e30d22a16b32beeb6118ac4542ae06f24e9911a96dd0a7af9d1d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774047274938014000,
+      "line_count": 2
     },
     {
       "repo_id": "self",
       "relative_path": "config.py",
       "language": "python",
-      "file_size": 6375,
-      "content_hash": "b80883c8662ea7e7f776cb6476fda39287ec8a46199036d22ede5fb5995293de",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773934219128437600,
-      "line_count": 197
+      "file_size": 11888,
+      "content_hash": "19c7f443763efd76d9c5bee8d9f0c3feaef3c665043032a4b7ddff14f64872fe",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774174302718692500,
+      "line_count": 308
     },
     {
       "repo_id": "self",
       "relative_path": "console_app.py",
       "language": "python",
-      "file_size": 3727,
-      "content_hash": "24a8aea0a53e4cbaa342895f1a3aed55eac16efce221e4d8aa85c1bb774d5be1",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935987865009000,
-      "line_count": 90
+      "file_size": 4872,
+      "content_hash": "a3c2770e468044b8cfb9b2059b44bd7aedea6dfd4809546b5f9585a37989fca6",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522826738700,
+      "line_count": 115
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/__init__.py",
       "language": "python",
-      "file_size": 481,
-      "content_hash": "2c3c6d993f44a03790a74fa104ddf4ee8eb93787d86b726a6c0b01da470bbf00",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935138630422600,
-      "line_count": 21
+      "file_size": 3467,
+      "content_hash": "3ffd8d1678ad3faac64da3a8e52afa2766fcae4bd0d680c4734070152db466ab",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774196943129782700,
+      "line_count": 115
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/actor_contract.py",
+      "language": "python",
+      "file_size": 1302,
+      "content_hash": "27e3c4c49f9ae998d29068f9ec85720cab6a3a840b28ac2bf2b58297f4e05b20",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522826738700,
+      "line_count": 39
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/agent_result.py",
       "language": "python",
-      "file_size": 370,
-      "content_hash": "96dbca4f4a86ac1f5110e4e375a43317a9c311a8756cbbbd6ff146133fc41f13",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773768542882131600,
+      "file_size": 378,
+      "content_hash": "f7b815051a9e289e3695cceb739a677dd39c169d8efade92cec5900347ed7b79",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786343477400,
       "line_count": 14
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/apply_contract.py",
+      "language": "python",
+      "file_size": 4773,
+      "content_hash": "ea74d04c25bf911c313c61d0d11853020b6dd578bdd4f50905bcbb42bac19f9c",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774049555215529700,
+      "line_count": 149
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/apply_preparation.py",
+      "language": "python",
+      "file_size": 696,
+      "content_hash": "15c532427ae8505a160a86c372048d6728d190d2648157e70b213f84959bca6d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786344980700,
+      "line_count": 21
     },
     {
       "repo_id": "self",
@@ -441,9 +451,29 @@
       "language": "python",
       "file_size": 381,
       "content_hash": "f247569dde9ed72219c568d66179a860d75ab2a29d36436a97c754af3aa9182b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773577777709432600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786344980700,
       "line_count": 13
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/crucible_review_contract.py",
+      "language": "python",
+      "file_size": 900,
+      "content_hash": "44c38cef475cf25b801c622a848b24bd4993b71bba6cdb19f121b4e80ea3749a",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786345985300,
+      "line_count": 31
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/diff_contract.py",
+      "language": "python",
+      "file_size": 2059,
+      "content_hash": "d61f837156b2eee76b1bad84a4576d54428c392b21075e1ef3d212bc1912e5db",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774087897850760100,
+      "line_count": 68
     },
     {
       "repo_id": "self",
@@ -451,9 +481,19 @@
       "language": "python",
       "file_size": 299,
       "content_hash": "5768c64a9574b69765ed997f36be215bf5b9fee43d3a9aff091eca8265336f38",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773579277178381900,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786346984300,
       "line_count": 12
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/error_contract.py",
+      "language": "python",
+      "file_size": 399,
+      "content_hash": "04dcf38b26b938cbd9a422c40750ed02b0bd7b2facf089a874be137e08765749",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786346984300,
+      "line_count": 17
     },
     {
       "repo_id": "self",
@@ -461,19 +501,29 @@
       "language": "python",
       "file_size": 237,
       "content_hash": "5d49aefed9f9e504ba0e6f1467f3dce148619b7cb685de0422ace76335fed5d3",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773577777716590600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786346984300,
       "line_count": 11
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/file_draft.py",
       "language": "python",
-      "file_size": 164,
-      "content_hash": "209d61de818588dbfaea3e1dd895366027a3c134c4640997573588be299411e0",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773749298227451600,
-      "line_count": 10
+      "file_size": 448,
+      "content_hash": "98bdfc2fec9e9fcb0db68e9778d01b56917d7b4afe05555298dda728e860e148",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786347984900,
+      "line_count": 20
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/implementation_result.py",
+      "language": "python",
+      "file_size": 6370,
+      "content_hash": "5aa663b0f96de1ff34b79c91903e88799efb9084d960ece0876de777c51aea54",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774097927581432000,
+      "line_count": 156
     },
     {
       "repo_id": "self",
@@ -481,8 +531,8 @@
       "language": "python",
       "file_size": 532,
       "content_hash": "563fa496926addfc35ad98fe03e07d6c7090405a6a9d986220a6d859f2f2e72d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773679775631301500,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786347984900,
       "line_count": 21
     },
     {
@@ -491,19 +541,49 @@
       "language": "python",
       "file_size": 369,
       "content_hash": "a0f531f1da331679377eca5d3cb2d7066310b76fbdd6c0dc02b41f18d950031c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773577777709432600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786347984900,
       "line_count": 13
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/permission_contract.py",
+      "language": "python",
+      "file_size": 2793,
+      "content_hash": "322c92c2304e5404b18dd6f3723dc0035789e7ea3bb341767680eff9e6dd7031",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522828242400,
+      "line_count": 80
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/proposed_file_change.py",
       "language": "python",
-      "file_size": 341,
-      "content_hash": "bb03dc8cfb45c5beba2626268cfe6b7e74013955332b0f703cca72cdebf499ef",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773749170573343900,
-      "line_count": 13
+      "file_size": 603,
+      "content_hash": "a8836d1d586ad1d96cae7166fa7fbf420f2867040974335dd3cb21de1bb84066",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786349487900,
+      "line_count": 23
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/publication_contract.py",
+      "language": "python",
+      "file_size": 1524,
+      "content_hash": "cfa4c87fb105e52374e662b9d189e76e6a4ad82987e1e7f9ec72af43ad6c3eb6",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774046923325494300,
+      "line_count": 42
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/pull_request_contract.py",
+      "language": "python",
+      "file_size": 666,
+      "content_hash": "ea4754223d671b2f584392438830a7bc4b005465386bdbd63ffa768521000d0c",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786350494200,
+      "line_count": 25
     },
     {
       "repo_id": "self",
@@ -511,49 +591,69 @@
       "language": "python",
       "file_size": 354,
       "content_hash": "60d36bc9225e51243679675b2f2c85890b4a8c954787c88d54a0019905506643",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773691280776910800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786350494200,
       "line_count": 13
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/repo_context_contract.py",
       "language": "python",
-      "file_size": 6250,
-      "content_hash": "69e09e58163cdd115d1953de13d2749a4ad4274689cd4057ce68ec87e49d15ca",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935590585576900,
+      "file_size": 6409,
+      "content_hash": "7fbc57836566d2150ee22b29d69a37e2389395d1687eeaa4e72bd91c45595397",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786350494200,
       "line_count": 159
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/repo_index.py",
       "language": "python",
-      "file_size": 6311,
-      "content_hash": "d480ef4ad601c46f0647a576afcd22406fbb83e3588a8ccc447e5af9071adc63",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935141522336600,
-      "line_count": 182
+      "file_size": 17070,
+      "content_hash": "8b9ea81dfafab570df2c167586b2ae71b3c4dc261db4fc21a7d954125816ee49",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774196938242737900,
+      "line_count": 459
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/repo_metadata.py",
       "language": "python",
-      "file_size": 2188,
-      "content_hash": "f80d978230590ca6b0010518baed0e2acfed045ece110f3c9dd7a2063c748cdc",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773934231944815000,
-      "line_count": 69
+      "file_size": 2801,
+      "content_hash": "e8b709bf3d9bf799536f94275f6c28343dab7387a1cf75bd7e15c69e5ccf0850",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522828242400,
+      "line_count": 82
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/repo_onboarding_contract.py",
+      "language": "python",
+      "file_size": 511,
+      "content_hash": "021665d2739cde8e436167d4827ede80dce2891b013199563b68f6bbeea6f706",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522829246000,
+      "line_count": 21
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/retrieval_result.py",
       "language": "python",
-      "file_size": 1652,
-      "content_hash": "06d300960bc8c728bbcc28de7620f837bf9f2ef94e6c78ccb20c56facc896d21",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773914393628693100,
+      "file_size": 1701,
+      "content_hash": "faf30df3fcd49116950be074d108ec0e28480c702762773a1acc08e26dd3666f",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786352491800,
       "line_count": 49
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/review_comment_contract.py",
+      "language": "python",
+      "file_size": 642,
+      "content_hash": "09479135b76e747cc7f2235a5ff755a8a8389bdadb59147d1c1f54e8acefe4ea",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522829246000,
+      "line_count": 25
     },
     {
       "repo_id": "self",
@@ -561,8 +661,8 @@
       "language": "python",
       "file_size": 588,
       "content_hash": "dc4edb16ff3695a41534d74695d8448eb46ef1d47f4ad00a0da1e39fb1abe6b1",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773690216267856000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786352491800,
       "line_count": 20
     },
     {
@@ -571,9 +671,39 @@
       "language": "python",
       "file_size": 152,
       "content_hash": "4b7c0c52777074e3025dd500ba5c0a1fceb73b89958f8a9259c330f1c404b37b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524606731400,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786353678800,
       "line_count": 9
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/run_contract.py",
+      "language": "python",
+      "file_size": 2794,
+      "content_hash": "9e52b8a77c7f8756e3128be6ec504e5724956b8ba5ecd4c5f0f670906b0ab262",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774090380267598900,
+      "line_count": 83
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/run_detail_contract.py",
+      "language": "python",
+      "file_size": 13964,
+      "content_hash": "aa4769ce632e5f06175f0da33317de6faf627b5acd53084a958708ecf2f91767",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774189432591030100,
+      "line_count": 290
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/scm_contract.py",
+      "language": "python",
+      "file_size": 1502,
+      "content_hash": "6d097a2e2c69b6e5d3970db0188d6f884f3b0245a377d2126595880ca1ccf413",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786354677800,
+      "line_count": 51
     },
     {
       "repo_id": "self",
@@ -581,8 +711,8 @@
       "language": "python",
       "file_size": 479,
       "content_hash": "5ef7098825daf0cd3596eb86404cb9dcc9622e233363878cde216d3c2257b9ad",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554108480743000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786354677800,
       "line_count": 15
     },
     {
@@ -591,18 +721,18 @@
       "language": "python",
       "file_size": 2916,
       "content_hash": "389f6ec5a6ec06dad1f98adc22071c279d3559f19ef543251bc0253744681d62",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554108480743000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786354677800,
       "line_count": 87
     },
     {
       "repo_id": "self",
       "relative_path": "contracts/spec_to_code_input.py",
       "language": "python",
-      "file_size": 309,
-      "content_hash": "6369fa446e6c2d4f211aba74ea15af82f6ff65cd8d38cd7ae2fa22268fad7d21",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773768542882131600,
+      "file_size": 322,
+      "content_hash": "f7328213cd010e6187619a7db3d1681cc405a84156e3feba2ec43d75dbf717dc",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786355678600,
       "line_count": 13
     },
     {
@@ -611,89 +741,149 @@
       "language": "python",
       "file_size": 163,
       "content_hash": "07a09de8f14023d87bfd90e9ecd95267113f2407d2b279c9d8e4b769968b81a9",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773672630303728900,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786355678600,
       "line_count": 9
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/temp_workspace_contract.py",
+      "language": "python",
+      "file_size": 660,
+      "content_hash": "371ea2a0498286c73af228710dae1d3b827acd6ee38a43395af046095c89223c",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786356678200,
+      "line_count": 21
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/user_contract.py",
+      "language": "python",
+      "file_size": 1626,
+      "content_hash": "291a2965f117df11d5171e234288ec145709aa652745bb0094907dea03b37fe3",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774170705621857100,
+      "line_count": 62
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/validation_contract.py",
+      "language": "python",
+      "file_size": 3175,
+      "content_hash": "cd1cb9466719ef74768cacf566240c8a3a3a2f9f608ed41aea949135108e944b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774100631135918600,
+      "line_count": 101
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "contracts/workflow_contract.py",
+      "language": "python",
+      "file_size": 8273,
+      "content_hash": "72dbb8d61db9a3c9a76fbcbabe7730bc1688ceb96f50116fadd27e0f5bec602e",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774190187892349500,
+      "line_count": 237
     },
     {
       "repo_id": "self",
       "relative_path": "data/README.md",
       "language": "markdown",
-      "file_size": 32135,
-      "content_hash": "6348ab39a9a7cb46e6fde5e51ad6c97c36fc74d92f3d8685c9ea96db099c2028",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773833655493622400,
+      "file_size": 32853,
+      "content_hash": "d0419e9f95a8cc55fcfc9b5d33539c07afee19239cc4ca11be6789a443e96d1b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786357677900,
       "line_count": 718
     },
     {
       "repo_id": "self",
       "relative_path": "data/hybrid_retrieval.md",
       "language": "markdown",
-      "file_size": 814,
-      "content_hash": "616f7223f38bc60e24a47d74a3a84ad5433df13a6b5e4532286c1d39b6522655",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773847508261583200,
+      "file_size": 844,
+      "content_hash": "fd0844bc0d9ab62b846ace32407bef3dc543e5530f79dfe76c4c24b6a078f5f1",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786357677900,
       "line_count": 30
     },
     {
       "repo_id": "self",
       "relative_path": "data/repo_context.md",
       "language": "markdown",
-      "file_size": 595,
-      "content_hash": "ff77796fbcd5996a680be7f593e088410842b85849ff880baaa1cb0d4b8c8368",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773847508260550100,
+      "file_size": 615,
+      "content_hash": "c1ae8ea1170818bbc38635a7d873ca8111da3740b6a426279320e6aabe1d10ed",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786357677900,
       "line_count": 20
     },
     {
       "repo_id": "self",
       "relative_path": "data/sdd_commands.md",
       "language": "markdown",
-      "file_size": 932,
-      "content_hash": "13b553031a4fafaf8ad4c0f961427549ed632b2b641568eb7cc8a326a3616192",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773847508258157500,
+      "file_size": 952,
+      "content_hash": "ff4a5ced023d84c38f26ec406ee25ce5923f6b608c9e342e895b3ab3df4642a3",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786357677900,
       "line_count": 20
     },
     {
       "repo_id": "self",
       "relative_path": "data/sdd_commands_uk.md",
       "language": "markdown",
-      "file_size": 955,
-      "content_hash": "a80ee2e52b254f1de935172d8cd2757d551485da33df278d4e2f8cf20fc2cbfc",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773848033447190600,
+      "file_size": 972,
+      "content_hash": "abeb35ae6ed4edcdd88502b7309fe374c071014e451420709a5c472e62167d75",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786359182500,
       "line_count": 17
     },
     {
       "repo_id": "self",
       "relative_path": "data/test_workflow.md",
       "language": "markdown",
-      "file_size": 590,
-      "content_hash": "bc873206cfce56ccca2c723ca06a501427a876167a4c224034da60354237f2c3",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773847508260550100,
+      "file_size": 614,
+      "content_hash": "1036b194d9dc01765855baf80f67888513dd4157fdf14a2671e765c349e7ef9a",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786359182500,
       "line_count": 24
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "docker-compose.yml",
+      "language": "yaml",
+      "file_size": 2906,
+      "content_hash": "19c5e6da150652b30fbeddd03b48fa8f87385574193e64c195a24b085dc69ae8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774046457195397500,
+      "line_count": 75
     },
     {
       "repo_id": "self",
       "relative_path": "docs/TEST_WORKFLOW.md",
       "language": "markdown",
-      "file_size": 921,
-      "content_hash": "ec79e13e786ef127aaa858fb7b335716eb0ad0360e6da2987c815007650a9a84",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773820149600090300,
+      "file_size": 937,
+      "content_hash": "b29af16c32258929c2b60c810f083c90b89599fa2940951b29e133708685fc09",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786360186200,
       "line_count": 17
     },
     {
       "repo_id": "self",
       "relative_path": "docs/sdd_implementation_gap_analysis.md",
       "language": "markdown",
-      "file_size": 15508,
-      "content_hash": "3cedc791017f07684b7605b1433b28f09f6c00f721d0dcf16c221fa0477c65f1",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773933989577949600,
+      "file_size": 15799,
+      "content_hash": "4fcf83de134772c80055f2c495d0a767008fc047f5a355ff80da5766d3cb4248",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786361186300,
       "line_count": 292
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "docs/sdd_preflight_check.md",
+      "language": "markdown",
+      "file_size": 13119,
+      "content_hash": "90d662c0ad8b6eb906547c37f8cea21de900622aeea693695e1befc307a85ab1",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786361186300,
+      "line_count": 247
     },
     {
       "repo_id": "self",
@@ -701,68 +891,68 @@
       "language": "markdown",
       "file_size": 423,
       "content_hash": "74e9865d8ec29d6d5f05b7f880827883c0d1e5e84b8fabc855550f1e1859a03d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773311708769912500,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786362186300,
       "line_count": 15
     },
     {
       "repo_id": "self",
       "relative_path": "formatters/__init__.py",
       "language": "python",
-      "file_size": 36,
-      "content_hash": "3c78788ea0fb8b468bf16f215d385ccca713e31b0d6625da9c1c4e1f920e5b92",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773918327299416900,
+      "file_size": 38,
+      "content_hash": "6acbba1a27817c9c664220cd140e2e6054fdd802b24805d2d79686bb32a58707",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786362186300,
       "line_count": 2
     },
     {
       "repo_id": "self",
       "relative_path": "formatters/capabilities.py",
       "language": "python",
-      "file_size": 2685,
-      "content_hash": "ef6df4bf12e815ce23f9055eb91ba943d27f68b2d31268d618dd7b811294b48d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773918327301529100,
+      "file_size": 2750,
+      "content_hash": "a72032dcda8e2044412b1f1c8aa99ef96b422fbfbf433da331d0250dc17c3d79",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786363186200,
       "line_count": 65
     },
     {
       "repo_id": "self",
       "relative_path": "formatters/commands.py",
       "language": "python",
-      "file_size": 2106,
-      "content_hash": "706acb04833b11384e0e42aebb3c5c6d62ad6a228ba566a09c1b23ebe0639948",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773918327300986200,
+      "file_size": 2157,
+      "content_hash": "4a59e2203f2d65b9d73116a2cba3725e6890bb2a40515f93579bda73fddafaf0",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786363186200,
       "line_count": 51
     },
     {
       "repo_id": "self",
       "relative_path": "formatters/common.py",
       "language": "python",
-      "file_size": 10838,
-      "content_hash": "ff914b9d19d41270f180aa5063952a56c2499058de850e5ee5754d9e575502be",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773918327299933400,
+      "file_size": 10973,
+      "content_hash": "c5675d0dc0ff4b5e6546a05ea7323443a093cd8b0140af9a1ab39f6804df85d1",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786363186200,
       "line_count": 135
     },
     {
       "repo_id": "self",
       "relative_path": "formatters/fallback.py",
       "language": "python",
-      "file_size": 423,
-      "content_hash": "014da533ba4ccfb59cd6c319fc567533f50dd5cd57c7ab37034ac133b62a2083",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773918327300468700,
+      "file_size": 442,
+      "content_hash": "05d6796e42436733beb298b467f27e3ecc1c975613c09e51b94fa7818052cf22",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786363186200,
       "line_count": 19
     },
     {
       "repo_id": "self",
       "relative_path": "formatters/generic.py",
       "language": "python",
-      "file_size": 968,
-      "content_hash": "145e18062a6cdcbdad96c200be91078b2c631bf638c5345f81de07b2422324fd",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773918327300468700,
+      "file_size": 996,
+      "content_hash": "188e991a9cabeb165e9afa283acc1162f94c4b31efe8c8356905be7bd1fd2626",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786364689100,
       "line_count": 28
     },
     {
@@ -771,48 +961,38 @@
       "language": "jsonl",
       "file_size": 54316,
       "content_hash": "434d667631d9b297a6d9c4868f4cd4a8807c144db7cc8d09b01c678a875d3b92",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773848044239202900,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786365695100,
       "line_count": 46
-    },
-    {
-      "repo_id": "self",
-      "relative_path": "index/manifest.json",
-      "language": "json",
-      "file_size": 526,
-      "content_hash": "23f58f84d65188492c596e453a827be0c6a620754e13fd52eaecdfbadcb04919",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773848044240707800,
-      "line_count": 25
     },
     {
       "repo_id": "self",
       "relative_path": "ingest.py",
       "language": "python",
-      "file_size": 10459,
-      "content_hash": "5a4bceda771e5469eb8faae3cc3ff3cf525e52da6989a49026b2c599b192b518",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773842365090220200,
+      "file_size": 10811,
+      "content_hash": "a19d080be72cbc0fe83db50ff15c9f266f75e11ef5d0735455b4cd0d3f4cd4c8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786367692500,
       "line_count": 352
     },
     {
       "repo_id": "self",
       "relative_path": "intent/__init__.py",
       "language": "python",
-      "file_size": 133,
-      "content_hash": "a860e6ecdedb3e5cb4bbffd6de1297459dab9b932a005ae931ed3019370d2103",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773923725904246200,
+      "file_size": 136,
+      "content_hash": "45fd309185cf671c0af3d3eca18663c048cd4c50f380eefb2f9a06f5e8066cb9",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786369194800,
       "line_count": 3
     },
     {
       "repo_id": "self",
       "relative_path": "intent/detector.py",
       "language": "python",
-      "file_size": 5131,
-      "content_hash": "a5ba967358d7f2257bacb63796bb1eefd1e5cbab7a0178158e60b62c0b32f673",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773923725904246200,
+      "file_size": 5288,
+      "content_hash": "748c40d370a2758475479894af593ee1571f6a31a81489ea88edf069b1b7f8bb",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786369194800,
       "line_count": 157
     },
     {
@@ -821,19 +1001,9 @@
       "language": "python",
       "file_size": 2126,
       "content_hash": "64ab6c846170bdccb73e901c103b65186920ad2b787fad01ba7b9418932989d1",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429747909000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786370198800,
       "line_count": 51
-    },
-    {
-      "repo_id": "self",
-      "relative_path": "jira_mcp_server/.env",
-      "language": "env",
-      "file_size": 341,
-      "content_hash": "866fafcef8988a75f2f3e314952e5a830de175709ffab5a9c022ecda730d4454",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773333296519530400,
-      "line_count": 6
     },
     {
       "repo_id": "self",
@@ -841,8 +1011,8 @@
       "language": "python",
       "file_size": 0,
       "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773477902615512500,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786370198800,
       "line_count": 0
     },
     {
@@ -851,8 +1021,8 @@
       "language": "python",
       "file_size": 291,
       "content_hash": "aed2fdd341e3169d16778a91832df4f4c3106b3c8c8d366302bfeb745296f721",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773474102818381300,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786370198800,
       "line_count": 12
     },
     {
@@ -861,48 +1031,48 @@
       "language": "python",
       "file_size": 328,
       "content_hash": "2cd33c3d0cf0a7c3dfd6819c0bcde192b12e1543f490759b516a2365019b9102",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773478129368976600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786371198900,
       "line_count": 14
     },
     {
       "repo_id": "self",
       "relative_path": "jira_mcp_server/config.py",
       "language": "python",
-      "file_size": 908,
-      "content_hash": "62e3c2a6b80eaf9a217aa14bf39cdb60c5be69b7200f91435c1eb4044d524520",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773791215676015900,
+      "file_size": 913,
+      "content_hash": "f726118812c6fcc4417521b32525c49bb9460bf23a7ba0c6805c82ac5628b8f5",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786371198900,
       "line_count": 37
     },
     {
       "repo_id": "self",
       "relative_path": "jira_mcp_server/jira_client.py",
       "language": "python",
-      "file_size": 2941,
-      "content_hash": "5b8601392d2106dd85ccc04ba30806719ff5d30aee11884ff3243c48943b2f66",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773791166913687600,
+      "file_size": 2999,
+      "content_hash": "d3fcfb56df28ab67aaed84c49a1c6e2ec9bbcfc8363548ffbe6ed2793b5f1d1b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786372198800,
       "line_count": 103
     },
     {
       "repo_id": "self",
       "relative_path": "jira_mcp_server/server.py",
       "language": "python",
-      "file_size": 1910,
-      "content_hash": "3ea1e053b0fb6d14cf2bc79142d0334b0ee435c6dbe3bc9c97da7f5e887c1027",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773789602475438900,
+      "file_size": 1929,
+      "content_hash": "413d497ba7ba9d8f554a8761025b9111e22365a3f25f6e98b3c6b0c1e1f5daab",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786372198800,
       "line_count": 61
     },
     {
       "repo_id": "self",
       "relative_path": "jira_mcp_server/test_jira.py",
       "language": "python",
-      "file_size": 1922,
-      "content_hash": "f2b1ea54d27c6cee88544db4013d627f820ab9cbd5efbf551c7075d74a673a71",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773791206379268100,
+      "file_size": 1973,
+      "content_hash": "13580967615f4547fa573b398d49bdebb9316575b192952464a908fbf1bdf02a",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786373198600,
       "line_count": 51
     },
     {
@@ -911,8 +1081,8 @@
       "language": "python",
       "file_size": 633,
       "content_hash": "8f1d9c2d3b8dbd5dcd461dae2684bde1097c270d43bd8cbb3c5dbe9a122c5de2",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773331072100056200,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786373198600,
       "line_count": 23
     },
     {
@@ -921,8 +1091,8 @@
       "language": "python",
       "file_size": 3728,
       "content_hash": "835ae0fc931f08b18096b7c7f7fc2e4865475975d54e1de7a58bd40e586f2c6c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773479880708149200,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786374198900,
       "line_count": 128
     },
     {
@@ -931,29 +1101,19 @@
       "language": "python",
       "file_size": 346,
       "content_hash": "f9249e86335e6fcd5ec8b2d565a05404ccf571b10a7a6d7ab5cc3f624b829689",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546429746905700,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786374198900,
       "line_count": 13
     },
     {
       "repo_id": "self",
       "relative_path": "logger_utils.py",
       "language": "python",
-      "file_size": 6926,
-      "content_hash": "a83c42b8370b4646bce98af9dca7a2d53db077945a66c3f4e77ecf46d3c9135b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773780113439674900,
+      "file_size": 7029,
+      "content_hash": "0ac4d8c8b0eb7fc2b70f910d0d1cf547d489a3b623d08629d604ba53e7dd8310",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786374198900,
       "line_count": 268
-    },
-    {
-      "repo_id": "self",
-      "relative_path": "logs/agent.log",
-      "language": "log",
-      "file_size": 1566049,
-      "content_hash": "3f0678eac104f6a77d02115737a975823fdaae3d61e718b057f2f89ff16957de",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936337849273800,
-      "line_count": 27548
     },
     {
       "repo_id": "self",
@@ -961,8 +1121,8 @@
       "language": "python",
       "file_size": 0,
       "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773548059603501600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786375198500,
       "line_count": 0
     },
     {
@@ -971,19 +1131,19 @@
       "language": "python",
       "file_size": 5923,
       "content_hash": "ed3d995b29965a360bb25a2dc6129710b2f7dcd3e9d6381f9c2b493aa4461cd3",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773586322026115400,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786375198500,
       "line_count": 167
     },
     {
       "repo_id": "self",
       "relative_path": "main.py",
       "language": "python",
-      "file_size": 428,
-      "content_hash": "ef429981bfe949bfdf624b14a79f15d3d0362718d9da02354b7d7f202ef9380e",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773913859999143000,
-      "line_count": 17
+      "file_size": 1997,
+      "content_hash": "9b1685bf213feec87a877d384cacf857411c924f76481b7f8c745f50a20d94d9",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774174302719698100,
+      "line_count": 57
     },
     {
       "repo_id": "self",
@@ -991,8 +1151,8 @@
       "language": "python",
       "file_size": 1285,
       "content_hash": "db87f5a43598c4ff889016bcaf2b15fd94b09702039678429d35ca207b0d3737",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773476546613212800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786376199300,
       "line_count": 51
     },
     {
@@ -1001,8 +1161,8 @@
       "language": "python",
       "file_size": 2784,
       "content_hash": "4d2c567344f7a4b861ccf0c65355cdf410cb21b1d7e5bfad4b5deb54a0d49aff",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773833659753798900,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786376199300,
       "line_count": 93
     },
     {
@@ -1011,8 +1171,8 @@
       "language": "python",
       "file_size": 147,
       "content_hash": "223aba117e5fb364a7917b40f9ef92e482c99dd2b0c5a05c17501879bb3d674c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773481041275563800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786377198600,
       "line_count": 8
     },
     {
@@ -1021,8 +1181,8 @@
       "language": "markdown",
       "file_size": 462,
       "content_hash": "ae488daa911cc5a1b92635c7f511c2327d9869b746c580e72665a911e157af11",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773490441520226600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786377198600,
       "line_count": 14
     },
     {
@@ -1031,8 +1191,8 @@
       "language": "text",
       "file_size": 228,
       "content_hash": "a06cccc760aceb5e5295123706934c5f3d46dc70a60656593481ff7660196978",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773669442601455200,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786378198900,
       "line_count": 3
     },
     {
@@ -1041,8 +1201,8 @@
       "language": "markdown",
       "file_size": 3663,
       "content_hash": "b44c020ea14cec222e35a0bf22eac0cfa7a323f7418d136672d214894283d968",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773483855366973700,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786378198900,
       "line_count": 30
     },
     {
@@ -1051,19 +1211,9 @@
       "language": "markdown",
       "file_size": 3664,
       "content_hash": "614fb86904b841207a8b25192c5c834367f40c86c7b470054ae21b430a56b639",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773481714668701000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786379199000,
       "line_count": 32
-    },
-    {
-      "repo_id": "self",
-      "relative_path": "output/repo_manifest.json",
-      "language": "json",
-      "file_size": 17571,
-      "content_hash": "da452946544fdefae6cc998e0cdded24c7140cb3449d4e982ad20b5c87cb1b69",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773900921855637600,
-      "line_count": 819
     },
     {
       "repo_id": "self",
@@ -1071,8 +1221,8 @@
       "language": "markdown",
       "file_size": 2137,
       "content_hash": "e757e67dd94ccabffeb646ecf2555c6ad7c555b0875bece8d618dd72169bd27e",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773546984051300000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786379199000,
       "line_count": 14
     },
     {
@@ -1081,19 +1231,19 @@
       "language": "markdown",
       "file_size": 678,
       "content_hash": "3d98cdd7a21e03e4a0c55b11637705accce63cc11288ec4f4bef8619e093194b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773311708783808300,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786380307200,
       "line_count": 22
     },
     {
       "repo_id": "self",
       "relative_path": "output_formatters.py",
       "language": "python",
-      "file_size": 2087,
-      "content_hash": "b06f8c591b81eb8513403318847f5047bca29bb231bb257cc646fff7ea021b5c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773919062049830100,
-      "line_count": 60
+      "file_size": 1882,
+      "content_hash": "e1bcb27a461cf97154999fea75d83120881fb347b4d38e789007250cbf9f4fca",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522831250600,
+      "line_count": 58
     },
     {
       "repo_id": "self",
@@ -1101,38 +1251,38 @@
       "language": "python",
       "file_size": 0,
       "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773548052289862800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786381311100,
       "line_count": 0
     },
     {
       "repo_id": "self",
       "relative_path": "prompts/change_prompt.py",
       "language": "python",
-      "file_size": 4614,
-      "content_hash": "745b434d9456a482ecc0a975633528cf843bbdf5b0113758d343a572ee4a8f11",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773769115483386300,
+      "file_size": 4625,
+      "content_hash": "61ceed5b30ad52e4600ff55bb5620f8687752809d359a897e6a4889270d6f0dd",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786381311100,
       "line_count": 99
     },
     {
       "repo_id": "self",
       "relative_path": "prompts/code_prompt.py",
       "language": "python",
-      "file_size": 1941,
-      "content_hash": "1a7c5e25aa1a4bb9e524176d84317f961d27f5c142b04d2215c72ca492299088",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773771043705124600,
+      "file_size": 2004,
+      "content_hash": "963be1f81cb4cd8caada372475497b220331d8c6a2ec4a4a12352eda12ec7405",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786381311100,
       "line_count": 63
     },
     {
       "repo_id": "self",
       "relative_path": "prompts/draft_prompt.py",
       "language": "python",
-      "file_size": 4789,
-      "content_hash": "9c5bf3f652347a1594f030e26961948a8de2605340de4aadf2c594ac91a4f56a",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773777622680991800,
+      "file_size": 4801,
+      "content_hash": "cfe4e9259b40cc73d65a2d16f5776a91004ae470bcff01dcb1493f5f2c89d7e8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786382308100,
       "line_count": 92
     },
     {
@@ -1141,8 +1291,8 @@
       "language": "python",
       "file_size": 895,
       "content_hash": "ffe5126c7f125b0b56728f85277bc07034af951b2ca7314fff9aea9d0bb2fd74",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554247313686800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786382308100,
       "line_count": 18
     },
     {
@@ -1151,8 +1301,8 @@
       "language": "python",
       "file_size": 4064,
       "content_hash": "81980a4a1f27103a130b747d1b5c14de6dc5e63511d0e24a9158362393303f12",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773756175597834600,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786383307100,
       "line_count": 88
     },
     {
@@ -1161,18 +1311,18 @@
       "language": "python",
       "file_size": 1890,
       "content_hash": "63ade521b1042766168161259c9d646b94fc84cb3a9ca292232d2e95afbb148e",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524606731400,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786383307100,
       "line_count": 30
     },
     {
       "repo_id": "self",
       "relative_path": "prompts/review_prompt.py",
       "language": "python",
-      "file_size": 1275,
-      "content_hash": "444ae0b22843a5315532c638b7c0c982464476f2c459743b2e1bfe1de35de883",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773768127377871400,
+      "file_size": 1281,
+      "content_hash": "95c4802a52468c7def5732c1406cc4789021533a97c9a7994deb606a273cdf9f",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786383307100,
       "line_count": 45
     },
     {
@@ -1181,18 +1331,18 @@
       "language": "python",
       "file_size": 1078,
       "content_hash": "fead2a20e7080cf7b639a61401504e01dfb39cd0aed39cc9b048ec8670149796",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773554815031518100,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786383307100,
       "line_count": 23
     },
     {
       "repo_id": "self",
       "relative_path": "prompts/spec_prompt.py",
       "language": "python",
-      "file_size": 3016,
-      "content_hash": "f54ab498c7e5faf35835f15c80e3e12e2e7015b7c962c557d9d6e56f0c89ef4a",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773780680536887100,
+      "file_size": 3039,
+      "content_hash": "ccd9148253e5e7744eceb61ef7afa67e005975592d0892eb22e2ab9a00628bd8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786384810200,
       "line_count": 69
     },
     {
@@ -1201,99 +1351,139 @@
       "language": "python",
       "file_size": 1209,
       "content_hash": "2ac1f00fe4344b9a55f48c4ec23cc90ab88e482db63ff416eecfc58951f2d369",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773685459363085300,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786384810200,
       "line_count": 45
     },
     {
       "repo_id": "self",
       "relative_path": "requirements.txt",
       "language": "text",
-      "file_size": 92,
-      "content_hash": "60fde2ea5705571c9afd68039bda002ad9d6b8fd57627934af3c4f34a1a71674",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773846016333874000,
-      "line_count": 9
+      "file_size": 175,
+      "content_hash": "0e2eca6de6ca3ae4312ad9298a5fa63bc47d902102a31aae7a6527b6211c4ff8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774170884428204000,
+      "line_count": 16
     },
     {
       "repo_id": "self",
       "relative_path": "retriever.py",
       "language": "python",
-      "file_size": 11224,
-      "content_hash": "e36adf9b0c670e4016042d5e259562a00b59d6a607c726f596f442dbaa69435c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773914645371097300,
+      "file_size": 11576,
+      "content_hash": "d8b25be1362cd1b191ad24a358af0d42806d5ac3296eca866e9733f17fb3fea2",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786385816100,
       "line_count": 352
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/debug_repo_context.ps1",
       "language": "powershell",
-      "file_size": 1437,
-      "content_hash": "edbb347662d57ff40f2cf5d74bb2e0e77304eecaba077c3a8f796be29bc14fed",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773818421737992100,
+      "file_size": 1504,
+      "content_hash": "d2378657a26be201454fc9abec20c77a1632189687939807ad5fcac598505127",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786386814300,
       "line_count": 67
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/debug_repo_context.py",
       "language": "python",
-      "file_size": 2165,
-      "content_hash": "e70a4dc8b4e27ff844156ee1fb13449fe2d235efc734274ec071cbc6b09ba45b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773818421737992100,
+      "file_size": 2211,
+      "content_hash": "031c9b65c6a0215ef65e64e9f785f75c4e2a880a6b99ef04f0264a19b191c213",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786387318700,
       "line_count": 46
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/quality_gate.ps1",
       "language": "powershell",
-      "file_size": 682,
-      "content_hash": "dec806824db360751eb3afe7d73161c9e185b709bfc0b210fe09249a44fb3fcc",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773820056847181200,
+      "file_size": 707,
+      "content_hash": "8db51cca0f21304ad7e2f8bacb3c1ef17182d3aad70238fdaaf9ba6e9857f0f8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786387318700,
       "line_count": 26
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/run_all_tests.ps1",
       "language": "powershell",
-      "file_size": 798,
-      "content_hash": "1457cd2e37e2ad1ce5385da49f63768573f1773f31da18d4e4c9baa0a11935a9",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773827563522370500,
+      "file_size": 832,
+      "content_hash": "bb8af85615f78307d656a5d61cbe8d4106e68c4971e58298504a1a7dcf7ee481",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786388323200,
       "line_count": 35
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/run_repo_context_tests.ps1",
       "language": "powershell",
-      "file_size": 821,
-      "content_hash": "194c5a3e975e8134097df9227ad94d80e07018d28f91a96187e89db41fd363fd",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773827563522370500,
+      "file_size": 855,
+      "content_hash": "67a5a42da2776249a7e37211f11b28c2c8b75e193e226f8d28f38b28395ea732",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786388323200,
       "line_count": 35
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/run_test.ps1",
       "language": "powershell",
-      "file_size": 1013,
-      "content_hash": "84a98d91cbdb68936493a80ba887d2d5c74b0f4820cc58aaf0ba6c49e582fca6",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773827563525864000,
+      "file_size": 1057,
+      "content_hash": "71b3a9fb98bd26b3fbf28b031f457261dadbcf966d751930057ce472bfed2ee5",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786389323400,
       "line_count": 45
     },
     {
       "repo_id": "self",
       "relative_path": "scripts/run_tests.ps1",
       "language": "powershell",
-      "file_size": 2074,
-      "content_hash": "419f4b6227d88b7a2c61d49a137e0493894a78b26e5fe9547cee0aee86315a15",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773817385442421200,
+      "file_size": 2169,
+      "content_hash": "97fb1bc9ae64f426354cd600617441a3ad3b6741cb5c21ef19b3c04e7b54aca7",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786389826800,
       "line_count": 95
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/apply_adapter.py",
+      "language": "python",
+      "file_size": 8231,
+      "content_hash": "b7f0a4d790cc850bfba9b39336eb303ab4a65d0c7ea36c98fa7d977221539417",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774049611116135700,
+      "line_count": 222
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/apply_service.py",
+      "language": "python",
+      "file_size": 12131,
+      "content_hash": "451fe23ebdcac3f398ee787dc60cbec28a46c76f5d80a89d508f17e673365613",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774049611115136400,
+      "line_count": 318
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/auth_service.py",
+      "language": "python",
+      "file_size": 17272,
+      "content_hash": "36f4873a49ec79857fb33dc5638a28e35842bea03fce712f24380da152d8e98c",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774182285741162300,
+      "line_count": 408
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/bitbucket_service.py",
+      "language": "python",
+      "file_size": 6009,
+      "content_hash": "43e770086d6f63f29a39a5591f5ce5b8a0b116af724b1289aa29387e1dbf02b9",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774046355636147800,
+      "line_count": 157
     },
     {
       "repo_id": "self",
@@ -1301,9 +1491,49 @@
       "language": "python",
       "file_size": 1876,
       "content_hash": "3dca3f6171274e56af0f59f59374a59b2afd74eadb3b00f70f9a819fa6cb33ad",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773681772774328200,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786390830900,
       "line_count": 71
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/crucible_service.py",
+      "language": "python",
+      "file_size": 12778,
+      "content_hash": "272365f437b51974fca6d2c8fbfc74cafcbac014aaab7eddd9f94c96cec0f992",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786391830900,
+      "line_count": 340
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/db_service.py",
+      "language": "python",
+      "file_size": 51541,
+      "content_hash": "0092cb3a437f5ead4392f1fd0bb8eaca8eb0af22623412f4aa0bded579694bd8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774182277808273700,
+      "line_count": 1270
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/diff_service.py",
+      "language": "python",
+      "file_size": 12658,
+      "content_hash": "a39203405bafe76d3739eb419067641616eae3da8ceb500f2e372937b88adce4",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774087920130558300,
+      "line_count": 323
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/i18n_service.py",
+      "language": "python",
+      "file_size": 1936,
+      "content_hash": "a226c1e85b388448884edc43c86f1b0f01eb094edb76ff84151e0438808fceba",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774175195957770200,
+      "line_count": 55
     },
     {
       "repo_id": "self",
@@ -1311,8 +1541,8 @@
       "language": "python",
       "file_size": 1864,
       "content_hash": "bc7efd0f8728ef26a286108a64b28ca016522a273b7f6484c60b497b3ef993fd",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773680370680899400,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786392830400,
       "line_count": 66
     },
     {
@@ -1321,39 +1551,99 @@
       "language": "python",
       "file_size": 11548,
       "content_hash": "a959c7e6e49e17ca0c6b491054ce76addac2d28e896c375cdce2c0b6b29c1688",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773680569215117800,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786393831500,
       "line_count": 394
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/permission_service.py",
+      "language": "python",
+      "file_size": 14971,
+      "content_hash": "bdb58f5e3e3a7612a192a2822e6ef29a1cda2a6abba5826d9898ebe69d62c339",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774174001976248300,
+      "line_count": 396
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/publication_service.py",
+      "language": "python",
+      "file_size": 13025,
+      "content_hash": "1601c80197d1dd620f9749ab07f49d9800c7da6eea9a44ae1c8d0f67c14f1c8f",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774047288874491600,
+      "line_count": 319
     },
     {
       "repo_id": "self",
       "relative_path": "services/repo_context_rules.py",
       "language": "python",
-      "file_size": 73892,
-      "content_hash": "d5c88e19db608fabc77cbd17feef3a4e654ad8f25eb399b5c5a24899d44459c6",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773819209298031500,
+      "file_size": 75701,
+      "content_hash": "cf1f03b96dadb3a39a83b37938e36e0e8f7f72900a11ebdbe9899b4c98a2686a",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786394830600,
       "line_count": 1809
     },
     {
       "repo_id": "self",
       "relative_path": "services/repo_index_service.py",
       "language": "python",
-      "file_size": 14362,
-      "content_hash": "3646a8d3a67405026e99bc7653088ba5a0ab1f51966f7546ccf0795ac09a89dd",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935233293348600,
-      "line_count": 405
+      "file_size": 41978,
+      "content_hash": "557f672f236e842eded7214531766f8c96891b7c5359f5f72952005b69494b68",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197502291711700,
+      "line_count": 1040
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/repo_onboarding_service.py",
+      "language": "python",
+      "file_size": 6560,
+      "content_hash": "c9edd9d4e541f0378906fc0d8a2bba85facf45422213bea0b3c177c3195b0256",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197327899083300,
+      "line_count": 148
     },
     {
       "repo_id": "self",
       "relative_path": "services/repo_registry.py",
       "language": "python",
-      "file_size": 11549,
-      "content_hash": "ac906dd67812a1ae38747dc813db980c1dd675028cb4b271a74d71ef7860c8af",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935581064194100,
-      "line_count": 338
+      "file_size": 12960,
+      "content_hash": "bda7242bcd831e2351aecd8d305dad4052a09845862c0ae4e9dcd5ba269f8fe8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522833251200,
+      "line_count": 368
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/review_comment_service.py",
+      "language": "python",
+      "file_size": 7180,
+      "content_hash": "adffed2f7d627f60284690e8535ffc6ba08425b4ce057a604c8360281b43eb2b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522834250100,
+      "line_count": 161
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/run_service.py",
+      "language": "python",
+      "file_size": 77958,
+      "content_hash": "e3592b872a656da5facb6d2f2556c2cb8744cd7ea505d1690b2d63121e46dddd",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774189920918501800,
+      "line_count": 1712
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/scm_service.py",
+      "language": "python",
+      "file_size": 24924,
+      "content_hash": "c3563b16c24c97023644b5bab9eb6c9053b928b2f612d761a693a62f6c004b38",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774178755255849900,
+      "line_count": 647
     },
     {
       "repo_id": "self",
@@ -1361,8 +1651,8 @@
       "language": "python",
       "file_size": 1730,
       "content_hash": "b4229df747e6cfa794bb5040c42b7ac1703f3a5abfa5e01ab6ad9ed0b3dfaad2",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773681772774328200,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786397831900,
       "line_count": 67
     },
     {
@@ -1371,19 +1661,19 @@
       "language": "python",
       "file_size": 5601,
       "content_hash": "d8fc67ade7f5d5b37f2074d1aecc3e2b9228a59b33539b87535a72fa9d27ebf7",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773679912557150500,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786397831900,
       "line_count": 178
     },
     {
       "repo_id": "self",
       "relative_path": "services/task_registry.py",
       "language": "python",
-      "file_size": 2198,
-      "content_hash": "c275af649e754e54a0e184e6d5c73be64c40214d009d0e7bda1753d080c4af43",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773681772775342300,
-      "line_count": 80
+      "file_size": 2349,
+      "content_hash": "3934bb9caf3ab4ff82eab9890f9bb1b21e1b413ecd47346afdf1f1183295e7ed",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786397831900,
+      "line_count": 84
     },
     {
       "repo_id": "self",
@@ -1391,9 +1681,29 @@
       "language": "python",
       "file_size": 1729,
       "content_hash": "24a540f19a0fcc26f9a6f1644a7c7f6401aba610d9c1bcf88511e2c462f5924d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773672119247473000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786399334600,
       "line_count": 68
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/temp_workspace_service.py",
+      "language": "python",
+      "file_size": 3125,
+      "content_hash": "aaf09d3154ee6e492cfc9867c1684d5bc331ba3d1d8c306df2caf97d0b8b193d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786399334600,
+      "line_count": 81
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "services/validation_service.py",
+      "language": "python",
+      "file_size": 31503,
+      "content_hash": "e32053c683acc6d88084b5563f432597853c5f85f3fe0f923e1160736cc78f08",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774100824147637100,
+      "line_count": 794
     },
     {
       "repo_id": "self",
@@ -1401,19 +1711,149 @@
       "language": "python",
       "file_size": 771,
       "content_hash": "95becbbc728aeaf6332e15c79a35017eadd8b40b5a3bb71c81bd2494766bbc80",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773319107212626100,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786400338300,
       "line_count": 26
     },
     {
       "repo_id": "self",
       "relative_path": "startup_text.py",
       "language": "python",
-      "file_size": 981,
-      "content_hash": "116e907671f093afc39d6d44d31abefc51fe6d3e3e8c2c4c07857d91c28dc60d",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773913859997635100,
-      "line_count": 21
+      "file_size": 1538,
+      "content_hash": "3d8c17e7730d814af94491dce94a98d300ac0309bdb0c02d1c3c3bb94a74996b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522835250500,
+      "line_count": 27
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/admin/index.html",
+      "language": "html",
+      "file_size": 3931,
+      "content_hash": "d4b23d3013edacc7811254a41289ade09da2191fff967e0cf5109a12c1f43fa7",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774180297165684000,
+      "line_count": 90
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/admin/policies.html",
+      "language": "html",
+      "file_size": 5971,
+      "content_hash": "91be29832aec72664bd2933bbfb3ce679e427cb81c63265a9f8fdca8248d0ae7",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774180297166684000,
+      "line_count": 110
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/admin/roles.html",
+      "language": "html",
+      "file_size": 3705,
+      "content_hash": "3debf63ce208736467a7ba4969cdcf752c27ff3c09a498cc4bd9c9184151bf01",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774180297166684000,
+      "line_count": 90
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/admin/users.html",
+      "language": "html",
+      "file_size": 6952,
+      "content_hash": "e83603cb3d1135f803dd24c504e71ae39a1c867755970bf126eeea89f9765d37",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774180297165684000,
+      "line_count": 131
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/config.js",
+      "language": "javascript",
+      "file_size": 10975,
+      "content_hash": "5f1ce1ec6e0881cd38014b94739571fe1cace877aec96c1dcd9794e39b791411",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774180151626166400,
+      "line_count": 306
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/create.html",
+      "language": "html",
+      "file_size": 3511,
+      "content_hash": "d08efac7d43bbd0b61e4f75ec2b391fd3b33f896e353b1b5c52a317969a8cd63",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774106131521649000,
+      "line_count": 99
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/index.html",
+      "language": "html",
+      "file_size": 4369,
+      "content_hash": "c6e0be0c408642d8234b9c4153ffb79aa49e3a1abe912254d5f8015dd303977d",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774178915827849400,
+      "line_count": 76
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/login.html",
+      "language": "html",
+      "file_size": 2262,
+      "content_hash": "ab52cf1066f4aeb7282c55bba11ea4f8db7a27510f7226494e97132d394cad33",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774175816066813600,
+      "line_count": 56
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/repos.html",
+      "language": "html",
+      "file_size": 5811,
+      "content_hash": "bf5bb2a4fdd134d414f53457d470d5c6fbad43f5292c56d358de69dad32bf8e8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197294445910800,
+      "line_count": 166
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/run.html",
+      "language": "html",
+      "file_size": 31223,
+      "content_hash": "14a17a8f22f6f72e27383eb7c58163018b70ad0fe503be425bebda04d0a36cfb",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774189614370915600,
+      "line_count": 724
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/runs.html",
+      "language": "html",
+      "file_size": 6106,
+      "content_hash": "8f3be432b9fb4c1a7405db741fd9041c452410637277c789a5b6bd1718a31622",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774178962633493500,
+      "line_count": 144
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/styles.css",
+      "language": "css",
+      "file_size": 8058,
+      "content_hash": "f3af59d0eed9084c961be8e4acfd6c468aad64b42fbfc239692e8ca34d905ad8",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774178915828849900,
+      "line_count": 529
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "static/workflow.html",
+      "language": "html",
+      "file_size": 19874,
+      "content_hash": "034a0e1885778cf4a23ca6e960b2a130298ca31cd76c607d24d68be17877771c",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774190445067308400,
+      "line_count": 399
     },
     {
       "repo_id": "self",
@@ -1421,108 +1861,288 @@
       "language": "python",
       "file_size": 1888,
       "content_hash": "991820d9751a31c4a293ffb38a289cb74668f1e5ef0e4a0cc3e5e913a73413f4",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524612820000,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786403933200,
       "line_count": 30
     },
     {
       "repo_id": "self",
       "relative_path": "telegram_bot.py",
       "language": "python",
-      "file_size": 11510,
-      "content_hash": "16fac9ec2dc0545543bc31634080ed2dee274e11cbd75d95f2a8bdf2c67af597",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773789949248209900,
+      "file_size": 11574,
+      "content_hash": "b42fdaf770305ac89e2af9380788c4c6b2f74b05460ddb1e287a593fffa704f2",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786403933200,
       "line_count": 307
     },
     {
       "repo_id": "self",
       "relative_path": "test_jira_tool.py",
       "language": "python",
-      "file_size": 1327,
-      "content_hash": "b15897aaf033220f49d88edfed1e60fc9e28e888fec4555716b1c873ff43586a",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773791177686143500,
+      "file_size": 1368,
+      "content_hash": "57520886e4249d1a9322c37f89c4d29e9ef20d4c70549127e7e3a864468cfd16",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786404933100,
       "line_count": 41
     },
     {
       "repo_id": "self",
       "relative_path": "tests/__init__.py",
       "language": "python",
-      "file_size": 63,
-      "content_hash": "a80d6ded70711e54c71a061f3536d82ec82c66a4c0c5ef0878529bb926153325",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773782483544137300,
+      "file_size": 64,
+      "content_hash": "d316889a635d63cb35cb7b6f076cd993abf505658bd059414fb9027798e637b2",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786404933100,
       "line_count": 1
     },
     {
       "repo_id": "self",
       "relative_path": "tests/repo_context_assertions.py",
       "language": "python",
-      "file_size": 16096,
-      "content_hash": "584a3db8c2f04f4a68ab7f2a2ffbe1dbee78d65b45f1874b805b4bc5e383fd85",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773820149589556300,
+      "file_size": 16501,
+      "content_hash": "aa943388821d723b72461893c90360db90795eaab52c78b91c59c99f6e5c2ade",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786404933100,
       "line_count": 406
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_apply_service.py",
+      "language": "python",
+      "file_size": 14105,
+      "content_hash": "f3850cc3cbea34fc99f305816a1c6387dcd8bb8d26305645ca8ccf0661b49c24",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786405935700,
+      "line_count": 341
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_bitbucket_service.py",
+      "language": "python",
+      "file_size": 4513,
+      "content_hash": "1b69e533ad6f19843a7f4202fa154e1f997d7a60861fb6fbd8412e65b2c16b61",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774046413094739200,
+      "line_count": 117
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_crucible_service.py",
+      "language": "python",
+      "file_size": 5232,
+      "content_hash": "64531822eaef0b5517d563c3887798e97320262b6ca210d6dde091806f52d3bd",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786406935500,
+      "line_count": 120
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_db_service.py",
+      "language": "python",
+      "file_size": 7315,
+      "content_hash": "d7596a3dbdd9c11cf311f1101fbe5108ab2ce246e1d5e463cdf531635b93503b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774182337888093100,
+      "line_count": 171
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_diff_service.py",
+      "language": "python",
+      "file_size": 7750,
+      "content_hash": "b894b8cfc0cfafa171138716fa70499da20a0199c695fe24f712308b5e347609",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774087983103098800,
+      "line_count": 184
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_global_permissions.py",
+      "language": "python",
+      "file_size": 1086,
+      "content_hash": "cabfaa05fbea99d232e1c6bcb266d60ffdeba716250a6e858db69327713ce2cb",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522843269200,
+      "line_count": 31
     },
     {
       "repo_id": "self",
       "relative_path": "tests/test_help_texts.py",
       "language": "python",
-      "file_size": 7982,
-      "content_hash": "1920daa724ebd597a099aa98b10b1d7c0923647deb6f73d4495aeeca8f8df867",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773790143326323900,
-      "line_count": 197
+      "file_size": 8093,
+      "content_hash": "f04438f7713a7ad0722a3e8d9c35606430cac6473e99d0bbf14d33b74440d558",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774037522843269200,
+      "line_count": 196
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_i18n_service.py",
+      "language": "python",
+      "file_size": 335,
+      "content_hash": "91a1a25e504623b046b1486f99b3e69e93fa2a4f94686b3c56a2a509dadae04c",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774176286366584700,
+      "line_count": 13
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_implementation_mode.py",
+      "language": "python",
+      "file_size": 61258,
+      "content_hash": "78621611cf3567f75eb921e09613fd08148df84a9d3ff9654c6176c3de4bf5b0",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774110673566024700,
+      "line_count": 1508
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_main.py",
+      "language": "python",
+      "file_size": 2859,
+      "content_hash": "4187164224a2580d8521ba71a396e18a2349130450064701d19b13c94f38acb6",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774174455667751900,
+      "line_count": 74
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_permission_service.py",
+      "language": "python",
+      "file_size": 5659,
+      "content_hash": "972a4c78fdb8397fb2e1d8f5532de034d2a12fc284ad2ab12a792a6aa9f57db3",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774173453819270400,
+      "line_count": 136
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_publication_service.py",
+      "language": "python",
+      "file_size": 8391,
+      "content_hash": "83a8dbb34d33ad8e98bd37ac19caa4049823abb7ab7bff11fca360c597b557b0",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774047418209161900,
+      "line_count": 210
     },
     {
       "repo_id": "self",
       "relative_path": "tests/test_repo_commands.py",
       "language": "python",
-      "file_size": 59122,
-      "content_hash": "d912945fd10c6c7ad4e3a881d0ecacee065af58c3634f9739b2a57e6538eb805",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773818507543667600,
+      "file_size": 60345,
+      "content_hash": "a920279b7d0602236a728392affe91837c38b30d7a1d1e291791a84ae4963785",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786409437400,
       "line_count": 1223
     },
     {
       "repo_id": "self",
       "relative_path": "tests/test_repo_id_execution.py",
       "language": "python",
-      "file_size": 5887,
-      "content_hash": "435003e936d6dbcc43d457391c28790c13bbcf008d3f23bd09274604113a759c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936088762008900,
-      "line_count": 139
+      "file_size": 12065,
+      "content_hash": "8dd3ecea3fd4ec4ad3a884b09c6adb6d49b492292562c2ecbd9735138d347e65",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197401319648900,
+      "line_count": 275
     },
     {
       "repo_id": "self",
       "relative_path": "tests/test_repo_index_service.py",
       "language": "python",
-      "file_size": 5297,
-      "content_hash": "a283e5dfad82089f0c43d1e4642a544c6b37becfec60c194ec2bca0073f0bdee",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935274844175500,
-      "line_count": 109
+      "file_size": 9557,
+      "content_hash": "87daeab37cccc602eee22aa266afd243a36861bf1e0c495d38486a10a9e3b7ff",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197458369135500,
+      "line_count": 183
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_repo_onboarding_service.py",
+      "language": "python",
+      "file_size": 9695,
+      "content_hash": "51cca858a8f77b31c9b186950eba404aea3c609719b56cc3c1933d5dc35812da",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197378475367700,
+      "line_count": 237
     },
     {
       "repo_id": "self",
       "relative_path": "tests/test_repo_registry.py",
       "language": "python",
-      "file_size": 4454,
-      "content_hash": "50f669c8cfec82baef1d7bd8a3a8ddc7cbf53ae2717c36771d61d442fde8df7c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773934661867392800,
+      "file_size": 4564,
+      "content_hash": "6a76e8de2e1cdde91d46669033ea28d592da97fb9e936b32f29d25e0b84f33fd",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786411442700,
       "line_count": 110
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_run_explorer.py",
+      "language": "python",
+      "file_size": 59105,
+      "content_hash": "d68cb43d3ad44ee9e1c80ef8dea99728e8ae868fc79e2025499bb180198f1d49",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774188169680634700,
+      "line_count": 1382
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_run_service.py",
+      "language": "python",
+      "file_size": 36615,
+      "content_hash": "70531032ea871a8fad007515914932e633ab85abe76ac42bf2c323567af20367",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774189998670370700,
+      "line_count": 847
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_scm_service.py",
+      "language": "python",
+      "file_size": 12087,
+      "content_hash": "b4f9c803fba378fe63f7c4980a7677804b3c652d0cb35d68e098ecf1cbfe5194",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774179019921586900,
+      "line_count": 288
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_temp_workspace_service.py",
+      "language": "python",
+      "file_size": 2431,
+      "content_hash": "da31655442cd9f5510aec7a887d53bddfbd7e8753ed5ed5f819caeba742dc95f",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786413442200,
+      "line_count": 58
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_validation_service.py",
+      "language": "python",
+      "file_size": 13965,
+      "content_hash": "391e32a6bdcc0c6d26e44df5b53f47e55cd4e2b356815a8836a4873f867b88ff",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774100752904549000,
+      "line_count": 321
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "tests/test_web_app.py",
+      "language": "python",
+      "file_size": 130689,
+      "content_hash": "7cfee654ed70353f74b86b5c1aa5515d72a406d04e7e0b84de9033e205dcc58b",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197418822189900,
+      "line_count": 2961
     },
     {
       "repo_id": "self",
       "relative_path": "tools/__init__.py",
       "language": "python",
-      "file_size": 586,
-      "content_hash": "59be3cdf5a8879c1c9b6ce97c6072d8343420f6d1902a16f6e454ef68014686b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773913444743107400,
+      "file_size": 606,
+      "content_hash": "af6e5c8cbcff94512f0df5ad3ab9fe808965374e02d41dda1da275c4c9d963e4",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786414445200,
       "line_count": 20
     },
     {
@@ -1531,48 +2151,48 @@
       "language": "python",
       "file_size": 2564,
       "content_hash": "fc4551f323df90fff3c60871f86cd639a3aa3f1475d0c5b6b4a711b84aa9f577",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524606095300,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786414445200,
       "line_count": 82
     },
     {
       "repo_id": "self",
       "relative_path": "tools/registry.py",
       "language": "python",
-      "file_size": 16217,
-      "content_hash": "2c9452804d7992ec26b72b2a03b2429e6eea64701da67e0b1eb088fef874334b",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773936020181362300,
+      "file_size": 16492,
+      "content_hash": "48f082381ca66978411f18aa7e296049eb401e96a4b63855ec7109041be4a407",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786415448600,
       "line_count": 395
     },
     {
       "repo_id": "self",
       "relative_path": "tools/repo_tools.py",
       "language": "python",
-      "file_size": 75890,
-      "content_hash": "1ce4695097c3023735479ed658621a5f7e62747834373a89e21e9f3b6279f66a",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773935693391852900,
-      "line_count": 2242
+      "file_size": 92375,
+      "content_hash": "59559b1f6ebc52d78ffa0635038bba048502d3a0a0d757cbea800c037c4eb235",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197437836893500,
+      "line_count": 2600
     },
     {
       "repo_id": "self",
       "relative_path": "tools/report_tools.py",
       "language": "python",
-      "file_size": 681,
-      "content_hash": "44e8b60fb9748b26a8a69cea80b36cd4b7c86a7ccea1e37f183a2ba5bad13582",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524606095300,
-      "line_count": 21
+      "file_size": 775,
+      "content_hash": "1c76ce577c061b5007e214d8980ecbf1578213c1186c0114fea81dfffb7b86ac",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786416444800,
+      "line_count": 24
     },
     {
       "repo_id": "self",
       "relative_path": "tools/tools.py",
       "language": "python",
-      "file_size": 1298,
-      "content_hash": "d675d1c792584d4770beaf515dd27ce23ae361699c26ce948a0ab0db42ff289c",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773914393629695500,
+      "file_size": 1341,
+      "content_hash": "aacc0a2c5812ee131da559182173f09ef492b6eec45e315e2ff4b246c26edb02",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786416444800,
       "line_count": 43
     },
     {
@@ -1581,9 +2201,19 @@
       "language": "python",
       "file_size": 1465,
       "content_hash": "a40f8d9d657bfbac2766ec9bd5e890c7b5ecd943e2076d1e582fb068948a3eae",
-      "last_indexed_at": "2026-03-19T16:05:37.845738+00:00",
-      "source_mtime_ns": 1773549524606095300,
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774036786417445100,
       "line_count": 51
+    },
+    {
+      "repo_id": "self",
+      "relative_path": "web_app.py",
+      "language": "python",
+      "file_size": 135452,
+      "content_hash": "5b52fa2586fb89b41deb5a3160d12a788bf7a4f3f8aaeb50b537c7ac8ab8f429",
+      "last_indexed_at": "2026-03-22T16:39:16.152548+00:00",
+      "source_mtime_ns": 1774197265123903300,
+      "line_count": 3206
     }
   ]
 }

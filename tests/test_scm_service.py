@@ -272,6 +272,17 @@ class ScmServiceTests(unittest.TestCase):
         self.assertFalse(status.is_git_repo)
         self.assertIn("git repository is not available", status.error.lower())
 
+    def test_failure_result_accepts_structured_data(self) -> None:
+        result = self.scm_service._failure_result(
+            "sync_with_remote_branch",
+            self.repo_root,
+            error="Repository has uncommitted changes.",
+            data={"changed_files": ["src/app.py"]},
+        )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.data.get("changed_files"), ["src/app.py"])
+
 
 if __name__ == "__main__":
     unittest.main()

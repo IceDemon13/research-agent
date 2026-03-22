@@ -55,6 +55,18 @@ class ImplementationResult:
     scm_branch_name: str = ""
     scm_remote_url: str = ""
     scm_warnings: list[str] = field(default_factory=list)
+    sync_status: str = ""
+    local_head_before: str = ""
+    remote_head: str = ""
+    synced_before_run: bool = False
+    repo_relevance_status: str = ""
+    repo_relevance_confidence: float = 0.0
+    repo_relevance_reason: str = ""
+    repo_relevance_next_action: str = ""
+    changed_files: list[str] = field(default_factory=list)
+    change_summary: str = ""
+    validation_outcome_type: str = ""
+    code_failure_related: bool = False
     pull_request_result: PullRequestResult | None = None
     crucible_review_result: CrucibleReviewResult | None = None
     review_status: str = ""
@@ -98,6 +110,18 @@ class ImplementationResult:
             "scm_branch_name": self.scm_branch_name,
             "scm_remote_url": self.scm_remote_url,
             "scm_warnings": list(self.scm_warnings),
+            "sync_status": self.sync_status,
+            "local_head_before": self.local_head_before,
+            "remote_head": self.remote_head,
+            "synced_before_run": bool(self.synced_before_run),
+            "repo_relevance_status": self.repo_relevance_status,
+            "repo_relevance_confidence": float(self.repo_relevance_confidence or 0.0),
+            "repo_relevance_reason": self.repo_relevance_reason,
+            "repo_relevance_next_action": self.repo_relevance_next_action,
+            "changed_files": list(self.changed_files),
+            "change_summary": self.change_summary,
+            "validation_outcome_type": self.validation_outcome_type,
+            "code_failure_related": bool(self.code_failure_related),
             "pull_request_result": (
                 self.pull_request_result.to_dict()
                 if self.pull_request_result is not None

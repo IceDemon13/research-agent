@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "repo_id": "sample",
+  "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/manual-b3423a08fa004cb8a6cd6de2549c0237",
+  "output_path": "C:/work/my repositories/research-agent/artifacts/repos/sample/repo_manifest.json",
+  "generated_at": "2026-03-22T19:43:05.440221+00:00",
+  "file_count": 4,
+  "files": [
+    {
+      "path": "src/Catalog.Api/Controllers/BonusController.cs",
+      "size": 31,
+      "extension": ".cs",
+      "line_count": 1
+    },
+    {
+      "path": "src/Catalog.Application/Bonuses/GetBonusInfoHandler.cs",
+      "size": 35,
+      "extension": ".cs",
+      "line_count": 1
+    },
+    {
+      "path": "src/Catalog.Application/Validators/GetBonusInfoQueryValidator.cs",
+      "size": 42,
+      "extension": ".cs",
+      "line_count": 1
+    },
+    {
+      "path": "tests/Catalog.Tests/GetBonusInfoHandlerTests.cs",
+      "size": 40,
+      "extension": ".cs",
+      "line_count": 1
+    }
+  ]
+}

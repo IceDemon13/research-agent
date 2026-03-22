@@ -16,6 +16,13 @@ class RepoMetadata:
     status: str
     remote_url: str = ""
     local_path: str = ""
+    index_status: str = ""
+    indexed_head: str = ""
+    index_error: str = ""
+    reindex_required: bool = False
+    sync_status: str = ""
+    last_sync_at: str = ""
+    sync_error: str = ""
 
     @classmethod
     def from_dict(cls, payload: dict | None) -> "RepoMetadata":
@@ -31,9 +38,16 @@ class RepoMetadata:
             status=str(item.get("status", "")).strip(),
             remote_url=str(item.get("remote_url", "")).strip(),
             local_path=local_path,
+            index_status=str(item.get("index_status", "")).strip(),
+            indexed_head=str(item.get("indexed_head", "")).strip(),
+            index_error=str(item.get("index_error", "")).strip(),
+            reindex_required=bool(item.get("reindex_required", False)),
+            sync_status=str(item.get("sync_status", "")).strip(),
+            last_sync_at=str(item.get("last_sync_at", "")).strip(),
+            sync_error=str(item.get("sync_error", "")).strip(),
         )
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, str | bool]:
         local_path = self.resolved_local_path
         return {
             "repo_id": self.repo_id,
@@ -44,6 +58,13 @@ class RepoMetadata:
             "default_branch": self.default_branch,
             "indexed_at": self.indexed_at,
             "status": self.status,
+            "index_status": self.index_status,
+            "indexed_head": self.indexed_head,
+            "index_error": self.index_error,
+            "reindex_required": bool(self.reindex_required),
+            "sync_status": self.sync_status,
+            "last_sync_at": self.last_sync_at,
+            "sync_error": self.sync_error,
         }
 
     @property

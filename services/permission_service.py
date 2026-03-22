@@ -25,6 +25,31 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "plan.generate",
         "draft.generate",
         "run.read_own",
+        "workflow.analyze_task",
+        "workflow.structure_task",
+        "workflow.implementation_plan",
+        "workflow.pre_review",
+        "runs.read_own",
+        "repo.read",
+    },
+    "analyst": {
+        "task.read",
+        "jira.read",
+        "task.analyze",
+        "task.review",
+        "spec.generate",
+        "acceptance.generate",
+        "repo.context.read",
+        "repo.search",
+        "plan.generate",
+        "draft.generate",
+        "run.read_own",
+        "workflow.analyze_task",
+        "workflow.structure_task",
+        "workflow.implementation_plan",
+        "workflow.pre_review",
+        "runs.read_own",
+        "repo.read",
     },
     "developer": {
         "task.read",
@@ -43,6 +68,15 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "scm.branch",
         "scm.commit",
         "run.read_own",
+        "workflow.analyze_task",
+        "workflow.structure_task",
+        "workflow.implementation_plan",
+        "workflow.pre_review",
+        "workflow.fix_and_retry",
+        "runs.read_own",
+        "runs.retry",
+        "runs.cancel",
+        "repo.read",
     },
     "techlead": {
         "task.read",
@@ -67,6 +101,18 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "run.read_own",
         "run.read_all",
         "run.retry",
+        "runs.read_own",
+        "runs.read_all",
+        "runs.retry",
+        "runs.cancel",
+        "runs.approve",
+        "runs.reject",
+        "workflow.analyze_task",
+        "workflow.structure_task",
+        "workflow.implementation_plan",
+        "workflow.pre_review",
+        "workflow.fix_and_retry",
+        "repo.read",
         "policy.read",
     },
     "admin": {
@@ -93,6 +139,21 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "run.read_all",
         "run.retry",
         "run.cancel",
+        "runs.read_own",
+        "runs.read_all",
+        "runs.retry",
+        "runs.cancel",
+        "runs.approve",
+        "runs.reject",
+        "workflow.analyze_task",
+        "workflow.structure_task",
+        "workflow.implementation_plan",
+        "workflow.pre_review",
+        "workflow.fix_and_retry",
+        "repo.read",
+        "repo.onboard",
+        "user.manage",
+        "auth.manage",
         "policy.read",
         "policy.manage",
         "role.manage",
@@ -102,9 +163,18 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
 
 ROLE_POLICIES: dict[str, RolePolicy] = {
     "ba": RolePolicy(role_name="ba", dry_run_only=True, publication_requires_pr=True),
+    "analyst": RolePolicy(role_name="analyst", dry_run_only=True, publication_requires_pr=True),
     "developer": RolePolicy(role_name="developer", dry_run_only=True, publication_requires_pr=True),
     "techlead": RolePolicy(role_name="techlead", dry_run_only=False, publication_requires_pr=True),
     "admin": RolePolicy(role_name="admin", dry_run_only=False, publication_requires_pr=False),
+}
+
+ROLE_DESCRIPTIONS: dict[str, str] = {
+    "ba": "Legacy business analyst role kept for backward compatibility.",
+    "analyst": "Analyst with workflow-driven analysis and planning access.",
+    "developer": "Developer with retry and implementation planning access.",
+    "techlead": "Tech lead with approval, publication, and review capabilities.",
+    "admin": "Administrator with full auth, user, role, policy, and repo management access.",
 }
 
 SENSITIVE_DRY_RUN_CAPABILITIES = {
@@ -127,7 +197,7 @@ class PermissionService:
         if self._db_service.enabled:
             self._db_service.bootstrap_schema()
             if not self._db_service.has_role_capability_data():
-                self._db_service.seed_role_capabilities(ROLE_CAPABILITIES, ROLE_POLICIES)
+                self._db_service.seed_role_capabilities(ROLE_CAPABILITIES, ROLE_POLICIES, ROLE_DESCRIPTIONS)
 
     def evaluate(
         self,
@@ -143,7 +213,7 @@ class PermissionService:
         metadata: dict | None = None,
     ) -> PermissionDecision:
         resolved_capability = str(capability or "").strip()
-        resolved_role = str(getattr(actor_context, "role", "") or "").strip().lower() or "ba"
+        resolved_role = str(getattr(actor_context, "role", "") or "").strip().lower() or "analyst"
         resolved_scope = scope or PermissionScope(
             repo_id=str(repo_id or "").strip(),
             jira_project=str(jira_project or "").strip().upper(),
@@ -281,7 +351,7 @@ class PermissionService:
             capabilities = self._db_service.get_role_capabilities(resolved_role)
             if capabilities:
                 return capabilities, "db"
-        return set(ROLE_CAPABILITIES.get(resolved_role, ROLE_CAPABILITIES["ba"])), "fallback"
+        return set(ROLE_CAPABILITIES.get(resolved_role, ROLE_CAPABILITIES["analyst"])), "fallback"
 
     def _role_policy(self, role_name: str) -> tuple[RolePolicy, str]:
         resolved_role = str(role_name or "").strip().lower()
@@ -289,7 +359,7 @@ class PermissionService:
             policy = self._db_service.get_role_policy(resolved_role)
             if policy is not None:
                 return policy, "db"
-        return ROLE_POLICIES.get(resolved_role, ROLE_POLICIES["ba"]), "fallback"
+        return ROLE_POLICIES.get(resolved_role, ROLE_POLICIES["analyst"]), "fallback"
 
     @staticmethod
     def _decision(

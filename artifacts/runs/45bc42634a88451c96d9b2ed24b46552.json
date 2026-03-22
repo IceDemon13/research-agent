@@ -1,0 +1,52 @@
+{
+  "run_id": "45bc42634a88451c96d9b2ed24b46552",
+  "goal": "implement update src/app.py",
+  "status": "failed",
+  "started_at": "2026-03-21T13:09:48.391365+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "sample",
+  "actor_context": {
+    "actor_id": "cli.local",
+    "actor_type": "cli",
+    "role": "admin",
+    "source_channel": "cli",
+    "display_name": "Local CLI",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-03-21T13:09:48.868661+00:00",
+  "steps": [
+    {
+      "name": "draft",
+      "status": "failed",
+      "started_at": "2026-03-21T13:09:48.867661+00:00",
+      "finished_at": "2026-03-21T13:09:48.868661+00:00",
+      "message": "",
+      "error": {
+        "type": "unexpected",
+        "message": "fatal: unable to access 'https://bitbucket.org/telemartsoft/telemart.ai_sdlc.git/': Failed to connect to bitbucket.org port 443 after 282 ms: Could not connect to server",
+        "step": "draft",
+        "details": {
+          "sync_status": "sync_failed"
+        }
+      }
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/45bc42634a88451c96d9b2ed24b46552.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}

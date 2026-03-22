@@ -13,6 +13,14 @@ class _LoadedSettings(BaseSettings):
 
     model_name: str = "gpt-4o-mini"
     strong_model_name: str = "gpt-4o"
+    default_light_model: str = "gpt-5.4-mini"
+    default_heavy_model: str = "gpt-5.4"
+    optional_nano_model: str = ""
+    workflow_model_overrides: str = ""
+    technical_run_model_overrides: str = ""
+    max_heavy_calls_per_workflow: int = 1
+    max_heavy_calls_per_run: int = 3
+    fallback_to_light_on_budget_exceeded: bool = True
     llm_max_completion_tokens: int = 2000
     llm_temperature: float = 0.2
 
@@ -42,6 +50,15 @@ class _LoadedSettings(BaseSettings):
     allow_review_creation: bool = False
     postgres_dsn: str = ""
     postgres_pool_size: int = 5
+    session_secret: str = "research-agent-dev-session-secret"
+    session_cookie_name: str = "research_agent_session"
+    session_max_age_seconds: int = 43200
+    session_https_only: bool = False
+    allow_dev_login: bool = False
+    allow_header_actor_fallback: bool = False
+    bootstrap_admin_username: str = ""
+    bootstrap_admin_password: str = ""
+    bootstrap_admin_display_name: str = "Bootstrap Admin"
     default_actor_role: str = "admin"
     default_actor_display_name: str = "Local CLI"
     crucible_base_url: str = ""
@@ -108,6 +125,14 @@ class LLMSettings:
     openrouter_api_key: str
     model_name: str
     strong_model_name: str
+    default_light_model: str
+    default_heavy_model: str
+    optional_nano_model: str
+    workflow_model_overrides: dict[str, str]
+    technical_run_model_overrides: dict[str, str]
+    max_heavy_calls_per_workflow: int
+    max_heavy_calls_per_run: int
+    fallback_to_light_on_budget_exceeded: bool
     llm_max_completion_tokens: int
     llm_temperature: float
     embedding_model: str
@@ -153,6 +178,15 @@ class RuntimeSettings:
     allow_review_creation: bool
     postgres_dsn: str
     postgres_pool_size: int
+    session_secret: str
+    session_cookie_name: str
+    session_max_age_seconds: int
+    session_https_only: bool
+    allow_dev_login: bool
+    allow_header_actor_fallback: bool
+    bootstrap_admin_username: str
+    bootstrap_admin_password: str
+    bootstrap_admin_display_name: str
     default_actor_role: str
     default_actor_display_name: str
     crucible_base_url: str
@@ -190,11 +224,31 @@ class Settings:
 
     @cached_property
     def llm(self) -> LLMSettings:
+        def _parse_mapping(raw: str) -> dict[str, str]:
+            mapping: dict[str, str] = {}
+            for chunk in str(raw or "").split(","):
+                if ":" not in chunk:
+                    continue
+                key, value = chunk.split(":", 1)
+                normalized_key = str(key or "").strip().lower()
+                normalized_value = str(value or "").strip()
+                if normalized_key and normalized_value:
+                    mapping[normalized_key] = normalized_value
+            return mapping
+
         return LLMSettings(
             openai_api_key=self._loaded.openai_api_key,
             openrouter_api_key=self._loaded.openrouter_api_key,
             model_name=self._loaded.model_name,
             strong_model_name=self._loaded.strong_model_name,
+            default_light_model=self._loaded.default_light_model,
+            default_heavy_model=self._loaded.default_heavy_model,
+            optional_nano_model=self._loaded.optional_nano_model,
+            workflow_model_overrides=_parse_mapping(self._loaded.workflow_model_overrides),
+            technical_run_model_overrides=_parse_mapping(self._loaded.technical_run_model_overrides),
+            max_heavy_calls_per_workflow=self._loaded.max_heavy_calls_per_workflow,
+            max_heavy_calls_per_run=self._loaded.max_heavy_calls_per_run,
+            fallback_to_light_on_budget_exceeded=self._loaded.fallback_to_light_on_budget_exceeded,
             llm_max_completion_tokens=self._loaded.llm_max_completion_tokens,
             llm_temperature=self._loaded.llm_temperature,
             embedding_model=self._loaded.EMBEDDING_MODEL,
@@ -242,6 +296,15 @@ class Settings:
             allow_review_creation=self._loaded.allow_review_creation,
             postgres_dsn=self._loaded.postgres_dsn,
             postgres_pool_size=self._loaded.postgres_pool_size,
+            session_secret=self._loaded.session_secret,
+            session_cookie_name=self._loaded.session_cookie_name,
+            session_max_age_seconds=self._loaded.session_max_age_seconds,
+            session_https_only=self._loaded.session_https_only,
+            allow_dev_login=self._loaded.allow_dev_login,
+            allow_header_actor_fallback=self._loaded.allow_header_actor_fallback,
+            bootstrap_admin_username=self._loaded.bootstrap_admin_username,
+            bootstrap_admin_password=self._loaded.bootstrap_admin_password,
+            bootstrap_admin_display_name=self._loaded.bootstrap_admin_display_name,
             default_actor_role=self._loaded.default_actor_role,
             default_actor_display_name=self._loaded.default_actor_display_name,
             crucible_base_url=self._loaded.crucible_base_url,

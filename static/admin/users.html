@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Користувачі</title>
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../config.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="toolbar">
+      <label class="language-switcher">
+        <span data-i18n="common.language">Мова</span>
+        <select id="languageSelector">
+          <option value="uk">Українська</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <a href="/ui/admin/index.html" data-i18n="admin.title">Адмін</a>
+      <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+    </div>
+    <h1 data-i18n="admin.users">Користувачі</h1>
+    <div id="accessDeniedBox" class="hidden"></div>
+    <div id="loadingBox" class="card">Loading admin data...</div>
+    <div id="adminContent" hidden>
+    <div class="card">
+      <h2 data-i18n="admin.create_user">Створити користувача</h2>
+      <label><span data-i18n="login.username">Ім'я користувача</span><input id="username"></label>
+      <label><span data-i18n="admin.display_name">Відображуване ім'я</span><input id="displayName"></label>
+      <label><span data-i18n="admin.email">Email</span><input id="email"></label>
+      <label><span data-i18n="admin.role">Роль</span><input id="roleName" value="developer"></label>
+      <label class="inline-option"><input id="isActive" type="checkbox" checked> <span data-i18n="admin.active">Активний</span></label>
+      <label class="inline-option"><input id="mustChangePassword" type="checkbox" checked> <span data-i18n="admin.must_change_password">Потрібно змінити пароль</span></label>
+      <label class="inline-option"><input id="generatePassword" type="checkbox" checked> <span data-i18n="admin.generate_password">Згенерувати безпечний пароль</span></label>
+      <label><span data-i18n="admin.custom_password">Власний пароль</span><input id="customPassword" type="password"></label>
+      <div class="toolbar">
+        <button id="createButton" class="primary" type="button" data-i18n="admin.create_user_action">Створити користувача</button>
+      </div>
+      <div id="messageBox" class="message"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th data-i18n="login.username">Ім'я користувача</th><th data-i18n="admin.display_name">Ім'я</th><th data-i18n="admin.role">Роль</th><th data-i18n="admin.active">Активний</th><th data-i18n="admin.must_change_password">Потрібно змінити пароль</th><th data-i18n="common.action">Дії</th></tr></thead>
+        <tbody id="usersBody"><tr><td colspan="6">Завантаження...</td></tr></tbody>
+      </table>
+    </div>
+    </div>
+  </div>
+  <script>
+    const auth = window.AuthUI;
+    async function loadUsers() {
+      const payload = await auth.fetchJson("/admin/users");
+      const tbody = document.getElementById("usersBody");
+      tbody.innerHTML = "";
+      for (const user of payload.users || []) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${auth.escapeHtml(user.username || "")}</td>
+          <td>${auth.escapeHtml(user.display_name || "")}</td>
+          <td>${auth.escapeHtml(user.role_name || "")}</td>
+          <td>${auth.boolLabel(user.is_active)}</td>
+          <td>${auth.boolLabel(user.must_change_password)}</td>
+          <td>
+            <button data-action="reset">${auth.t("admin.reset_password")}</button>
+            <button data-action="${user.is_active ? "deactivate" : "activate"}">${auth.t(user.is_active ? "admin.disable" : "admin.enable")}</button>
+          </td>
+        `;
+        row.querySelector('[data-action="reset"]').addEventListener("click", async () => {
+          const result = await auth.fetchJson(`/admin/users/${encodeURIComponent(user.user_id)}/reset-password`, {
+            method: "POST",
+            body: { generate_password: true, must_change_password: true }
+          });
+          document.getElementById("messageBox").textContent = result.generated_password
+            ? auth.t("admin.temporary_password", { username: user.username, password: result.generated_password })
+            : auth.t("admin.password_reset");
+          loadUsers();
+        });
+        row.querySelector(`[data-action="${user.is_active ? "deactivate" : "activate"}"]`).addEventListener("click", async () => {
+          await auth.fetchJson(`/admin/users/${encodeURIComponent(user.user_id)}/${user.is_active ? "deactivate" : "activate"}`, {
+            method: "POST"
+          });
+          loadUsers();
+        });
+        tbody.appendChild(row);
+      }
+    }
+    auth.requireLogin({ requireRole: "admin", allowErrorState: true }).then((me) => {
+      if (!me) return;
+      auth.applySessionNavigation({ me, logoutButtonId: "logoutButton" });
+      if (me.authError) {
+        document.getElementById("loadingBox").hidden = true;
+        auth.renderStateMessage(document.getElementById("accessDeniedBox"), {
+          title: auth.t("common.message"),
+          message: me.errorMessage || auth.t("error.auth_state_invalid"),
+          stateClass: "blocked"
+        });
+        return;
+      }
+      if (me.accessDenied) {
+        document.getElementById("loadingBox").hidden = true;
+        auth.renderAccessDenied(document.getElementById("accessDeniedBox"));
+        return;
+      }
+      document.getElementById("loadingBox").hidden = true;
+      document.getElementById("adminContent").hidden = false;
+      loadUsers();
+    });
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    document.getElementById("createButton").addEventListener("click", async () => {
+      const result = await auth.fetchJson("/admin/users", {
+        method: "POST",
+        body: {
+          username: document.getElementById("username").value.trim(),
+          display_name: document.getElementById("displayName").value.trim(),
+          email: document.getElementById("email").value.trim(),
+          role_name: document.getElementById("roleName").value.trim(),
+          is_active: document.getElementById("isActive").checked,
+          must_change_password: document.getElementById("mustChangePassword").checked,
+          generate_password: document.getElementById("generatePassword").checked,
+          password: document.getElementById("customPassword").value
+        }
+      });
+      document.getElementById("messageBox").textContent = result.generated_password
+        ? auth.t("admin.user_created_with_password", { password: result.generated_password })
+        : auth.t("admin.user_created");
+      loadUsers();
+    });
+  </script>
+</body>
+</html>

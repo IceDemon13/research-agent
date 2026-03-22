@@ -993,6 +993,7 @@ def run_change_agent(
     task_intent: str = "create",
     repo_context: dict | None = None,
     debug_context_summary: str = "",
+    routing_metadata: dict | None = None,
 ) -> AgentResult:
     resolved_repo_context = ensure_repo_context(
         original_request,
@@ -1187,6 +1188,7 @@ def run_change_agent(
         user_input=composed_input,
         memory=memory,
         agent_name="change_agent",
+        routing_metadata=dict(routing_metadata or {}),
     )
 
     change_set = _extract_change_set(answer)
@@ -1256,5 +1258,6 @@ def run_change_agent(
         metadata={
             "artifact_type": "change_set",
             "change_set": change_set,
+            **dict(routing_metadata or {}),
         },
     )

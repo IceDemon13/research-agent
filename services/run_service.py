@@ -298,6 +298,7 @@ class RunService:
         repo_id: str = "",
         actor_id: str = "",
         role: str = "",
+        include_related: bool = True,
     ) -> list[RunRecord]:
         merged_runs: dict[str, RunRecord] = {}
         if self._db_service.enabled:
@@ -306,6 +307,7 @@ class RunService:
                 repo_id=repo_id,
                 actor_id=actor_id,
                 role=role,
+                include_related=include_related,
             ):
                 merged_runs[run.run_id] = run
 
@@ -505,6 +507,15 @@ class RunService:
                 validation_payload=validation_payload,
                 failure_summary=failure_summary,
             )
+        final_result_fields = self._compute_final_result_fields(
+            run_record=resolved_run,
+            mode=self._infer_mode(resolved_run, detail_payload),
+            implementation_payload=implementation_payload,
+            validation_payload=validation_payload,
+            diff_payload=normalized_diff_payload,
+            detail_payload=detail_payload,
+            root_cause_summary=root_cause_summary,
+        )
         step_payloads = [self._detail_step_from_run_step(step).to_dict() for step in list(resolved_run.steps)]
         step_errors = [
             {
@@ -516,6 +527,13 @@ class RunService:
             for step in list(resolved_run.steps)
             if step.error is not None
         ]
+
+        actor_payload = self._normalize_actor_payload(resolved_run)
+        actor_display_name = ""
+        actor_username = ""
+        if isinstance(actor_payload, dict):
+            actor_display_name = str(actor_payload.get("display_name", "") or "").strip()
+            actor_username = str(actor_payload.get("username", "") or "").strip()
 
         detail = RunDetail.from_dict(
             {
@@ -530,7 +548,9 @@ class RunService:
                 "status": resolved_run.status,
                 "started_at": resolved_run.started_at,
                 "finished_at": resolved_run.finished_at,
-                "actor": self._normalize_actor_payload(resolved_run),
+                "actor": actor_payload,
+                "actor_display_name": actor_display_name,
+                "actor_username": actor_username,
                 "decision": resolved_run.decision or "pending",
                 "decided_by": resolved_run.decided_by,
                 "decided_at": resolved_run.decided_at,
@@ -545,10 +565,27 @@ class RunService:
                 "failure_code": failure_summary.get("failure_code", ""),
                 "failure_reason": failure_summary.get("failure_reason", ""),
                 "root_cause_summary": root_cause_summary,
+                "final_result_summary": final_result_fields.get("final_result_summary", ""),
+                "recommendation": final_result_fields.get("recommendation", ""),
+                "run_outcome_type": final_result_fields.get("run_outcome_type", ""),
+                "model_used": str(detail_payload.get("model_used", "") or "").strip(),
+                "routing_reason": str(detail_payload.get("routing_reason", "") or "").strip(),
+                "was_escalated": bool(detail_payload.get("was_escalated", False)),
+                "source_stage": str(detail_payload.get("source_stage", "") or "").strip(),
+                "estimated_prompt_size": int(detail_payload.get("estimated_prompt_size", 0) or 0),
+                "sync_status": str((implementation_payload or {}).get("sync_status", detail_payload.get("sync_status", "")) or "").strip(),
+                "local_head_before": str((implementation_payload or {}).get("local_head_before", detail_payload.get("local_head_before", "")) or "").strip(),
+                "remote_head": str((implementation_payload or {}).get("remote_head", detail_payload.get("remote_head", "")) or "").strip(),
+                "synced_before_run": bool((implementation_payload or {}).get("synced_before_run", detail_payload.get("synced_before_run", False))),
+                "repo_relevance_status": str((implementation_payload or {}).get("repo_relevance_status", detail_payload.get("repo_relevance_status", "")) or "").strip(),
+                "repo_relevance_confidence": float((implementation_payload or {}).get("repo_relevance_confidence", detail_payload.get("repo_relevance_confidence", 0.0)) or 0.0),
+                "repo_relevance_reason": str((implementation_payload or {}).get("repo_relevance_reason", detail_payload.get("repo_relevance_reason", "")) or "").strip(),
+                "repo_relevance_next_action": str((implementation_payload or {}).get("repo_relevance_next_action", detail_payload.get("repo_relevance_next_action", "")) or "").strip(),
                 "log_path": resolved_run.log_path,
                 "pr_url": resolved_run.pr_url,
                 "review_url": resolved_run.review_url,
                 "parent_run": self._related_run_summary(resolved_run.parent_run_id),
+                "previous_attempt_summary": self._previous_attempt_summary(resolved_run.parent_run_id),
                 "child_runs": [
                     self._run_child_summary(child_run)
                     for child_run in self.list_child_runs(resolved_run.run_id)
@@ -580,7 +617,7 @@ class RunService:
                 "repo_context_summary": detail_payload.get("repo_context_summary"),
             }
         )
-        return detail
+        return self._stabilize_retry_child_detail(detail)
 
     def list_child_runs(self, parent_run_id: str) -> list[RunRecord]:
         resolved_parent_run_id = str(parent_run_id or "").strip()
@@ -626,7 +663,7 @@ class RunService:
     @staticmethod
     def _normalize_status(value: str, *, fallback: str) -> str:
         normalized = str(value or "").strip().lower()
-        if normalized in {"pending", "running", "success", "failed", "partial", "cancelled", "skipped", "no_changes"}:
+        if normalized in {"pending", "running", "success", "failed", "partial", "cancelled", "skipped", "no_changes", "repo_mismatch"}:
             return normalized
         return fallback
 
@@ -681,6 +718,7 @@ class RunService:
         repo_id: str = "",
         actor_id: str = "",
         role: str = "",
+        include_related: bool = False,
     ) -> list[RunRecord]:
         rows = self._db_service.fetch_runs(
             status=status,
@@ -690,7 +728,7 @@ class RunService:
         )
         runs: list[RunRecord] = []
         for row in rows:
-            run = self._run_from_db_row(row, include_related=True)
+            run = self._run_from_db_row(row, include_related=include_related)
             if run is not None:
                 runs.append(run)
         return runs
@@ -973,6 +1011,131 @@ class RunService:
             "retry_context": dict(related_run.retry_context or {}),
         }
 
+    def _previous_attempt_summary(self, run_id: str) -> dict | None:
+        related_run = self.load_run(run_id)
+        if related_run is None:
+            return None
+        related_detail = self.load_run_detail(
+            related_run.run_id,
+            run_record=related_run,
+            log_path=related_run.log_path,
+        )
+        if related_detail is None:
+            return self._related_run_summary(run_id)
+        return {
+            "run_id": related_detail.run_id,
+            "status": related_detail.status,
+            "attempt_index": related_detail.attempt_index,
+            "total_attempts": related_detail.total_attempts,
+            "final_result_summary": related_detail.final_result_summary,
+            "root_cause_summary": related_detail.root_cause_summary,
+            "recommendation": related_detail.recommendation,
+            "failed_step": related_detail.failed_step,
+            "failure_code": related_detail.failure_code,
+            "failure_reason": related_detail.failure_reason,
+        }
+
+    @classmethod
+    def _stabilize_retry_child_detail(cls, detail: RunDetail) -> RunDetail:
+        if not str(detail.parent_run_id or "").strip():
+            return detail
+        implementation = dict(detail.implementation_result or {})
+        final_status = str(implementation.get("final_status", "") or detail.status or "").strip().lower()
+        if final_status != "no_changes" and str(detail.status or "").strip().lower() != "no_changes":
+            return detail
+
+        detail.validation_result = cls._no_changes_validation_payload(detail.validation_result)
+        detail.diff_result = cls._no_changes_diff_payload(detail.diff_result)
+        detail.implementation_result = cls._no_changes_implementation_payload(detail.implementation_result)
+        return detail
+
+    @classmethod
+    def _no_changes_validation_payload(cls, payload: dict | None) -> dict:
+        normalized = cls._normalize_validation_payload(payload) or {}
+        warnings = [
+            str(item or "").strip()
+            for item in list(normalized.get("warnings", []) or [])
+            if str(item or "").strip()
+        ]
+        message = "Skipped because no changes were generated."
+        if message not in warnings:
+            warnings.insert(0, message)
+        return {
+            **normalized,
+            "overall_status": "skipped",
+            "passed": False,
+            "outcome_type": "",
+            "environment_related_failure": False,
+            "environment_prepared": bool(normalized.get("environment_prepared", False)),
+            "dependency_install_status": str(normalized.get("dependency_install_status", "") or "").strip(),
+            "total_tests": 0,
+            "passed_tests": 0,
+            "failed_tests": 0,
+            "failed_test_cases": [],
+            "stdout": "",
+            "stderr": "",
+            "errors": [],
+            "warnings": warnings,
+        }
+
+    @classmethod
+    def _no_changes_apply_payload(cls, payload: dict | None) -> dict:
+        normalized = cls._normalize_apply_payload(payload) or {}
+        warnings = [
+            str(item or "").strip()
+            for item in list(normalized.get("warnings", []) or [])
+            if str(item or "").strip()
+        ]
+        message = "Skipped because no changes were generated."
+        if message not in warnings:
+            warnings.insert(0, message)
+        return {
+            **normalized,
+            "applied": False,
+            "files_written": 0,
+            "files_failed": 0,
+            "skipped": True,
+            "skip_reason": "no_changes",
+            "errors": [],
+            "warnings": warnings,
+        }
+
+    @classmethod
+    def _no_changes_diff_payload(cls, payload: dict | None) -> dict:
+        normalized = cls._normalize_diff_payload(payload) or {}
+        return {
+            **normalized,
+            "diff_available": False,
+            "files": [],
+            "total_files_changed": 0,
+            "total_additions": 0,
+            "total_deletions": 0,
+            "reason": "no_changes",
+            "truncated": False,
+        }
+
+    @classmethod
+    def _no_changes_implementation_payload(cls, payload: dict | None) -> dict:
+        implementation = cls._normalize_implementation_payload(payload) or {}
+        if implementation.get("dry_run_apply_result") is not None:
+            implementation["dry_run_apply_result"] = cls._no_changes_apply_payload(
+                implementation.get("dry_run_apply_result")
+            )
+        else:
+            implementation["dry_run_apply_result"] = cls._no_changes_apply_payload(
+                {"dry_run": True, "warnings": []}
+            )
+        if implementation.get("real_apply_result") is not None:
+            implementation["real_apply_result"] = cls._no_changes_apply_payload(
+                implementation.get("real_apply_result")
+            )
+        implementation["validation_result"] = cls._no_changes_validation_payload(
+            implementation.get("validation_result")
+        )
+        implementation["final_status"] = "no_changes"
+        implementation["root_cause_summary"] = "No changes generated by agent"
+        return implementation
+
     def _run_child_summary(self, run: RunRecord) -> dict:
         failure_summary = self.get_failure_summary(run)
         return {
@@ -1044,11 +1207,25 @@ class RunService:
             return {}
         return payload if isinstance(payload, dict) else {}
 
-    @staticmethod
-    def _normalize_actor_payload(run_record: RunRecord) -> dict | None:
+    def _normalize_actor_payload(self, run_record: RunRecord) -> dict | None:
         if run_record.actor_context is None:
             return None
-        return run_record.actor_context.to_dict()
+        payload = run_record.actor_context.to_dict()
+        actor_id = str(payload.get("actor_id", "") or "").strip()
+        if actor_id and self._db_service.enabled:
+            user_row = self._db_service.fetch_user(actor_id)
+            if user_row is not None:
+                payload["username"] = str(user_row.get("username", "") or "").strip()
+                payload["display_name"] = str(
+                    payload.get("display_name", "") or user_row.get("display_name", "") or ""
+                ).strip()
+                payload["role"] = str(
+                    payload.get("role", "") or user_row.get("role_name", user_row.get("role", "")) or ""
+                ).strip()
+                payload["actor_type"] = str(
+                    payload.get("actor_type", "") or user_row.get("actor_type", "") or ""
+                ).strip()
+        return payload
 
     @staticmethod
     def _detail_step_from_run_step(step: RunStep) -> RunDetailStep:
@@ -1082,6 +1259,14 @@ class RunService:
             "repo_id": str(payload.get("repo_id", "") or "").strip(),
             "overall_status": str(payload.get("overall_status", "") or "").strip(),
             "passed": bool(payload.get("passed", False)),
+            "outcome_type": str(payload.get("outcome_type", "") or "").strip(),
+            "validation_scope": str(payload.get("validation_scope", "") or "").strip(),
+            "validation_profile_used": str(payload.get("validation_profile_used", "") or "").strip(),
+            "targeted_validation": bool(payload.get("targeted_validation", False)),
+            "environment_related_failure": bool(payload.get("environment_related_failure", False)),
+            "environment_prepared": bool(payload.get("environment_prepared", False)),
+            "environment_setup_logs": str(payload.get("environment_setup_logs", "") or "").strip(),
+            "dependency_install_status": str(payload.get("dependency_install_status", "") or "").strip(),
             "total_tests": int(payload.get("total_tests", 0) or 0),
             "passed_tests": int(payload.get("passed_tests", 0) or 0),
             "failed_tests": int(payload.get("failed_tests", 0) or 0),
@@ -1141,7 +1326,8 @@ class RunService:
             ],
         }
 
-    def _normalize_implementation_payload(self, implementation_payload: dict | None) -> dict | None:
+    @staticmethod
+    def _normalize_implementation_payload(implementation_payload: dict | None) -> dict | None:
         payload = dict(implementation_payload or {}) if isinstance(implementation_payload, dict) else {}
         if not payload:
             return None
@@ -1172,10 +1358,10 @@ class RunService:
                 "files_deleted": files_deleted,
                 "reason_if_empty": reason_if_empty,
             },
-            "dry_run_apply_result": self._normalize_apply_payload(payload.get("dry_run_apply_result")),
-            "candidate_apply_result": self._normalize_apply_payload(payload.get("candidate_apply_result")),
-            "real_apply_result": self._normalize_apply_payload(payload.get("real_apply_result")),
-            "validation_result": self._normalize_validation_payload(payload.get("validation_result")),
+            "dry_run_apply_result": RunService._normalize_apply_payload(payload.get("dry_run_apply_result")),
+            "candidate_apply_result": RunService._normalize_apply_payload(payload.get("candidate_apply_result")),
+            "real_apply_result": RunService._normalize_apply_payload(payload.get("real_apply_result")),
+            "validation_result": RunService._normalize_validation_payload(payload.get("validation_result")),
             "root_cause_summary": str(payload.get("root_cause_summary", "") or "").strip(),
         }
 
@@ -1193,6 +1379,17 @@ class RunService:
             return str(artifact_summary.get("reason_if_empty", "") or "No changes generated by agent").strip()
 
         validation = dict(validation_payload or {}) if isinstance(validation_payload, dict) else {}
+        outcome_type = str(validation.get("outcome_type", "") or "").strip()
+        if outcome_type in {
+            "validation_environment_not_ready",
+            "validation_missing_dependency",
+            "validation_misconfigured",
+        }:
+            return "; ".join(
+                list(validation.get("errors", []) or [])
+                or list(validation.get("warnings", []) or [])
+                or ["Validation environment is not ready"]
+            )
         failed_tests = int(validation.get("failed_tests", 0) or 0)
         if failed_tests > 0:
             return f"Validation failed: {failed_tests} test(s) failed"
@@ -1210,6 +1407,145 @@ class RunService:
                 return f"Apply skipped: {reason.replace('_', ' ')}"
 
         return str(implementation.get("root_cause_summary", "") or failure_summary.get("failure_reason", "") or "").strip()
+
+    @staticmethod
+    def _compute_final_result_fields(
+        *,
+        run_record: RunRecord,
+        mode: str,
+        implementation_payload: dict | None,
+        validation_payload: dict | None,
+        diff_payload: dict | None,
+        detail_payload: dict | None,
+        root_cause_summary: str,
+    ) -> dict:
+        implementation = dict(implementation_payload or {}) if isinstance(implementation_payload, dict) else {}
+        validation = dict(validation_payload or {}) if isinstance(validation_payload, dict) else {}
+        diff_result = dict(diff_payload or {}) if isinstance(diff_payload, dict) else {}
+        detail = dict(detail_payload or {}) if isinstance(detail_payload, dict) else {}
+
+        normalized_mode = str(mode or "").strip().lower()
+        status = str(run_record.status or "").strip().lower()
+        implementation_status = str(implementation.get("final_status", "") or "").strip().lower()
+        repo_relevance_status = str(
+            implementation.get("repo_relevance_status", detail.get("repo_relevance_status", ""))
+            or ""
+        ).strip().lower()
+        repo_relevance_reason = str(
+            implementation.get("repo_relevance_reason", detail.get("repo_relevance_reason", ""))
+            or ""
+        ).strip()
+        repo_relevance_next_action = str(
+            implementation.get("repo_relevance_next_action", detail.get("repo_relevance_next_action", ""))
+            or ""
+        ).strip()
+        sync_status = str(
+            implementation.get("sync_status", detail.get("sync_status", ""))
+            or ""
+        ).strip().lower()
+        validation_outcome_type = str(validation.get("outcome_type", "") or "").strip()
+        failed_tests = int(validation.get("failed_tests", 0) or 0)
+        artifact_summary = dict(implementation.get("artifact_summary", {}) or {})
+        files_count = int(artifact_summary.get("files_count", artifact_summary.get("file_count", 0)) or 0)
+        changed_files = list(implementation.get("changed_files", []) or [])
+        diff_available = bool(diff_result.get("diff_available", False))
+        repeated_failure_detected = bool(run_record.retry_context.get("repeated_failure_detected", False))
+
+        if repo_relevance_status == "repo_mismatch" or status == "repo_mismatch" or implementation_status == "repo_mismatch":
+            return {
+                "run_outcome_type": "repo_mismatch",
+                "final_result_summary": "Task does not match this repository.",
+                "recommendation": repo_relevance_next_action or "Choose a different repository or refine the request to match this codebase.",
+            }
+
+        if status == "no_changes" or implementation_status == "no_changes" or (
+            normalized_mode == "implement" and files_count == 0 and not changed_files and not diff_available
+        ):
+            return {
+                "run_outcome_type": "success_no_changes",
+                "final_result_summary": "No changes generated by agent.",
+                "recommendation": "Refine the request.",
+            }
+
+        if validation_outcome_type == "validation_missing_dependency":
+            return {
+                "run_outcome_type": "failed_environment",
+                "final_result_summary": "Validation failed due to missing dependencies.",
+                "recommendation": "Install missing dependencies and retry.",
+            }
+
+        if validation_outcome_type == "validation_environment_not_ready":
+            return {
+                "run_outcome_type": "failed_environment",
+                "final_result_summary": "Validation could not run because the environment is not ready.",
+                "recommendation": "Prepare the validation environment and retry.",
+            }
+
+        if validation_outcome_type == "validation_misconfigured":
+            return {
+                "run_outcome_type": "failed_environment",
+                "final_result_summary": "Validation could not run because the repository validation path is misconfigured.",
+                "recommendation": "Configure a runnable validation command for this repository.",
+            }
+
+        if validation_outcome_type == "validation_failed_code" or failed_tests > 0:
+            return {
+                "run_outcome_type": "failed_code",
+                "final_result_summary": "Changes generated but tests failed.",
+                "recommendation": (
+                    "Review the failing tests and narrow the fix before retrying again."
+                    if repeated_failure_detected
+                    else "Inspect the failing tests and retry with a narrower fix."
+                ),
+            }
+
+        if normalized_mode == "implement":
+            if sync_status == "sync_unavailable":
+                return {
+                    "run_outcome_type": "partial_incomplete",
+                    "final_result_summary": "Run completed, but repository sync was unavailable.",
+                    "recommendation": "Verify repository access and rerun before acting on this result.",
+                }
+            if files_count > 0 or changed_files or diff_available:
+                return {
+                    "run_outcome_type": "success_ready_for_approval",
+                    "final_result_summary": "Changes ready for approval.",
+                    "recommendation": "Approve changes to create PR.",
+                }
+
+        if normalized_mode == "spec" and status == "success":
+            return {
+                "run_outcome_type": "partial_incomplete",
+                "final_result_summary": "Specification generated.",
+                "recommendation": "Review the proposed files, risks, and acceptance criteria.",
+            }
+
+        if normalized_mode == "review" and status == "success":
+            return {
+                "run_outcome_type": "partial_incomplete",
+                "final_result_summary": "Review analysis is ready.",
+                "recommendation": "Inspect the findings and decide whether to retry or reject.",
+            }
+
+        if normalized_mode == "research" and status == "success":
+            return {
+                "run_outcome_type": "partial_incomplete",
+                "final_result_summary": "Research result is ready.",
+                "recommendation": "Review the evidence and decide the next action.",
+            }
+
+        if status == "cancelled":
+            return {
+                "run_outcome_type": "partial_incomplete",
+                "final_result_summary": "Run was cancelled before completion.",
+                "recommendation": "Retry when you are ready to continue.",
+            }
+
+        return {
+            "run_outcome_type": "partial_incomplete",
+            "final_result_summary": root_cause_summary or "Run completed with incomplete results.",
+            "recommendation": "Review the blocking issue and retry if needed.",
+        }
 
     @staticmethod
     def _normalize_diff_payload(

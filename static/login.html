@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TELEMART AI Delivery Workflows</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./config.js"></script>
+</head>
+<body>
+  <div class="page-shell login-shell">
+    <div class="topbar">
+      <div></div>
+      <label class="language-switcher">
+        <span data-i18n="common.language">Мова</span>
+        <select id="languageSelector">
+          <option value="uk">Українська</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+    </div>
+    <form id="loginForm" class="login-card">
+      <div class="brand-kicker">Internal Platform</div>
+      <h1 class="brand-title" data-i18n="system.name">TELEMART AI Delivery Workflows</h1>
+      <p class="brand-subtitle" data-i18n="system.subtitle">AI-помічник для аналізу Jira, планування імплементації та pre-review</p>
+      <label><span data-i18n="login.username">Ім'я користувача</span> <input id="username" required></label>
+      <label><span data-i18n="login.password">Пароль</span> <input id="password" type="password" required></label>
+      <button class="primary" type="submit" data-i18n="login.submit">Увійти</button>
+      <div id="errorBox" class="error"></div>
+    </form>
+  </div>
+  <script>
+    const auth = window.AuthUI;
+    document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      document.getElementById("errorBox").textContent = "";
+      try {
+        const payload = await auth.fetchJson("/auth/login", {
+          method: "POST",
+          body: {
+            username: document.getElementById("username").value.trim(),
+            password: document.getElementById("password").value
+          }
+        });
+        if (payload?.user?.must_change_password) {
+          window.location.href = "/ui/admin/index.html?change_password=1";
+          return;
+        }
+        window.location.href = "/ui/index.html";
+      } catch (error) {
+        document.getElementById("errorBox").textContent = error.message;
+      }
+    });
+  </script>
+</body>
+</html>

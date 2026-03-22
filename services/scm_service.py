@@ -295,6 +295,86 @@ class ScmService:
             result.data["commit_hash"] = result.stdout.strip()
         return result
 
+    def get_ref_commit_hash(self, repo_path: str | Path, ref_name: str) -> ScmOperationResult:
+        cleaned_ref_name = str(ref_name or "").strip()
+        if not cleaned_ref_name:
+            return self._failure_result(
+                "get_ref_commit_hash",
+                Path(repo_path).resolve(),
+                error="Ref name is required.",
+            )
+        repo_root = Path(repo_path).resolve()
+        result = self._run_git(repo_root, ["rev-parse", cleaned_ref_name], "get_ref_commit_hash")
+        if result.success:
+            result.data["ref_name"] = cleaned_ref_name
+            result.data["commit_hash"] = result.stdout.strip()
+        return result
+
+    def sync_with_remote_branch(
+        self,
+        repo_path: str | Path,
+        *,
+        branch_name: str,
+        remote_name: str = "origin",
+    ) -> ScmOperationResult:
+        repo_root = Path(repo_path).resolve()
+        cleaned_branch_name = str(branch_name or "").strip()
+        cleaned_remote_name = str(remote_name or "").strip() or "origin"
+        if not cleaned_branch_name:
+            return self._failure_result(
+                "sync_with_remote_branch",
+                repo_root,
+                error="Branch name is required.",
+            )
+        clean_result = self.is_clean(repo_root)
+        if not clean_result.success:
+            return self._failure_result(
+                "sync_with_remote_branch",
+                repo_root,
+                error=clean_result.error or "Repository has uncommitted changes.",
+                data={"changed_files": list(clean_result.data.get("changed_files", []))},
+            )
+        fetch_result = self.fetch(repo_root, cleaned_remote_name)
+        if not fetch_result.success:
+            return self._failure_result(
+                "sync_with_remote_branch",
+                repo_root,
+                error=fetch_result.error or "Fetch failed.",
+            )
+        branch_list_result = self._run_git(
+            repo_root,
+            ["branch", "--list", cleaned_branch_name],
+            "sync_with_remote_branch",
+        )
+        if branch_list_result.success and str(branch_list_result.stdout or "").strip():
+            checkout_result = self.checkout_branch(repo_root, cleaned_branch_name)
+        else:
+            checkout_result = self._run_git(
+                repo_root,
+                ["checkout", "-b", cleaned_branch_name, "--track", f"{cleaned_remote_name}/{cleaned_branch_name}"],
+                "sync_with_remote_branch",
+            )
+        if not checkout_result.success:
+            return self._failure_result(
+                "sync_with_remote_branch",
+                repo_root,
+                error=checkout_result.error or "Checkout failed during sync.",
+            )
+        pull_result = self._run_git(
+            repo_root,
+            ["pull", "--ff-only", cleaned_remote_name, cleaned_branch_name],
+            "sync_with_remote_branch",
+        )
+        if not pull_result.success:
+            return self._failure_result(
+                "sync_with_remote_branch",
+                repo_root,
+                error=pull_result.error or "Fast-forward sync failed.",
+            )
+        pull_result.data["branch_name"] = cleaned_branch_name
+        pull_result.data["remote_name"] = cleaned_remote_name
+        return pull_result
+
     def push(self, repo_path: str | Path, branch_name: str, remote_name: str = "origin") -> ScmOperationResult:
         cleaned_branch_name = str(branch_name or "").strip()
         cleaned_remote_name = str(remote_name or "").strip() or "origin"
@@ -496,6 +576,7 @@ class ScmService:
         *,
         error: str,
         command: list[str] | None = None,
+        data: dict | None = None,
     ) -> ScmOperationResult:
         return ScmOperationResult(
             operation=operation,
@@ -503,6 +584,7 @@ class ScmService:
             success=False,
             command=self._sanitize_command(list(command or [])),
             error=self._sanitize_text(str(error or "").strip()),
+            data=dict(data or {}),
         )
 
     def _build_git_auth_args(self, remote_url: str) -> list[str]:

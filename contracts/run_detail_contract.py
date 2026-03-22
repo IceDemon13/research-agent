@@ -52,6 +52,8 @@ class RunDetail:
     started_at: str = ""
     finished_at: str = ""
     actor: dict | None = None
+    actor_display_name: str = ""
+    actor_username: str = ""
     decision: str = "pending"
     decided_by: str = ""
     decided_at: str = ""
@@ -66,10 +68,27 @@ class RunDetail:
     failure_code: str = ""
     failure_reason: str = ""
     root_cause_summary: str = ""
+    final_result_summary: str = ""
+    recommendation: str = ""
+    run_outcome_type: str = ""
+    model_used: str = ""
+    routing_reason: str = ""
+    was_escalated: bool = False
+    source_stage: str = ""
+    estimated_prompt_size: int = 0
+    sync_status: str = ""
+    local_head_before: str = ""
+    remote_head: str = ""
+    synced_before_run: bool = False
+    repo_relevance_status: str = ""
+    repo_relevance_confidence: float = 0.0
+    repo_relevance_reason: str = ""
+    repo_relevance_next_action: str = ""
     log_path: str = ""
     pr_url: str = ""
     review_url: str = ""
     parent_run: dict | None = None
+    previous_attempt_summary: dict | None = None
     child_runs: list[dict] = field(default_factory=list)
     steps: list[RunDetailStep] = field(default_factory=list)
     spec_result: dict | None = None
@@ -99,6 +118,8 @@ class RunDetail:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "actor": dict(self.actor or {}) if self.actor is not None else None,
+            "actor_display_name": self.actor_display_name,
+            "actor_username": self.actor_username,
             "decision": self.decision,
             "decided_by": self.decided_by,
             "decided_at": self.decided_at,
@@ -113,10 +134,31 @@ class RunDetail:
             "failure_code": self.failure_code,
             "failure_reason": self.failure_reason,
             "root_cause_summary": self.root_cause_summary,
+            "final_result_summary": self.final_result_summary,
+            "recommendation": self.recommendation,
+            "run_outcome_type": self.run_outcome_type,
+            "model_used": self.model_used,
+            "routing_reason": self.routing_reason,
+            "was_escalated": bool(self.was_escalated),
+            "source_stage": self.source_stage,
+            "estimated_prompt_size": int(self.estimated_prompt_size or 0),
+            "sync_status": self.sync_status,
+            "local_head_before": self.local_head_before,
+            "remote_head": self.remote_head,
+            "synced_before_run": bool(self.synced_before_run),
+            "repo_relevance_status": self.repo_relevance_status,
+            "repo_relevance_confidence": float(self.repo_relevance_confidence or 0.0),
+            "repo_relevance_reason": self.repo_relevance_reason,
+            "repo_relevance_next_action": self.repo_relevance_next_action,
             "log_path": self.log_path,
             "pr_url": self.pr_url,
             "review_url": self.review_url,
             "parent_run": dict(self.parent_run or {}) if self.parent_run is not None else None,
+            "previous_attempt_summary": (
+                dict(self.previous_attempt_summary or {})
+                if self.previous_attempt_summary is not None
+                else None
+            ),
             "child_runs": [dict(item or {}) for item in list(self.child_runs)],
             "steps": [step.to_dict() for step in list(self.steps)],
             "spec_result": dict(self.spec_result or {}) if self.spec_result is not None else None,
@@ -165,6 +207,8 @@ class RunDetail:
             started_at=str(item.get("started_at", "") or "").strip(),
             finished_at=str(item.get("finished_at", "") or "").strip(),
             actor=dict(item.get("actor", {}) or {}) if isinstance(item.get("actor"), dict) else None,
+            actor_display_name=str(item.get("actor_display_name", "") or "").strip(),
+            actor_username=str(item.get("actor_username", "") or "").strip(),
             decision=str(item.get("decision", "pending") or "pending").strip() or "pending",
             decided_by=str(item.get("decided_by", "") or "").strip(),
             decided_at=str(item.get("decided_at", "") or "").strip(),
@@ -179,10 +223,31 @@ class RunDetail:
             failure_code=str(item.get("failure_code", "") or "").strip(),
             failure_reason=str(item.get("failure_reason", "") or "").strip(),
             root_cause_summary=str(item.get("root_cause_summary", "") or "").strip(),
+            final_result_summary=str(item.get("final_result_summary", "") or "").strip(),
+            recommendation=str(item.get("recommendation", "") or "").strip(),
+            run_outcome_type=str(item.get("run_outcome_type", "") or "").strip(),
+            model_used=str(item.get("model_used", "") or "").strip(),
+            routing_reason=str(item.get("routing_reason", "") or "").strip(),
+            was_escalated=bool(item.get("was_escalated", False)),
+            source_stage=str(item.get("source_stage", "") or "").strip(),
+            estimated_prompt_size=int(item.get("estimated_prompt_size", 0) or 0),
+            sync_status=str(item.get("sync_status", "") or "").strip(),
+            local_head_before=str(item.get("local_head_before", "") or "").strip(),
+            remote_head=str(item.get("remote_head", "") or "").strip(),
+            synced_before_run=bool(item.get("synced_before_run", False)),
+            repo_relevance_status=str(item.get("repo_relevance_status", "") or "").strip(),
+            repo_relevance_confidence=float(item.get("repo_relevance_confidence", 0.0) or 0.0),
+            repo_relevance_reason=str(item.get("repo_relevance_reason", "") or "").strip(),
+            repo_relevance_next_action=str(item.get("repo_relevance_next_action", "") or "").strip(),
             log_path=str(item.get("log_path", "") or "").strip(),
             pr_url=str(item.get("pr_url", "") or "").strip(),
             review_url=str(item.get("review_url", "") or "").strip(),
             parent_run=dict(item.get("parent_run", {}) or {}) if isinstance(item.get("parent_run"), dict) else None,
+            previous_attempt_summary=(
+                dict(item.get("previous_attempt_summary", {}) or {})
+                if isinstance(item.get("previous_attempt_summary"), dict)
+                else None
+            ),
             child_runs=[
                 dict(child_payload or {})
                 for child_payload in list(item.get("child_runs", []) or [])

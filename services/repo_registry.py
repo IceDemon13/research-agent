@@ -199,6 +199,13 @@ class RepositoryRegistryService:
             display_name=current.display_name,
             default_branch=current.default_branch,
             remote_url=current.remote_url,
+            index_status=current.index_status,
+            indexed_head=current.indexed_head,
+            index_error=current.index_error,
+            reindex_required=current.reindex_required,
+            sync_status=current.sync_status,
+            last_sync_at=current.last_sync_at,
+            sync_error=current.sync_error,
         )
         updated_repos = [
             refreshed if repo.repo_id == refreshed.repo_id else repo
@@ -233,6 +240,25 @@ class RepositoryRegistryService:
             display_name=fallback_display_name,
         )
 
+    def update_repo_metadata(self, repo_id: str, **updates) -> RepoMetadata | None:
+        normalized_repo_id = _normalize_repo_id(repo_id)
+        if not normalized_repo_id:
+            return None
+        state = self._load_state()
+        current = self._find_repo_by_id(state, normalized_repo_id)
+        if current is None:
+            return None
+        payload = current.to_dict()
+        payload.update(updates)
+        updated = RepoMetadata.from_dict(payload)
+        updated_repos = [
+            updated if repo.repo_id == updated.repo_id else repo
+            for repo in state.repos
+        ]
+        self._save_state(RepoRegistryState(version=state.version, repos=updated_repos))
+        self._sync_repo_to_db(updated)
+        return updated
+
     def _build_repo_metadata(
         self,
         *,
@@ -241,11 +267,22 @@ class RepositoryRegistryService:
         display_name: str,
         default_branch: str,
         remote_url: str,
+        index_status: str = "",
+        indexed_head: str = "",
+        index_error: str = "",
+        reindex_required: bool = False,
+        sync_status: str = "",
+        last_sync_at: str = "",
+        sync_error: str = "",
     ) -> RepoMetadata:
         resolved_root_path = root_path.expanduser().resolve()
         detected_default_branch = _detect_default_branch(resolved_root_path) or (default_branch or "").strip()
         indexed_at = _detect_indexed_at(resolved_root_path, repo_id, self._storage_path.parent)
         normalized_display_name = (display_name or resolved_root_path.name or repo_id).strip()
+        resolved_index_status = str(index_status or "").strip()
+        if not resolved_index_status:
+            resolved_index_status = "ready" if indexed_at else "stale"
+        resolved_reindex_required = bool(reindex_required or not indexed_at or resolved_index_status in {"stale", "failed"})
         return RepoMetadata(
             repo_id=repo_id,
             root_path=str(resolved_root_path),
@@ -255,6 +292,13 @@ class RepositoryRegistryService:
             default_branch=detected_default_branch,
             indexed_at=indexed_at,
             status=_detect_status(resolved_root_path, indexed_at),
+            index_status=resolved_index_status,
+            indexed_head=str(indexed_head or "").strip(),
+            index_error=str(index_error or "").strip(),
+            reindex_required=resolved_reindex_required,
+            sync_status=str(sync_status or "").strip(),
+            last_sync_at=str(last_sync_at or "").strip(),
+            sync_error=str(sync_error or "").strip(),
         )
 
     def _load_state(self) -> RepoRegistryState:

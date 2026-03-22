@@ -38,6 +38,7 @@ def run_react_loop(
     memory: list[dict[str, Any]],
     agent_name: str = "react_loop",
     tools: list[dict[str, Any]] | None = None,
+    routing_metadata: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     effective_tools = tools if tools is not None else TOOLS
     tag = _agent_tag(agent_name)
@@ -63,7 +64,7 @@ def run_react_loop(
                 messages=messages,
                 tools=effective_tools,
                 agent_name=agent_name,
-                metadata={"step": step},
+                metadata={**dict(routing_metadata or {}), "step": step},
             )
             gateway_response = GATEWAY.create_chat_completion(gateway_request)
             response = gateway_response.raw_response

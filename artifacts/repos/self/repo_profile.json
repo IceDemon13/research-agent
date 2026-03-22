@@ -1,0 +1,84 @@
+{
+  "repo_id": "self",
+  "indexed_at": "2026-03-22T16:39:16.152548+00:00",
+  "primary_stack": "python",
+  "detected_stacks": [
+    "python",
+    "node"
+  ],
+  "solution_files": [],
+  "project_files": [
+    "requirements.txt"
+  ],
+  "source_roots": [
+    "agents",
+    "ai_gateway",
+    "artifacts",
+    "contracts",
+    "formatters",
+    "intent",
+    "jira_mcp_server",
+    "loops",
+    "prompts",
+    "scripts",
+    "services",
+    "static"
+  ],
+  "test_roots": [
+    "agents",
+    "ai_gateway",
+    "artifacts",
+    "contracts",
+    "data",
+    "docs",
+    "example_output",
+    "formatters",
+    "index",
+    "intent",
+    "jira_mcp_server",
+    "loops"
+  ],
+  "config_roots": [
+    ".github",
+    "agents",
+    "ai_gateway",
+    "artifacts",
+    "contracts",
+    "data",
+    "docs",
+    "example_output",
+    "formatters",
+    "index",
+    "intent",
+    "jira_mcp_server"
+  ],
+  "docs_roots": [
+    "agents",
+    "ai_gateway",
+    "artifacts",
+    "contracts",
+    "data",
+    "docs",
+    "example_output",
+    "formatters",
+    "index",
+    "intent",
+    "jira_mcp_server",
+    "loops"
+  ],
+  "framework_markers": [],
+  "build_command_candidates": [
+    "python -m pip install -r requirements.txt"
+  ],
+  "test_command_candidates": [
+    "python -m pytest"
+  ],
+  "package_manager_markers": [
+    "pip",
+    "npm"
+  ],
+  "runtime_markers": [
+    "Python",
+    "Node.js"
+  ]
+}

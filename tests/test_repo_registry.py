@@ -44,6 +44,8 @@ class RepositoryRegistryServiceTests(unittest.TestCase):
         self.assertEqual(metadata.default_branch, "main")
         self.assertEqual(metadata.status, INDEXED_REPO_STATUS)
         self.assertTrue(metadata.indexed_at)
+        self.assertEqual(metadata.index_status, "ready")
+        self.assertFalse(metadata.reindex_required)
         self.assertTrue(self.registry_path.exists())
 
         stored_payload = json.loads(self.registry_path.read_text(encoding="utf-8"))

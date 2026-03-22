@@ -321,6 +321,86 @@ class RunExplorerTests(unittest.TestCase):
         self.assertIn("Fix previous validation failures", retry_prompt)
         self.assertIn("tests/test_app.py::test_run", retry_prompt)
 
+    def test_fix_and_retry_allows_blocked_review_run_to_retry_implementation(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="admin-1",
+            actor_type="user",
+            role="admin",
+            source_channel="cli",
+            display_name="Admin",
+        )
+        source_run = service.start_run("Pre review", repo_id="sample", actor_context=actor)
+        finished_source = service.finish_run(source_run.run_id, "success")
+        service.persist_run_detail(
+            source_run.run_id,
+            {
+                "mode": "review",
+                "root_cause_summary": "src/app.py still returns the legacy payload shape.",
+                "review_result": {
+                    "status": "blocked",
+                    "summary": "Changes are not ready for human review yet.",
+                    "issues": ["src/app.py still returns the legacy payload shape."],
+                    "approved_files": ["src/app.py"],
+                },
+                "implementation_result": {
+                    "artifact_summary": {
+                        "files_count": 1,
+                    }
+                },
+                "diff_result": {
+                    "diff_available": True,
+                    "files": [{"file_path": "src/app.py", "change_type": "modified"}],
+                },
+                "repo_context_summary": {
+                    "resolved_target_files": ["src/app.py"],
+                    "files_used": ["src/app.py"],
+                },
+            },
+            log_path=finished_source.log_path,
+        )
+        retried_run = RunRecord(
+            run_id="review-fix-run-1",
+            goal="Pre review",
+            status="success",
+            started_at="2026-03-20T00:00:00+00:00",
+            parent_run_id=source_run.run_id,
+            repo_id="sample",
+            actor_context=actor,
+            finished_at="2026-03-20T00:01:00+00:00",
+        )
+        retried_result = AgentResult(
+            agent_name="implementation",
+            output_text="retry complete",
+            success=True,
+            task_intent="modify",
+            repo_context={},
+            metadata={"run_record": retried_run},
+        )
+
+        with patch("agents.root_agent.RunService", return_value=service), patch(
+            "agents.root_agent.run_implementation_pipeline",
+            return_value=retried_result,
+        ) as mocked_retry:
+            result = root_agent.run_root_agent(
+                f"runs retry {source_run.run_id}",
+                actor_context=actor,
+                action_payload={
+                    "workflow_name": "fix_and_retry",
+                    "refinement_prompt": "STRICT FIX MODE:\nOnly fix src/app.py.\nRemove the legacy payload shape issue.",
+                    "fix_files": ["src/app.py"],
+                    "fix_actions": ["Update src/app.py to remove the legacy payload shape issue."],
+                },
+            )
+
+        self.assertTrue(result.success)
+        mocked_retry.assert_called_once()
+        self.assertEqual(mocked_retry.call_args.kwargs["parent_run_id"], source_run.run_id)
+        retry_prompt = mocked_retry.call_args.args[0]
+        self.assertIn("Focused Fix Instructions:", retry_prompt)
+        self.assertIn("Only fix src/app.py.", retry_prompt)
+        self.assertIn("legacy payload shape issue", retry_prompt)
+
     def test_retry_after_no_changes_injects_generate_change_guidance(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
         actor = ActorContext(
@@ -601,6 +681,41 @@ class RunExplorerTests(unittest.TestCase):
         self.assertIn("test tests/test_app.py::test_run still failing", retry_prompt)
         self.assertIn("issue not resolved", retry_prompt)
 
+    def test_retry_context_sanitizes_fix_targets_for_repo_search(self) -> None:
+        run_record = RunRecord(
+            run_id="parent-run",
+            goal="Fix app",
+            status="failed",
+            started_at="2026-03-20T00:00:00+00:00",
+        )
+        run_detail = RunDetail(
+            run_id="parent-run",
+            mode="review",
+            root_cause_summary="Review blocked",
+        )
+
+        retry_context = root_agent._build_retry_context(
+            run_record=run_record,
+            run_detail=run_detail,
+            fix_targets={
+                "fix_files": ["src/app.py", "runtime_error", "../outside.py"],
+                "fix_symbols": ["app.run", "previous_attempt_failed_because", "runtime_error"],
+                "fix_actions": [
+                    "Update src/app.py to remove the blocking issue.",
+                    "runtime_error still failing",
+                    "previous_attempt_failed_because should not be searched",
+                ],
+            },
+            attempt_index=2,
+            total_attempts=3,
+        )
+
+        self.assertEqual(retry_context["fix_files"], ["src/app.py"])
+        self.assertEqual(retry_context["fix_symbols"], ["app.run"])
+        self.assertNotIn("runtime_error", retry_context["repo_query_input"])
+        self.assertNotIn("previous_attempt_failed_because", retry_context["repo_query_input"])
+        self.assertIn("src/app.py", retry_context["repo_query_input"])
+
     def test_retry_prompt_reports_improvement_when_failures_reduced(self) -> None:
         run_record = RunRecord(
             run_id="attempt-2",
@@ -745,6 +860,108 @@ class RunExplorerTests(unittest.TestCase):
         )
         self.assertIn("Retry Strategy Reason: Escalated from strict to aggressive because the same assertion_error repeated after a similar change set.", retry_prompt)
         self.assertIn("- repeated_failure_detected: true", retry_prompt)
+
+    def test_fix_and_retry_stops_when_same_query_and_targets_produce_no_progress(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="user",
+            role="techlead",
+            source_channel="cli",
+            display_name="Tech Lead",
+        )
+        source_run = service.start_run("Fix app", repo_id="sample", actor_context=actor)
+        finished_source = service.finish_run(source_run.run_id, "failed")
+        service.persist_run_detail(
+            source_run.run_id,
+            {
+                "mode": "review",
+                "status": "failed",
+                "root_cause_summary": "src/app.py still returns the legacy payload shape.",
+                "repo_context_summary": {"resolved_target_files": ["src/app.py"]},
+                "diff_result": {
+                    "diff_available": True,
+                    "files": [{"file_path": "src/app.py", "change_type": "modified", "diff_text": "@@ -1 +1 @@\n-return 'old'\n+return 'new'"}],
+                },
+                "implementation_result": {"artifact_summary": {"files_count": 1}},
+                "validation_result": {"overall_status": "failed", "failed_tests": 1, "failed_test_cases": []},
+            },
+            log_path=finished_source.log_path,
+        )
+        source_detail = service.load_run_detail(source_run.run_id, run_record=source_run, log_path=finished_source.log_path)
+
+        child_run = RunRecord(
+            run_id="attempt-2",
+            goal="Fix app",
+            status="failed",
+            started_at="2026-03-20T00:02:00+00:00",
+            finished_at="2026-03-20T00:03:00+00:00",
+            parent_run_id=source_run.run_id,
+            repo_id="sample",
+            actor_context=actor,
+            attempt_index=2,
+            total_attempts=3,
+        )
+        service.persist_run_detail(
+            child_run.run_id,
+            {
+                "mode": "implement",
+                "status": "failed",
+                "root_cause_summary": "src/app.py still returns the legacy payload shape.",
+                "repo_context_summary": {"resolved_target_files": ["src/app.py"]},
+                "diff_result": {
+                    "diff_available": True,
+                    "files": [{"file_path": "src/app.py", "change_type": "modified", "diff_text": "@@ -1 +1 @@\n-return 'old'\n+return 'new'"}],
+                },
+                "implementation_result": {"final_status": "candidate_validation_failed", "artifact_summary": {"files_count": 1}},
+                "validation_result": {"overall_status": "failed", "failed_tests": 1, "failed_test_cases": []},
+            },
+            log_path=child_run.log_path,
+        )
+
+        retried_result = AgentResult(
+            agent_name="implementation",
+            output_text="Retry attempt completed.",
+            success=True,
+            task_intent="modify",
+            repo_context={},
+            metadata={
+                "run_record": child_run,
+                "implementation_result": ImplementationResult(
+                    repo_id="sample",
+                    artifact_summary=ImplementationArtifactSummary(
+                        artifact_type="draft_set",
+                        goal="Fix app",
+                        file_count=1,
+                        file_paths=["src/app.py"],
+                        files_count=1,
+                    ),
+                    dry_run_apply_result=ApplyResult(repo_id="sample", root_path=".", dry_run=True),
+                    dry_run_diff_result=DiffResult(repo_id="sample", root_path=".", dry_run=True),
+                    validation_result=ValidationResult(repo_id="sample", overall_status="failed"),
+                    final_status="candidate_validation_failed",
+                ),
+            },
+        )
+
+        with patch("agents.root_agent.RunService", return_value=service), patch(
+            "agents.root_agent.run_implementation_pipeline",
+            return_value=retried_result,
+        ):
+            result, attempts_history = root_agent._run_context_aware_retry_loop(
+                source_run=source_run,
+                source_detail=source_detail,
+                resolved_actor_context=actor,
+                retry_note="Keep the patch small.",
+                refinement_prompt="Update src/app.py only.",
+                workflow_name="fix_and_retry",
+                fix_targets={"fix_files": ["src/app.py"], "fix_actions": ["Update src/app.py only."]},
+            )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.metadata["retry_stop_status"], "retry_stopped_no_progress")
+        self.assertIn("no new change summary", result.output_text)
+        self.assertEqual(len(attempts_history), 3)
 
     def test_retry_loop_stops_after_successful_second_attempt(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)

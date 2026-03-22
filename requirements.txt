@@ -13,3 +13,4 @@ fastapi
 uvicorn
 httpx
 requests
+argon2-cffi

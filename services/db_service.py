@@ -40,25 +40,35 @@ class DatabaseService:
         self,
         role_capability_map: dict[str, set[str]] | None = None,
         role_policy_map: dict[str, RolePolicy] | None = None,
+        role_descriptions: dict[str, str] | None = None,
     ) -> None:
         if not self.enabled or self._bootstrapped:
             if self.enabled and role_capability_map:
-                self.seed_role_capabilities(role_capability_map, role_policy_map)
+                self.seed_role_capabilities(role_capability_map, role_policy_map, role_descriptions)
             return
 
         statements = [
             """
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL DEFAULT '',
                 display_name TEXT NOT NULL,
+                email TEXT NOT NULL DEFAULT '',
                 actor_type TEXT NOT NULL,
                 role TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                role_name TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                password_hash TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT '',
+                last_login_at TEXT NOT NULL DEFAULT ''
             )
             """,
             """
             CREATE TABLE IF NOT EXISTS roles (
                 role_name TEXT PRIMARY KEY,
+                description TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             )
             """,
@@ -90,7 +100,14 @@ class DatabaseService:
                 display_name TEXT NOT NULL,
                 default_branch TEXT NOT NULL,
                 status TEXT NOT NULL,
-                indexed_at TEXT NOT NULL
+                indexed_at TEXT NOT NULL,
+                index_status TEXT NOT NULL DEFAULT '',
+                indexed_head TEXT NOT NULL DEFAULT '',
+                index_error TEXT NOT NULL DEFAULT '',
+                reindex_required INTEGER NOT NULL DEFAULT 0,
+                sync_status TEXT NOT NULL DEFAULT '',
+                last_sync_at TEXT NOT NULL DEFAULT '',
+                sync_error TEXT NOT NULL DEFAULT ''
             )
             """,
             """
@@ -154,6 +171,60 @@ class DatabaseService:
                 cursor.execute(statement)
             self._ensure_column(
                 cursor,
+                "users",
+                "username",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "email",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "role_name",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "is_active",
+                "INTEGER NOT NULL DEFAULT 1",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "must_change_password",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "password_hash",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "updated_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "users",
+                "last_login_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "roles",
+                "description",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
                 "repos",
                 "local_path",
                 "TEXT NOT NULL DEFAULT ''",
@@ -162,6 +233,48 @@ class DatabaseService:
                 cursor,
                 "repos",
                 "remote_url",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "index_status",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "indexed_head",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "index_error",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "reindex_required",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "sync_status",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "last_sync_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "sync_error",
                 "TEXT NOT NULL DEFAULT ''",
             )
             self._ensure_column(
@@ -224,14 +337,21 @@ class DatabaseService:
                 "retry_context_json",
                 "TEXT NOT NULL DEFAULT '{}'",
             )
+            self._ensure_unique_index(cursor, "idx_users_username", "users", "username")
+            self._ensure_index(cursor, "idx_runs_started_at", "runs", "started_at")
+            self._ensure_index(cursor, "idx_runs_status", "runs", "status")
+            self._ensure_index(cursor, "idx_runs_actor_id", "runs", "actor_id")
+            self._ensure_index(cursor, "idx_runs_repo_id", "runs", "repo_id")
+            self._backfill_user_role_names(cursor)
         self._bootstrapped = True
         if role_capability_map:
-            self.seed_role_capabilities(role_capability_map, role_policy_map)
+            self.seed_role_capabilities(role_capability_map, role_policy_map, role_descriptions)
 
     def seed_role_capabilities(
         self,
         role_capability_map: dict[str, set[str]],
         role_policy_map: dict[str, RolePolicy] | None = None,
+        role_descriptions: dict[str, str] | None = None,
     ) -> None:
         if not self.enabled:
             return
@@ -243,12 +363,13 @@ class DatabaseService:
                 cursor.execute(
                     self._sql(
                         """
-                        INSERT INTO roles (role_name, created_at)
-                        VALUES (?, ?)
-                        ON CONFLICT(role_name) DO NOTHING
+                        INSERT INTO roles (role_name, description, created_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(role_name) DO UPDATE SET
+                            description = excluded.description
                         """
                     ),
-                    self._params(role_name, created_at),
+                    self._params(role_name, str((role_descriptions or {}).get(role_name, "") or "").strip(), created_at),
                 )
                 for capability in sorted(capabilities):
                     cursor.execute(
@@ -298,16 +419,18 @@ class DatabaseService:
         if not self.enabled:
             return set()
         self.bootstrap_schema()
+        resolved_role = self.normalize_role_name(role_name)
         with self._connection() as connection:
             cursor = connection.cursor()
             cursor.execute(
                 self._sql("SELECT capability FROM role_capabilities WHERE role_name = ?"),
-                self._params(str(role_name or "").strip()),
+                self._params(resolved_role),
             )
             rows = cursor.fetchall()
         return {str(self._row_value(row, "capability") or "").strip() for row in rows}
 
     def get_role_policy(self, role_name: str) -> RolePolicy | None:
+        resolved_role = self.normalize_role_name(role_name)
         row = self._fetch_one(
             """
             SELECT role_name, repo_allowlist_json, repo_denylist_json,
@@ -316,7 +439,7 @@ class DatabaseService:
             FROM role_policies
             WHERE role_name = ?
             """,
-            self._params(str(role_name or "").strip()),
+            self._params(resolved_role),
         )
         if row is None:
             return None
@@ -331,6 +454,114 @@ class DatabaseService:
             publication_requires_pr=bool(row.get("publication_requires_pr", 0)),
         )
 
+    def list_roles(self) -> list[dict]:
+        return self._fetch_all(
+            """
+            SELECT role_name, description, created_at
+            FROM roles
+            ORDER BY role_name ASC
+            """,
+            self._params(),
+        )
+
+    def upsert_role(self, role_name: str, *, description: str = "") -> dict | None:
+        if not self.enabled:
+            return None
+        self.bootstrap_schema()
+        resolved_role = self.normalize_role_name(role_name)
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    INSERT INTO roles (role_name, description, created_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(role_name) DO UPDATE SET
+                        description = excluded.description
+                    """
+                ),
+                self._params(resolved_role, str(description or "").strip(), _timestamp()),
+            )
+        return self._fetch_one(
+            "SELECT role_name, description, created_at FROM roles WHERE role_name = ?",
+            self._params(resolved_role),
+        )
+
+    def replace_role_capabilities(self, role_name: str, capabilities: list[str]) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        normalized_role = self.normalize_role_name(role_name)
+        normalized_capabilities = sorted(
+            {str(item or "").strip() for item in list(capabilities or []) if str(item or "").strip()}
+        )
+        with self._connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(self._sql("DELETE FROM role_capabilities WHERE role_name = ?"), self._params(normalized_role))
+            for capability in normalized_capabilities:
+                cursor.execute(
+                    self._sql(
+                        "INSERT INTO role_capabilities (role_name, capability) VALUES (?, ?)"
+                    ),
+                    self._params(normalized_role, capability),
+                )
+
+    def upsert_role_policy(self, role_policy: RolePolicy) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    INSERT INTO role_policies (
+                        role_name, repo_allowlist_json, repo_denylist_json,
+                        jira_project_allowlist_json, jira_project_denylist_json,
+                        protected_branch_prefixes_json, dry_run_only, publication_requires_pr
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(role_name) DO UPDATE SET
+                        repo_allowlist_json = excluded.repo_allowlist_json,
+                        repo_denylist_json = excluded.repo_denylist_json,
+                        jira_project_allowlist_json = excluded.jira_project_allowlist_json,
+                        jira_project_denylist_json = excluded.jira_project_denylist_json,
+                        protected_branch_prefixes_json = excluded.protected_branch_prefixes_json,
+                        dry_run_only = excluded.dry_run_only,
+                        publication_requires_pr = excluded.publication_requires_pr
+                    """
+                ),
+                self._params(
+                    str(role_policy.role_name or "").strip(),
+                    json.dumps(role_policy.repo_allowlist, ensure_ascii=False, sort_keys=True),
+                    json.dumps(role_policy.repo_denylist, ensure_ascii=False, sort_keys=True),
+                    json.dumps(role_policy.jira_project_allowlist, ensure_ascii=False, sort_keys=True),
+                    json.dumps(role_policy.jira_project_denylist, ensure_ascii=False, sort_keys=True),
+                    json.dumps(role_policy.protected_branch_prefixes, ensure_ascii=False, sort_keys=True),
+                    1 if role_policy.dry_run_only else 0,
+                    1 if role_policy.publication_requires_pr else 0,
+                ),
+            )
+
+    def list_role_policies(self) -> list[dict]:
+        rows = self._fetch_all(
+            """
+            SELECT role_name, repo_allowlist_json, repo_denylist_json,
+                   jira_project_allowlist_json, jira_project_denylist_json,
+                   protected_branch_prefixes_json, dry_run_only, publication_requires_pr
+            FROM role_policies
+            ORDER BY role_name ASC
+            """,
+            self._params(),
+        )
+        for row in rows:
+            row["repo_allowlist"] = self._load_json_list(row.pop("repo_allowlist_json", "[]"))
+            row["repo_denylist"] = self._load_json_list(row.pop("repo_denylist_json", "[]"))
+            row["jira_project_allowlist"] = self._load_json_list(row.pop("jira_project_allowlist_json", "[]"))
+            row["jira_project_denylist"] = self._load_json_list(row.pop("jira_project_denylist_json", "[]"))
+            row["protected_branch_prefixes"] = self._load_json_list(row.pop("protected_branch_prefixes_json", "[]"))
+            row["dry_run_only"] = bool(row.get("dry_run_only", 0))
+            row["publication_requires_pr"] = bool(row.get("publication_requires_pr", 0))
+        return rows
+
     def has_role_capability_data(self) -> bool:
         if not self.enabled:
             return False
@@ -344,33 +575,213 @@ class DatabaseService:
         if not self.enabled or actor_context is None:
             return
         self.bootstrap_schema()
-        created_at = _timestamp()
+        timestamp = _timestamp()
+        resolved_role = self.normalize_role_name(actor_context.role)
         with self._connection() as connection:
             connection.cursor().execute(
                 self._sql(
                     """
-                    INSERT INTO users (user_id, display_name, actor_type, role, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO users (
+                        user_id, username, display_name, email, actor_type, role, role_name,
+                        is_active, must_change_password, password_hash, created_at, updated_at, last_login_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(user_id) DO UPDATE SET
+                        username = CASE WHEN excluded.username <> '' THEN excluded.username ELSE users.username END,
                         display_name = excluded.display_name,
                         actor_type = excluded.actor_type,
-                        role = excluded.role
+                        role = excluded.role,
+                        role_name = CASE WHEN excluded.role_name <> '' THEN excluded.role_name ELSE users.role_name END,
+                        updated_at = excluded.updated_at
                     """
                 ),
                 self._params(
                     actor_context.actor_id,
+                    str(actor_context.actor_id or "").strip(),
                     actor_context.display_name,
+                    "",
                     actor_context.actor_type,
-                    actor_context.role,
-                    created_at,
+                    resolved_role,
+                    resolved_role,
+                    1,
+                    0,
+                    "",
+                    timestamp,
+                    timestamp,
+                    "",
                 ),
             )
 
     def fetch_user(self, actor_id: str) -> dict | None:
         return self._fetch_one(
-            "SELECT user_id, display_name, actor_type, role, created_at FROM users WHERE user_id = ?",
+            """
+            SELECT user_id, username, display_name, email, actor_type, role, role_name,
+                   is_active, must_change_password, password_hash, created_at, updated_at, last_login_at
+            FROM users
+            WHERE user_id = ?
+            """,
             self._params(str(actor_id or "").strip()),
         )
+
+    def fetch_user_by_username(self, username: str) -> dict | None:
+        return self._fetch_one(
+            """
+            SELECT user_id, username, display_name, email, actor_type, role, role_name,
+                   is_active, must_change_password, password_hash, created_at, updated_at, last_login_at
+            FROM users
+            WHERE LOWER(username) = ?
+            """,
+            self._params(str(username or "").strip().lower()),
+        )
+
+    def list_users(self) -> list[dict]:
+        return self._fetch_all(
+            """
+            SELECT user_id, username, display_name, email, actor_type, role, role_name,
+                   is_active, must_change_password, password_hash, created_at, updated_at, last_login_at
+            FROM users
+            ORDER BY username ASC, user_id ASC
+            """,
+            self._params(),
+        )
+
+    def count_users(self) -> int:
+        row = self._fetch_one("SELECT COUNT(*) AS user_count FROM users", self._params())
+        return int((row or {}).get("user_count", 0) or 0)
+
+    def create_or_update_directory_user(
+        self,
+        *,
+        user_id: str,
+        username: str,
+        display_name: str,
+        email: str,
+        role_name: str,
+        is_active: bool,
+        must_change_password: bool,
+        password_hash: str,
+        actor_type: str = "user",
+    ) -> dict:
+        if not self.enabled:
+            return {}
+        self.bootstrap_schema()
+        timestamp = _timestamp()
+        resolved_role = self.normalize_role_name(role_name)
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    INSERT INTO users (
+                        user_id, username, display_name, email, actor_type, role, role_name,
+                        is_active, must_change_password, password_hash, created_at, updated_at, last_login_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        username = excluded.username,
+                        display_name = excluded.display_name,
+                        email = excluded.email,
+                        actor_type = excluded.actor_type,
+                        role = excluded.role,
+                        role_name = excluded.role_name,
+                        is_active = excluded.is_active,
+                        must_change_password = excluded.must_change_password,
+                        password_hash = CASE WHEN excluded.password_hash <> '' THEN excluded.password_hash ELSE users.password_hash END,
+                        updated_at = excluded.updated_at
+                    """
+                ),
+                self._params(
+                    str(user_id or "").strip(),
+                    str(username or "").strip(),
+                    str(display_name or "").strip(),
+                    str(email or "").strip(),
+                    str(actor_type or "user").strip() or "user",
+                    resolved_role,
+                    resolved_role,
+                    1 if is_active else 0,
+                    1 if must_change_password else 0,
+                    str(password_hash or "").strip(),
+                    timestamp,
+                    timestamp,
+                    "",
+                ),
+            )
+        return self.fetch_user(str(user_id or "").strip()) or {}
+
+    def update_user_directory_fields(
+        self,
+        user_id: str,
+        *,
+        display_name: str,
+        email: str,
+        role_name: str,
+        is_active: bool,
+        must_change_password: bool,
+    ) -> dict | None:
+        if not self.enabled:
+            return None
+        self.bootstrap_schema()
+        resolved_role = self.normalize_role_name(role_name)
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    UPDATE users
+                    SET display_name = ?, email = ?, role = ?, role_name = ?,
+                        is_active = ?, must_change_password = ?, updated_at = ?
+                    WHERE user_id = ?
+                    """
+                ),
+                self._params(
+                    str(display_name or "").strip(),
+                    str(email or "").strip(),
+                    resolved_role,
+                    resolved_role,
+                    1 if is_active else 0,
+                    1 if must_change_password else 0,
+                    _timestamp(),
+                    str(user_id or "").strip(),
+                ),
+            )
+        return self.fetch_user(user_id)
+
+    def set_user_password_hash(self, user_id: str, password_hash: str, *, must_change_password: bool) -> dict | None:
+        if not self.enabled:
+            return None
+        self.bootstrap_schema()
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    UPDATE users
+                    SET password_hash = ?, must_change_password = ?, updated_at = ?
+                    WHERE user_id = ?
+                    """
+                ),
+                self._params(
+                    str(password_hash or "").strip(),
+                    1 if must_change_password else 0,
+                    _timestamp(),
+                    str(user_id or "").strip(),
+                ),
+            )
+        return self.fetch_user(user_id)
+
+    def update_last_login(self, user_id: str) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        timestamp = _timestamp()
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    UPDATE users
+                    SET last_login_at = ?, updated_at = ?
+                    WHERE user_id = ?
+                    """
+                ),
+                self._params(timestamp, timestamp, str(user_id or "").strip()),
+            )
 
     def upsert_repo(self, repo_metadata: RepoMetadata | None) -> None:
         if not self.enabled or repo_metadata is None:
@@ -380,8 +791,11 @@ class DatabaseService:
             connection.cursor().execute(
                 self._sql(
                     """
-                    INSERT INTO repos (repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO repos (
+                        repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
+                        index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(repo_id) DO UPDATE SET
                         root_path = excluded.root_path,
                         local_path = excluded.local_path,
@@ -389,7 +803,14 @@ class DatabaseService:
                         display_name = excluded.display_name,
                         default_branch = excluded.default_branch,
                         status = excluded.status,
-                        indexed_at = excluded.indexed_at
+                        indexed_at = excluded.indexed_at,
+                        index_status = excluded.index_status,
+                        indexed_head = excluded.indexed_head,
+                        index_error = excluded.index_error,
+                        reindex_required = excluded.reindex_required,
+                        sync_status = excluded.sync_status,
+                        last_sync_at = excluded.last_sync_at,
+                        sync_error = excluded.sync_error
                     """
                 ),
                 self._params(
@@ -401,13 +822,21 @@ class DatabaseService:
                     repo_metadata.default_branch,
                     repo_metadata.status,
                     repo_metadata.indexed_at,
+                    repo_metadata.index_status,
+                    repo_metadata.indexed_head,
+                    repo_metadata.index_error,
+                    1 if repo_metadata.reindex_required else 0,
+                    repo_metadata.sync_status,
+                    repo_metadata.last_sync_at,
+                    repo_metadata.sync_error,
                 ),
             )
 
     def fetch_repo(self, repo_id: str) -> dict | None:
         return self._fetch_one(
             """
-            SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at
+            SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
+                   index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error
             FROM repos
             WHERE repo_id = ?
             """,
@@ -423,7 +852,8 @@ class DatabaseService:
             cursor.execute(
                 self._sql(
                     """
-                    SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at
+                    SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
+                           index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error
                     FROM repos
                     ORDER BY repo_id
                     """
@@ -621,12 +1051,12 @@ class DatabaseService:
 
         return self._fetch_all(
             f"""
-            SELECT runs.run_id, runs.goal, runs.status, runs.attempt_index, runs.total_attempts, runs.parent_run_id, runs.actor_id, runs.repo_id,
-                   runs.started_at, runs.finished_at, runs.scm_branch, runs.scm_commit,
-                   runs.pr_url, runs.review_url, runs.decision, runs.decided_at, runs.decided_by,
-                   runs.decision_note, runs.retry_note, runs.retry_context_summary, runs.retry_context_json,
-                   users.display_name, users.role, users.actor_type
-            FROM runs
+              SELECT runs.run_id, runs.goal, runs.status, runs.attempt_index, runs.total_attempts, runs.parent_run_id, runs.actor_id, runs.repo_id,
+                     runs.started_at, runs.finished_at, runs.scm_branch, runs.scm_commit,
+                     runs.pr_url, runs.review_url, runs.decision, runs.decided_at, runs.decided_by,
+                     runs.decision_note, runs.retry_note, runs.retry_context_summary, runs.retry_context_json,
+                     users.username, users.display_name, users.role, users.role_name, users.actor_type
+              FROM runs
             LEFT JOIN users ON users.user_id = runs.actor_id
             {where_clause}
             ORDER BY runs.started_at DESC, runs.run_id DESC
@@ -790,3 +1220,119 @@ class DatabaseService:
             if cursor.fetchone() is not None:
                 return
             cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
+
+    def _ensure_unique_index(self, cursor, index_name: str, table_name: str, column_name: str) -> None:
+        if self._backend == "sqlite":
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+                (index_name,),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} ON {table_name}({column_name})"
+                )
+            return
+        if self._backend == "postgres":
+            cursor.execute(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE tablename = %s AND indexname = %s
+                """,
+                (table_name, index_name),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    f"CREATE UNIQUE INDEX {index_name} ON {table_name}({column_name})"
+                )
+
+    def _ensure_index(self, cursor, index_name: str, table_name: str, column_name: str) -> None:
+        if self._backend == "sqlite":
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+                (index_name,),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name}({column_name})"
+                )
+            return
+        if self._backend == "postgres":
+            cursor.execute(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE tablename = %s AND indexname = %s
+                """,
+                (table_name, index_name),
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    f"CREATE INDEX {index_name} ON {table_name}({column_name})"
+                )
+
+    def _backfill_user_role_names(self, cursor) -> None:
+        cursor.execute(
+            self._sql(
+                """
+                SELECT user_id, username, role, role_name, updated_at
+                FROM users
+                """
+            )
+        )
+        for row in cursor.fetchall():
+            user_id = str(self._row_value(row, "user_id") or "").strip()
+            username = str(self._row_value(row, "username") or "").strip()
+            legacy_role = str(self._row_value(row, "role") or "").strip()
+            current_role_name = str(self._row_value(row, "role_name") or "").strip()
+            current_updated_at = str(self._row_value(row, "updated_at") or "").strip()
+            resolved_role = self.resolve_user_role_name(
+                role_name=current_role_name,
+                legacy_role=legacy_role,
+                username=username,
+            )
+            if not user_id or not resolved_role:
+                continue
+            if legacy_role == resolved_role and current_role_name == resolved_role:
+                continue
+            cursor.execute(
+                self._sql(
+                    """
+                    UPDATE users
+                    SET role = ?, role_name = ?, updated_at = ?
+                    WHERE user_id = ?
+                    """
+                ),
+                self._params(
+                    resolved_role,
+                    resolved_role,
+                    current_updated_at or _timestamp(),
+                    user_id,
+                ),
+            )
+
+    @staticmethod
+    def normalize_role_name(role_name: str | None) -> str:
+        resolved = str(role_name or "").strip().lower()
+        if not resolved:
+            return ""
+        legacy_map = {
+            "ba": "analyst",
+        }
+        return legacy_map.get(resolved, resolved)
+
+    @classmethod
+    def resolve_user_role_name(
+        cls,
+        *,
+        role_name: str | None,
+        legacy_role: str | None = None,
+        username: str | None = None,
+    ) -> str:
+        resolved = cls.normalize_role_name(role_name or legacy_role)
+        if resolved:
+            return resolved
+        bootstrap_username = str(settings.runtime.bootstrap_admin_username or "").strip().lower()
+        if bootstrap_username and str(username or "").strip().lower() == bootstrap_username:
+            return "admin"
+        return ""

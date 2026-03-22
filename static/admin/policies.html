@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Політики</title>
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../config.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="toolbar">
+      <label class="language-switcher">
+        <span data-i18n="common.language">Мова</span>
+        <select id="languageSelector">
+          <option value="uk">Українська</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <a href="/ui/admin/index.html" data-i18n="admin.title">Адмін</a>
+      <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+    </div>
+    <h1 data-i18n="admin.policies">Політики</h1>
+    <div id="accessDeniedBox" class="hidden"></div>
+    <div id="loadingBox" class="card">Loading admin data...</div>
+    <div id="adminContent" hidden>
+    <div class="card">
+      <label><span data-i18n="admin.role">Роль</span><input id="roleName"></label>
+      <label><span data-i18n="admin.repo_allowlist">Дозволені repo</span><input id="repoAllowlist" placeholder="sample,repo-2"></label>
+      <label><span data-i18n="admin.repo_denylist">Заборонені repo</span><input id="repoDenylist"></label>
+      <label><span data-i18n="admin.jira_allowlist">Дозволені Jira проєкти</span><input id="jiraAllowlist" placeholder="TEL,OPS"></label>
+      <label><span data-i18n="admin.jira_denylist">Заборонені Jira проєкти</span><input id="jiraDenylist"></label>
+      <label><span data-i18n="admin.protected_branches">Захищені гілки</span><input id="protectedBranches" placeholder="main,release/"></label>
+      <label class="inline-option"><input id="dryRunOnly" type="checkbox"> <span data-i18n="admin.dry_run_only">Лише dry-run</span></label>
+      <label class="inline-option"><input id="publicationRequiresPr" type="checkbox"> <span data-i18n="admin.publication_requires_pr">Публікація вимагає PR</span></label>
+      <div class="toolbar">
+        <button id="savePolicyButton" class="primary" type="button" data-i18n="admin.save_policy">Зберегти політику</button>
+      </div>
+      <div id="messageBox"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th data-i18n="admin.role">Роль</th><th data-i18n="admin.repo_allowlist">Repo allowlist</th><th data-i18n="admin.repo_denylist">Repo denylist</th><th data-i18n="admin.jira_allowlist">Jira allowlist</th><th data-i18n="admin.dry_run_only">Dry-run only</th><th data-i18n="admin.publication_requires_pr">PR required</th></tr></thead>
+        <tbody id="policiesBody"><tr><td colspan="6">Завантаження...</td></tr></tbody>
+      </table>
+    </div>
+    </div>
+  </div>
+  <script>
+    const auth = window.AuthUI;
+    async function loadPolicies() {
+      const payload = await auth.fetchJson("/admin/policies");
+      const tbody = document.getElementById("policiesBody");
+      tbody.innerHTML = "";
+      for (const policy of payload.policies || []) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${auth.escapeHtml(policy.role_name || "")}</td>
+          <td>${auth.escapeHtml((policy.repo_allowlist || []).join(", "))}</td>
+          <td>${auth.escapeHtml((policy.repo_denylist || []).join(", "))}</td>
+          <td>${auth.escapeHtml((policy.jira_project_allowlist || []).join(", "))}</td>
+          <td>${auth.boolLabel(policy.dry_run_only)}</td>
+          <td>${auth.boolLabel(policy.publication_requires_pr)}</td>
+        `;
+        tbody.appendChild(row);
+      }
+    }
+    auth.requireLogin({ requireRole: "admin", allowErrorState: true }).then((me) => {
+      if (!me) return;
+      auth.applySessionNavigation({ me, logoutButtonId: "logoutButton" });
+      if (me.authError) {
+        document.getElementById("loadingBox").hidden = true;
+        auth.renderStateMessage(document.getElementById("accessDeniedBox"), {
+          title: auth.t("common.message"),
+          message: me.errorMessage || auth.t("error.auth_state_invalid"),
+          stateClass: "blocked"
+        });
+        return;
+      }
+      if (me.accessDenied) {
+        document.getElementById("loadingBox").hidden = true;
+        auth.renderAccessDenied(document.getElementById("accessDeniedBox"));
+        return;
+      }
+      document.getElementById("loadingBox").hidden = true;
+      document.getElementById("adminContent").hidden = false;
+      loadPolicies();
+    });
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    document.getElementById("savePolicyButton").addEventListener("click", async () => {
+      const splitList = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+      const roleName = document.getElementById("roleName").value.trim();
+      const payload = await auth.fetchJson(`/admin/policies/${encodeURIComponent(roleName)}`, {
+        method: "PUT",
+        body: {
+          repo_allowlist: splitList(document.getElementById("repoAllowlist").value),
+          repo_denylist: splitList(document.getElementById("repoDenylist").value),
+          jira_project_allowlist: splitList(document.getElementById("jiraAllowlist").value),
+          jira_project_denylist: splitList(document.getElementById("jiraDenylist").value),
+          protected_branch_prefixes: splitList(document.getElementById("protectedBranches").value),
+          dry_run_only: document.getElementById("dryRunOnly").checked,
+          publication_requires_pr: document.getElementById("publicationRequiresPr").checked
+        }
+      });
+      document.getElementById("messageBox").textContent = payload?.policy?.role_name ? auth.t("admin.policy_saved") : auth.t("admin.policy_saved");
+      loadPolicies();
+    });
+  </script>
+</body>
+</html>

@@ -1,10 +1,13 @@
 import shutil
+import subprocess
 import sys
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from contracts.validation_contract import ValidationCommand
+from contracts.validation_contract import ValidationStepResult
 from services.repo_registry import RepositoryRegistryService
 from services.validation_service import ValidationService
 
@@ -156,6 +159,8 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("skipped", statuses)
         self.assertTrue(any("-m pytest" in command for command in commands))
         self.assertTrue(any("-m unittest" in command for command in commands))
+        self.assertFalse(result.environment_prepared)
+        self.assertEqual(result.dependency_install_status, "skipped")
 
     def test_validation_service_parses_pytest_failure_summary(self) -> None:
         script_path = self.repo_root / "emit_pytest_failure.py"
@@ -188,6 +193,128 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(result.failed_test_cases[0].error_type, "AssertionError")
         self.assertIn("expected 4", result.failed_test_cases[0].message)
         self.assertIn("1 failed, 2 passed", result.stdout)
+
+    def test_validation_service_classifies_missing_dependency(self) -> None:
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[
+                ValidationCommand(
+                    name="test",
+                    command=f"\"{sys.executable}\" -c \"import missing_package_xyz\"",
+                )
+            ],
+        )
+
+        self.assertEqual(result.overall_status, "failed")
+        self.assertEqual(result.outcome_type, "validation_missing_dependency")
+        self.assertTrue(result.environment_related_failure)
+
+    def test_validation_service_prepares_environment_from_requirements(self) -> None:
+        (self.repo_root / "requirements.txt").write_text("pytest==8.0.0\n", encoding="utf-8")
+        recorded_commands: list[str] = []
+
+        def _fake_run_command(command, *, cwd, timeout_seconds=None, env_overrides=None):
+            recorded_commands.append(str(command))
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="ok",
+                stderr="",
+            )
+
+        with patch.object(self.validation_service, "_run_command", side_effect=_fake_run_command):
+            result = self.validation_service.run_validation(
+                "sample",
+                commands=[
+                    ValidationCommand(
+                        name="test",
+                        command="python -m pytest tests/test_smoke.py",
+                    )
+                ],
+            )
+
+        self.assertEqual(result.overall_status, "success")
+        self.assertTrue(result.environment_prepared)
+        self.assertEqual(result.dependency_install_status, "prepared")
+        self.assertTrue(any("-m venv" in command for command in recorded_commands))
+        self.assertTrue(any("-m pip install" in command and "requirements.txt" in command for command in recorded_commands))
+        self.assertIn("Dependency source detected: requirements.txt", result.environment_setup_logs)
+
+    def test_validation_service_skips_environment_setup_without_dependency_manifest(self) -> None:
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[
+                ValidationCommand(
+                    name="custom",
+                    command=f"\"{sys.executable}\" -c \"print('ok')\"",
+                )
+            ],
+        )
+
+        self.assertEqual(result.overall_status, "success")
+        self.assertFalse(result.environment_prepared)
+        self.assertEqual(result.dependency_install_status, "skipped")
+        self.assertIn("validation environment setup skipped", result.environment_setup_logs.lower())
+
+    def test_validation_service_reports_dependency_install_failure(self) -> None:
+        (self.repo_root / "requirements.txt").write_text("missing-package\n", encoding="utf-8")
+
+        def _fake_run_command(command, *, cwd, timeout_seconds=None, env_overrides=None):
+            normalized_command = str(command)
+            if "-m venv" in normalized_command:
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=1,
+                stdout="",
+                stderr="Could not find a version that satisfies the requirement missing-package",
+            )
+
+        with patch.object(self.validation_service, "_run_command", side_effect=_fake_run_command):
+            result = self.validation_service.run_validation("sample")
+
+        self.assertEqual(result.overall_status, "failed")
+        self.assertEqual(result.outcome_type, "validation_missing_dependency")
+        self.assertFalse(result.environment_prepared)
+        self.assertEqual(result.dependency_install_status, "failed")
+        self.assertIn("Dependency installation failed.", result.errors[0])
+        self.assertIn("missing-package", result.environment_setup_logs)
+
+    def test_validation_service_marks_targeted_profile_for_changed_python_files(self) -> None:
+        recorded_commands: list[str] = []
+
+        def _fake_run_step(*, repo_root, command, output_max_chars, timeout_seconds, env_overrides=None):
+            if not command.command:
+                return ValidationStepResult(
+                    name=command.name,
+                    command="",
+                    exit_code=None,
+                    status="skipped",
+                    stdout="",
+                    stderr=f"No validation command configured or detected for step: {command.name}",
+                    duration=0.0,
+                )
+            recorded_commands.append(command.command)
+            return ValidationStepResult(
+                name="test",
+                command=command.command,
+                exit_code=0,
+                status="success",
+                stdout="ok",
+                stderr="",
+                duration=0.01,
+            )
+
+        with patch.object(self.validation_service, "_run_step", side_effect=_fake_run_step):
+            result = self.validation_service.run_validation(
+                "sample",
+                changed_files=["tests/test_smoke.py"],
+            )
+
+        self.assertEqual(result.validation_scope, "changed_files")
+        self.assertEqual(result.validation_profile_used, "python_targeted")
+        self.assertTrue(result.targeted_validation)
+        self.assertTrue(any("tests/test_smoke.py" in command for command in recorded_commands))
 
 
 if __name__ == "__main__":

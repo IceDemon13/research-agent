@@ -118,6 +118,7 @@ def run_spec_agent(
     user_input: str,
     task_intent: str = "create",
     repo_context: dict | None = None,
+    routing_metadata: dict | None = None,
 ) -> AgentResult:
     resolved_repo_context = ensure_repo_context(
         user_input,
@@ -136,6 +137,7 @@ def run_spec_agent(
             metadata={
                 "artifact_type": "spec",
                 "spec": parse_spec_text(""),
+                **dict(routing_metadata or {}),
             },
         )
 
@@ -156,6 +158,7 @@ def run_spec_agent(
         user_input=composed_input,
         memory=memory,
         agent_name="spec_agent",
+        routing_metadata=dict(routing_metadata or {}),
     )
 
     spec = parse_spec_text(answer)
@@ -169,5 +172,6 @@ def run_spec_agent(
         metadata={
             "artifact_type": "spec",
             "spec": spec,
+            **dict(routing_metadata or {}),
         },
     )

@@ -1,138 +1,307 @@
 <!doctype html>
-<html lang="en">
+<html lang="uk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Repos</title>
+  <title>Repositories</title>
+  <link rel="stylesheet" href="./styles.css">
   <script src="./config.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
-    form { max-width: 720px; margin-bottom: 24px; }
-    label { display: block; margin-bottom: 12px; }
-    input, button, a { font: inherit; }
-    input { width: 100%; padding: 8px; box-sizing: border-box; }
-    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-    button, a { padding: 8px 12px; border: 1px solid #bbb; background: #f6f6f6; color: #222; text-decoration: none; cursor: pointer; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
-    .error { color: #a40000; margin-top: 12px; }
-    .muted { color: #666; }
-  </style>
 </head>
 <body>
-  <div class="toolbar">
-    <a href="./index.html">Back to Runs</a>
-    <a href="./create.html">Create Run</a>
+  <div class="page-shell">
+    <div class="topbar">
+      <div id="userBox" class="muted" data-i18n="common.loading">Завантаження...</div>
+      <div class="actions">
+        <label class="language-switcher">
+          <span data-i18n="common.language">Мова</span>
+          <select id="languageSelector">
+            <option value="uk">Українська</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <a href="./index.html" data-i18n="common.home">Головна</a>
+        <a href="./runs.html" data-i18n="common.technical_runs">Технічні run-и</a>
+        <a href="./admin/index.html" id="adminLink" data-i18n="common.admin">Адмін</a>
+        <a href="./login.html" id="loginLink" data-i18n="common.login">Вхід</a>
+        <a href="#" id="logoutLink" data-i18n="common.logout">Вийти</a>
+      </div>
+    </div>
+
+    <div class="page-header">
+      <h1 data-i18n="repo.page.title">Керування repo</h1>
+      <p class="muted" data-i18n="repo.page.subtitle">Переглядайте sync/index стан, поточний HEAD та вручну оновлюйте аналіз repo.</p>
+    </div>
+
+    <form id="repoForm" class="card">
+      <h2 data-i18n="repo.onboard.title">Підключити repo</h2>
+      <p class="muted" data-i18n="repo.onboard.subtitle">Вкажіть чистий Git URL без токенів у рядку адреси.</p>
+      <div class="grid">
+        <label>
+          <span data-i18n="repo.field.repo_id">Repo ID</span>
+          <input id="repoIdInput" required data-i18n-placeholder="repo.placeholder.repo_id" placeholder="sample-repo">
+        </label>
+        <label>
+          <span data-i18n="repo.field.display_name">Display Name</span>
+          <input id="displayNameInput" required data-i18n-placeholder="repo.placeholder.display_name" placeholder="Sample Repo">
+        </label>
+        <label>
+          <span data-i18n="repo.field.remote_url">Remote URL</span>
+          <input id="remoteUrlInput" required data-i18n-placeholder="repo.placeholder.remote_url" placeholder="https://bitbucket.org/acme/sample-repo.git">
+        </label>
+        <label>
+          <span data-i18n="repo.field.default_branch">Default Branch</span>
+          <input id="defaultBranchInput" data-i18n-placeholder="repo.placeholder.default_branch" placeholder="main">
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary" data-i18n="repo.action.onboard">Підключити repo</button>
+        <button id="refreshButton" type="button" class="secondary" data-i18n="common.refresh">Оновити</button>
+      </div>
+    </form>
+
+    <div id="actionMessage" class="message" hidden></div>
+    <div id="errorBox" class="error" hidden></div>
+
+    <section class="card">
+      <div class="toolbar">
+        <h2 data-i18n="repo.page.list_title">Зареєстровані repo</h2>
+      </div>
+      <div id="reposContainer" class="repo-grid">
+        <div class="empty-state" data-i18n="common.loading">Завантаження...</div>
+      </div>
+    </section>
   </div>
 
-  <h1>Repositories</h1>
-  <p class="muted">Onboard a repo by clean remote Git URL and register it for repo-aware runs. Do not paste tokens into the URL.</p>
-
-  <form id="repoForm">
-    <label>
-      Repo ID
-      <input id="repoIdInput" required placeholder="sample-repo">
-    </label>
-    <label>
-      Display Name
-      <input id="displayNameInput" required placeholder="Sample Repo">
-    </label>
-    <label>
-      Remote URL
-      <input id="remoteUrlInput" required placeholder="https://bitbucket.org/acme/sample-repo.git">
-    </label>
-    <label>
-      Default Branch
-      <input id="defaultBranchInput" placeholder="main">
-    </label>
-    <div class="toolbar">
-      <button type="submit">Onboard Repo</button>
-      <button id="refreshButton" type="button">Refresh</button>
-    </div>
-  </form>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Repo ID</th>
-        <th>Display Name</th>
-        <th>Remote URL</th>
-        <th>Local Path</th>
-        <th>Status</th>
-        <th>Default Branch</th>
-      </tr>
-    </thead>
-    <tbody id="reposBody">
-      <tr><td colspan="6">Loading...</td></tr>
-    </tbody>
-  </table>
-
-  <div id="errorBox" class="error"></div>
-
   <script>
-    const config = window.APP_CONFIG || { apiBaseUrl: "", defaultHeaders: {} };
+    const auth = window.AuthUI;
 
-    function buildUrl(path) {
-      const base = (config.apiBaseUrl || "").replace(/\/$/, "");
-      return (base ? base : window.location.origin) + path;
+    function shortHash(value) {
+      const text = String(value || "").trim();
+      if (!text) return "-";
+      return text.length > 10 ? text.slice(0, 10) : text;
     }
 
-    async function fetchJson(path, options = {}) {
-      const response = await fetch(buildUrl(path), {
-        method: options.method || "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(config.defaultHeaders || {}),
-          ...(options.headers || {})
+    function safeList(values) {
+      return Array.isArray(values) && values.length ? values : [];
+    }
+
+    function statusClass(kind, value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      const mapping = {
+        sync: {
+          up_to_date: "status-success",
+          synced: "status-ready",
+          sync_unavailable: "status-warning",
+          not_git_repo: "status-failed",
+          stale: "status-warning"
         },
-        body: options.body ? JSON.stringify(options.body) : undefined
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.detail?.message || payload?.detail?.error || "Request failed");
+        index: {
+          ready: "status-success",
+          building: "status-running",
+          stale: "status-warning",
+          failed: "status-failed",
+          unavailable: "status-neutral"
+        }
+      };
+      return mapping[kind]?.[normalized] || "status-neutral";
+    }
+
+    function translateSyncStatus(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      const key = `sync.status.${normalized}`;
+      const translated = auth.t(key);
+      return translated === key ? (value || "-") : translated;
+    }
+
+    function translateIndexStatus(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      const key = normalized ? `repo.index.${normalized}` : "repo.index.unavailable";
+      const translated = auth.t(key);
+      return translated === key ? (value || auth.t("repo.index.unavailable")) : translated;
+    }
+
+    function renderBadge(label, className) {
+      return `<span class="status-badge ${className}">${auth.escapeHtml(label)}</span>`;
+    }
+
+    function renderListItems(values, emptyKey = "common.none") {
+      const items = safeList(values);
+      if (!items.length) {
+        return `<div class="empty-state">${auth.escapeHtml(auth.t(emptyKey))}</div>`;
       }
-      return payload;
+      return `<ul class="report-list">${items.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul>`;
+    }
+
+    function renderActionLinks(repo) {
+      const repoId = encodeURIComponent(repo.repo_id || "");
+      return `
+        <a class="button-link" href="./workflow.html?type=implementation_plan&repo_id=${repoId}">${auth.escapeHtml(auth.t("repo.action.open_workflows"))}</a>
+        <a class="button-link" href="./runs.html?repo_id=${repoId}">${auth.escapeHtml(auth.t("repo.action.open_runs"))}</a>
+      `;
+    }
+
+    function repoStateText(repo) {
+      if (repo.analysis_stale || repo.reindex_required) {
+        return auth.t("repo.analysis.stale");
+      }
+      if (repo.index_status === "failed") {
+        return auth.t("repo.analysis.failed");
+      }
+      if (repo.index_status === "ready") {
+        return auth.t("repo.analysis.ready");
+      }
+      return auth.t("repo.analysis.unknown");
+    }
+
+    function renderRepoCard(repo) {
+      const profile = repo.profile || {};
+      const syncLabel = translateSyncStatus(repo.sync_status || "stale");
+      const indexLabel = translateIndexStatus(repo.index_status || "unavailable");
+      const analysisClass = repo.analysis_stale || repo.reindex_required ? "status-warning" : statusClass("index", repo.index_status || "unavailable");
+      const currentHead = String(repo.current_local_head || "").trim();
+      const indexedHead = String(repo.indexed_head || "").trim();
+      const showIndexError = String(repo.index_error || "").trim();
+      const showSyncError = String(repo.sync_error || "").trim();
+      return `
+        <article class="card repo-card" data-repo-id="${auth.escapeHtml(repo.repo_id || "")}">
+          <div class="repo-card-header">
+            <div>
+              <h2>${auth.escapeHtml(repo.display_name || repo.repo_id || "-")}</h2>
+              <div class="muted">${auth.escapeHtml(repo.repo_id || "-")}</div>
+            </div>
+            <div class="repo-badges">
+              ${renderBadge(syncLabel, statusClass("sync", repo.sync_status || "stale"))}
+              ${renderBadge(indexLabel, statusClass("index", repo.index_status || "unavailable"))}
+              ${renderBadge(repoStateText(repo), analysisClass)}
+            </div>
+          </div>
+
+          <div class="repo-summary-grid">
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.remote_url"))}</strong><br><span class="repo-mono">${auth.escapeHtml(repo.remote_url || "-")}</span></div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.local_path"))}</strong><br><span class="repo-mono">${auth.escapeHtml(repo.local_path || "-")}</span></div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.default_branch"))}</strong><br>${auth.escapeHtml(repo.default_branch || "-")}</div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.current_branch"))}</strong><br>${auth.escapeHtml(repo.current_branch || "-")}</div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.current_head"))}</strong><br><span class="repo-mono" title="${auth.escapeHtml(currentHead || "-")}">${auth.escapeHtml(shortHash(currentHead))}</span></div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.indexed_head"))}</strong><br><span class="repo-mono" title="${auth.escapeHtml(indexedHead || "-")}">${auth.escapeHtml(shortHash(indexedHead))}</span></div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.last_indexed_at"))}</strong><br>${auth.escapeHtml(auth.formatDateTime(repo.indexed_at || ""))}</div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.last_sync_at"))}</strong><br>${auth.escapeHtml(auth.formatDateTime(repo.last_sync_at || ""))}</div>
+          </div>
+
+          <div class="repo-analysis-note ${repo.analysis_stale || repo.reindex_required ? "warning" : "ready"}">
+            ${auth.escapeHtml(repo.analysis_stale || repo.reindex_required ? auth.t("repo.analysis.rebuild_needed") : auth.t("repo.analysis.up_to_date"))}
+          </div>
+
+          <div class="actions">
+            <button type="button" class="secondary" data-sync="${auth.escapeHtml(repo.repo_id || "")}">${auth.escapeHtml(auth.t("repo.action.sync"))}</button>
+            <button type="button" class="primary" data-reindex="${auth.escapeHtml(repo.repo_id || "")}">${auth.escapeHtml(auth.t("repo.action.reindex"))}</button>
+            ${renderActionLinks(repo)}
+          </div>
+
+          <details class="repo-details">
+            <summary>${auth.escapeHtml(auth.t("repo.details.title"))}</summary>
+            <div class="repo-detail-grid">
+              <div class="panel">
+                <h3>${auth.escapeHtml(auth.t("repo.details.profile"))}</h3>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.stack"))}</strong><br>${auth.escapeHtml(profile.primary_stack || auth.t("common.none"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.solution_count"))}</strong><br>${auth.escapeHtml(String(profile.solution_count || 0))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.project_count"))}</strong><br>${auth.escapeHtml(String(profile.project_count || 0))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.framework_markers"))}</strong></p>
+                ${renderListItems(profile.framework_markers)}
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.source_roots"))}</strong></p>
+                ${renderListItems(profile.source_roots)}
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.test_roots"))}</strong></p>
+                ${renderListItems(profile.test_roots)}
+              </div>
+              <div class="panel">
+                <h3>${auth.escapeHtml(auth.t("repo.details.commands"))}</h3>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.controller_count"))}</strong><br>${auth.escapeHtml(String(profile.controller_count || 0))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.route_count"))}</strong><br>${auth.escapeHtml(String(profile.route_count || 0))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.handler_count"))}</strong><br>${auth.escapeHtml(String(profile.handler_count || 0))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.validator_count"))}</strong><br>${auth.escapeHtml(String(profile.validator_count || 0))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.build_commands"))}</strong></p>
+                ${renderListItems(profile.build_command_candidates)}
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.test_commands"))}</strong></p>
+                ${renderListItems(profile.test_command_candidates)}
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.glossary_terms"))}</strong><br>${auth.escapeHtml(String(repo.glossary_term_count || 0))}</p>
+              </div>
+              <div class="panel">
+                <h3>${auth.escapeHtml(auth.t("repo.details.health"))}</h3>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.sync_status"))}</strong><br>${renderBadge(syncLabel, statusClass("sync", repo.sync_status || "stale"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.index_status"))}</strong><br>${renderBadge(indexLabel, statusClass("index", repo.index_status || "unavailable"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.reindex_required"))}</strong><br>${auth.escapeHtml(auth.boolLabel(Boolean(repo.reindex_required)))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.index_error"))}</strong><br>${auth.escapeHtml(showIndexError || auth.t("common.none"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.sync_error"))}</strong><br>${auth.escapeHtml(showSyncError || auth.t("common.none"))}</p>
+              </div>
+            </div>
+          </details>
+        </article>
+      `;
+    }
+
+    function setMessage(text, kind = "message") {
+      const messageNode = document.getElementById("actionMessage");
+      const errorNode = document.getElementById("errorBox");
+      messageNode.hidden = !text || kind === "error";
+      errorNode.hidden = !text || kind !== "error";
+      messageNode.textContent = kind === "error" ? "" : text;
+      errorNode.textContent = kind === "error" ? text : "";
+    }
+
+    function setLoadingState() {
+      document.getElementById("reposContainer").innerHTML = `<div class="empty-state">${auth.escapeHtml(auth.t("common.loading"))}</div>`;
     }
 
     function renderRepos(repos) {
-      const tbody = document.getElementById("reposBody");
-      tbody.innerHTML = "";
-      if (!repos.length) {
-        tbody.innerHTML = "<tr><td colspan=\"6\">No repos registered.</td></tr>";
+      const container = document.getElementById("reposContainer");
+      if (!Array.isArray(repos) || !repos.length) {
+        container.innerHTML = `<div class="empty-state">${auth.escapeHtml(auth.t("repo.page.empty"))}</div>`;
         return;
       }
-      repos.forEach((repo) => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${repo.repo_id || ""}</td>
-          <td>${repo.display_name || ""}</td>
-          <td>${repo.remote_url || "-"}</td>
-          <td>${repo.local_path || "-"}</td>
-          <td>${repo.status || "-"}</td>
-          <td>${repo.default_branch || "-"}</td>
-        `;
-        tbody.appendChild(row);
+      container.innerHTML = repos.map(renderRepoCard).join("");
+      container.querySelectorAll("button[data-sync]").forEach((button) => {
+        button.addEventListener("click", () => runRepoAction(button, "sync"));
+      });
+      container.querySelectorAll("button[data-reindex]").forEach((button) => {
+        button.addEventListener("click", () => runRepoAction(button, "reindex"));
       });
     }
 
-    async function loadRepos() {
-      const errorBox = document.getElementById("errorBox");
-      errorBox.textContent = "";
+    async function runRepoAction(button, action) {
+      const repoId = button.getAttribute(`data-${action}`) || "";
+      if (!repoId) return;
+      setMessage("");
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = auth.t(action === "sync" ? "repo.action.sync_loading" : "repo.action.reindex_loading");
       try {
-        const payload = await fetchJson("/repos");
+        const payload = await auth.fetchJson(`/repos/${encodeURIComponent(repoId)}/${action}`, { method: "POST" });
+        setMessage(payload.message || auth.t("common.success"));
+        await loadRepos();
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function loadRepos() {
+      setLoadingState();
+      setMessage("");
+      try {
+        const payload = await auth.fetchJson("/repos");
         renderRepos(payload.repos || []);
       } catch (error) {
-        document.getElementById("reposBody").innerHTML = "<tr><td colspan=\"6\">Failed to load repos.</td></tr>";
-        errorBox.textContent = error.message;
+        document.getElementById("reposContainer").innerHTML = `<div class="empty-state">${auth.escapeHtml(auth.t("repo.page.load_failed"))}</div>`;
+        setMessage(error.message || auth.t("repo.page.load_failed"), "error");
       }
     }
 
     document.getElementById("repoForm").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const errorBox = document.getElementById("errorBox");
-      errorBox.textContent = "";
+      setMessage("");
       try {
-        await fetchJson("/repos/onboard", {
+        await auth.fetchJson("/repos/onboard", {
           method: "POST",
           body: {
             repo_id: document.getElementById("repoIdInput").value.trim(),
@@ -142,14 +311,27 @@
           }
         });
         document.getElementById("repoForm").reset();
-        loadRepos();
+        setMessage(auth.t("repo.onboard.success"));
+        await loadRepos();
       } catch (error) {
-        errorBox.textContent = error.message;
+        setMessage(error.message || auth.t("common.failed"), "error");
       }
     });
 
     document.getElementById("refreshButton").addEventListener("click", loadRepos);
-    loadRepos();
+    document.getElementById("logoutLink").addEventListener("click", (event) => {
+      event.preventDefault();
+      auth.logout();
+    });
+
+    auth.requireLogin({ redirectTo: "/ui/login.html" }).then(async (me) => {
+      if (!me) return;
+      auth.applySessionNavigation({ me, loginLinkId: "loginLink", logoutLinkId: "logoutLink", adminLinkId: "adminLink" });
+      document.getElementById("userBox").textContent = auth.t("index.signed_in_as", {
+        name: me.user.display_name || me.user.username || "-"
+      });
+      await loadRepos();
+    });
   </script>
 </body>
 </html>

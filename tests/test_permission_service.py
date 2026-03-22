@@ -10,6 +10,7 @@ from contracts.permission_contract import PermissionScope
 from contracts.permission_contract import RolePolicy
 from services.db_service import DatabaseService
 from services.permission_service import ROLE_CAPABILITIES
+from services.permission_service import ROLE_DESCRIPTIONS
 from services.permission_service import ROLE_POLICIES
 from services.permission_service import PermissionService
 
@@ -119,6 +120,16 @@ class PermissionServiceTests(unittest.TestCase):
         self.assertFalse(denied.allowed)
         self.assertEqual(denied.source, "db")
         self.assertTrue(allowed.allowed)
+
+    def test_default_seed_exposes_product_roles_and_operations(self) -> None:
+        db_path = (Path("artifacts") / "test-temp" / f"permission-seed-{uuid.uuid4().hex}.db").resolve()
+        db_service = DatabaseService(dsn=f"sqlite:///{db_path.as_posix()}")
+        db_service.bootstrap_schema(ROLE_CAPABILITIES, ROLE_POLICIES, ROLE_DESCRIPTIONS)
+
+        self.assertIn("workflow.analyze_task", db_service.get_role_capabilities("analyst"))
+        self.assertIn("workflow.fix_and_retry", db_service.get_role_capabilities("developer"))
+        self.assertIn("runs.approve", db_service.get_role_capabilities("techlead"))
+        self.assertIn("repo.onboard", db_service.get_role_capabilities("admin"))
 
 
 if __name__ == "__main__":

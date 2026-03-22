@@ -1,0 +1,144 @@
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Технічні run-и</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./config.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="topbar">
+      <div id="userBox" class="muted">Завантаження...</div>
+      <div class="actions">
+        <label class="language-switcher">
+          <span data-i18n="common.language">Мова</span>
+          <select id="languageSelector">
+            <option value="uk">Українська</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <a href="./index.html" data-i18n="common.home">Головна</a>
+        <a href="./admin/index.html" id="adminLink" data-i18n="common.admin">Адмін</a>
+        <a href="./create.html" data-i18n="common.create_technical_run">Створити технічний run</a>
+        <a href="./repos.html" data-i18n="common.repositories">Репозиторії</a>
+        <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+      </div>
+    </div>
+
+    <div class="page-header">
+      <h1 data-i18n="runs.title">Технічні run-и</h1>
+      <p class="muted" data-i18n="runs.subtitle">Налагодження та перегляд внутрішніх tracked run-ів.</p>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <label><span data-i18n="common.filter.status">Статус</span> <input id="statusFilter" placeholder="success / failed"></label>
+        <label><span data-i18n="common.filter.repo">Repo</span> <input id="repoFilter" placeholder="sample"></label>
+        <button id="refreshButton" class="primary" type="button" data-i18n="common.refresh">Оновити</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Run ID</th>
+            <th data-i18n="common.status">Статус</th>
+            <th data-i18n="common.goal">Ціль</th>
+            <th data-i18n="common.user">Користувач</th>
+            <th data-i18n="common.started_at">Почато</th>
+            <th data-i18n="common.branch">Гілка</th>
+            <th data-i18n="common.pr">PR</th>
+            <th data-i18n="common.review">Review</th>
+          </tr>
+        </thead>
+        <tbody id="runsBody">
+          <tr><td colspan="8">Завантаження...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="errorBox" class="error"></div>
+  </div>
+
+  <script>
+    const auth = window.AuthUI;
+
+    function normalizeStatus(value) {
+      return String(value || "neutral").toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+    }
+
+    function actorLabel(run) {
+      return run.actor_display_name || run.actor_username || run?.actor?.display_name || run?.actor?.username || run?.actor?.actor_id || "-";
+    }
+
+    function renderRuns(runs) {
+      const tbody = document.getElementById("runsBody");
+      tbody.innerHTML = "";
+      if (!runs.length) {
+        tbody.innerHTML = `<tr><td colspan="8">${auth.t("runs.empty")}</td></tr>`;
+        return;
+      }
+      runs.forEach((run) => {
+        const branchName = run?.branch_name || run?.branch || "-";
+        const prCell = run?.pr_url
+          ? `<a href="${run.pr_url}" target="_blank" rel="noopener noreferrer">${auth.t("common.open")}</a>`
+          : "-";
+        let reviewCell = "-";
+        if (run?.review_url) {
+          reviewCell = `<a href="${run.review_url}" target="_blank" rel="noopener noreferrer">${auth.t("common.open")}</a>`;
+        } else if ((run?.review_status || run?.publication_result?.review_status || "").toLowerCase() === "failed" || (run?.failed_step || "") === "review") {
+          reviewCell = `<span class="status-failed">${auth.t("common.failed")}</span>`;
+        }
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${run.run_id || ""}</td>
+          <td><span class="status-badge status-${normalizeStatus(run.status)}">${auth.translateStatus(run.status_display || run.status || "")}</span></td>
+          <td>${run.goal || ""}</td>
+          <td>${actorLabel(run)}</td>
+          <td>${auth.formatDateTime(run.started_at)}</td>
+          <td>${branchName}</td>
+          <td>${prCell}</td>
+          <td>${reviewCell}</td>
+        `;
+        row.addEventListener("click", () => {
+          window.location.href = `./run.html?id=${encodeURIComponent(run.run_id || "")}`;
+        });
+        tbody.appendChild(row);
+      });
+    }
+
+    async function loadRuns() {
+      const errorBox = document.getElementById("errorBox");
+      errorBox.textContent = "";
+      document.getElementById("runsBody").innerHTML = `<tr><td colspan="8">${auth.t("common.loading")}</td></tr>`;
+      try {
+        const query = {};
+        if (document.getElementById("statusFilter").value.trim()) {
+          query.status = document.getElementById("statusFilter").value.trim();
+        }
+        if (document.getElementById("repoFilter").value.trim()) {
+          query.repo_id = document.getElementById("repoFilter").value.trim();
+        }
+        const payload = await auth.fetchJson("/runs", { query });
+        renderRuns(payload.runs || []);
+      } catch (error) {
+        document.getElementById("runsBody").innerHTML = `<tr><td colspan="8">${auth.t("runs.load_failed")}</td></tr>`;
+        errorBox.textContent = error.message;
+      }
+    }
+
+    auth.requireLogin({ redirectTo: "/ui/login.html" }).then((me) => {
+      if (!me) return;
+      auth.applySessionNavigation({ me, logoutButtonId: "logoutButton", adminLinkId: "adminLink" });
+      document.getElementById("userBox").textContent = auth.t("index.signed_in_as", {
+        name: me.user.display_name || me.user.username || "-"
+      });
+      loadRuns();
+    });
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    document.getElementById("refreshButton").addEventListener("click", loadRuns);
+  </script>
+</body>
+</html>

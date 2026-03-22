@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ролі</title>
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../config.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="toolbar">
+      <label class="language-switcher">
+        <span data-i18n="common.language">Мова</span>
+        <select id="languageSelector">
+          <option value="uk">Українська</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <a href="/ui/admin/index.html" data-i18n="admin.title">Адмін</a>
+      <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+    </div>
+    <h1 data-i18n="admin.roles">Ролі</h1>
+    <div id="accessDeniedBox" class="hidden"></div>
+    <div id="loadingBox" class="card">Loading admin data...</div>
+    <div id="adminContent" hidden>
+    <div class="card">
+      <label><span data-i18n="admin.role_name">Назва ролі</span><input id="roleName"></label>
+      <label><span data-i18n="admin.description">Опис</span><textarea id="roleDescription"></textarea></label>
+      <div class="toolbar">
+        <button id="saveRoleButton" class="primary" type="button" data-i18n="admin.save_role">Зберегти роль</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th data-i18n="admin.role">Роль</th><th data-i18n="admin.description">Опис</th><th>Capabilities</th></tr></thead>
+        <tbody id="rolesBody"><tr><td colspan="3">Завантаження...</td></tr></tbody>
+      </table>
+    </div>
+    </div>
+  </div>
+  <script>
+    const auth = window.AuthUI;
+    async function loadRoles() {
+      const payload = await auth.fetchJson("/admin/roles");
+      const tbody = document.getElementById("rolesBody");
+      tbody.innerHTML = "";
+      for (const role of payload.roles || []) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${auth.escapeHtml(role.role_name || "")}</td>
+          <td>${auth.escapeHtml(role.description || "")}</td>
+          <td>${auth.escapeHtml((role.capabilities || []).join(", "))}</td>
+        `;
+        tbody.appendChild(row);
+      }
+    }
+    auth.requireLogin({ requireRole: "admin", allowErrorState: true }).then((me) => {
+      if (!me) return;
+      auth.applySessionNavigation({ me, logoutButtonId: "logoutButton" });
+      if (me.authError) {
+        document.getElementById("loadingBox").hidden = true;
+        auth.renderStateMessage(document.getElementById("accessDeniedBox"), {
+          title: auth.t("common.message"),
+          message: me.errorMessage || auth.t("error.auth_state_invalid"),
+          stateClass: "blocked"
+        });
+        return;
+      }
+      if (me.accessDenied) {
+        document.getElementById("loadingBox").hidden = true;
+        auth.renderAccessDenied(document.getElementById("accessDeniedBox"));
+        return;
+      }
+      document.getElementById("loadingBox").hidden = true;
+      document.getElementById("adminContent").hidden = false;
+      loadRoles();
+    });
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    document.getElementById("saveRoleButton").addEventListener("click", async () => {
+      const roleName = document.getElementById("roleName").value.trim();
+      await auth.fetchJson(`/admin/roles?role_name=${encodeURIComponent(roleName)}`, {
+        method: "POST",
+        body: { description: document.getElementById("roleDescription").value.trim() }
+      });
+      loadRoles();
+    });
+  </script>
+</body>
+</html>

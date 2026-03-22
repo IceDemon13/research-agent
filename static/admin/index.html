@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Адмін</title>
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../config.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="topbar">
+      <h1 data-i18n="admin.title">Адмін</h1>
+      <div class="actions">
+        <label class="language-switcher">
+          <span data-i18n="common.language">Мова</span>
+          <select id="languageSelector">
+            <option value="uk">Українська</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+      </div>
+    </div>
+    <div id="accessDeniedBox" class="hidden"></div>
+    <div id="meBox" class="card">Loading admin data...</div>
+    <div id="adminContent" hidden>
+    <div class="links">
+      <a href="/ui/admin/users.html" data-i18n="admin.users">Користувачі</a>
+      <a href="/ui/admin/roles.html" data-i18n="admin.roles">Ролі</a>
+      <a href="/ui/admin/policies.html" data-i18n="admin.policies">Політики</a>
+      <a href="/ui/index.html" data-i18n="common.home">Головна</a>
+    </div>
+    <div class="card">
+      <h2 data-i18n="admin.change_password">Змінити пароль</h2>
+      <label><span data-i18n="login.password">Поточний пароль</span><input id="currentPassword" type="password"></label>
+      <label><span data-i18n="admin.custom_password">Новий пароль</span><input id="newPassword" type="password"></label>
+      <div class="toolbar">
+        <button id="changePasswordButton" class="primary" type="button" data-i18n="admin.change_password">Змінити пароль</button>
+      </div>
+      <div id="messageBox"></div>
+    </div>
+    </div>
+  </div>
+  <script>
+    const auth = window.AuthUI;
+    auth.requireLogin({ requireRole: "admin", allowErrorState: true }).then((me) => {
+      if (!me) return;
+      auth.applySessionNavigation({ me, logoutButtonId: "logoutButton" });
+      if (me.authError) {
+        document.getElementById("meBox").hidden = true;
+        auth.renderStateMessage(document.getElementById("accessDeniedBox"), {
+          title: auth.t("common.message"),
+          message: me.errorMessage || auth.t("error.auth_state_invalid"),
+          stateClass: "blocked"
+        });
+        return;
+      }
+      if (me.accessDenied) {
+        document.getElementById("meBox").hidden = true;
+        auth.renderAccessDenied(document.getElementById("accessDeniedBox"));
+        return;
+      }
+      document.getElementById("adminContent").hidden = false;
+      document.getElementById("meBox").innerHTML = `
+        <p><strong>${auth.t("admin.user")}:</strong> ${auth.escapeHtml(me.display_name || me.username || "-")}</p>
+        <p><strong>${auth.t("admin.role")}:</strong> ${auth.escapeHtml(me.role || "-")}</p>
+        <p><strong>${auth.t("admin.must_change_password")}:</strong> ${auth.boolLabel(me.user.must_change_password)}</p>
+      `;
+    });
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    document.getElementById("changePasswordButton").addEventListener("click", async () => {
+      const messageBox = document.getElementById("messageBox");
+      messageBox.textContent = "";
+      try {
+        const payload = await auth.fetchJson("/auth/change-password", {
+          method: "POST",
+          body: {
+            current_password: document.getElementById("currentPassword").value,
+            new_password: document.getElementById("newPassword").value
+          }
+        });
+        messageBox.textContent = payload.message || auth.t("admin.password_changed");
+      } catch (error) {
+        messageBox.textContent = error.message;
+      }
+    });
+  </script>
+</body>
+</html>

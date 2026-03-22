@@ -1,4 +1,6 @@
 import re
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agents.change_agent import run_change_agent
@@ -56,6 +58,7 @@ from services.repo_context_rules import (
     remove_readme_from_symbol_only_context,
     run_repo_context_rule_pipeline,
 )
+from services.repo_index_service import RepositoryIndexService
 from services.repo_registry import RepositoryRegistryService, resolve_repo
 from services.permission_service import PermissionService, default_actor_context
 from services.publication_service import PublicationService
@@ -64,6 +67,7 @@ from services.run_service import RunService
 from services.scm_service import ScmService, build_feature_branch_name, build_run_branch_name
 from services.temp_workspace_service import TempWorkspaceService
 from services.validation_service import ValidationService
+from services.model_routing_service import route_model
 from tools.repo_tools import (
     build_context,
     parse_repo_query,
@@ -223,6 +227,52 @@ def _attach_stage_summary(
     )
 
 
+def _route_stage_metadata(
+    *,
+    workflow_name: str = "",
+    technical_mode: str = "",
+    stage_name: str = "",
+    user_input: str = "",
+    repo_context: dict | None = None,
+    has_artifact: bool = False,
+    actionable: bool = False,
+    repo_mismatch: bool = False,
+) -> dict:
+    decision = route_model(
+        workflow_name=workflow_name,
+        technical_mode=technical_mode,
+        stage_name=stage_name,
+        user_input=user_input,
+        repo_context=repo_context,
+        has_artifact=has_artifact,
+        actionable=actionable,
+        repo_mismatch=repo_mismatch,
+    )
+    return decision.to_metadata()
+
+
+def _attach_routing_metadata(result: AgentResult, routing_metadata: dict | None) -> AgentResult:
+    metadata = dict(result.metadata or {})
+    metadata.update(dict(routing_metadata or {}))
+    return AgentResult(
+        agent_name=result.agent_name,
+        output_text=result.output_text,
+        success=result.success,
+        task_intent=result.task_intent,
+        repo_context=result.repo_context,
+        metadata=metadata,
+    )
+
+
+def _invoke_agent_with_optional_routing(agent_callable, /, *args, routing_metadata: dict | None = None, **kwargs):
+    try:
+        return agent_callable(*args, routing_metadata=routing_metadata, **kwargs)
+    except TypeError as exc:
+        if "routing_metadata" not in str(exc):
+            raise
+        return agent_callable(*args, **kwargs)
+
+
 def _build_shared_repo_context(user_input: str, command_mode: str = "", repo_id: str | None = None) -> dict:
     repo_execution, bound_read_file_range, bound_validate_manifest_file_path = _resolve_repo_execution(repo_id)
     parsed_query = parse_repo_query(_with_command_mode(user_input, command_mode))
@@ -346,12 +396,32 @@ def _run_spec_agent_with_finalized_repo_context(
     repo_context: dict | None,
     command_mode: str = "",
     repo_id: str | None = None,
+    workflow_name: str = "",
 ) -> AgentResult:
     effective_repo_id = repo_id or (
         str((repo_context or {}).get("repo_id", "")).strip()
         if isinstance(repo_context, dict)
         else ""
     ) or None
+    if effective_repo_id:
+        resolved_repo = resolve_repo(repo_id=effective_repo_id, fallback_root_path=".")
+        sync_state = _sync_repo_before_repo_aware_run(resolved_repo)
+        if list(sync_state.get("errors", []) or []):
+            return _attach_routing_metadata(AgentResult(
+                agent_name="spec",
+                output_text=str(sync_state["errors"][0]),
+                success=False,
+                task_intent=task_intent,
+                repo_context=repo_context or {},
+                metadata={"artifact_type": "spec_result", "sync_status": sync_state},
+            ), _route_stage_metadata(
+                workflow_name=workflow_name,
+                technical_mode="spec",
+                stage_name="spec",
+                user_input=user_input,
+                repo_context=repo_context,
+                repo_mismatch=False,
+            ))
     repo_execution, bound_read_file_range, bound_validate_manifest_file_path = _resolve_repo_execution(effective_repo_id)
     finalized_repo_context = normalize_repo_context(_prepare_final_repo_context_for_downstream(
         user_input,
@@ -377,6 +447,23 @@ def _run_spec_agent_with_finalized_repo_context(
             with_command_mode=_with_command_mode,
             read_file_range=bound_read_file_range,
             validate_manifest_file_path=bound_validate_manifest_file_path,
+        ))
+    relevance_assessment = _assess_repo_task_relevance(user_input, finalized_repo_context)
+    if str(relevance_assessment.get("status", "") or "").strip() == "repo_mismatch":
+        return _attach_routing_metadata(AgentResult(
+            agent_name="spec",
+            output_text=str(relevance_assessment.get("reason", "") or "Repo mismatch detected."),
+            success=False,
+            task_intent=task_intent,
+            repo_context=finalized_repo_context,
+            metadata={"artifact_type": "spec_result", "repo_relevance": relevance_assessment},
+        ), _route_stage_metadata(
+            workflow_name=workflow_name,
+            technical_mode="spec",
+            stage_name="spec",
+            user_input=user_input,
+            repo_context=finalized_repo_context,
+            repo_mismatch=True,
         ))
     file_selection = (
         finalized_repo_context.get("file_selection")
@@ -429,13 +516,22 @@ def _run_spec_agent_with_finalized_repo_context(
             resolved_target_count=len(finalized_repo_context.get("resolved_target_files", []) or []),
         ),
     )
-    spec_result = run_spec_agent(
+    routing_metadata = _route_stage_metadata(
+        workflow_name=workflow_name,
+        technical_mode="spec",
+        stage_name="spec",
+        user_input=user_input,
+        repo_context=finalized_repo_context,
+    )
+    spec_result = _invoke_agent_with_optional_routing(
+        run_spec_agent,
         user_input,
         task_intent=task_intent,
         repo_context=finalized_repo_context,
+        routing_metadata=routing_metadata,
     )
     return _attach_stage_summary(
-        spec_result,
+        _attach_routing_metadata(spec_result, routing_metadata),
         stage_name="spec",
         repo_context=finalized_repo_context,
         task_intent=task_intent,
@@ -837,6 +933,7 @@ def run_lightweight_review_pipeline(
     repo_id: str | None = None,
     *,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "",
 ) -> AgentResult:
     resolved_actor_context = _resolve_actor(actor_context)
     denied = _enforce_capabilities(
@@ -847,6 +944,18 @@ def run_lightweight_review_pipeline(
     if denied is not None:
         return _permission_block_result(denied.capability, denied)
     repo_execution, _bound_read_file_range, _bound_validate_manifest_file_path = _resolve_repo_execution(repo_id)
+    if repo_execution["repo_id"]:
+        resolved_repo = resolve_repo(repo_id=repo_execution["repo_id"], fallback_root_path=".")
+        sync_state = _sync_repo_before_repo_aware_run(resolved_repo)
+        if list(sync_state.get("errors", []) or []):
+            return AgentResult(
+                agent_name="review",
+                output_text=str(sync_state["errors"][0]),
+                success=False,
+                task_intent="review",
+                repo_context={},
+                metadata={"artifact_type": "run_review", "sync_status": sync_state},
+            )
     task_intent = _detect_and_log_task_intent(user_input, command_mode="review")
     parsed_query = parse_repo_query(_with_command_mode(user_input, "review"))
     log_line("PIPELINE MODE: review_only")
@@ -868,6 +977,16 @@ def run_lightweight_review_pipeline(
         stage_name="spec",
         repo_id=repo_execution["repo_id"],
     ))
+    relevance_assessment = _assess_repo_task_relevance(user_input, repo_context)
+    if str(relevance_assessment.get("status", "") or "").strip() == "repo_mismatch":
+        return AgentResult(
+            agent_name="review",
+            output_text=str(relevance_assessment.get("reason", "") or "Repo mismatch detected."),
+            success=False,
+            task_intent=task_intent,
+            repo_context=repo_context,
+            metadata={"artifact_type": "run_review", "repo_relevance": relevance_assessment},
+        )
 
     spec_result = _run_spec_agent_with_finalized_repo_context(
         user_input,
@@ -875,6 +994,7 @@ def run_lightweight_review_pipeline(
         repo_context=repo_context,
         command_mode="review",
         repo_id=repo_execution["repo_id"],
+        workflow_name=workflow_name,
     )
 
     spec = spec_result.metadata.get("spec")
@@ -903,8 +1023,22 @@ def run_lightweight_review_pipeline(
         ),
     )
     repo_context = code_input.repo_context
+    code_routing_metadata = _route_stage_metadata(
+        workflow_name=workflow_name,
+        technical_mode="review",
+        stage_name="code",
+        user_input=user_input,
+        repo_context=repo_context,
+    )
     code_result = _attach_stage_summary(
-        run_code_agent_from_spec(code_input),
+        _attach_routing_metadata(
+            _invoke_agent_with_optional_routing(
+                run_code_agent_from_spec,
+                code_input,
+                routing_metadata=code_routing_metadata,
+            ),
+            code_routing_metadata,
+        ),
         stage_name="code",
         repo_context=repo_context,
         task_intent=task_intent,
@@ -921,14 +1055,24 @@ def run_lightweight_review_pipeline(
         risks=list(spec.risks),
     )
 
-    review_result = run_review_agent(
+    review_routing_metadata = _route_stage_metadata(
+        workflow_name=workflow_name,
+        technical_mode="review",
+        stage_name="review",
+        user_input=user_input,
+        repo_context=repo_context,
+        has_artifact=False,
+    )
+    review_result = _attach_routing_metadata(_invoke_agent_with_optional_routing(
+        run_review_agent,
         original_request=user_input,
         spec=review_spec,
         change_set=ChangeSet(goal="Existing implementation review"),
         draft_set=DraftSet(goal="No draft generation in lightweight review"),
         task_intent=task_intent,
         repo_context=repo_context,
-    )
+        routing_metadata=review_routing_metadata,
+    ), review_routing_metadata)
 
     return AgentResult(
         agent_name="review",
@@ -942,6 +1086,7 @@ def run_lightweight_review_pipeline(
             "spec_result": spec_result,
             "code_result": code_result,
             "review_result": review_result.metadata.get("review_result"),
+            **dict(review_routing_metadata or {}),
         },
     )
 
@@ -1457,6 +1602,7 @@ def _build_retry_context(
     run_detail,
     retry_note: str = "",
     refinement_prompt: str = "",
+    fix_targets: dict | None = None,
     attempt_index: int = 1,
     total_attempts: int = 1,
     previous_attempts: list[dict] | None = None,
@@ -1490,6 +1636,11 @@ def _build_retry_context(
         if str(item or "").strip()
     ]
     previous_attempt_changes = _summarize_previous_attempt_changes(detail)
+    sanitized_fix_targets = _sanitize_retry_fix_targets(
+        fix_files=list(dict(fix_targets or {}).get("fix_files", []) or []),
+        fix_symbols=list(dict(fix_targets or {}).get("fix_symbols", []) or []),
+        fix_actions=list(dict(fix_targets or {}).get("fix_actions", []) or []),
+    )
     files_count = int(artifact_summary.get("files_count", artifact_summary.get("file_count", 0)) or 0)
     previous_status = str(run_record.status or "").strip().lower()
     implementation_final_status = str(implementation_payload.get("final_status", "") or "").strip().lower()
@@ -1588,6 +1739,10 @@ def _build_retry_context(
         "validation_errors": validation_errors,
         "previous_attempt_changes": previous_attempt_changes,
         "previous_attempt_result": result_analysis,
+        "fix_files": list(sanitized_fix_targets.get("fix_files", []) or []),
+        "fix_symbols": list(sanitized_fix_targets.get("fix_symbols", []) or []),
+        "fix_actions": list(sanitized_fix_targets.get("fix_actions", []) or []),
+        "repo_query_input": str(sanitized_fix_targets.get("repo_query_input", "") or "").strip(),
         "draft_issues": {
             "files_count": files_count,
             "reason_if_empty": reason_if_empty,
@@ -1618,6 +1773,8 @@ def _build_retry_context(
         context["instructions"].append(
             f"This is attempt #{context['attempt_index']} of {context['total_attempts']}."
         )
+    if list(context.get("fix_files", []) or []):
+        context["instructions"].append("Only target the listed concrete files and directly related tests.")
     if retry_strategy_reason:
         context["instructions"].append(retry_strategy_reason)
     if str(context.get("previous_attempt_failure", "") or "").strip():
@@ -1674,8 +1831,6 @@ def _build_retry_goal(goal: str, retry_context: dict | None = None) -> str:
         lines.append(f"- rejection_feedback: {decision_note}")
     if retry_note:
         lines.append(f"- retry_note: {retry_note}")
-    if refinement_prompt:
-        lines.append(f"- refinement_prompt: {refinement_prompt}")
     if int(draft_issues.get("files_count", 0) or 0) == 0:
         lines.append(
             f"- previous_draft_issue: {str(draft_issues.get('reason_if_empty', '') or 'agent produced no changes').strip()}"
@@ -1690,6 +1845,12 @@ def _build_retry_goal(goal: str, retry_context: dict | None = None) -> str:
         lines.append("")
         lines.append("Result:")
         for item in list(previous_attempt_result.get("lines", []) or [])[:8]:
+            if str(item or "").strip():
+                lines.append(f"- {str(item).strip()}")
+    if refinement_prompt:
+        lines.append("")
+        lines.append("Focused Fix Instructions:")
+        for item in str(refinement_prompt or "").splitlines():
             if str(item or "").strip():
                 lines.append(f"- {str(item).strip()}")
     if failed_test_cases:
@@ -1793,6 +1954,104 @@ def _summarize_previous_attempt_changes(run_detail) -> dict:
         "affected_symbols": affected_symbols[:5],
         "summary_lines": summary_lines[:8],
     }
+
+
+_RETRY_META_TARGET_RE = re.compile(
+    r"(?i)\b(runtime_error|previous_attempt_failed_because|retry_reason|review_summary|blocking_explanation|decision_statement|outcome_type|status|failure_type)\b"
+)
+_RETRY_SYMBOL_RE = re.compile(r"\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\b")
+
+
+def _is_retry_repo_relative_path(path: str) -> bool:
+    resolved = str(path or "").strip().replace("\\", "/")
+    if not resolved or resolved.startswith("/") or re.match(r"^[A-Za-z]:", resolved):
+        return False
+    if ".." in Path(resolved).parts:
+        return False
+    return "/" in resolved or "." in Path(resolved).name
+
+
+def _sanitize_retry_fix_targets(
+    *,
+    fix_files: list[str] | None = None,
+    fix_symbols: list[str] | None = None,
+    fix_actions: list[str] | None = None,
+) -> dict:
+    sanitized_files: list[str] = []
+    seen_files: set[str] = set()
+    for item in list(fix_files or []):
+        path = str(item or "").strip()
+        if not _is_retry_repo_relative_path(path) or path in seen_files:
+            continue
+        seen_files.add(path)
+        sanitized_files.append(path)
+
+    sanitized_symbols: list[str] = []
+    seen_symbols: set[str] = set()
+    for item in list(fix_symbols or []):
+        symbol = str(item or "").strip()
+        if not symbol or _RETRY_META_TARGET_RE.search(symbol) or "/" in symbol:
+            continue
+        if not _RETRY_SYMBOL_RE.fullmatch(symbol):
+            continue
+        if symbol in seen_symbols:
+            continue
+        seen_symbols.add(symbol)
+        sanitized_symbols.append(symbol)
+
+    sanitized_actions: list[str] = []
+    seen_actions: set[str] = set()
+    for item in list(fix_actions or []):
+        action = str(item or "").strip()
+        if not action or _RETRY_META_TARGET_RE.search(action):
+            continue
+        if action in seen_actions:
+            continue
+        seen_actions.add(action)
+        sanitized_actions.append(action)
+
+    query_lines = [*sanitized_files[:8], *sanitized_symbols[:8], *sanitized_actions[:6]]
+    return {
+        "fix_files": sanitized_files[:8],
+        "fix_symbols": sanitized_symbols[:12],
+        "fix_actions": sanitized_actions[:8],
+        "repo_query_input": "\n".join(query_lines).strip(),
+    }
+
+
+def _retry_query_signature(retry_context: dict | None) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    context = dict(retry_context or {})
+    return (
+        tuple(sorted(str(item).strip() for item in list(context.get("fix_files", []) or []) if str(item).strip())),
+        tuple(sorted(str(item).strip() for item in list(context.get("fix_symbols", []) or []) if str(item).strip())),
+        tuple(sorted(str(item).strip() for item in list(context.get("fix_actions", []) or []) if str(item).strip())),
+    )
+
+
+def _retry_resolved_target_signature(run_detail) -> tuple[str, ...]:
+    if run_detail is None:
+        return tuple()
+    repo_context = dict(getattr(run_detail, "repo_context_summary", {}) or {})
+    return tuple(
+        sorted(
+            str(item).strip()
+            for item in list(repo_context.get("resolved_target_files", []) or [])
+            if str(item).strip()
+        )
+    )
+
+
+def _retry_change_summary_signature(run_detail) -> tuple[str, ...]:
+    summary = _summarize_previous_attempt_changes(run_detail)
+    return tuple(
+        str(item).strip()
+        for item in list(summary.get("summary_lines", []) or [])
+        if str(item).strip()
+    )
+
+
+def _fix_and_retry_max_runtime_seconds() -> int:
+    return 180
 
 
 def _classify_retry_failure_type(
@@ -2167,6 +2426,8 @@ def _run_context_aware_retry_loop(
     resolved_actor_context: ActorContext,
     retry_note: str,
     refinement_prompt: str,
+    workflow_name: str = "",
+    fix_targets: dict | None = None,
 ) -> tuple[AgentResult, list[dict]]:
     total_attempts = max(_max_retry_attempts(), int(source_run.attempt_index or 1))
     next_attempt_index = int(source_run.attempt_index or 1) + 1
@@ -2189,8 +2450,24 @@ def _run_context_aware_retry_loop(
     last_result = None
     last_signature: tuple[str, str, str] = ("", "", "")
     repeated_failure_count = 0
+    started_at = time.monotonic()
+    last_query_signature = tuple()
+    last_target_signature = _retry_resolved_target_signature(source_detail)
+    last_change_signature = _retry_change_summary_signature(source_detail)
 
     for attempt_index in range(next_attempt_index, total_attempts + 1):
+        if workflow_name == "fix_and_retry" and (time.monotonic() - started_at) >= _fix_and_retry_max_runtime_seconds():
+            return (
+                _run_action_result(
+                    artifact_type="run_retry",
+                    action="retry",
+                    run_record=current_source_run,
+                    success=False,
+                    message="Retry stopped because the fix-and-retry workflow reached its maximum runtime.",
+                    blocked_reason="retry_stopped_timeout",
+                ),
+                previous_attempts,
+            )
         retry_context_summary = (
             str(getattr(current_source_detail, "root_cause_summary", "") or "").strip()
             if current_source_detail is not None
@@ -2201,6 +2478,7 @@ def _run_context_aware_retry_loop(
             run_detail=current_source_detail,
             retry_note=retry_note,
             refinement_prompt=refinement_prompt,
+            fix_targets=fix_targets,
             attempt_index=attempt_index,
             total_attempts=total_attempts,
             previous_attempts=previous_attempts,
@@ -2232,6 +2510,35 @@ def _run_context_aware_retry_loop(
             log_path=new_run_record.log_path,
         )
         previous_attempts.append(_retry_attempt_summary(new_run_record, new_run_detail))
+        query_signature = _retry_query_signature(retry_context)
+        target_signature = _retry_resolved_target_signature(new_run_detail)
+        change_signature = _retry_change_summary_signature(new_run_detail)
+        if (
+            workflow_name == "fix_and_retry"
+            and query_signature
+            and query_signature == last_query_signature
+            and target_signature == last_target_signature
+            and change_signature == last_change_signature
+        ):
+            last_result = AgentResult(
+                agent_name=last_result.agent_name,
+                output_text="Retry stopped because the same fix targets resolved to the same files and produced no new change summary.",
+                success=False,
+                task_intent=last_result.task_intent,
+                repo_context=last_result.repo_context,
+                metadata={
+                    **dict(last_result.metadata or {}),
+                    "retry_stop_status": "retry_stopped_no_progress",
+                    "success": False,
+                    "message": "Retry stopped because the same fix targets resolved to the same files and produced no new change summary.",
+                    "blocked_reason": "retry_stopped_no_progress",
+                },
+            )
+            last_result.metadata["attempts_history"] = previous_attempts
+            return last_result, previous_attempts
+        last_query_signature = query_signature
+        last_target_signature = target_signature
+        last_change_signature = change_signature
 
         implementation_result = last_result.metadata.get("implementation_result")
         final_status = ""
@@ -2662,6 +2969,12 @@ def run_run_explorer_command(
             retry_note = str(action_data.get("note", "") or "").strip()
             refinement_prompt = str(action_data.get("refinement_prompt", "") or "").strip()
             force_mode = str(action_data.get("force_mode", "") or "").strip().lower()
+            workflow_name = str(action_data.get("workflow_name", "") or "").strip().lower()
+            fix_targets = _sanitize_retry_fix_targets(
+                fix_files=list(action_data.get("fix_files", []) or []),
+                fix_symbols=list(action_data.get("fix_symbols", []) or []),
+                fix_actions=list(action_data.get("fix_actions", []) or []),
+            )
             source_detail = run_service.load_run_detail(
                 run_record.run_id,
                 run_record=run_record,
@@ -2672,7 +2985,17 @@ def run_run_explorer_command(
                 if source_detail is not None
                 else ""
             )
-            effective_mode = force_mode or source_mode or "implement"
+            allow_review_fix_retry = workflow_name == "fix_and_retry" and source_mode == "review"
+            if workflow_name == "fix_and_retry" and not list(fix_targets.get("fix_files", []) or []):
+                return _run_action_result(
+                    artifact_type="run_retry",
+                    action=action,
+                    run_record=run_record,
+                    success=False,
+                    message="Automatic fix is unavailable because no concrete files or implementation artifact were identified.",
+                    blocked_reason="retry_not_actionable",
+                )
+            effective_mode = force_mode or ("implement" if allow_review_fix_retry else source_mode) or "implement"
             if force_mode and force_mode != source_mode:
                 return _run_action_result(
                     artifact_type="run_retry",
@@ -2692,6 +3015,7 @@ def run_run_explorer_command(
                 run_detail=source_detail,
                 retry_note=retry_note,
                 refinement_prompt=refinement_prompt,
+                fix_targets=fix_targets,
             )
             attempts_history: list[dict] = []
             if effective_mode != "implement":
@@ -2710,6 +3034,8 @@ def run_run_explorer_command(
                     resolved_actor_context=resolved_actor_context,
                     retry_note=retry_note,
                     refinement_prompt=refinement_prompt,
+                    workflow_name=workflow_name,
+                    fix_targets=fix_targets,
                 )
             new_run_record = retried_result.metadata.get("run_record")
             created_child_run = isinstance(new_run_record, RunRecord) and new_run_record.run_id != run_record.run_id
@@ -2734,6 +3060,7 @@ def run_run_explorer_command(
                     "retry_note": retry_note,
                     "retry_context_summary": retry_context_summary,
                     "retry_context": retry_context,
+                    "status": str(retried_result.metadata.get("retry_stop_status", "") or retried_result.metadata.get("blocked_reason", "") or "").strip(),
                     "attempts_history": attempts_history if effective_mode == "implement" else [],
                 },
             )
@@ -2789,6 +3116,7 @@ def run_root_agent(
     run_log: bool = False,
     actor_context: ActorContext | None = None,
     action_payload: dict | None = None,
+    workflow_name: str = "",
 ) -> AgentResult:
     resolved_actor_context = _resolve_actor(actor_context)
     if implementation_mode or _is_implementation_command(user_input):
@@ -2801,6 +3129,7 @@ def run_root_agent(
             create_review=create_review,
             run_log=run_log,
             actor_context=resolved_actor_context,
+            workflow_name=workflow_name or "implement",
         )
 
     if _parse_run_explorer_command(user_input) is not None:
@@ -2821,7 +3150,12 @@ def run_root_agent(
             return _permission_block_result("task.review", denied)
         log_line("ROOT AGENT: selected pipeline mode review_only")
         log_line("ROOT AGENT: /review mode runs spec_agent -> code_agent -> review_agent only")
-        return run_lightweight_review_pipeline(user_input, repo_id=repo_id, actor_context=resolved_actor_context)
+        return run_lightweight_review_pipeline(
+            user_input,
+            repo_id=repo_id,
+            actor_context=resolved_actor_context,
+            workflow_name=workflow_name,
+        )
 
     route = route_request(user_input)
     task_intent = _detect_and_log_task_intent(user_input)
@@ -2851,6 +3185,7 @@ def run_root_agent(
             task_intent=task_intent,
             repo_context=repo_context,
             repo_id=repo_id,
+            workflow_name=workflow_name,
         )
 
     if route.route == "code":
@@ -2861,7 +3196,23 @@ def run_root_agent(
         )
         if denied is not None:
             return _permission_block_result(denied.capability, denied, repo_context=repo_context)
-        return run_code_agent(user_input, task_intent=task_intent, repo_context=repo_context)
+        code_routing_metadata = _route_stage_metadata(
+            workflow_name=workflow_name,
+            technical_mode="spec",
+            stage_name="code",
+            user_input=user_input,
+            repo_context=repo_context,
+        )
+        return _attach_routing_metadata(
+            _invoke_agent_with_optional_routing(
+                run_code_agent,
+                user_input,
+                task_intent=task_intent,
+                repo_context=repo_context,
+                routing_metadata=code_routing_metadata,
+            ),
+            code_routing_metadata,
+        )
 
     denied = _enforce_capabilities(
         resolved_actor_context,
@@ -2878,6 +3229,7 @@ def run_spec_only_pipeline(
     repo_id: str | None = None,
     *,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "",
 ) -> AgentResult:
     resolved_actor_context = _resolve_actor(actor_context)
     denied = _enforce_capabilities(
@@ -2896,6 +3248,7 @@ def run_spec_only_pipeline(
         repo_context=repo_context,
         command_mode="spec",
         repo_id=repo_id,
+        workflow_name=workflow_name,
     )
 
 
@@ -2904,7 +3257,9 @@ def run_spec_to_code_pipeline(
     task_intent: str | None = None,
     command_mode: str = "",
     repo_id: str | None = None,
+    repo_query_input: str | None = None,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "",
 ) -> tuple[AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "spec_to_code helper")
     resolved_actor_context = _resolve_actor(actor_context)
@@ -2917,7 +3272,7 @@ def run_spec_to_code_pipeline(
         blocked_result = _permission_block_result(denied.capability, denied)
         return blocked_result, blocked_result
     resolved_task_intent = task_intent or _detect_and_log_task_intent(user_input, command_mode=command_mode)
-    repo_context = _build_shared_repo_context(user_input, command_mode=command_mode, repo_id=repo_id)
+    repo_context = _build_shared_repo_context(repo_query_input or user_input, command_mode=command_mode, repo_id=repo_id)
     log_line("ROOT AGENT: resolved mode spec_to_code")
     repo_context = _prepare_final_repo_context_for_downstream(
         user_input,
@@ -2932,6 +3287,7 @@ def run_spec_to_code_pipeline(
         repo_context=repo_context,
         command_mode=command_mode,
         repo_id=repo_id,
+        workflow_name=workflow_name,
     )
 
     spec = spec_result.metadata.get("spec")
@@ -2959,7 +3315,21 @@ def run_spec_to_code_pipeline(
     )
     repo_context = code_input.repo_context
 
-    code_result = run_code_agent_from_spec(code_input)
+    code_routing_metadata = _route_stage_metadata(
+        workflow_name=workflow_name,
+        technical_mode="implement" if workflow_name in {"implement", "fix_and_retry"} else "spec",
+        stage_name="code",
+        user_input=user_input,
+        repo_context=repo_context,
+    )
+    code_result = _attach_routing_metadata(
+        _invoke_agent_with_optional_routing(
+            run_code_agent_from_spec,
+            code_input,
+            routing_metadata=code_routing_metadata,
+        ),
+        code_routing_metadata,
+    )
     return spec_result, code_result
 
 
@@ -2968,7 +3338,9 @@ def run_full_change_pipeline(
     task_intent: str | None = None,
     command_mode: str = "changes",
     repo_id: str | None = None,
+    repo_query_input: str | None = None,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "",
 ) -> tuple[AgentResult, AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "change_agent")
     resolved_actor_context = _resolve_actor(actor_context)
@@ -2987,12 +3359,14 @@ def run_full_change_pipeline(
         task_intent=resolved_task_intent,
         command_mode=command_mode,
         repo_id=repo_id,
+        repo_query_input=repo_query_input,
         actor_context=resolved_actor_context,
+        workflow_name=workflow_name,
     )
     repo_context = (
         spec_result.repo_context
         or code_result.repo_context
-        or _build_shared_repo_context(user_input, command_mode=command_mode, repo_id=repo_id)
+        or _build_shared_repo_context(repo_query_input or user_input, command_mode=command_mode, repo_id=repo_id)
     )
 
     patch_plan = code_result.metadata.get("patch_plan")
@@ -3015,12 +3389,20 @@ def run_full_change_pipeline(
         f"chunks_count={len((repo_context or {}).get('chunks', []) or [])}"
     )
 
-    change_result = run_change_agent(
+    change_result = _invoke_agent_with_optional_routing(
+        run_change_agent,
         original_request=user_input,
         patch_plan=patch_plan,
         task_intent=resolved_task_intent,
         repo_context=repo_context,
         debug_context_summary=debug_context_summary,
+        routing_metadata=_route_stage_metadata(
+            workflow_name=workflow_name,
+            technical_mode="implement" if workflow_name in {"implement", "fix_and_retry"} else "spec",
+            stage_name="change",
+            user_input=user_input,
+            repo_context=repo_context,
+        ),
     )
     change_result = _attach_change_result_runtime_debug(
         change_result=change_result,
@@ -3041,7 +3423,9 @@ def run_full_draft_pipeline(
     user_input: str,
     repo_id: str | None = None,
     *,
+    repo_query_input: str | None = None,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "",
 ) -> tuple[AgentResult, AgentResult, AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "draft_agent")
     resolved_actor_context = _resolve_actor(actor_context)
@@ -3060,13 +3444,15 @@ def run_full_draft_pipeline(
         task_intent=task_intent,
         command_mode="drafts",
         repo_id=repo_id,
+        repo_query_input=repo_query_input,
         actor_context=resolved_actor_context,
+        workflow_name=workflow_name,
     )
     repo_context = (
         spec_result.repo_context
         or code_result.repo_context
         or change_result.repo_context
-        or _build_shared_repo_context(user_input, command_mode="drafts", repo_id=repo_id)
+        or _build_shared_repo_context(repo_query_input or user_input, command_mode="drafts", repo_id=repo_id)
     )
 
     change_set = change_result.metadata.get("change_set")
@@ -3081,11 +3467,19 @@ def run_full_draft_pipeline(
         ), stage_name="draft", repo_context=repo_context, task_intent=task_intent)
         return spec_result, code_result, change_result, draft_result
 
-    draft_result = run_draft_agent(
+    draft_result = _invoke_agent_with_optional_routing(
+        run_draft_agent,
         original_request=user_input,
         change_set=change_set,
         task_intent=task_intent,
         repo_context=repo_context,
+        routing_metadata=_route_stage_metadata(
+            workflow_name=workflow_name,
+            technical_mode="implement" if workflow_name in {"implement", "fix_and_retry"} else "spec",
+            stage_name="draft",
+            user_input=user_input,
+            repo_context=repo_context,
+        ),
     )
     draft_result = _attach_draft_result_runtime_debug(draft_result)
     draft_result = _attach_stage_summary(
@@ -3204,6 +3598,12 @@ def _human_validation_step_message(
         return "validation path missing"
     if candidate_apply_result is not None and candidate_apply_result.errors:
         return "candidate apply failed before validation"
+    if str(getattr(validation_result, "outcome_type", "") or "").strip() in {
+        "validation_environment_not_ready",
+        "validation_missing_dependency",
+        "validation_misconfigured",
+    }:
+        return "; ".join(list(validation_result.errors) or list(validation_result.warnings) or ["validation environment is not ready"])
     if int(getattr(validation_result, "failed_tests", 0) or 0) > 0:
         return f"{int(validation_result.failed_tests)} tests failed"
     if int(getattr(validation_result, "total_tests", 0) or 0) > 0:
@@ -3261,6 +3661,12 @@ def _build_root_cause_summary(result: ImplementationResult) -> str:
     artifact_summary = result.artifact_summary
     if int(artifact_summary.files_count or artifact_summary.file_count or 0) == 0:
         return "No changes generated by agent"
+    if str(getattr(result.validation_result, "outcome_type", "") or "").strip() in {
+        "validation_environment_not_ready",
+        "validation_missing_dependency",
+        "validation_misconfigured",
+    }:
+        return "; ".join(list(result.validation_result.errors) or list(result.validation_result.warnings) or ["Validation environment is not ready"])
     if int(getattr(result.validation_result, "failed_tests", 0) or 0) > 0:
         return f"Validation failed: {int(result.validation_result.failed_tests)} test(s) failed"
     if result.validation_result.overall_status == "failed":
@@ -3339,11 +3745,25 @@ def _validation_path_exists(validation_result) -> bool:
     return any(str(step.command or "").strip() for step in list(validation_result.steps))
 
 
-def _build_failed_validation_result(repo_id: str, message: str) -> ValidationResult:
+def _build_failed_validation_result(
+    repo_id: str,
+    message: str,
+    *,
+    outcome_type: str = "validation_environment_not_ready",
+) -> ValidationResult:
     return ValidationResult(
         repo_id=repo_id,
         overall_status="failed",
         passed=False,
+        outcome_type=outcome_type,
+        validation_scope="repo",
+        validation_profile_used="unavailable",
+        targeted_validation=False,
+        environment_related_failure=outcome_type in {
+            "validation_environment_not_ready",
+            "validation_missing_dependency",
+            "validation_misconfigured",
+        },
         total_tests=0,
         passed_tests=0,
         failed_tests=0,
@@ -3697,6 +4117,286 @@ def _repo_context_summary_payload(repo_context: dict | None) -> dict:
     }
 
 
+def _sync_repo_before_repo_aware_run(resolved_repo) -> dict:
+    repo_root_path = str(getattr(resolved_repo, "root_path", "") or getattr(resolved_repo, "local_path", "") or "").strip()
+    default_branch = str(getattr(resolved_repo, "default_branch", "") or "").strip() or "main"
+    repo_id = str(getattr(resolved_repo, "repo_id", "") or "").strip()
+    index_service = RepositoryIndexService()
+    registry_service = RepositoryRegistryService()
+    sync_timestamp = datetime.now(timezone.utc).isoformat()
+
+    def _persist_sync(status: str, error: str = "") -> None:
+        if not repo_id:
+            return
+        registry_service.update_repo_metadata(
+            repo_id,
+            sync_status=str(status or "").strip(),
+            last_sync_at=sync_timestamp,
+            sync_error=str(error or "").strip(),
+        )
+
+    if not repo_root_path:
+        return {
+            "sync_status": "not_applicable",
+            "local_head_before": "",
+            "remote_head": "",
+            "synced_before_run": False,
+            "current_local_head": "",
+            "indexed_head": "",
+            "index_status": "",
+            "reindex_required": False,
+            "warnings": [],
+            "errors": [],
+        }
+    scm_service = ScmService()
+    if not scm_service.detect_git_repo(repo_root_path):
+        _persist_sync("not_git_repo", "Repository sync skipped because the onboarded repo is not a git clone.")
+        return {
+            "sync_status": "not_git_repo",
+            "local_head_before": "",
+            "remote_head": "",
+            "synced_before_run": False,
+            "current_local_head": "",
+            "indexed_head": str(getattr(resolved_repo, "indexed_head", "") or "").strip(),
+            "index_status": str(getattr(resolved_repo, "index_status", "") or "").strip(),
+            "reindex_required": bool(getattr(resolved_repo, "reindex_required", False)),
+            "warnings": ["Repository sync skipped because the onboarded repo is not a git clone."],
+            "errors": [],
+        }
+    local_head_before = ""
+    local_head_result = scm_service.get_head_commit_hash(repo_root_path)
+    if local_head_result.success:
+        local_head_before = str(local_head_result.data.get("commit_hash", "") or "").strip()
+    indexed_head = str(getattr(resolved_repo, "indexed_head", "") or "").strip()
+    index_status = str(getattr(resolved_repo, "index_status", "") or "").strip()
+    reindex_required = bool(getattr(resolved_repo, "reindex_required", False))
+    fetch_result = scm_service.fetch(repo_root_path, "origin")
+    if not fetch_result.success:
+        if local_head_before and indexed_head and local_head_before != indexed_head:
+            registry_service.update_repo_metadata(
+                repo_id,
+                index_status="stale",
+                reindex_required=True,
+            )
+        _persist_sync("sync_unavailable", fetch_result.error or "Repository fetch failed.")
+        return {
+            "sync_status": "sync_unavailable",
+            "local_head_before": local_head_before,
+            "remote_head": "",
+            "synced_before_run": False,
+            "current_local_head": local_head_before,
+            "indexed_head": indexed_head,
+            "index_status": "stale" if local_head_before and indexed_head and local_head_before != indexed_head else index_status,
+            "reindex_required": bool(local_head_before and indexed_head and local_head_before != indexed_head) or reindex_required,
+            "warnings": [fetch_result.error or "Repository fetch failed."],
+            "errors": [],
+        }
+    remote_ref = f"refs/remotes/origin/{default_branch}"
+    remote_head_result = scm_service.get_ref_commit_hash(repo_root_path, remote_ref)
+    remote_head = (
+        str(remote_head_result.data.get("commit_hash", "") or "").strip()
+        if remote_head_result.success
+        else ""
+    )
+    if local_head_before and remote_head and local_head_before == remote_head:
+        try:
+            reindex_state = index_service.ensure_index_for_head(
+                repo_id,
+                current_head=local_head_before,
+            ) if repo_id else {"rebuilt": False, "index_status": index_status, "indexed_head": indexed_head, "indexed_at": str(getattr(resolved_repo, "indexed_at", "") or "").strip(), "index_error": str(getattr(resolved_repo, "index_error", "") or "").strip()}
+        except KeyError:
+            reindex_state = {
+                "rebuilt": False,
+                "index_status": index_status or ("ready" if indexed_head else "stale"),
+                "indexed_head": indexed_head,
+                "indexed_at": str(getattr(resolved_repo, "indexed_at", "") or "").strip(),
+                "index_error": str(getattr(resolved_repo, "index_error", "") or "").strip(),
+            }
+        except Exception as exc:
+            _persist_sync("up_to_date", f"Repository understanding rebuild failed: {exc}")
+            return {
+                "sync_status": "repo_index_failed",
+                "local_head_before": local_head_before,
+                "remote_head": remote_head,
+                "synced_before_run": False,
+                "current_local_head": local_head_before,
+                "indexed_head": indexed_head,
+                "index_status": "failed",
+                "reindex_required": True,
+                "warnings": [],
+                "errors": [f"Repository understanding rebuild failed: {exc}"],
+            }
+        _persist_sync("up_to_date")
+        return {
+            "sync_status": "up_to_date",
+            "local_head_before": local_head_before,
+            "remote_head": remote_head,
+            "synced_before_run": False,
+            "current_local_head": local_head_before,
+            "indexed_head": str(reindex_state.get("indexed_head", indexed_head) or "").strip(),
+            "index_status": str(reindex_state.get("index_status", index_status or "ready") or "ready").strip(),
+            "reindex_required": False,
+            "warnings": [],
+            "errors": [],
+        }
+    sync_result = scm_service.sync_with_remote_branch(
+        repo_root_path,
+        branch_name=default_branch,
+        remote_name="origin",
+    )
+    if not sync_result.success:
+        _persist_sync("sync_unavailable", sync_result.error or "Repository sync failed.")
+        return {
+            "sync_status": "sync_failed",
+            "local_head_before": local_head_before,
+            "remote_head": remote_head,
+            "synced_before_run": False,
+            "current_local_head": local_head_before,
+            "indexed_head": indexed_head,
+            "index_status": index_status,
+            "reindex_required": reindex_required,
+            "warnings": [],
+            "errors": [sync_result.error or "Repository sync failed."],
+        }
+    current_head = ""
+    current_head_result = scm_service.get_head_commit_hash(repo_root_path)
+    if current_head_result.success:
+        current_head = str(current_head_result.data.get("commit_hash", "") or "").strip()
+    effective_head = current_head or remote_head
+    if local_head_before and remote_head and effective_head == local_head_before and remote_head != local_head_before:
+        effective_head = remote_head
+    head_changed = bool(local_head_before and effective_head and local_head_before != effective_head)
+    try:
+        reindex_state = index_service.ensure_index_for_head(
+            repo_id,
+            current_head=effective_head,
+            force=bool(head_changed or (effective_head and indexed_head and effective_head != indexed_head)),
+        ) if repo_id else {"rebuilt": False, "index_status": index_status or "ready", "indexed_head": indexed_head, "indexed_at": str(getattr(resolved_repo, "indexed_at", "") or "").strip(), "index_error": str(getattr(resolved_repo, "index_error", "") or "").strip()}
+    except KeyError:
+        reindex_state = {
+            "rebuilt": False,
+            "index_status": index_status or ("ready" if indexed_head else "stale"),
+            "indexed_head": indexed_head,
+            "indexed_at": str(getattr(resolved_repo, "indexed_at", "") or "").strip(),
+            "index_error": str(getattr(resolved_repo, "index_error", "") or "").strip(),
+        }
+    except Exception as exc:
+        _persist_sync("synced", f"Repository understanding rebuild failed: {exc}")
+        return {
+            "sync_status": "repo_index_failed",
+            "local_head_before": local_head_before,
+            "remote_head": remote_head,
+            "synced_before_run": True,
+            "current_local_head": effective_head,
+            "indexed_head": indexed_head,
+            "index_status": "failed",
+            "reindex_required": True,
+            "warnings": [],
+            "errors": [f"Repository understanding rebuild failed: {exc}"],
+        }
+    _persist_sync("synced")
+    return {
+        "sync_status": "synced",
+        "local_head_before": local_head_before,
+        "remote_head": remote_head,
+        "synced_before_run": True,
+        "current_local_head": effective_head,
+        "indexed_head": str(reindex_state.get("indexed_head", indexed_head) or "").strip(),
+        "index_status": str(reindex_state.get("index_status", "ready") or "ready").strip(),
+        "reindex_required": False,
+        "warnings": [],
+        "errors": [],
+    }
+
+
+def _assess_repo_task_relevance(user_input: str, repo_context: dict | None) -> dict:
+    context = repo_context if isinstance(repo_context, dict) else {}
+    files_used = [
+        str(item or "").strip()
+        for item in list(context.get("files_used", []) or [])
+        if str(item or "").strip()
+    ]
+    resolved_targets = [
+        str(item or "").strip()
+        for item in list(context.get("resolved_target_files", []) or [])
+        if str(item or "").strip()
+    ]
+    def _is_code_relevant_path(path: str) -> bool:
+        normalized = str(path or "").strip().lower().replace("\\", "/")
+        if not normalized:
+            return False
+        if normalized.startswith(("src/", "app/", "services/", "modules/", "tests/")):
+            return True
+        return normalized.endswith((".py", ".js", ".ts", ".tsx", ".jsx", ".cs"))
+
+    relevant_files_used = [path for path in files_used if _is_code_relevant_path(path)]
+    relevant_targets = [path for path in resolved_targets if _is_code_relevant_path(path)]
+    repo_profile = dict(context.get("repo_profile", {}) or {})
+    glossary_terms = [
+        dict(item or {})
+        for item in list(context.get("glossary_terms", []) or [])
+        if isinstance(item, dict)
+    ]
+    dependency_routes = [
+        dict(item or {})
+        for item in list(context.get("dependency_routes", []) or [])
+        if isinstance(item, dict)
+    ]
+    chunks = [
+        dict(item or {})
+        for item in list(context.get("chunks", []) or [])
+        if isinstance(item, dict)
+    ]
+    normalized_query = re.findall(r"[a-zA-Z_][a-zA-Z0-9_./-]+", str(user_input or "").lower())
+    query_keywords = {item for item in normalized_query if len(item) >= 3}
+    hit_keywords: set[str] = set()
+    for chunk in chunks[:20]:
+        chunk_path = str(chunk.get("path", "") or "").strip()
+        if chunk_path and not _is_code_relevant_path(chunk_path):
+            continue
+        haystack = " ".join(
+            [
+                chunk_path,
+                str(chunk.get("reason", "")),
+                str(chunk.get("snippet", "")),
+            ]
+        ).lower()
+        for keyword in query_keywords:
+            if keyword in haystack:
+                hit_keywords.add(keyword)
+    confidence = 0.0
+    if relevant_files_used:
+        confidence += 0.45
+    if relevant_targets:
+        confidence += 0.35
+    if list(repo_profile.get("source_roots", []) or []):
+        confidence += 0.05
+    if glossary_terms:
+        confidence += 0.05
+    if dependency_routes:
+        confidence += 0.05
+    if query_keywords:
+        confidence += min(0.2, len(hit_keywords) / max(1, len(query_keywords)) * 0.2)
+    confidence = max(0.0, min(1.0, confidence))
+    if confidence >= 0.35:
+        return {
+            "status": "relevant",
+            "confidence": round(confidence, 2),
+            "reason": "Repo context produced plausible file or symbol matches for the request.",
+            "suggested_next_action": "Continue with the repo-aware run.",
+        }
+    return {
+        "status": "repo_mismatch",
+        "confidence": round(confidence, 2),
+        "reason": (
+            "No relevant code files were found for this task in the selected repository, and onboarding analysis did not provide a plausible match."
+            if not relevant_files_used and not relevant_targets
+            else "The request did not produce enough repository-specific code matches to trust this repo as the target."
+        ),
+        "suggested_next_action": "Confirm the repo_id or narrow the goal to concrete files/modules in this repository.",
+    }
+
+
 def _spec_result_payload(spec_result: AgentResult | None) -> dict | None:
     if spec_result is None:
         return None
@@ -3957,6 +4657,16 @@ def _format_implementation_result_text(result: ImplementationResult) -> str:
         f"- goal: {artifact_summary.goal or 'not specified'}",
         f"- file_count: {artifact_summary.file_count}",
         f"- files: {file_paths_text}",
+        f"- change_summary: {result.change_summary or 'not available'}",
+        "",
+        "## Repo Readiness",
+        f"- sync_status: {result.sync_status or 'not available'}",
+        f"- local_head_before: {result.local_head_before or 'not available'}",
+        f"- remote_head: {result.remote_head or 'not available'}",
+        f"- synced_before_run: {'true' if result.synced_before_run else 'false'}",
+        f"- repo_relevance_status: {result.repo_relevance_status or 'not available'}",
+        f"- repo_relevance_confidence: {result.repo_relevance_confidence}",
+        f"- repo_relevance_reason: {result.repo_relevance_reason or 'not available'}",
         "",
         "## Dry Run Apply",
         f"- applied_files: {len(result.dry_run_apply_result.applied_files)}",
@@ -3971,6 +4681,7 @@ def _format_implementation_result_text(result: ImplementationResult) -> str:
         "",
         f"- validation_path: {validation_path_state}",
         f"- validation_status: {result.validation_result.overall_status}",
+        f"- validation_outcome_type: {result.validation_outcome_type or result.validation_result.outcome_type or 'not available'}",
         "",
         _render_diff_section("Dry Run Diff", result.dry_run_diff_result),
         "",
@@ -4084,11 +4795,23 @@ def run_implementation_pipeline(
     create_review: bool = False,
     run_log: bool = False,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "implement",
 ) -> AgentResult:
     implementation_request = _strip_implementation_prefix(user_input)
+    retry_repo_query_input = str(dict(retry_context or {}).get("repo_query_input", "") or "").strip()
+    repo_query_input = retry_repo_query_input or implementation_request
     resolved_repo = resolve_repo(repo_id=repo_id, fallback_root_path=".")
     resolved_repo_id = str(resolved_repo.repo_id).strip()
     resolved_actor_context = actor_context or default_actor_context()
+    implementation_routing_metadata = _route_stage_metadata(
+        workflow_name=workflow_name or "implement",
+        technical_mode="implement",
+        stage_name="implement",
+        user_input=user_input,
+        repo_context=None,
+        has_artifact=True,
+        actionable=workflow_name == "fix_and_retry",
+    )
     base_permission_scope = PermissionScope(
         repo_id=resolved_repo_id,
         source_channel=str(resolved_actor_context.source_channel or "").strip(),
@@ -4122,6 +4845,20 @@ def run_implementation_pipeline(
     code_result = None
     spec_result = None
     implementation_result = None
+    sync_state = {
+        "sync_status": "not_applicable",
+        "local_head_before": "",
+        "remote_head": "",
+        "synced_before_run": False,
+        "warnings": [],
+        "errors": [],
+    }
+    relevance_assessment = {
+        "status": "unknown",
+        "confidence": 0.0,
+        "reason": "",
+        "suggested_next_action": "",
+    }
     permissions = _implementation_permissions()
     dry_run_decision = permission_service.evaluate(
         resolved_actor_context,
@@ -4140,11 +4877,148 @@ def run_implementation_pipeline(
             permission_decision=dry_run_decision,
         )
     try:
+        sync_state = _sync_repo_before_repo_aware_run(resolved_repo)
+        temp_workspace_warnings.extend(list(sync_state.get("warnings", []) or []))
+        if list(sync_state.get("errors", []) or []):
+            run_service.start_step(run_id, "draft")
+            run_service.fail_step(
+                run_id,
+                _build_execution_error(
+                    "unexpected",
+                    str(sync_state["errors"][0]),
+                    "draft",
+                    details={"sync_status": sync_state.get("sync_status", "")},
+                ),
+            )
+            run_record = run_service.finish_run(run_id, "failed")
+            return _build_failed_implementation_agent_result(
+                repo_id=resolved_repo_id,
+                task_intent="modify",
+                repo_context={},
+                run_record=run_record,
+                message=str(sync_state["errors"][0]),
+            )
+        relevance_probe_context = _build_shared_repo_context(
+            repo_query_input,
+            command_mode="implement",
+            repo_id=resolved_repo_id,
+        )
+        relevance_assessment = _assess_repo_task_relevance(
+            repo_query_input,
+            relevance_probe_context,
+        )
+        if str(relevance_assessment.get("status", "") or "").strip() == "repo_mismatch":
+            run_service.start_step(run_id, "draft")
+            run_service.finish_step(
+                run_id,
+                "skipped",
+                str(relevance_assessment.get("reason", "") or "Skipped because the task does not appear to match this repository."),
+            )
+            run_service.start_step(run_id, "validation")
+            run_service.finish_step(run_id, "skipped", "Skipped because repo relevance was too low.")
+            run_service.start_step(run_id, "apply")
+            run_service.finish_step(run_id, "skipped", "Skipped because repo relevance was too low.")
+            validation_result = ValidationResult(
+                repo_id=resolved_repo_id,
+                overall_status="skipped",
+                outcome_type="validation_misconfigured",
+                validation_scope="repo",
+                validation_profile_used="skipped_repo_mismatch",
+                targeted_validation=False,
+                environment_related_failure=False,
+                warnings=["Skipped because repo relevance was too low."],
+            )
+            empty_artifact = ImplementationArtifactSummary(
+                artifact_type="draft_set",
+                goal=implementation_request or user_input,
+                file_count=0,
+                file_paths=[],
+                files_count=0,
+                files_changed=0,
+                files_created=0,
+                files_deleted=0,
+                reason_if_empty="repo mismatch",
+            )
+            empty_apply_result = ApplyResult(
+                repo_id=resolved_repo_id,
+                root_path=str(getattr(resolved_repo, "root_path", "") or "").strip(),
+                dry_run=True,
+                applied_files=[],
+                skipped_files=[],
+                warnings=[],
+                errors=[],
+            )
+            implementation_result = ImplementationResult(
+                repo_id=resolved_repo_id,
+                artifact_summary=empty_artifact,
+                dry_run_apply_result=_enrich_apply_result(empty_apply_result, skip_reason="no_changes"),
+                dry_run_diff_result=DiffResult(
+                    repo_id=resolved_repo_id,
+                    root_path=str(getattr(resolved_repo, "root_path", "") or "").strip(),
+                    dry_run=True,
+                    files=[],
+                    warnings=[],
+                ),
+                validation_result=validation_result,
+                actor_context=resolved_actor_context,
+                temp_workspace_warnings=temp_workspace_warnings,
+                policy_decisions=[],
+                publication_status="",
+                final_status="repo_mismatch",
+                sync_status=str(sync_state.get("sync_status", "") or "").strip(),
+                local_head_before=str(sync_state.get("local_head_before", "") or "").strip(),
+                remote_head=str(sync_state.get("remote_head", "") or "").strip(),
+                synced_before_run=bool(sync_state.get("synced_before_run", False)),
+                repo_relevance_status="repo_mismatch",
+                repo_relevance_confidence=float(relevance_assessment.get("confidence", 0.0) or 0.0),
+                repo_relevance_reason=str(relevance_assessment.get("reason", "") or "").strip(),
+                repo_relevance_next_action=str(relevance_assessment.get("suggested_next_action", "") or "").strip(),
+                changed_files=[],
+                change_summary="No changes prepared because the task does not appear relevant to this repository.",
+                validation_outcome_type=validation_result.outcome_type,
+                code_failure_related=False,
+            )
+            implementation_result.root_cause_summary = implementation_result.repo_relevance_reason or "Repository mismatch detected."
+            implementation_result.run_record = run_service.finish_run(run_id, "repo_mismatch")
+            if implementation_result.run_record is not None:
+                implementation_result.run_record.status = "repo_mismatch"
+            run_service.persist_run_detail(
+                run_id,
+                {
+                    "mode": "implement",
+                    "goal": implementation_request or user_input,
+                    "repo_id": resolved_repo_id,
+                    "implementation_result": implementation_result.to_dict(),
+                    "publication_result": _implementation_publication_payload(implementation_result),
+                    "validation_result": validation_result.to_dict(),
+                    "diff_result": _build_diff_payload(implementation_result.dry_run_diff_result, reason="no_changes"),
+                    "review_comments": [],
+                    "policy_decisions": [],
+                    "sources": [],
+                    "repo_context_summary": _repo_context_summary_payload(relevance_probe_context),
+                    "root_cause_summary": implementation_result.root_cause_summary,
+                },
+                log_path=implementation_result.run_record.log_path if implementation_result.run_record is not None else "",
+            )
+            return AgentResult(
+                agent_name="implementation",
+                output_text=_format_implementation_result_text(implementation_result),
+                success=False,
+                task_intent="modify",
+                repo_context=relevance_probe_context,
+                metadata={
+                    "artifact_type": "implementation_result",
+                    "implementation_result": implementation_result,
+                    "run_record": implementation_result.run_record,
+                },
+            )
         run_service.start_step(run_id, "draft")
         spec_result, code_result, change_result, draft_result = run_full_draft_pipeline(
             implementation_request,
             repo_id=resolved_repo_id,
+            repo_query_input=repo_query_input,
             actor_context=resolved_actor_context,
+            workflow_name=workflow_name or "implement",
         )
         artifact_summary, dry_run_apply_input, dry_run_apply_result = _prepare_implementation_apply_artifact(
             resolved_repo_id,
@@ -4187,6 +5061,19 @@ def run_implementation_pipeline(
             temp_workspace_warnings=temp_workspace_warnings,
             policy_decisions=[],
             publication_status="",
+            sync_status=str(sync_state.get("sync_status", "") or "").strip(),
+            local_head_before=str(sync_state.get("local_head_before", "") or "").strip(),
+            remote_head=str(sync_state.get("remote_head", "") or "").strip(),
+            synced_before_run=bool(sync_state.get("synced_before_run", False)),
+            repo_relevance_status=str(relevance_assessment.get("status", "") or "").strip(),
+            repo_relevance_confidence=float(relevance_assessment.get("confidence", 0.0) or 0.0),
+            repo_relevance_reason=str(relevance_assessment.get("reason", "") or "").strip(),
+            repo_relevance_next_action=str(relevance_assessment.get("suggested_next_action", "") or "").strip(),
+            changed_files=list(artifact_summary.file_paths),
+            change_summary=(
+                f"Prepared {int(artifact_summary.files_count or artifact_summary.file_count or 0)} file change(s): "
+                + ", ".join(list(artifact_summary.file_paths)[:5])
+            ) if list(artifact_summary.file_paths) else "No changed files prepared.",
             final_status="dry_run_complete",
         )
 
@@ -4199,6 +5086,11 @@ def run_implementation_pipeline(
                 repo_id=resolved_repo_id,
                 overall_status="skipped",
                 passed=False,
+                outcome_type="validation_misconfigured",
+                validation_scope="repo",
+                validation_profile_used="skipped_no_changes",
+                targeted_validation=False,
+                environment_related_failure=False,
                 total_tests=0,
                 passed_tests=0,
                 failed_tests=0,
@@ -4310,7 +5202,10 @@ def run_implementation_pipeline(
                         )
                         validation_result = ValidationService(
                             storage_path=temp_workspace_context.registry_path
-                        ).run_validation(resolved_repo_id)
+                        ).run_validation(
+                            resolved_repo_id,
+                            changed_files=list(artifact_summary.file_paths),
+                        )
                         validation_path_exists = _validation_path_exists(validation_result)
                     except Exception as exc:
                         message = f"Temp workspace validation failed to start: {exc}"
@@ -4365,6 +5260,8 @@ def run_implementation_pipeline(
 
         implementation_result.candidate_apply_result = candidate_apply_result
         implementation_result.validation_result = validation_result
+        implementation_result.validation_outcome_type = str(validation_result.outcome_type or "").strip()
+        implementation_result.code_failure_related = implementation_result.validation_outcome_type == "validation_failed_code"
         implementation_result.temp_workspace_root = (
             temp_workspace_context.workspace_repo_root
             if temp_workspace_context is not None
@@ -4937,6 +5834,11 @@ def run_implementation_pipeline(
             "sources": [],
             "repo_context_summary": _repo_context_summary_payload(repo_context),
             "root_cause_summary": implementation_result.root_cause_summary,
+            "model_used": str(implementation_routing_metadata.get("model_used", "") or "").strip(),
+            "routing_reason": str(implementation_routing_metadata.get("routing_reason", "") or "").strip(),
+            "was_escalated": bool(implementation_routing_metadata.get("was_escalated", False)),
+            "source_stage": str(implementation_routing_metadata.get("source_stage", "") or "").strip(),
+            "estimated_prompt_size": int(implementation_routing_metadata.get("estimated_prompt_size", 0) or 0),
         },
         log_path=implementation_result.run_record.log_path if implementation_result.run_record is not None else "",
     )
@@ -4961,6 +5863,7 @@ def run_implementation_pipeline(
             "code_result": code_result,
             "change_result": change_result,
             "draft_result": draft_result,
+            **dict(implementation_routing_metadata or {}),
         },
     )
 
@@ -5042,6 +5945,7 @@ def run_full_review_pipeline(
     repo_id: str | None = None,
     *,
     actor_context: ActorContext | None = None,
+    workflow_name: str = "",
 ) -> tuple[AgentResult, AgentResult, AgentResult, AgentResult, AgentResult]:
     _assert_not_review_only_pipeline(user_input, "repair/change/draft review pipeline")
     resolved_actor_context = _resolve_actor(actor_context)
@@ -5060,6 +5964,7 @@ def run_full_review_pipeline(
         user_input,
         repo_id=repo_id,
         actor_context=resolved_actor_context,
+        workflow_name=workflow_name,
     )
     repo_context = (
         spec_result.repo_context
@@ -5128,14 +6033,24 @@ def run_full_review_pipeline(
         ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
         return spec_result, code_result, change_result, draft_result, review_result
 
-    review_result = _attach_stage_summary(run_review_agent(
+    review_routing_metadata = _route_stage_metadata(
+        workflow_name=workflow_name,
+        technical_mode="review",
+        stage_name="review",
+        user_input=user_input,
+        repo_context=repo_context,
+        has_artifact=True,
+    )
+    review_result = _attach_stage_summary(_attach_routing_metadata(_invoke_agent_with_optional_routing(
+        run_review_agent,
         original_request=user_input,
         spec=spec,
         change_set=change_set,
         draft_set=draft_set,
         task_intent=task_intent,
         repo_context=repo_context,
-    ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
+        routing_metadata=review_routing_metadata,
+    ), review_routing_metadata), stage_name="review", repo_context=repo_context, task_intent=task_intent)
 
     if review_result.success:
         return spec_result, code_result, change_result, draft_result, review_result
@@ -5176,14 +6091,24 @@ def run_full_review_pipeline(
             },
         ), stage_name="draft", repo_context=repo_context, task_intent=task_intent)
 
-        current_review_result = _attach_stage_summary(run_review_agent(
+        review_retry_routing_metadata = _route_stage_metadata(
+            workflow_name=workflow_name,
+            technical_mode="review",
+            stage_name="review",
+            user_input=user_input,
+            repo_context=repo_context,
+            has_artifact=True,
+        )
+        current_review_result = _attach_stage_summary(_attach_routing_metadata(_invoke_agent_with_optional_routing(
+            run_review_agent,
             original_request=user_input,
             spec=spec,
             change_set=change_set,
             draft_set=repaired_draft_set,
             task_intent=task_intent,
             repo_context=repo_context,
-        ), stage_name="review", repo_context=repo_context, task_intent=task_intent)
+            routing_metadata=review_retry_routing_metadata,
+        ), review_retry_routing_metadata), stage_name="review", repo_context=repo_context, task_intent=task_intent)
 
         if current_review_result.success:
             return spec_result, code_result, change_result, current_draft_result, current_review_result

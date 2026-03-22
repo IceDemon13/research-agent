@@ -34,6 +34,7 @@ class LLMGateway:
             messages=sanitized_messages,
             user_input=request.user_input,
             agent_name=request.agent_name,
+            metadata=request.metadata,
         )
 
         prepared = GatewayPreparedRequest(

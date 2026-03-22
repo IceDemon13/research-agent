@@ -1,0 +1,47 @@
+{
+  "mode": "review",
+  "goal": "Check readiness for review for TEL-1. Return an explicit verdict, blocking issues, exact files to inspect, and required fixes with file, what to fix, and why. Avoid generic wording.",
+  "repo_id": "sample",
+  "jira_ticket": "TEL-1",
+  "model_used": "",
+  "routing_reason": "Deterministic short-circuit: pre-review has no concrete implementation artifact or diff.",
+  "was_escalated": false,
+  "source_stage": "deterministic",
+  "estimated_prompt_size": 0,
+  "spec_result": null,
+  "review_result": {
+    "status": "blocked_insufficient_artifact",
+    "summary": "Недостатньо implementation evidence. Система ще не може безпечно зібрати file-level review findings.",
+    "issues": [],
+    "checks": [],
+    "approved_files": [],
+    "decision_source": "deterministic_precheck",
+    "precheck_issues": [],
+    "semantic_issues": [],
+    "semantic_notes": []
+  },
+  "research_result": null,
+  "implementation_result": null,
+  "publication_result": null,
+  "validation_result": {
+    "overall_status": "skipped",
+    "outcome_type": "validation_skipped",
+    "targeted_validation": false,
+    "validation_profile_used": ""
+  },
+  "diff_result": {
+    "diff_available": false,
+    "files": [],
+    "truncated": false,
+    "reason": "No diff produced for this run mode."
+  },
+  "review_comments": [],
+  "policy_decisions": [],
+  "sources": [],
+  "repo_context_summary": null,
+  "root_cause_summary": "Для pre-review не було concrete implementation artifact або diff.",
+  "final_result_summary": "Review заблоковано, бо implementation evidence недостатньо.",
+  "recommendation": "Спочатку отримайте реальний implementation artifact або diff, і лише потім відкривайте review.",
+  "run_outcome_type": "partial_incomplete",
+  "run_id": "92a9bdec344149c183dad2fc25951a67"
+}

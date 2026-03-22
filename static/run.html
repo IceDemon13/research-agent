@@ -1,134 +1,120 @@
 <!doctype html>
-<html lang="en">
+<html lang="uk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Run Detail</title>
+  <link rel="stylesheet" href="./styles.css">
   <script src="./config.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
-    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-    button, a { padding: 8px 12px; border: 1px solid #bbb; background: #f6f6f6; color: #222; text-decoration: none; cursor: pointer; font: inherit; }
-    .card { border: 1px solid #ddd; padding: 16px; margin-bottom: 16px; }
-    .timeline-item { border-left: 3px solid #ccc; padding-left: 12px; margin-bottom: 12px; }
-    .error { color: #a40000; }
-    .status-failed { color: #a40000; }
-    .status-skipped { color: #8a5a00; }
-    .status-success { color: #0a6b2d; }
-    .status-added { color: #0a6b2d; }
-    .status-modified { color: #1b4d8a; }
-    .status-deleted { color: #a40000; }
-    .hidden { display: none; }
-    ul { margin: 8px 0 0 18px; }
-    code { background: #f5f5f5; padding: 1px 4px; }
-    details { margin-bottom: 12px; }
-    summary { cursor: pointer; }
-    .diff-block { background: #f8f8f8; border: 1px solid #ddd; padding: 12px; overflow-x: auto; white-space: pre-wrap; font-family: Consolas, "Courier New", monospace; }
-    .diff-line-added { background: #e9f7ec; color: #0a6b2d; }
-    .diff-line-removed { background: #fdeeee; color: #a40000; }
-    .diff-line-header { color: #555; }
-    .diff-warning { color: #8a5a00; }
-    .severity-info { color: #3a3a3a; background: #f1f1f1; padding: 2px 6px; }
-    .severity-warning { color: #8a5a00; background: #fff4db; padding: 2px 6px; }
-    .severity-risk { color: #a40000; background: #fdeeee; padding: 2px 6px; }
-    .comment-file-group { margin-bottom: 16px; }
-    .comment-item { border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; }
-    .empty-state { color: #666; font-style: italic; }
-    .action-result { border: 1px solid #ddd; background: #f9f9f9; padding: 12px; margin-bottom: 16px; }
-    .diff-summary { margin-bottom: 12px; font-weight: bold; }
-  </style>
 </head>
 <body>
-  <div class="toolbar">
-    <a href="./index.html">Back to Runs</a>
-    <a href="./create.html">Create Run</a>
-    <button id="retryButton" type="button">Retry</button>
-    <button id="cancelButton" type="button">Cancel</button>
-    <button id="approveButton" type="button">Approve</button>
-    <button id="rejectButton" type="button">Reject</button>
-  </div>
+  <div class="page-shell">
+    <div class="toolbar">
+      <label class="language-switcher">
+        <span data-i18n="common.language">Мова</span>
+        <select id="languageSelector">
+          <option value="uk">Українська</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <a href="./index.html" data-i18n="common.home">Головна</a>
+      <a href="./runs.html" data-i18n="common.technical_runs">Технічні run-и</a>
+      <a href="./create.html" data-i18n="common.create_technical_run">Створити технічний run</a>
+      <button id="retryButton" type="button" data-i18n="run.retry">Retry</button>
+      <button id="cancelButton" type="button" data-i18n="run.cancel">Скасувати</button>
+      <button id="approveButton" class="primary" type="button" data-i18n="run.approve">Погодити</button>
+      <button id="rejectButton" class="danger" type="button" data-i18n="run.reject">Відхилити</button>
+    </div>
 
-  <div id="errorBox" class="error"></div>
-  <div id="actionResultBox" class="action-result hidden"></div>
+    <div id="errorBox" class="error"></div>
+    <div id="actionResultBox" class="action-result hidden"></div>
 
-  <div class="card">
-    <h1 id="runTitle">Run</h1>
-    <div id="runMeta">Loading...</div>
-  </div>
+    <div class="card">
+      <h1 id="runTitle">Run</h1>
+      <div id="runMeta">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Failure Summary</h2>
-    <div id="failureSummary">Loading...</div>
-  </div>
+    <div id="resultBanner" class="result-banner hidden"></div>
 
-  <div class="card">
-    <h2>Root Cause</h2>
-    <div id="rootCauseBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="common.result">Результат</h2>
+      <div id="resultBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Draft Summary</h2>
-    <div id="draftBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.failure_summary">Підсумок збою</h2>
+      <div id="failureSummary">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Validation</h2>
-    <div id="validationBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.root_cause">Коренева причина</h2>
+      <div id="rootCauseBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Apply Summary</h2>
-    <div id="applyBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.draft_summary">Підсумок draft</h2>
+      <div id="draftBox">Завантаження...</div>
+    </div>
 
-  <div id="publicationCard" class="card">
-    <h2>Publication</h2>
-    <div id="publicationBlock"></div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.validation">Validation</h2>
+      <div id="validationBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Spec</h2>
-    <div id="specBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.apply_summary">Підсумок apply</h2>
+      <div id="applyBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Review Analysis</h2>
-    <div id="reviewBox">Loading...</div>
-  </div>
+    <div id="publicationCard" class="card">
+      <h2 data-i18n="run.publication">Публікація</h2>
+      <div id="publicationBlock"></div>
+    </div>
 
-  <div class="card">
-    <h2>Research</h2>
-    <div id="researchBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.spec">Spec</h2>
+      <div id="specBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Repo Context</h2>
-    <div id="repoContextBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.review_analysis">Аналіз review</h2>
+      <div id="reviewBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>Diff</h2>
-    <div id="diffBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2 data-i18n="run.research">Дослідження</h2>
+      <div id="researchBox">Завантаження...</div>
+    </div>
 
-  <div class="card">
-    <h2>AI Review Comments</h2>
-    <div id="commentsBox">Loading...</div>
-  </div>
+    <div class="card">
+      <h2>Repo Context</h2>
+      <div id="repoContextBox">Loading...</div>
+    </div>
 
-  <div class="card">
-    <h2>Steps Timeline</h2>
-    <div id="stepsTimeline">Loading...</div>
-  </div>
+    <div class="card">
+      <h2>Diff</h2>
+      <div id="diffBox">Loading...</div>
+    </div>
 
-  <div class="card">
-    <h2>Policy Decisions</h2>
-    <div id="policyList">Loading...</div>
-  </div>
+    <div class="card">
+      <h2>AI Review Comments</h2>
+      <div id="commentsBox">Loading...</div>
+    </div>
 
-  <div class="card">
-    <h2>Errors</h2>
-    <div id="errorsBox">Loading...</div>
+    <div class="card">
+      <h2>Steps Timeline</h2>
+      <div id="stepsTimeline">Loading...</div>
+    </div>
+
+    <div class="card">
+      <h2>Policy Decisions</h2>
+      <div id="policyList">Loading...</div>
+    </div>
+
+    <div class="card">
+      <h2>Errors</h2>
+      <div id="errorsBox">Loading...</div>
+    </div>
   </div>
 
   <script>
@@ -176,33 +162,119 @@
         <p><strong>Decided At:</strong> ${run.decided_at || "-"}</p>
         <p><strong>Decided By:</strong> ${run.decided_by || "-"}</p>
         <p><strong>Decision Note:</strong> ${escapeHtml(run.decision_note || "-")}</p>
-        <p><strong>Retry Note:</strong> ${escapeHtml(run.retry_note || "-")}</p>
-        <p><strong>Retry Context:</strong> ${escapeHtml(run.retry_context_summary || "-")}</p>
-        <p><strong>Retry Strategy:</strong> ${escapeHtml(run.retry_strategy || "-")}</p>
-        <p><strong>Strategy Reason:</strong> ${escapeHtml(run.retry_strategy_reason || "-")}</p>
-        <p><strong>Repeated Failure Detected:</strong> ${run.repeated_failure_detected ? "true" : "false"}</p>
-        <p><strong>Retry Reason:</strong> ${escapeHtml(run.retry_context?.retry_reason || "-")}</p>
-        <p><strong>Retry Instructions:</strong> ${(run.retry_context?.instructions || []).length ? (run.retry_context.instructions || []).map((item) => escapeHtml(item)).join("; ") : "-"}</p>
-        <p><strong>Parent Run:</strong> ${
-          run.parent_run?.run_id
-            ? `<a href="./run.html?id=${encodeURIComponent(run.parent_run.run_id)}">${escapeHtml(run.parent_run.run_id)}</a>`
-            : "-"
-        }</p>
         <p><strong>Child Runs:</strong> ${
           (run.child_runs || []).length
             ? (run.child_runs || []).map((child) => `<a href="./run.html?id=${encodeURIComponent(child.run_id || "")}">${escapeHtml(child.run_id || "-")}</a>`).join(", ")
             : "-"
         }</p>
       `;
+      renderResult(run);
+      renderRetryContext(run);
       document.getElementById("failureSummary").innerHTML = `
         <p><strong>Failed Step:</strong> ${run.failed_step || "-"}</p>
         <p><strong>Failure Code:</strong> ${run.failure_code || "-"}</p>
         <p><strong>Failure Reason:</strong> ${run.failure_reason || "-"}</p>
+        <p><strong>Sync Status:</strong> ${escapeHtml(run.sync_status || "-")}</p>
+        <p><strong>Synced Before Run:</strong> ${run.synced_before_run ? "true" : "false"}</p>
+        <p><strong>Local Head Before:</strong> ${escapeHtml(run.local_head_before || "-")}</p>
+        <p><strong>Remote Head:</strong> ${escapeHtml(run.remote_head || "-")}</p>
+        <p><strong>Repo Relevance:</strong> ${escapeHtml(run.repo_relevance_status || "-")}</p>
+        <p><strong>Relevance Confidence:</strong> ${run.repo_relevance_confidence ?? 0}</p>
+        <p><strong>Relevance Reason:</strong> ${escapeHtml(run.repo_relevance_reason || "-")}</p>
+        <p><strong>Suggested Next Action:</strong> ${escapeHtml(run.repo_relevance_next_action || "-")}</p>
       `;
       document.getElementById("rootCauseBox").innerHTML = `
         <p><strong>Summary:</strong> ${escapeHtml(run.root_cause_summary || "-")}</p>
       `;
       updateApproveState(run, currentDiff || {});
+    }
+
+    function renderRetryContext(run) {
+      const hasRetryContext = Boolean(
+        (run.parent_run_id || "").trim() ||
+        (run.retry_note || "").trim() ||
+        (run.retry_context_summary || "").trim() ||
+        (run.retry_strategy || "").trim()
+      );
+      let card = document.getElementById("retryContextCard");
+      if (!card) {
+        card = document.createElement("div");
+        card.id = "retryContextCard";
+        card.className = "card hidden";
+        card.innerHTML = `<h2>Retry Context</h2><div id="retryContextBox"></div>`;
+        const resultCard = document.getElementById("resultBox")?.closest(".card");
+        if (resultCard && resultCard.parentNode) {
+          resultCard.parentNode.insertBefore(card, resultCard.nextSibling);
+        }
+      }
+      const box = document.getElementById("retryContextBox");
+      if (!card || !box) {
+        return;
+      }
+      card.classList.toggle("hidden", !hasRetryContext);
+      if (!hasRetryContext) {
+        box.innerHTML = "";
+        return;
+      }
+      const previous = run.previous_attempt_summary || {};
+      const parentRunLink = run.parent_run?.run_id
+        ? `<a href="./run.html?id=${encodeURIComponent(run.parent_run.run_id)}">${escapeHtml(run.parent_run.run_id)}</a>`
+        : "-";
+      const retryInstructions = (run.retry_context?.instructions || []).length
+        ? `
+          <details>
+            <summary>Retry Instructions</summary>
+            <div>${(run.retry_context.instructions || []).map((item) => `<div>${escapeHtml(item)}</div>`).join("")}</div>
+          </details>
+        `
+        : "";
+      const previousAttemptDetails = previous.run_id
+        ? `
+          <details>
+            <summary>Previous Attempt Summary</summary>
+            <p><strong>Run:</strong> <a href="./run.html?id=${encodeURIComponent(previous.run_id)}">${escapeHtml(previous.run_id)}</a></p>
+            <p><strong>Status:</strong> ${escapeHtml(previous.status || "-")}</p>
+            <p><strong>Summary:</strong> ${escapeHtml(previous.final_result_summary || "-")}</p>
+            <p><strong>Root Cause:</strong> ${escapeHtml(previous.root_cause_summary || "-")}</p>
+            <p><strong>Recommendation:</strong> ${escapeHtml(previous.recommendation || "-")}</p>
+            <p><strong>Failed Step:</strong> ${escapeHtml(previous.failed_step || "-")}</p>
+            <p><strong>Failure Code:</strong> ${escapeHtml(previous.failure_code || "-")}</p>
+            <p><strong>Failure Reason:</strong> ${escapeHtml(previous.failure_reason || "-")}</p>
+          </details>
+        `
+        : "";
+      box.innerHTML = `
+        <p><strong>Retry Note:</strong> ${escapeHtml(run.retry_note || "-")}</p>
+        <p><strong>Retry Context:</strong> ${escapeHtml(run.retry_context_summary || "-")}</p>
+        <p><strong>Retry Strategy:</strong> ${escapeHtml(run.retry_strategy || "-")}</p>
+        <p><strong>Strategy Reason:</strong> ${escapeHtml(run.retry_strategy_reason || "-")}</p>
+        <p><strong>Repeated Failure Detected:</strong> ${run.repeated_failure_detected ? "true" : "false"}</p>
+        <p><strong>Parent Run:</strong> ${parentRunLink}</p>
+        ${previousAttemptDetails}
+        ${retryInstructions}
+      `;
+    }
+
+    function renderResult(run) {
+      const resultBox = document.getElementById("resultBox");
+      const banner = document.getElementById("resultBanner");
+      const warningMessages = [];
+      if ((run.run_outcome_type || "") === "failed_environment") {
+        warningMessages.push(run.final_result_summary || "Validation environment is not ready.");
+      }
+      if ((run.run_outcome_type || "") === "repo_mismatch") {
+        warningMessages.push(run.final_result_summary || "Task does not match this repository.");
+      }
+      if ((run.sync_status || "") === "sync_unavailable") {
+        warningMessages.push("Repository sync was unavailable before this run.");
+      }
+      banner.classList.toggle("hidden", warningMessages.length === 0);
+      banner.innerHTML = warningMessages.map((message) => `<div><strong>Warning:</strong> ${escapeHtml(message)}</div>`).join("");
+      resultBox.innerHTML = `
+        <p><strong>Status:</strong> ${escapeHtml(run.run_outcome_type || run.status || "-")}</p>
+        <p><strong>Summary:</strong> ${escapeHtml(run.final_result_summary || "-")}</p>
+        <p><strong>Recommendation:</strong> ${escapeHtml(run.recommendation || "-")}</p>
+      `;
     }
 
     function renderDraftSummary(run) {
@@ -233,10 +305,19 @@
       const failedCases = validation.failed_test_cases || [];
       box.innerHTML = `
         <p><strong>Status:</strong> ${escapeHtml(validation.overall_status || "-")}</p>
+        <p><strong>Outcome Type:</strong> ${escapeHtml(validation.outcome_type || "-")}</p>
+        <p><strong>Validation Scope:</strong> ${escapeHtml(validation.validation_scope || "-")}</p>
+        <p><strong>Validation Profile:</strong> ${escapeHtml(validation.validation_profile_used || "-")}</p>
+        <p><strong>Targeted Validation:</strong> ${validation.targeted_validation ? "true" : "false"}</p>
+        <p><strong>Environment Related Failure:</strong> ${validation.environment_related_failure ? "true" : "false"}</p>
+        <p><strong>Environment Prepared:</strong> ${validation.environment_prepared ? "true" : "false"}</p>
+        <p><strong>Dependency Install Status:</strong> ${escapeHtml(validation.dependency_install_status || "-")}</p>
         <p><strong>Passed:</strong> ${validation.passed ? "true" : "false"}</p>
         <p><strong>Total Tests:</strong> ${validation.total_tests ?? 0}</p>
         <p><strong>Passed Tests:</strong> ${validation.passed_tests ?? 0}</p>
         <p><strong>Failed Tests:</strong> ${validation.failed_tests ?? 0}</p>
+        <p><strong>Environment Setup Logs:</strong></p>
+        <div class="diff-block">${escapeHtml(validation.environment_setup_logs || "-")}</div>
         <p><strong>Stdout:</strong></p>
         <div class="diff-block">${escapeHtml(validation.stdout || "-")}</div>
         <p><strong>Stderr:</strong></p>
@@ -352,8 +433,11 @@
         return;
       }
       box.innerHTML = `
-        <p><strong>Files Used:</strong> ${(summary.files_used || []).join(", ") || "-"}</p>
+        <p><strong>Candidate Files Count:</strong> ${summary.candidate_files_count ?? 0}</p>
+        <p><strong>Selected Files Count:</strong> ${summary.selected_files_count ?? 0}</p>
+        <p><strong>Relevant Files Used For Analysis:</strong> ${(summary.files_used || []).join(", ") || "-"}</p>
         <p><strong>Resolved Targets:</strong> ${(summary.resolved_target_files || []).join(", ") || "-"}</p>
+        <p><strong>Closest Candidate Files:</strong> ${(summary.candidate_files || []).slice(0, 8).join(", ") || "-"}</p>
         <p><strong>Chunk Count:</strong> ${summary.chunk_count ?? 0}</p>
       `;
     }
@@ -497,17 +581,12 @@
       const totalFiles = diffPayload?.total_files_changed || 0;
       const additions = diffPayload?.total_additions || 0;
       const deletions = diffPayload?.total_deletions || 0;
-      return window.confirm(
-        [
-          "Approve this run?",
-          "",
-          `Branch: ${branchName}`,
-          `Files: ${totalFiles}`,
-          `Additions: +${additions}`,
-          `Deletions: -${deletions}`,
-          "PR will be created through the existing publication flow when enabled.",
-        ].join("\n")
-      );
+      return window.confirm(auth.t("run.review_confirmation", {
+        branch: branchName,
+        files: totalFiles,
+        additions,
+        deletions
+      }));
     }
 
     function renderComments(payload) {
@@ -597,19 +676,19 @@
 
     function buildActionBody(action) {
       if (action === "reject") {
-        const note = window.prompt("Optional rejection reason:", "") || "";
+        const note = window.prompt(auth.t("run.rejection_note_prompt"), "") || "";
         return { note };
       }
       if (action === "approve") {
         if (!buildApproveConfirmation(currentRun || {}, currentDiff || {})) {
           return null;
         }
-        const note = window.prompt("Optional approval note:", "") || "";
+        const note = window.prompt(auth.t("run.approval_note_prompt"), "") || "";
         return { note };
       }
       if (action === "retry") {
-        const note = window.prompt("Optional retry note:", "") || "";
-        const refinementPrompt = window.prompt("Optional refinement prompt:", "") || "";
+        const note = window.prompt(auth.t("run.retry_note_prompt"), "") || "";
+        const refinementPrompt = window.prompt(auth.t("run.retry_refinement_prompt"), "") || "";
         return { note, refinement_prompt: refinementPrompt };
       }
       return {};

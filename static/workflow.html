@@ -1,0 +1,399 @@
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workflow</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./config.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="topbar">
+      <span id="userBox" class="muted">Завантаження...</span>
+      <div class="actions">
+        <label class="language-switcher">
+          <span data-i18n="common.language">Мова</span>
+          <select id="languageSelector">
+            <option value="uk">Українська</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <a href="./index.html" data-i18n="common.home">Головна</a>
+      <a href="./runs.html" data-i18n="common.technical_runs">Технічні run-и</a>
+    </div>
+
+    <div class="page-header">
+      <h1 id="workflowTitle">Workflow</h1>
+      <p id="workflowDescription" class="muted"></p>
+    </div>
+
+    <form id="workflowForm" class="card">
+      <div id="dynamicFields"></div>
+      <div class="toolbar">
+        <button class="primary" type="submit" data-i18n="common.run_workflow">Запустити workflow</button>
+      </div>
+    </form>
+
+    <div id="errorBox" class="error"></div>
+
+    <div id="resultCard" class="card" hidden>
+      <h2 data-i18n="workflow.result.result">Результат</h2>
+      <div id="resultSummary"></div>
+      <div id="resultBody"></div>
+      <div class="toolbar">
+        <button id="fixAndRetryButton" type="button" hidden data-i18n="workflow.result.fix_and_retry">Виправити проблеми і повторити</button>
+        <a id="technicalRunLink" href="./runs.html" hidden data-i18n="common.open_technical_run">Відкрити технічний run</a>
+      </div>
+      <div id="actionStatus" class="muted"></div>
+      <details>
+        <summary data-i18n="common.technical_details">Технічні деталі</summary>
+        <pre id="technicalDetails"></pre>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    const auth = window.AuthUI;
+    const workflowType = new URLSearchParams(window.location.search).get("type") || "analyze_task";
+
+    const workflowConfig = {
+      analyze_task: {
+        titleKey: "workflow.analyze_task.title",
+        descriptionKey: "workflow.analyze_task.description",
+        endpoint: "/workflows/analyze-task",
+        fields: [
+          { id: "jira_ticket", labelKey: "workflow.field.jira_ticket", type: "text", required: true, placeholderKey: "workflow.placeholder.jira_ticket" },
+          { id: "repo_id", labelKey: "workflow.field.repo_id", type: "text", required: false, placeholderKey: "workflow.placeholder.repo_id" }
+        ]
+      },
+      structure_task: {
+        titleKey: "workflow.structure_task.title",
+        descriptionKey: "workflow.structure_task.description",
+        endpoint: "/workflows/structure-task",
+        fields: [
+          { id: "free_text", labelKey: "workflow.field.free_text", type: "textarea", required: true, placeholderKey: "workflow.placeholder.free_text" }
+        ]
+      },
+      implementation_plan: {
+        titleKey: "workflow.implementation_plan.title",
+        descriptionKey: "workflow.implementation_plan.description",
+        endpoint: "/workflows/implementation-plan",
+        fields: [
+          { id: "jira_ticket", labelKey: "workflow.field.jira_ticket", type: "text", required: true, placeholderKey: "workflow.placeholder.jira_ticket" },
+          { id: "repo_id", labelKey: "workflow.field.repo_id", type: "text", required: true, placeholderKey: "workflow.placeholder.repo_id" }
+        ]
+      },
+      pre_review: {
+        titleKey: "workflow.pre_review.title",
+        descriptionKey: "workflow.pre_review.description",
+        endpoint: "/workflows/pre-review",
+        fields: [
+          { id: "jira_ticket", labelKey: "workflow.field.jira_ticket", type: "text", required: true, placeholderKey: "workflow.placeholder.jira_ticket" },
+          { id: "repo_id", labelKey: "workflow.field.repo_id", type: "text", required: true, placeholderKey: "workflow.placeholder.repo_id" }
+        ]
+      }
+    };
+
+    function renderFields() {
+      const configItem = workflowConfig[workflowType] || workflowConfig.analyze_task;
+      document.getElementById("workflowTitle").textContent = auth.t(configItem.titleKey);
+      document.getElementById("workflowDescription").textContent = auth.t(configItem.descriptionKey);
+      const container = document.getElementById("dynamicFields");
+      container.innerHTML = "";
+      configItem.fields.forEach((field) => {
+        const wrapper = document.createElement("label");
+        const labelText = auth.t(field.labelKey);
+        const placeholder = auth.t(field.placeholderKey);
+        wrapper.innerHTML = field.type === "textarea"
+          ? `<span>${labelText}</span><textarea id="${field.id}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}"></textarea>`
+          : `<span>${labelText}</span><input id="${field.id}" type="${field.type}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}">`;
+        container.appendChild(wrapper);
+      });
+    }
+
+    function renderList(titleKey, items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>${auth.t(titleKey)}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `<div><strong>${auth.t(titleKey)}:</strong><ul>${values.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul></div>`;
+    }
+
+    function renderSelectionDetails(titleKey, items, fieldName = "name") {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>${auth.t(titleKey)}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `
+        <div>
+          <strong>${auth.t(titleKey)}:</strong>
+          <ul>
+            ${values.map((item) => `
+              <li>
+                <strong>${auth.escapeHtml(item[fieldName] || "-")}</strong>
+                <span class="badge">${Number(item.confidence || 0).toFixed(2)}</span>
+                <br>
+                <span class="muted">${auth.escapeHtml(item.reason || "-")}</span>
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderChangeActions(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>${auth.t("workflow.result.change_actions")}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `
+        <div>
+          <strong>${auth.t("workflow.result.change_actions")}:</strong>
+          <ul>
+            ${values.map((item) => `
+              <li>
+                <strong>${auth.escapeHtml(item.file || "-")}</strong>
+                (${auth.escapeHtml(item.action || "-")}): ${auth.escapeHtml(item.description || "-")}
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderRequiredFixes(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>${auth.t("workflow.result.required_fixes")}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `
+        <div>
+          <strong>${auth.t("workflow.result.required_fixes")}:</strong>
+          <ul>
+            ${values.map((item) => `
+              <li>
+                <strong>${auth.escapeHtml(item.file || "-")}:</strong>
+                ${auth.escapeHtml(item.what_to_fix || "-")}
+                <br>
+                <span>${auth.escapeHtml(item.exact_action || "-")}</span>
+                <br>
+                <span class="muted">${auth.escapeHtml(item.why || "-")}</span>
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderReviewIssues(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>${auth.t("workflow.result.issue_details")}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `
+        <div>
+          <strong>${auth.t("workflow.result.issue_details")}:</strong>
+          <ul>
+            ${values.map((item) => `
+              <li>
+                <strong>${auth.escapeHtml(item.file || "-")}</strong>
+                <span class="badge">${auth.escapeHtml(auth.translateSeverity(item.severity || "-"))}</span>
+                <span class="badge">${auth.escapeHtml(auth.translateImpact(item.impact || "-"))}</span>
+                <br>
+                ${auth.escapeHtml(item.issue || "-")}
+                <br>
+                <span class="muted">${auth.escapeHtml(item.why || "-")}</span>
+                ${(item.evidence_type || item.evidence_source || item.evidence_snippet) ? `
+                  <details>
+                    <summary>Evidence</summary>
+                    <div><strong>Type:</strong> ${auth.escapeHtml(item.evidence_type || "-")}</div>
+                    <div><strong>Source:</strong> ${auth.escapeHtml(item.evidence_source || "-")}</div>
+                    <div><strong>Confidence:</strong> ${Number(item.evidence_confidence || 0).toFixed(2)}</div>
+                    <div><strong>Snippet:</strong> ${auth.escapeHtml(item.evidence_snippet || "-")}</div>
+                  </details>
+                ` : ""}
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderGlobalBlockers(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return "";
+      }
+      return `
+        <div>
+          <strong>Global blockers:</strong>
+          <ul>
+            ${values.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function configureFixAndRetry(result, technicalRun) {
+      const button = document.getElementById("fixAndRetryButton");
+      const actionStatus = document.getElementById("actionStatus");
+      button.hidden = true;
+      button.disabled = false;
+      button.onclick = null;
+      actionStatus.textContent = "";
+      const verdict = String(result?.verdict || result?.review_verdict || "").toLowerCase();
+      if (workflowType !== "pre_review" || !verdict.startsWith("blocked") || !technicalRun?.run_id) {
+        return;
+      }
+      const actionable = Boolean(result?.fix_and_retry_actionable);
+      const blockedReason = String(result?.fix_and_retry_block_reason || "").trim();
+      button.hidden = false;
+      if (!actionable) {
+        button.disabled = true;
+        actionStatus.textContent = blockedReason || "Automatic fix is unavailable because no concrete files or implementation artifact were identified.";
+        return;
+      }
+      button.onclick = async () => {
+        const note = window.prompt(auth.t("workflow.result.retry_note_prompt"), "") || "";
+        button.disabled = true;
+        actionStatus.textContent = auth.t("workflow.result.retry_starting");
+        try {
+          const payload = await auth.fetchJson("/workflows/fix-and-retry", {
+            method: "POST",
+            body: { run_id: technicalRun.run_id, note }
+          });
+          const newRunId = payload?.new_run_id || "";
+          if (!payload?.success) {
+            actionStatus.textContent = payload?.message || auth.t("workflow.result.retry_starting");
+            return;
+          }
+          actionStatus.innerHTML = newRunId
+            ? `${auth.t("workflow.result.retry_started")} <a href="./run.html?id=${encodeURIComponent(newRunId)}">${auth.t("common.open_technical_run")}</a>`
+            : auth.escapeHtml(payload?.message || auth.t("workflow.result.retry_started"));
+        } catch (error) {
+          actionStatus.textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+    }
+
+    function renderResult(payload) {
+      const result = payload?.result || {};
+      const technicalRun = result.technical_run || {};
+      const resultCard = document.getElementById("resultCard");
+      resultCard.hidden = false;
+      const summaryBox = document.getElementById("resultSummary");
+      const bodyBox = document.getElementById("resultBody");
+      const technicalRunLink = document.getElementById("technicalRunLink");
+      document.getElementById("technicalDetails").textContent = JSON.stringify(payload, null, 2);
+
+      if (workflowType === "analyze_task") {
+        summaryBox.innerHTML = `
+          <p><strong>${auth.t("common.summary")}:</strong> ${auth.escapeHtml(result.task_quality_summary || "-")}</p>
+          <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
+        `;
+        bodyBox.innerHTML = `
+          ${renderList("workflow.result.missing_details", result.missing_details)}
+          ${renderList("workflow.result.risks", result.risks)}
+          ${renderList("workflow.result.suggested_additions", result.suggested_additions)}
+          ${renderList("workflow.result.concrete_questions", result.concrete_questions)}
+          <p><strong>${auth.t("workflow.result.repo_match")}:</strong> ${auth.escapeHtml(result.repo_match?.status || "-")}</p>
+          <p><strong>${auth.t("workflow.result.repo_match_reason")}:</strong> ${auth.escapeHtml(result.repo_match?.reason || "-")}</p>
+        `;
+      } else if (workflowType === "structure_task") {
+        summaryBox.innerHTML = `
+          <p><strong>Title:</strong> ${auth.escapeHtml(result.title || "-")}</p>
+          <p><strong>${auth.t("common.summary")}:</strong> ${auth.escapeHtml(result.summary || "-")}</p>
+          <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
+        `;
+        bodyBox.innerHTML = `
+          <p><strong>${auth.t("workflow.result.description")}:</strong> ${auth.escapeHtml(result.description || "-")}</p>
+          ${renderList("workflow.result.acceptance_criteria", result.acceptance_criteria)}
+          ${renderList("workflow.result.risks", result.risks)}
+          ${renderList("workflow.result.open_questions", result.open_questions)}
+        `;
+      } else if (workflowType === "implementation_plan") {
+        summaryBox.innerHTML = `
+          <p><strong>${auth.t("workflow.result.repo_match")}:</strong> ${auth.escapeHtml(result.repo_match || "-")}</p>
+          <p><strong>${auth.t("workflow.result.repo_match_reason")}:</strong> ${auth.escapeHtml(result.repo_match_reason || "-")}</p>
+          <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
+        `;
+        bodyBox.innerHTML = `
+          ${renderList("workflow.result.likely_files", result.likely_files)}
+          ${renderSelectionDetails("workflow.result.file_selection_reason", result.likely_file_details)}
+          ${renderList("workflow.result.likely_modules", result.likely_modules)}
+          ${renderSelectionDetails("workflow.result.module_selection_reason", result.likely_module_details)}
+          ${renderSelectionDetails("workflow.result.closest_areas", result.closest_areas, "area")}
+          ${renderChangeActions(result.change_actions)}
+          ${renderList("workflow.result.risks", result.risks)}
+          ${renderList("workflow.result.validation_plan", result.validation_plan)}
+        `;
+      } else {
+        const verdict = String(result.verdict || result.review_verdict || "").toLowerCase();
+        const ready = verdict === "ready_for_review";
+        const insufficient = verdict === "blocked_insufficient_artifact";
+        summaryBox.innerHTML = `
+          <div class="review-banner ${ready ? "ready" : "blocked"}">
+            <div><strong>${auth.t("workflow.result.review.banner")}</strong></div>
+            <div><strong>${auth.t("workflow.result.review.verdict")}:</strong> ${ready ? auth.t("workflow.result.review.safe") : auth.t("workflow.result.review.blocked")}</div>
+            <div><strong>${auth.t("workflow.result.review.why")}:</strong> ${auth.escapeHtml(result.decision_statement || result.blocking_explanation || "-")}</div>
+            <div><strong>${auth.t("workflow.result.review.what_to_fix")}:</strong> ${auth.escapeHtml(result.required_fixes?.[0]?.exact_action || result.review_summary?.what_must_be_done_next || "-")}</div>
+            <div><strong>${auth.t("common.confidence")}:</strong> ${Number(result.review_verdict_confidence || 0).toFixed(2)}</div>
+            ${insufficient ? `<div><strong>Reason:</strong> insufficient implementation evidence</div>` : ""}
+          </div>
+          <p><strong>${auth.t("common.summary")}:</strong> ${auth.escapeHtml(result.final_change_summary || "-")}</p>
+          <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
+        `;
+        bodyBox.innerHTML = `
+          <p><strong>${auth.t("workflow.result.decision_statement")}:</strong> ${auth.escapeHtml(result.decision_statement || "-")}</p>
+          <p><strong>${auth.t("workflow.result.attempted")}:</strong> ${auth.escapeHtml(result.review_summary?.attempted || "-")}</p>
+          <p><strong>${auth.t("workflow.result.what_is_wrong")}:</strong> ${auth.escapeHtml(result.review_summary?.what_is_wrong || "-")}</p>
+          <p><strong>${auth.t("workflow.result.what_must_be_done_next")}:</strong> ${auth.escapeHtml(result.review_summary?.what_must_be_done_next || "-")}</p>
+          ${renderList("workflow.result.files_to_check", result.files_to_check)}
+          ${renderList("workflow.result.blocking_issues", result.blocking_issues)}
+          ${renderGlobalBlockers(result.global_blockers)}
+          ${renderReviewIssues(result.issue_details)}
+          <p><strong>${auth.t("workflow.result.blocking_explanation")}:</strong> ${auth.escapeHtml(result.blocking_explanation || "-")}</p>
+          ${renderRequiredFixes(result.required_fixes)}
+          <p><strong>${auth.t("workflow.result.ready_for_crucible")}:</strong> ${auth.boolLabel(result.ready_for_crucible)}</p>
+        `;
+      }
+
+      technicalRunLink.hidden = !technicalRun.run_id;
+      technicalRunLink.href = technicalRun.run_id ? `./run.html?id=${encodeURIComponent(technicalRun.run_id)}` : "./runs.html";
+      configureFixAndRetry(result, technicalRun);
+    }
+
+    document.getElementById("workflowForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const configItem = workflowConfig[workflowType] || workflowConfig.analyze_task;
+      const body = {};
+      configItem.fields.forEach((field) => {
+        body[field.id] = document.getElementById(field.id).value.trim();
+      });
+      document.getElementById("errorBox").textContent = "";
+      try {
+        const payload = await auth.fetchJson(configItem.endpoint, { method: "POST", body });
+        renderResult(payload);
+      } catch (error) {
+        document.getElementById("errorBox").textContent = error.message;
+      }
+    });
+
+    auth.requireLogin({ redirectTo: "/ui/login.html" }).then((me) => {
+      if (!me) return;
+      renderFields();
+      document.getElementById("userBox").textContent = auth.t("index.signed_in_as", {
+        name: me.user.display_name || me.user.username || "-"
+      });
+    });
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    auth.i18nReady().then(renderFields);
+  </script>
+</body>
+</html>

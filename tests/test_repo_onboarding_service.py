@@ -4,6 +4,7 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from contracts.scm_contract import ScmOperationResult
 from services.db_service import DatabaseService
@@ -15,6 +16,8 @@ class FakeScmService:
     def __init__(self) -> None:
         self._branches: dict[str, str] = {}
         self._remotes: dict[str, str] = {}
+        self._heads: dict[str, str] = {}
+        self._remote_heads: dict[str, str] = {}
 
     def clone_repo(
         self,
@@ -35,6 +38,8 @@ class FakeScmService:
         key = resolved_target_path.as_posix()
         self._branches[key] = resolved_branch_name
         self._remotes[key] = str(remote_url or "").strip()
+        self._heads[key] = "abc123def456"
+        self._remote_heads[key] = "abc123def456"
         return ScmOperationResult(
             operation="clone_repo",
             repo_path=key,
@@ -79,6 +84,45 @@ class FakeScmService:
                 "remote_url": remote_url,
             },
             stdout=remote_url,
+        )
+
+    def get_head_commit_hash(self, repo_path: str | Path) -> ScmOperationResult:
+        resolved_repo_path = Path(repo_path).resolve().as_posix()
+        return ScmOperationResult(
+            operation="get_head_commit_hash",
+            repo_path=resolved_repo_path,
+            success=True,
+            data={"commit_hash": self._heads.get(resolved_repo_path, "abc123def456")},
+            stdout=self._heads.get(resolved_repo_path, "abc123def456"),
+        )
+
+    def fetch(self, repo_path: str | Path, remote_name: str = "origin") -> ScmOperationResult:
+        resolved_repo_path = Path(repo_path).resolve().as_posix()
+        return ScmOperationResult(
+            operation="fetch",
+            repo_path=resolved_repo_path,
+            success=True,
+            data={"remote_name": remote_name},
+        )
+
+    def get_ref_commit_hash(self, repo_path: str | Path, ref_name: str) -> ScmOperationResult:
+        resolved_repo_path = Path(repo_path).resolve().as_posix()
+        return ScmOperationResult(
+            operation="get_ref_commit_hash",
+            repo_path=resolved_repo_path,
+            success=True,
+            data={"ref_name": ref_name, "commit_hash": self._remote_heads.get(resolved_repo_path, self._heads.get(resolved_repo_path, "abc123def456"))},
+        )
+
+    def sync_with_remote_branch(self, repo_path: str | Path, branch_name: str, remote_name: str = "origin") -> ScmOperationResult:
+        resolved_repo_path = Path(repo_path).resolve().as_posix()
+        self._heads[resolved_repo_path] = self._remote_heads.get(resolved_repo_path, self._heads.get(resolved_repo_path, "abc123def456"))
+        self._branches[resolved_repo_path] = str(branch_name or "main").strip() or "main"
+        return ScmOperationResult(
+            operation="sync_with_remote_branch",
+            repo_path=resolved_repo_path,
+            success=True,
+            data={"branch_name": self._branches[resolved_repo_path], "remote_name": remote_name},
         )
 
 
@@ -133,6 +177,11 @@ class RepoOnboardingServiceTests(unittest.TestCase):
         self.assertIsNotNone(persisted_repo)
         self.assertEqual(persisted_repo["remote_url"], remote_url)
         self.assertEqual(persisted_repo["local_path"], result.local_path)
+        repo_storage = self.registry_service.storage_path.parent / "sample"
+        self.assertTrue((repo_storage / "repo_profile.json").exists())
+        self.assertTrue((repo_storage / "symbol_index.json").exists())
+        self.assertTrue((repo_storage / "dependency_map.json").exists())
+        self.assertTrue((repo_storage / "repo_glossary.json").exists())
 
     def test_onboard_repo_reuses_existing_registration_for_same_remote(self) -> None:
         remote_url = "https://bitbucket.org/acme/reuse-repo.git"
@@ -226,6 +275,55 @@ class RepoOnboardingServiceTests(unittest.TestCase):
             self.registry_service.resolve_repo_root("listed"),
             onboarded.local_path,
         )
+
+    def test_reindex_repo_returns_success_payload(self) -> None:
+        self.service.onboard_repo(
+            repo_id="reindexed",
+            display_name="Reindexed Repo",
+            remote_url="https://bitbucket.org/acme/reindexed.git",
+            default_branch="main",
+        )
+
+        result = self.service.reindex_repo("reindexed")
+
+        self.assertEqual(result["repo_id"], "reindexed")
+        self.assertEqual(result["index_status"], "ready")
+        self.assertEqual(result["indexed_head"], "abc123def456")
+        self.assertFalse(result["reindex_required"])
+
+    def test_reindex_repo_returns_failed_state_when_rebuild_raises(self) -> None:
+        self.service.onboard_repo(
+            repo_id="broken",
+            display_name="Broken Repo",
+            remote_url="https://bitbucket.org/acme/broken.git",
+            default_branch="main",
+        )
+
+        with patch.object(self.service._index_service, "rebuild_repo_index", side_effect=RuntimeError("boom")):
+            result = self.service.reindex_repo("broken")
+
+        self.assertEqual(result["repo_id"], "broken")
+        self.assertEqual(result["index_status"], "failed")
+        self.assertTrue(result["reindex_required"])
+        self.assertIn("boom", result["message"])
+
+    def test_sync_repo_returns_sync_status_payload(self) -> None:
+        self.service.onboard_repo(
+            repo_id="synced",
+            display_name="Synced Repo",
+            remote_url="https://bitbucket.org/acme/synced.git",
+            default_branch="main",
+        )
+        repo_path = (self.clone_root / "synced").resolve().as_posix()
+        self.scm_service._heads[repo_path] = "old-head"
+        self.scm_service._remote_heads[repo_path] = "new-head"
+
+        result = self.service.sync_repo("synced")
+
+        self.assertEqual(result["repo_id"], "synced")
+        self.assertEqual(result["sync_status"], "synced")
+        self.assertEqual(result["current_local_head"], "new-head")
+        self.assertEqual(result["indexed_head"], "new-head")
 
 
 if __name__ == "__main__":

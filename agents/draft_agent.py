@@ -1717,6 +1717,7 @@ def run_draft_agent(
     change_set: ChangeSet,
     task_intent: str = "create",
     repo_context: dict | None = None,
+    routing_metadata: dict | None = None,
 ) -> AgentResult:
     resolved_repo_context = ensure_repo_context(
         original_request,
@@ -2070,6 +2071,7 @@ def run_draft_agent(
         user_input=composed_input,
         memory=memory,
         agent_name="draft_agent",
+        routing_metadata=dict(routing_metadata or {}),
     )
 
     draft_set = _extract_draft_set(answer)
@@ -2170,5 +2172,6 @@ def run_draft_agent(
                 "draft_rewrite_attempts": draft_rewrite_attempts,
                 "draft_used_safe_fallback": draft_used_safe_fallback,
             },
+            **dict(routing_metadata or {}),
         },
     )

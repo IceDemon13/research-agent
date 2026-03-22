@@ -6,95 +6,70 @@
     "README.md",
     "docs/TEST_WORKFLOW.md",
     "docs/sdd_implementation_gap_analysis.md",
+    "docs/sdd_preflight_check.md",
     "data/README.md",
     "data/hybrid_retrieval.md",
     "data/repo_context.md",
     "data/sdd_commands.md",
     "data/sdd_commands_uk.md",
-    "data/test_workflow.md",
-    "example_output/report.md"
+    "data/test_workflow.md"
   ],
   "config_candidates": [
-    ".env",
-    ".env.example",
-    "jira_mcp_server/.env",
+    "docker-compose.yml",
     "requirements.txt",
     ".github/workflows/python-tests.yml",
     "config.py",
     "jira_mcp_server/config.py",
-    ".vs/VSWorkspaceState.json",
-    ".vs/research-agent.slnx/v18/DocumentLayout.json",
-    "artifacts/repos/registry.json",
-    "artifacts/repos/repo-id-test-dd7706b3/repo_manifest.json",
-    "index/manifest.json",
-    "output/repo_manifest.json"
+    "static/config.js"
   ],
   "likely_test_paths": [
+    "tests/test_apply_service.py",
+    "tests/test_bitbucket_service.py",
+    "tests/test_crucible_service.py",
+    "tests/test_db_service.py",
+    "tests/test_diff_service.py",
+    "tests/test_global_permissions.py",
     "tests/test_help_texts.py",
+    "tests/test_i18n_service.py",
+    "tests/test_implementation_mode.py",
+    "tests/test_main.py",
+    "tests/test_permission_service.py",
+    "tests/test_publication_service.py",
     "tests/test_repo_commands.py",
     "tests/test_repo_id_execution.py",
     "tests/test_repo_index_service.py",
+    "tests/test_repo_onboarding_service.py",
     "tests/test_repo_registry.py",
-    "data/test_workflow.md",
-    "docs/TEST_WORKFLOW.md",
-    "jira_mcp_server/test_jira.py",
-    "scripts/run_test.ps1",
-    "test_jira_tool.py",
-    "tests/__init__.py",
-    "tests/repo_context_assertions.py",
-    "agents/spec_agent.py",
-    "agents/spec_review_agent.py",
-    "contracts/spec_contract.py",
-    "contracts/spec_parser.py",
-    "contracts/spec_to_code_input.py",
-    "prompts/spec_prompt.py",
-    "prompts/spec_review_prompt.py",
-    "services/jira_field_inspector.py"
+    "tests/test_run_explorer.py",
+    "tests/test_run_service.py",
+    "tests/test_scm_service.py"
   ],
-  "file_count": 158,
-  "indexed_at": "2026-03-19T16:05:37.845738+00:00",
+  "file_count": 221,
+  "indexed_at": "2026-03-22T16:39:16.152548+00:00",
   "files": [
     {
-      "path": ".env",
-      "size": 600,
+      "path": ".dockerignore",
+      "size": 147,
       "extension": "",
       "line_count": 16
     },
     {
-      "path": ".env.example",
-      "size": 0,
-      "extension": ".example",
-      "line_count": 0
-    },
-    {
       "path": ".github/workflows/python-tests.yml",
-      "size": 633,
+      "size": 663,
       "extension": ".yml",
       "line_count": 30
     },
     {
-      "path": ".gitignore",
-      "size": 4916,
+      "path": "Dockerfile",
+      "size": 529,
       "extension": "",
-      "line_count": 210
-    },
-    {
-      "path": ".vs/VSWorkspaceState.json",
-      "size": 78,
-      "extension": ".json",
-      "line_count": 6
-    },
-    {
-      "path": ".vs/research-agent.slnx/v18/DocumentLayout.json",
-      "size": 557,
-      "extension": ".json",
-      "line_count": 23
+      "line_count": 22
     },
     {
       "path": "README.md",
-      "size": 48386,
+      "size": 8223,
       "extension": ".md",
-      "line_count": 773
+      "line_count": 305
     },
     {
       "path": "__write_probe_root__.txt",
@@ -104,7 +79,7 @@
     },
     {
       "path": "agent.py",
-      "size": 141,
+      "size": 146,
       "extension": ".py",
       "line_count": 5
     },
@@ -116,13 +91,13 @@
     },
     {
       "path": "agents/change_agent.py",
-      "size": 47666,
+      "size": 48703,
       "extension": ".py",
       "line_count": 1260
     },
     {
       "path": "agents/code_agent.py",
-      "size": 7587,
+      "size": 7333,
       "extension": ".py",
       "line_count": 240
     },
@@ -134,7 +109,7 @@
     },
     {
       "path": "agents/draft_agent.py",
-      "size": 88593,
+      "size": 90515,
       "extension": ".py",
       "line_count": 2174
     },
@@ -152,31 +127,31 @@
     },
     {
       "path": "agents/repair_agent.py",
-      "size": 6884,
+      "size": 6929,
       "extension": ".py",
       "line_count": 251
     },
     {
       "path": "agents/research_agent.py",
-      "size": 518,
+      "size": 537,
       "extension": ".py",
       "line_count": 19
     },
     {
       "path": "agents/review_agent.py",
-      "size": 32120,
+      "size": 32307,
       "extension": ".py",
       "line_count": 960
     },
     {
       "path": "agents/root_agent.py",
-      "size": 58706,
+      "size": 251809,
       "extension": ".py",
-      "line_count": 1484
+      "line_count": 5947
     },
     {
       "path": "agents/spec_agent.py",
-      "size": 6769,
+      "size": 6938,
       "extension": ".py",
       "line_count": 173
     },
@@ -277,40 +252,64 @@
       "line_count": 16
     },
     {
-      "path": "artifacts/repos/registry.json",
-      "size": 320,
-      "extension": ".json",
-      "line_count": 13
+      "path": "artifacts/test-temp/publication-service-3502affbd9a54f92a7e2fcc057d2fc14/sample-repo/src/app.py",
+      "size": 36,
+      "extension": ".py",
+      "line_count": 2
     },
     {
-      "path": "artifacts/repos/repo-id-test-dd7706b3/repo_manifest.json",
-      "size": 626,
-      "extension": ".json",
-      "line_count": 22
+      "path": "artifacts/test-temp/publication-service-7eebcc09f1624109b677c9356f051fc1/sample-repo/src/app.py",
+      "size": 36,
+      "extension": ".py",
+      "line_count": 2
+    },
+    {
+      "path": "artifacts/test-temp/publication-service-acededeafb714fcc86f9cfcdd7b9df73/sample-repo/src/app.py",
+      "size": 36,
+      "extension": ".py",
+      "line_count": 2
     },
     {
       "path": "config.py",
-      "size": 6375,
+      "size": 11888,
       "extension": ".py",
-      "line_count": 197
+      "line_count": 308
     },
     {
       "path": "console_app.py",
-      "size": 3727,
+      "size": 4872,
       "extension": ".py",
-      "line_count": 90
+      "line_count": 115
     },
     {
       "path": "contracts/__init__.py",
-      "size": 481,
+      "size": 3467,
       "extension": ".py",
-      "line_count": 21
+      "line_count": 115
+    },
+    {
+      "path": "contracts/actor_contract.py",
+      "size": 1302,
+      "extension": ".py",
+      "line_count": 39
     },
     {
       "path": "contracts/agent_result.py",
-      "size": 370,
+      "size": 378,
       "extension": ".py",
       "line_count": 14
+    },
+    {
+      "path": "contracts/apply_contract.py",
+      "size": 4773,
+      "extension": ".py",
+      "line_count": 149
+    },
+    {
+      "path": "contracts/apply_preparation.py",
+      "size": 696,
+      "extension": ".py",
+      "line_count": 21
     },
     {
       "path": "contracts/change_set.py",
@@ -319,10 +318,28 @@
       "line_count": 13
     },
     {
+      "path": "contracts/crucible_review_contract.py",
+      "size": 900,
+      "extension": ".py",
+      "line_count": 31
+    },
+    {
+      "path": "contracts/diff_contract.py",
+      "size": 2059,
+      "extension": ".py",
+      "line_count": 68
+    },
+    {
       "path": "contracts/draft_set.py",
       "size": 299,
       "extension": ".py",
       "line_count": 12
+    },
+    {
+      "path": "contracts/error_contract.py",
+      "size": 399,
+      "extension": ".py",
+      "line_count": 17
     },
     {
       "path": "contracts/file_change_plan.py",
@@ -332,9 +349,15 @@
     },
     {
       "path": "contracts/file_draft.py",
-      "size": 164,
+      "size": 448,
       "extension": ".py",
-      "line_count": 10
+      "line_count": 20
+    },
+    {
+      "path": "contracts/implementation_result.py",
+      "size": 6370,
+      "extension": ".py",
+      "line_count": 156
     },
     {
       "path": "contracts/normalized_task_brief.py",
@@ -349,10 +372,28 @@
       "line_count": 13
     },
     {
-      "path": "contracts/proposed_file_change.py",
-      "size": 341,
+      "path": "contracts/permission_contract.py",
+      "size": 2793,
       "extension": ".py",
-      "line_count": 13
+      "line_count": 80
+    },
+    {
+      "path": "contracts/proposed_file_change.py",
+      "size": 603,
+      "extension": ".py",
+      "line_count": 23
+    },
+    {
+      "path": "contracts/publication_contract.py",
+      "size": 1524,
+      "extension": ".py",
+      "line_count": 42
+    },
+    {
+      "path": "contracts/pull_request_contract.py",
+      "size": 666,
+      "extension": ".py",
+      "line_count": 25
     },
     {
       "path": "contracts/repair_result.py",
@@ -362,27 +403,39 @@
     },
     {
       "path": "contracts/repo_context_contract.py",
-      "size": 6250,
+      "size": 6409,
       "extension": ".py",
       "line_count": 159
     },
     {
       "path": "contracts/repo_index.py",
-      "size": 6311,
+      "size": 17070,
       "extension": ".py",
-      "line_count": 182
+      "line_count": 459
     },
     {
       "path": "contracts/repo_metadata.py",
-      "size": 2188,
+      "size": 2801,
       "extension": ".py",
-      "line_count": 69
+      "line_count": 82
+    },
+    {
+      "path": "contracts/repo_onboarding_contract.py",
+      "size": 511,
+      "extension": ".py",
+      "line_count": 21
     },
     {
       "path": "contracts/retrieval_result.py",
-      "size": 1652,
+      "size": 1701,
       "extension": ".py",
       "line_count": 49
+    },
+    {
+      "path": "contracts/review_comment_contract.py",
+      "size": 642,
+      "extension": ".py",
+      "line_count": 25
     },
     {
       "path": "contracts/review_result.py",
@@ -395,6 +448,24 @@
       "size": 152,
       "extension": ".py",
       "line_count": 9
+    },
+    {
+      "path": "contracts/run_contract.py",
+      "size": 2794,
+      "extension": ".py",
+      "line_count": 83
+    },
+    {
+      "path": "contracts/run_detail_contract.py",
+      "size": 13964,
+      "extension": ".py",
+      "line_count": 290
+    },
+    {
+      "path": "contracts/scm_contract.py",
+      "size": 1502,
+      "extension": ".py",
+      "line_count": 51
     },
     {
       "path": "contracts/spec_contract.py",
@@ -410,7 +481,7 @@
     },
     {
       "path": "contracts/spec_to_code_input.py",
-      "size": 309,
+      "size": 322,
       "extension": ".py",
       "line_count": 13
     },
@@ -421,52 +492,88 @@
       "line_count": 9
     },
     {
+      "path": "contracts/temp_workspace_contract.py",
+      "size": 660,
+      "extension": ".py",
+      "line_count": 21
+    },
+    {
+      "path": "contracts/user_contract.py",
+      "size": 1626,
+      "extension": ".py",
+      "line_count": 62
+    },
+    {
+      "path": "contracts/validation_contract.py",
+      "size": 3175,
+      "extension": ".py",
+      "line_count": 101
+    },
+    {
+      "path": "contracts/workflow_contract.py",
+      "size": 8273,
+      "extension": ".py",
+      "line_count": 237
+    },
+    {
       "path": "data/README.md",
-      "size": 32135,
+      "size": 32853,
       "extension": ".md",
       "line_count": 718
     },
     {
       "path": "data/hybrid_retrieval.md",
-      "size": 814,
+      "size": 844,
       "extension": ".md",
       "line_count": 30
     },
     {
       "path": "data/repo_context.md",
-      "size": 595,
+      "size": 615,
       "extension": ".md",
       "line_count": 20
     },
     {
       "path": "data/sdd_commands.md",
-      "size": 932,
+      "size": 952,
       "extension": ".md",
       "line_count": 20
     },
     {
       "path": "data/sdd_commands_uk.md",
-      "size": 955,
+      "size": 972,
       "extension": ".md",
       "line_count": 17
     },
     {
       "path": "data/test_workflow.md",
-      "size": 590,
+      "size": 614,
       "extension": ".md",
       "line_count": 24
     },
     {
+      "path": "docker-compose.yml",
+      "size": 2906,
+      "extension": ".yml",
+      "line_count": 75
+    },
+    {
       "path": "docs/TEST_WORKFLOW.md",
-      "size": 921,
+      "size": 937,
       "extension": ".md",
       "line_count": 17
     },
     {
       "path": "docs/sdd_implementation_gap_analysis.md",
-      "size": 15508,
+      "size": 15799,
       "extension": ".md",
       "line_count": 292
+    },
+    {
+      "path": "docs/sdd_preflight_check.md",
+      "size": 13119,
+      "extension": ".md",
+      "line_count": 247
     },
     {
       "path": "example_output/report.md",
@@ -476,37 +583,37 @@
     },
     {
       "path": "formatters/__init__.py",
-      "size": 36,
+      "size": 38,
       "extension": ".py",
       "line_count": 2
     },
     {
       "path": "formatters/capabilities.py",
-      "size": 2685,
+      "size": 2750,
       "extension": ".py",
       "line_count": 65
     },
     {
       "path": "formatters/commands.py",
-      "size": 2106,
+      "size": 2157,
       "extension": ".py",
       "line_count": 51
     },
     {
       "path": "formatters/common.py",
-      "size": 10838,
+      "size": 10973,
       "extension": ".py",
       "line_count": 135
     },
     {
       "path": "formatters/fallback.py",
-      "size": 423,
+      "size": 442,
       "extension": ".py",
       "line_count": 19
     },
     {
       "path": "formatters/generic.py",
-      "size": 968,
+      "size": 996,
       "extension": ".py",
       "line_count": 28
     },
@@ -517,26 +624,20 @@
       "line_count": 46
     },
     {
-      "path": "index/manifest.json",
-      "size": 526,
-      "extension": ".json",
-      "line_count": 25
-    },
-    {
       "path": "ingest.py",
-      "size": 10459,
+      "size": 10811,
       "extension": ".py",
       "line_count": 352
     },
     {
       "path": "intent/__init__.py",
-      "size": 133,
+      "size": 136,
       "extension": ".py",
       "line_count": 3
     },
     {
       "path": "intent/detector.py",
-      "size": 5131,
+      "size": 5288,
       "extension": ".py",
       "line_count": 157
     },
@@ -545,12 +646,6 @@
       "size": 2126,
       "extension": ".py",
       "line_count": 51
-    },
-    {
-      "path": "jira_mcp_server/.env",
-      "size": 341,
-      "extension": "",
-      "line_count": 6
     },
     {
       "path": "jira_mcp_server/__init__.py",
@@ -572,25 +667,25 @@
     },
     {
       "path": "jira_mcp_server/config.py",
-      "size": 908,
+      "size": 913,
       "extension": ".py",
       "line_count": 37
     },
     {
       "path": "jira_mcp_server/jira_client.py",
-      "size": 2941,
+      "size": 2999,
       "extension": ".py",
       "line_count": 103
     },
     {
       "path": "jira_mcp_server/server.py",
-      "size": 1910,
+      "size": 1929,
       "extension": ".py",
       "line_count": 61
     },
     {
       "path": "jira_mcp_server/test_jira.py",
-      "size": 1922,
+      "size": 1973,
       "extension": ".py",
       "line_count": 51
     },
@@ -614,15 +709,9 @@
     },
     {
       "path": "logger_utils.py",
-      "size": 6926,
+      "size": 7029,
       "extension": ".py",
       "line_count": 268
-    },
-    {
-      "path": "logs/agent.log",
-      "size": 1566049,
-      "extension": ".log",
-      "line_count": 27548
     },
     {
       "path": "loops/__init__.py",
@@ -638,9 +727,9 @@
     },
     {
       "path": "main.py",
-      "size": 428,
+      "size": 1997,
       "extension": ".py",
-      "line_count": 17
+      "line_count": 57
     },
     {
       "path": "mcp_client.py",
@@ -685,12 +774,6 @@
       "line_count": 32
     },
     {
-      "path": "output/repo_manifest.json",
-      "size": 17571,
-      "extension": ".json",
-      "line_count": 819
-    },
-    {
       "path": "output/report.md",
       "size": 2137,
       "extension": ".md",
@@ -704,9 +787,9 @@
     },
     {
       "path": "output_formatters.py",
-      "size": 2087,
+      "size": 1882,
       "extension": ".py",
-      "line_count": 60
+      "line_count": 58
     },
     {
       "path": "prompts/__init__.py",
@@ -716,19 +799,19 @@
     },
     {
       "path": "prompts/change_prompt.py",
-      "size": 4614,
+      "size": 4625,
       "extension": ".py",
       "line_count": 99
     },
     {
       "path": "prompts/code_prompt.py",
-      "size": 1941,
+      "size": 2004,
       "extension": ".py",
       "line_count": 63
     },
     {
       "path": "prompts/draft_prompt.py",
-      "size": 4789,
+      "size": 4801,
       "extension": ".py",
       "line_count": 92
     },
@@ -752,7 +835,7 @@
     },
     {
       "path": "prompts/review_prompt.py",
-      "size": 1275,
+      "size": 1281,
       "extension": ".py",
       "line_count": 45
     },
@@ -764,7 +847,7 @@
     },
     {
       "path": "prompts/spec_prompt.py",
-      "size": 3016,
+      "size": 3039,
       "extension": ".py",
       "line_count": 69
     },
@@ -776,63 +859,111 @@
     },
     {
       "path": "requirements.txt",
-      "size": 92,
+      "size": 175,
       "extension": ".txt",
-      "line_count": 9
+      "line_count": 16
     },
     {
       "path": "retriever.py",
-      "size": 11224,
+      "size": 11576,
       "extension": ".py",
       "line_count": 352
     },
     {
       "path": "scripts/debug_repo_context.ps1",
-      "size": 1437,
+      "size": 1504,
       "extension": ".ps1",
       "line_count": 67
     },
     {
       "path": "scripts/debug_repo_context.py",
-      "size": 2165,
+      "size": 2211,
       "extension": ".py",
       "line_count": 46
     },
     {
       "path": "scripts/quality_gate.ps1",
-      "size": 682,
+      "size": 707,
       "extension": ".ps1",
       "line_count": 26
     },
     {
       "path": "scripts/run_all_tests.ps1",
-      "size": 798,
+      "size": 832,
       "extension": ".ps1",
       "line_count": 35
     },
     {
       "path": "scripts/run_repo_context_tests.ps1",
-      "size": 821,
+      "size": 855,
       "extension": ".ps1",
       "line_count": 35
     },
     {
       "path": "scripts/run_test.ps1",
-      "size": 1013,
+      "size": 1057,
       "extension": ".ps1",
       "line_count": 45
     },
     {
       "path": "scripts/run_tests.ps1",
-      "size": 2074,
+      "size": 2169,
       "extension": ".ps1",
       "line_count": 95
+    },
+    {
+      "path": "services/apply_adapter.py",
+      "size": 8231,
+      "extension": ".py",
+      "line_count": 222
+    },
+    {
+      "path": "services/apply_service.py",
+      "size": 12131,
+      "extension": ".py",
+      "line_count": 318
+    },
+    {
+      "path": "services/auth_service.py",
+      "size": 17272,
+      "extension": ".py",
+      "line_count": 408
+    },
+    {
+      "path": "services/bitbucket_service.py",
+      "size": 6009,
+      "extension": ".py",
+      "line_count": 157
     },
     {
       "path": "services/brief_exporter.py",
       "size": 1876,
       "extension": ".py",
       "line_count": 71
+    },
+    {
+      "path": "services/crucible_service.py",
+      "size": 12778,
+      "extension": ".py",
+      "line_count": 340
+    },
+    {
+      "path": "services/db_service.py",
+      "size": 51541,
+      "extension": ".py",
+      "line_count": 1270
+    },
+    {
+      "path": "services/diff_service.py",
+      "size": 12658,
+      "extension": ".py",
+      "line_count": 323
+    },
+    {
+      "path": "services/i18n_service.py",
+      "size": 1936,
+      "extension": ".py",
+      "line_count": 55
     },
     {
       "path": "services/jira_field_inspector.py",
@@ -847,22 +978,58 @@
       "line_count": 394
     },
     {
+      "path": "services/permission_service.py",
+      "size": 14971,
+      "extension": ".py",
+      "line_count": 396
+    },
+    {
+      "path": "services/publication_service.py",
+      "size": 13025,
+      "extension": ".py",
+      "line_count": 319
+    },
+    {
       "path": "services/repo_context_rules.py",
-      "size": 73892,
+      "size": 75701,
       "extension": ".py",
       "line_count": 1809
     },
     {
       "path": "services/repo_index_service.py",
-      "size": 14362,
+      "size": 41978,
       "extension": ".py",
-      "line_count": 405
+      "line_count": 1040
+    },
+    {
+      "path": "services/repo_onboarding_service.py",
+      "size": 6560,
+      "extension": ".py",
+      "line_count": 148
     },
     {
       "path": "services/repo_registry.py",
-      "size": 11549,
+      "size": 12960,
       "extension": ".py",
-      "line_count": 338
+      "line_count": 368
+    },
+    {
+      "path": "services/review_comment_service.py",
+      "size": 7180,
+      "extension": ".py",
+      "line_count": 161
+    },
+    {
+      "path": "services/run_service.py",
+      "size": 77958,
+      "extension": ".py",
+      "line_count": 1712
+    },
+    {
+      "path": "services/scm_service.py",
+      "size": 24924,
+      "extension": ".py",
+      "line_count": 647
     },
     {
       "path": "services/spec_exporter.py",
@@ -878,15 +1045,27 @@
     },
     {
       "path": "services/task_registry.py",
-      "size": 2198,
+      "size": 2349,
       "extension": ".py",
-      "line_count": 80
+      "line_count": 84
     },
     {
       "path": "services/task_source_detector.py",
       "size": 1729,
       "extension": ".py",
       "line_count": 68
+    },
+    {
+      "path": "services/temp_workspace_service.py",
+      "size": 3125,
+      "extension": ".py",
+      "line_count": 81
+    },
+    {
+      "path": "services/validation_service.py",
+      "size": 31503,
+      "extension": ".py",
+      "line_count": 794
     },
     {
       "path": "simple_chat_agent.py",
@@ -896,9 +1075,87 @@
     },
     {
       "path": "startup_text.py",
-      "size": 981,
+      "size": 1538,
       "extension": ".py",
-      "line_count": 21
+      "line_count": 27
+    },
+    {
+      "path": "static/admin/index.html",
+      "size": 3931,
+      "extension": ".html",
+      "line_count": 90
+    },
+    {
+      "path": "static/admin/policies.html",
+      "size": 5971,
+      "extension": ".html",
+      "line_count": 110
+    },
+    {
+      "path": "static/admin/roles.html",
+      "size": 3705,
+      "extension": ".html",
+      "line_count": 90
+    },
+    {
+      "path": "static/admin/users.html",
+      "size": 6952,
+      "extension": ".html",
+      "line_count": 131
+    },
+    {
+      "path": "static/config.js",
+      "size": 10975,
+      "extension": ".js",
+      "line_count": 306
+    },
+    {
+      "path": "static/create.html",
+      "size": 3511,
+      "extension": ".html",
+      "line_count": 99
+    },
+    {
+      "path": "static/index.html",
+      "size": 4369,
+      "extension": ".html",
+      "line_count": 76
+    },
+    {
+      "path": "static/login.html",
+      "size": 2262,
+      "extension": ".html",
+      "line_count": 56
+    },
+    {
+      "path": "static/repos.html",
+      "size": 5811,
+      "extension": ".html",
+      "line_count": 166
+    },
+    {
+      "path": "static/run.html",
+      "size": 31223,
+      "extension": ".html",
+      "line_count": 724
+    },
+    {
+      "path": "static/runs.html",
+      "size": 6106,
+      "extension": ".html",
+      "line_count": 144
+    },
+    {
+      "path": "static/styles.css",
+      "size": 8058,
+      "extension": ".css",
+      "line_count": 529
+    },
+    {
+      "path": "static/workflow.html",
+      "size": 19874,
+      "extension": ".html",
+      "line_count": 399
     },
     {
       "path": "system_prompt.py",
@@ -908,61 +1165,169 @@
     },
     {
       "path": "telegram_bot.py",
-      "size": 11510,
+      "size": 11574,
       "extension": ".py",
       "line_count": 307
     },
     {
       "path": "test_jira_tool.py",
-      "size": 1327,
+      "size": 1368,
       "extension": ".py",
       "line_count": 41
     },
     {
       "path": "tests/__init__.py",
-      "size": 63,
+      "size": 64,
       "extension": ".py",
       "line_count": 1
     },
     {
       "path": "tests/repo_context_assertions.py",
-      "size": 16096,
+      "size": 16501,
       "extension": ".py",
       "line_count": 406
     },
     {
-      "path": "tests/test_help_texts.py",
-      "size": 7982,
+      "path": "tests/test_apply_service.py",
+      "size": 14105,
       "extension": ".py",
-      "line_count": 197
+      "line_count": 341
+    },
+    {
+      "path": "tests/test_bitbucket_service.py",
+      "size": 4513,
+      "extension": ".py",
+      "line_count": 117
+    },
+    {
+      "path": "tests/test_crucible_service.py",
+      "size": 5232,
+      "extension": ".py",
+      "line_count": 120
+    },
+    {
+      "path": "tests/test_db_service.py",
+      "size": 7315,
+      "extension": ".py",
+      "line_count": 171
+    },
+    {
+      "path": "tests/test_diff_service.py",
+      "size": 7750,
+      "extension": ".py",
+      "line_count": 184
+    },
+    {
+      "path": "tests/test_global_permissions.py",
+      "size": 1086,
+      "extension": ".py",
+      "line_count": 31
+    },
+    {
+      "path": "tests/test_help_texts.py",
+      "size": 8093,
+      "extension": ".py",
+      "line_count": 196
+    },
+    {
+      "path": "tests/test_i18n_service.py",
+      "size": 335,
+      "extension": ".py",
+      "line_count": 13
+    },
+    {
+      "path": "tests/test_implementation_mode.py",
+      "size": 61258,
+      "extension": ".py",
+      "line_count": 1508
+    },
+    {
+      "path": "tests/test_main.py",
+      "size": 2859,
+      "extension": ".py",
+      "line_count": 74
+    },
+    {
+      "path": "tests/test_permission_service.py",
+      "size": 5659,
+      "extension": ".py",
+      "line_count": 136
+    },
+    {
+      "path": "tests/test_publication_service.py",
+      "size": 8391,
+      "extension": ".py",
+      "line_count": 210
     },
     {
       "path": "tests/test_repo_commands.py",
-      "size": 59122,
+      "size": 60345,
       "extension": ".py",
       "line_count": 1223
     },
     {
       "path": "tests/test_repo_id_execution.py",
-      "size": 5887,
+      "size": 12065,
       "extension": ".py",
-      "line_count": 139
+      "line_count": 275
     },
     {
       "path": "tests/test_repo_index_service.py",
-      "size": 5297,
+      "size": 9557,
       "extension": ".py",
-      "line_count": 109
+      "line_count": 183
+    },
+    {
+      "path": "tests/test_repo_onboarding_service.py",
+      "size": 9695,
+      "extension": ".py",
+      "line_count": 237
     },
     {
       "path": "tests/test_repo_registry.py",
-      "size": 4454,
+      "size": 4564,
       "extension": ".py",
       "line_count": 110
     },
     {
+      "path": "tests/test_run_explorer.py",
+      "size": 59105,
+      "extension": ".py",
+      "line_count": 1382
+    },
+    {
+      "path": "tests/test_run_service.py",
+      "size": 36615,
+      "extension": ".py",
+      "line_count": 847
+    },
+    {
+      "path": "tests/test_scm_service.py",
+      "size": 12087,
+      "extension": ".py",
+      "line_count": 288
+    },
+    {
+      "path": "tests/test_temp_workspace_service.py",
+      "size": 2431,
+      "extension": ".py",
+      "line_count": 58
+    },
+    {
+      "path": "tests/test_validation_service.py",
+      "size": 13965,
+      "extension": ".py",
+      "line_count": 321
+    },
+    {
+      "path": "tests/test_web_app.py",
+      "size": 130689,
+      "extension": ".py",
+      "line_count": 2961
+    },
+    {
       "path": "tools/__init__.py",
-      "size": 586,
+      "size": 606,
       "extension": ".py",
       "line_count": 20
     },
@@ -974,25 +1339,25 @@
     },
     {
       "path": "tools/registry.py",
-      "size": 16217,
+      "size": 16492,
       "extension": ".py",
       "line_count": 395
     },
     {
       "path": "tools/repo_tools.py",
-      "size": 75890,
+      "size": 92375,
       "extension": ".py",
-      "line_count": 2242
+      "line_count": 2600
     },
     {
       "path": "tools/report_tools.py",
-      "size": 681,
+      "size": 775,
       "extension": ".py",
-      "line_count": 21
+      "line_count": 24
     },
     {
       "path": "tools/tools.py",
-      "size": 1298,
+      "size": 1341,
       "extension": ".py",
       "line_count": 43
     },
@@ -1001,6 +1366,12 @@
       "size": 1465,
       "extension": ".py",
       "line_count": 51
+    },
+    {
+      "path": "web_app.py",
+      "size": 135452,
+      "extension": ".py",
+      "line_count": 3206
     }
   ]
 }

@@ -187,6 +187,94 @@ The following remain file-based by design:
 - repo indexes and manifests
 - other heavy artifacts
 
+## Authentication And Admin
+
+The app now supports real login with server-side session cookies for the UI and API:
+
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
+- `POST /auth/change-password`
+
+Admin JSON endpoints:
+
+- `GET /admin/users`
+- `POST /admin/users`
+- `PUT /admin/users/{user_id}`
+- `POST /admin/users/{user_id}/reset-password`
+- `POST /admin/users/{user_id}/activate`
+- `POST /admin/users/{user_id}/deactivate`
+- `GET /admin/roles`
+- `POST /admin/roles`
+- `PUT /admin/roles/{role_name}`
+- `GET /admin/roles/{role_name}/capabilities`
+- `PUT /admin/roles/{role_name}/capabilities`
+- `GET /admin/policies`
+- `PUT /admin/policies/{role_name}`
+
+Admin UI pages:
+
+- `http://127.0.0.1:8000/ui/login.html`
+- `http://127.0.0.1:8000/ui/admin/index.html`
+- `http://127.0.0.1:8000/ui/admin/users.html`
+- `http://127.0.0.1:8000/ui/admin/roles.html`
+- `http://127.0.0.1:8000/ui/admin/policies.html`
+
+The login page is branded as `TELEMART AI Delivery Workflows`.
+
+Supported UI languages:
+
+- `uk` (default)
+- `en`
+
+Language selection is persisted in `localStorage` and a `ui_lang` cookie. User-facing workflow, run, and pre-review messages are localized from the shared catalog, while code identifiers such as file paths, modules, symbols, endpoint names, and issue keys remain untranslated.
+
+Seeded default roles:
+
+- `analyst`
+- `developer`
+- `techlead`
+- `admin`
+
+The technical runs table now includes:
+
+- initiating user
+- start datetime
+
+Bootstrap the first admin only when the user directory is empty:
+
+```dotenv
+BOOTSTRAP_ADMIN_USERNAME=admin
+BOOTSTRAP_ADMIN_PASSWORD=change-me-now
+BOOTSTRAP_ADMIN_DISPLAY_NAME=Platform Admin
+```
+
+For local development only, passwordless login can be enabled explicitly:
+
+```dotenv
+ALLOW_DEV_LOGIN=true
+```
+
+When enabled, existing users can log in by username without a password. Keep this off outside local dev.
+
+Local fallback password reset command:
+
+```bash
+.venv\Scripts\python.exe main.py reset-password <username> --generate
+```
+
+Password handling:
+
+- plain passwords are never stored
+- generated passwords are shown only once on create/reset
+- custom passwords must pass basic strength checks
+- `must_change_password=true` forces the user to change the password after admin create/reset
+
+Development-only fallback:
+
+- `ALLOW_HEADER_ACTOR_FALLBACK=false` by default
+- when explicitly enabled, old header-based actor identity can still be used for local/dev compatibility
+
 ## Validation
 
 Run tests locally with:

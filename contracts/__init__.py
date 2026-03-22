@@ -15,11 +15,18 @@ from contracts.publication_contract import PublicationResult
 from contracts.pull_request_contract import PullRequestResult
 from contracts.repo_index import (
     REPO_INDEX_VERSION,
+    RepoDependencyEdge,
+    RepoDependencyMap,
     RepoFileIndex,
     RepoFileIndexEntry,
+    RepoGlossary,
+    RepoGlossaryTerm,
     RepoIndexArtifacts,
     RepoManifest,
     RepoManifestFile,
+    RepoProfile,
+    RepoSymbol,
+    RepoSymbolIndex,
 )
 from contracts.repo_metadata import REGISTRY_VERSION, RepoMetadata, RepoRegistryState
 from contracts.repo_onboarding_contract import RepoOnboardingResult
@@ -28,6 +35,20 @@ from contracts.temp_workspace_contract import TempWorkspaceContext
 from contracts.run_contract import RunRecord, RunStep
 from contracts.run_detail_contract import RunDetail, RunDetailStep
 from contracts.review_comment_contract import AIReviewComment
+from contracts.user_contract import PasswordActionResult, RoleRecord, UserRecord
+from contracts.workflow_contract import (
+    AnalyzeTaskWorkflowResult,
+    AreaSuggestion,
+    FileChangeAction,
+    ImplementationPlanWorkflowResult,
+    PreReviewWorkflowResult,
+    RequiredFix,
+    ReviewIssue,
+    ReviewSummaryBlock,
+    SelectionCandidate,
+    StructureTaskWorkflowResult,
+    WorkflowRunLink,
+)
 from contracts.validation_contract import FailedTestCase, ValidationCommand, ValidationResult, ValidationStepResult
 
 __all__ = [
@@ -56,8 +77,27 @@ __all__ = [
     "RunDetail",
     "RunDetailStep",
     "RunStep",
+    "UserRecord",
+    "RoleRecord",
+    "PasswordActionResult",
+    "AnalyzeTaskWorkflowResult",
+    "AreaSuggestion",
+    "FileChangeAction",
+    "ImplementationPlanWorkflowResult",
+    "PreReviewWorkflowResult",
+    "RequiredFix",
+    "ReviewIssue",
+    "ReviewSummaryBlock",
+    "SelectionCandidate",
     "RepoFileIndex",
     "RepoFileIndexEntry",
+    "RepoProfile",
+    "RepoSymbol",
+    "RepoSymbolIndex",
+    "RepoDependencyEdge",
+    "RepoDependencyMap",
+    "RepoGlossary",
+    "RepoGlossaryTerm",
     "RepoIndexArtifacts",
     "RepoManifest",
     "RepoManifestFile",
@@ -67,7 +107,9 @@ __all__ = [
     "ScmOperationResult",
     "ScmStatus",
     "TempWorkspaceContext",
+    "StructureTaskWorkflowResult",
     "ValidationCommand",
     "ValidationResult",
     "ValidationStepResult",
+    "WorkflowRunLink",
 ]

@@ -427,6 +427,12 @@ def get_repo_context_priority_tier(
         if normalize_repo_context_path(item)
     }
 
+    if normalized_path.startswith("tests/") and any(
+        marker in reason
+        for reason in normalized_reasons
+        for marker in ("test linkage", "dependency map tests", "test directory priority")
+    ):
+        return RepoContextPriorityTier.DOMAIN_RELEVANT_SUPPORT
     if _is_forbidden_repo_noise_path(normalized_path, parsed_query):
         return RepoContextPriorityTier.FORBIDDEN_NOISE
     if any(marker in reason for reason in normalized_reasons for marker in EXPLICIT_SYMBOL_PRIORITY_MARKERS):
