@@ -23,6 +23,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      gitnexus:
+        condition: service_started
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -45,6 +47,18 @@ services:
       VALIDATION_LINT_COMMAND: ${VALIDATION_LINT_COMMAND:-}
       VALIDATION_TEST_COMMAND: ${VALIDATION_TEST_COMMAND:-}
       REPO_CLONE_ROOT: ${REPO_CLONE_ROOT:-/repos}
+      REPO_INTELLIGENCE_PROVIDER: ${REPO_INTELLIGENCE_PROVIDER:-native}
+      GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-false}
+      GITNEXUS_USE_SKILLS: ${GITNEXUS_USE_SKILLS:-true}
+      GITNEXUS_USE_EMBEDDINGS: ${GITNEXUS_USE_EMBEDDINGS:-false}
+      GITNEXUS_REPO_ALLOWLIST: ${GITNEXUS_REPO_ALLOWLIST:-catalog_service}
+      GITNEXUS_TIMEOUT_SECONDS: ${GITNEXUS_TIMEOUT_SECONDS:-120}
+      GITNEXUS_VERSION: ${GITNEXUS_VERSION:-latest}
+      GITNEXUS_PORT: ${GITNEXUS_PORT:-3010}
+      GITNEXUS_HOME: ${GITNEXUS_HOME:-/gitnexus}
+      GITNEXUS_REPO_ROOT: ${GITNEXUS_REPO_ROOT:-/repos}
+      GITNEXUS_INTERNAL_BASE_URL: ${GITNEXUS_INTERNAL_BASE_URL:-http://gitnexus:3010}
+      GITNEXUS_EXTERNAL_UI_URL: ${GITNEXUS_EXTERNAL_UI_URL:-}
       BITBUCKET_API_BASE_URL: ${BITBUCKET_API_BASE_URL:-https://api.bitbucket.org/2.0}
       BITBUCKET_REPO_TOKEN: ${BITBUCKET_REPO_TOKEN:-}
       BITBUCKET_USERNAME: ${BITBUCKET_USERNAME:-}
@@ -66,6 +80,29 @@ services:
       - app_data:/app/data
       - app_repos:/repos
 
+  gitnexus:
+    image: node:22-trixie
+    restart: unless-stopped
+    environment:
+      GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-false}
+      GITNEXUS_CONTROL_ENABLED: ${GITNEXUS_CONTROL_ENABLED:-true}
+      GITNEXUS_VERSION: ${GITNEXUS_VERSION:-latest}
+      GITNEXUS_PORT: ${GITNEXUS_PORT:-3010}
+      GITNEXUS_MCP_PORT_INTERNAL: ${GITNEXUS_MCP_PORT_INTERNAL:-3011}
+      GITNEXUS_HOME: ${GITNEXUS_HOME:-/gitnexus}
+      GITNEXUS_REPO_ROOT: ${GITNEXUS_REPO_ROOT:-/repos}
+      GITNEXUS_USE_SKILLS: ${GITNEXUS_USE_SKILLS:-true}
+      GITNEXUS_USE_EMBEDDINGS: ${GITNEXUS_USE_EMBEDDINGS:-false}
+    command:
+      - node
+      - /opt/gitnexus-sidecar-server.mjs
+    ports:
+      - "${GITNEXUS_PORT:-3010}:${GITNEXUS_PORT:-3010}"
+    volumes:
+      - app_repos:/repos
+      - gitnexus_home:/gitnexus
+      - ./scripts/gitnexus-sidecar-server.mjs:/opt/gitnexus-sidecar-server.mjs:ro
+
 volumes:
   postgres_data:
   app_artifacts:
@@ -73,3 +110,4 @@ volumes:
   app_index:
   app_data:
   app_repos:
+  gitnexus_home:

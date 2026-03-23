@@ -3,6 +3,7 @@ import unittest
 import uuid
 import json
 import warnings
+import urllib.parse
 from pathlib import Path
 from unittest.mock import patch
 
@@ -214,6 +215,669 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(detail.source_stage, "deterministic")
         self.assertIn("no concrete implementation artifact", detail.routing_reason.lower())
 
+    def test_pre_review_without_artifact_does_not_call_gitnexus_provider(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        with patch("web_app.RunService", return_value=service), patch(
+            "web_app._find_latest_implementation_run_with_artifact",
+            return_value=(None, None),
+        ), patch("web_app._repo_intelligence_service.query_for_workflow") as mocked_provider_query:
+            response = self.client.post(
+                "/workflows/pre-review",
+                json={"jira_ticket": "TEL-404", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["result"]["verdict"], "blocked_insufficient_artifact")
+        mocked_provider_query.assert_not_called()
+
+    def test_implementation_plan_uses_gitnexus_payload_for_catalog_service(self) -> None:
+        run_record = RunRecord(
+            run_id="impl-plan-1",
+            goal="Update bonus response in catalog service",
+            status="success",
+            started_at="2026-03-23T09:00:00+00:00",
+            finished_at="2026-03-23T09:02:00+00:00",
+            repo_id="catalog_service",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        detail = RunDetail(
+            run_id="impl-plan-1",
+            mode="spec",
+            goal="Update bonus response in catalog service",
+            repo_id="catalog_service",
+            status="success",
+            repo_relevance_status="relevant",
+            repo_relevance_reason="Catalog service matches the requested area.",
+            spec_result={"risks": ["Response contract change."]},
+            validation_result={},
+            repo_context_summary={},
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+                return_value={
+                    "provider": "gitnexus_http",
+                    "configured_provider": "gitnexus_http",
+                    "repo_metadata_provider": "gitnexus_http",
+                    "allowlist_match": True,
+                    "gitnexus_enabled": True,
+                    "gitnexus_index_status": "ready",
+                    "selection_decision": "selected_gitnexus_http",
+                    "provider_used": "gitnexus_http",
+                    "provider_fallback": False,
+                    "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+                    "candidate_files_count": 3,
+                    "selected_files_count": 1,
+                    "top_candidate_files": [
+                        {
+                            "name": "src/Catalog.Api/Controllers/BonusController.cs",
+                            "confidence": 0.91,
+                            "reason": "route match, controller/action linkage",
+                        }
+                    ],
+                    "top_candidate_symbols": [
+                        {
+                            "name": "GetBonusInfoHandler",
+                            "confidence": 0.82,
+                            "reason": "handler dependency linkage",
+                        }
+                    ],
+                    "top_closest_areas": [
+                        {
+                            "area": "src/Catalog.Api/Controllers",
+                            "confidence": 0.74,
+                            "reason": "route match",
+                        }
+                    ],
+                    "likely_file_details": [
+                        {
+                            "name": "src/Catalog.Api/Controllers/BonusController.cs",
+                            "confidence": 0.91,
+                            "reason": "route match, controller/action linkage",
+                    }
+                ],
+                "likely_module_details": [
+                    {
+                        "name": "GetBonusInfoHandler",
+                        "confidence": 0.82,
+                        "reason": "handler dependency linkage",
+                    }
+                ],
+                "change_actions": [
+                    {
+                        "file": "src/Catalog.Api/Controllers/BonusController.cs",
+                        "action": "modify",
+                        "description": "Adjust the bonus response contract.",
+                    }
+                ],
+                "closest_areas": [],
+                "risks": ["Response contract change."],
+                "validation_plan": ["Run targeted bonus controller tests."],
+                "recommendation": "Update the controller and validate the handler chain.",
+            },
+        ):
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={"jira_ticket": "TEL-1", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["likely_files"], ["src/Catalog.Api/Controllers/BonusController.cs"])
+        self.assertEqual(payload["likely_modules"], ["GetBonusInfoHandler"])
+        self.assertEqual(payload["change_actions"][0]["file"], "src/Catalog.Api/Controllers/BonusController.cs")
+        self.assertEqual(payload["validation_plan"], ["Run targeted bonus controller tests."])
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertFalse(payload["provider_fallback"])
+        self.assertEqual(payload["configured_provider"], "gitnexus_http")
+        self.assertEqual(payload["repo_metadata_provider"], "gitnexus_http")
+        self.assertTrue(payload["allowlist_match"])
+        self.assertTrue(payload["gitnexus_enabled"])
+        self.assertEqual(payload["gitnexus_index_status"], "ready")
+        self.assertEqual(payload["selection_decision"], "selected_gitnexus_http")
+        self.assertEqual(payload["candidate_files_count"], 3)
+        self.assertEqual(payload["selected_files_count"], 1)
+        self.assertEqual(payload["top_candidate_files"][0]["name"], "src/Catalog.Api/Controllers/BonusController.cs")
+        self.assertEqual(payload["top_candidate_symbols"][0]["name"], "GetBonusInfoHandler")
+
+    def test_implementation_plan_downgrades_when_gitnexus_returns_no_targets(self) -> None:
+        run_record = RunRecord(
+            run_id="impl-plan-empty",
+            goal="Update bonus response in catalog service",
+            status="success",
+            started_at="2026-03-23T09:00:00+00:00",
+            finished_at="2026-03-23T09:02:00+00:00",
+            repo_id="catalog_service",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        detail = RunDetail(
+            run_id="impl-plan-empty",
+            mode="spec",
+            goal="Update bonus response in catalog service",
+            repo_id="catalog_service",
+            status="success",
+            repo_relevance_status="relevant",
+            repo_relevance_reason="Catalog service is onboarded, but target resolution is weak.",
+            spec_result={"risks": []},
+            validation_result={},
+            repo_context_summary={},
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "provider": "native",
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "allowlist_match": True,
+                "gitnexus_enabled": True,
+                "gitnexus_index_status": "ready",
+                "selection_decision": "selected_gitnexus_http",
+                "provider_used": "native",
+                "provider_fallback": True,
+                "provider_reason": "GitNexus returned weak query evidence, so the native provider was used.",
+                "candidate_files_count": 0,
+                "selected_files_count": 0,
+                "top_candidate_files": [],
+                "top_candidate_symbols": [],
+                "top_closest_areas": [],
+                "likely_file_details": [],
+                "likely_module_details": [],
+                "closest_areas": [],
+                "change_actions": [],
+                "risks": [],
+                "validation_plan": [],
+                "recommendation": "",
+            },
+        ):
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={"jira_ticket": "TEL-EMPTY", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["repo_match"], "low_confidence")
+        self.assertEqual(payload["likely_files"], [])
+        self.assertEqual(payload["likely_modules"], [])
+        self.assertEqual(payload["closest_areas"], [])
+        self.assertEqual(payload["provider_used"], "native")
+        self.assertTrue(payload["provider_fallback"])
+        self.assertEqual(payload["configured_provider"], "gitnexus_http")
+        self.assertEqual(payload["selection_decision"], "selected_gitnexus_http")
+        self.assertIn("No strong repo-specific targets were found", payload["recommendation"])
+
+    def test_implementation_plan_ukrainian_response_is_utf8_clean(self) -> None:
+        run_record = RunRecord(
+            run_id="impl-plan-uk",
+            goal="Оновити бонусний ендпоінт",
+            status="success",
+            started_at="2026-03-23T09:00:00+00:00",
+            finished_at="2026-03-23T09:02:00+00:00",
+            repo_id="catalog_service",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        detail = RunDetail(
+            run_id="impl-plan-uk",
+            mode="spec",
+            goal="Оновити бонусний ендпоінт",
+            repo_id="catalog_service",
+            status="success",
+            repo_relevance_status="relevant",
+            repo_relevance_reason="Каталоговий сервіс виглядає релевантним, але точних цілей не знайдено.",
+            spec_result={"risks": []},
+            validation_result={},
+            repo_context_summary={},
+        )
+        with patch("web_app._execute_tracked_api_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "provider": "native",
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "allowlist_match": True,
+                "gitnexus_enabled": True,
+                "gitnexus_index_status": "ready",
+                "selection_decision": "selected_gitnexus_http",
+                "provider_used": "native",
+                "provider_fallback": True,
+                "provider_reason": "GitNexus returned weak query evidence, so the native provider was used.",
+                "candidate_files_count": 0,
+                "selected_files_count": 0,
+                "top_candidate_files": [],
+                "top_candidate_symbols": [],
+                "top_closest_areas": [],
+                "likely_file_details": [],
+                "likely_module_details": [],
+                "closest_areas": [],
+                "change_actions": [],
+                "risks": [],
+                "validation_plan": [],
+                "recommendation": "",
+            },
+        ):
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={"jira_ticket": "TEL-UTF", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "uk",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertIn("Не знайдено сильних repo-specific цілей", payload["recommendation"])
+        self.assertNotIn("Р ", response.text)
+
+    def test_implementation_plan_persists_provider_metadata_in_run_detail(self) -> None:
+        run_record = RunRecord(
+            run_id="impl-plan-2",
+            goal="Update bonus response in catalog service",
+            status="success",
+            started_at="2026-03-23T09:00:00+00:00",
+            finished_at="2026-03-23T09:02:00+00:00",
+            repo_id="catalog_service",
+            log_path="artifacts/runs/impl-plan-2.json",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        detail = RunDetail(
+            run_id="impl-plan-2",
+            mode="spec",
+            goal="Update bonus response in catalog service",
+            repo_id="catalog_service",
+            status="success",
+            repo_relevance_status="relevant",
+            repo_relevance_reason="Catalog service matches the requested area.",
+            spec_result={"risks": ["Response contract change."]},
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+                "likely_file_details": [
+                    {"name": "src/Catalog.Api/Controllers/BonusController.cs", "confidence": 0.91, "reason": "route match"}
+                ],
+                "likely_module_details": [
+                    {"name": "GetBonusInfoHandler", "confidence": 0.82, "reason": "handler linkage"}
+                ],
+            },
+        ), patch("web_app._persist_workflow_detail") as mocked_persist:
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={"jira_ticket": "TEL-2", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(detail.provider_used, "gitnexus_http")
+        self.assertFalse(detail.provider_fallback)
+        self.assertEqual(detail.provider_reason, "GitNexus MCP evidence was used for implementation planning.")
+        mocked_persist.assert_called_once()
+
+    def test_repos_endpoint_exposes_gitnexus_provider_status(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="c:/repos/catalog_service",
+            local_path="c:/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            index_status="ready",
+            indexed_head="abc123",
+            intelligence_provider="gitnexus_http",
+            gitnexus_indexed=True,
+            gitnexus_indexed_at="2026-03-23T09:01:00+00:00",
+            gitnexus_index_status="ready",
+            gitnexus_index_error="",
+            gitnexus_last_fallback_reason="",
+        )
+        with patch("web_app.RepoOnboardingService") as mocked_service, patch(
+            "web_app._repo_intelligence_service.provider_status",
+            return_value={
+                "provider": "gitnexus_http",
+                "gitnexus_enabled": True,
+                "gitnexus_use_skills": True,
+                "gitnexus_use_embeddings": False,
+                "gitnexus_indexed": True,
+                "gitnexus_indexed_at": "2026-03-23T09:01:00+00:00",
+                "gitnexus_index_status": "ready",
+                "gitnexus_index_error": "",
+                "gitnexus_last_fallback_reason": "",
+                "gitnexus_backend_available": True,
+                "gitnexus_ui_url": "",
+            },
+        ), patch("web_app._repo_index_service.get_repo_profile", return_value=RepoProfile(repo_id="catalog_service", indexed_at="2026-03-23T09:01:00+00:00", primary_stack="dotnet")), patch(
+            "web_app._repo_index_service.get_glossary",
+            return_value=None,
+        ), patch("web_app._repo_scm_service.detect_git_repo", return_value=False):
+            mocked_service.return_value.list_repos.return_value = [repo]
+            response = self.client.get(
+                "/repos",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["repos"][0]
+        self.assertEqual(payload["intelligence_provider"], "gitnexus_http")
+        self.assertEqual(payload["gitnexus_index_status"], "ready")
+        self.assertTrue(payload["gitnexus_backend_available"])
+        self.assertEqual(payload["gitnexus_ui_url"], "")
+        self.assertEqual(payload["gitnexus_open_url"], "")
+        self.assertIn("provider_status", payload)
+
+    def test_repos_endpoint_probes_only_repo_local_path_not_app_root(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="/app",
+            local_path="/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            index_status="ready",
+            indexed_head="abc123",
+        )
+        observed_paths: list[str] = []
+
+        def _detect_git_repo(path):
+            observed_paths.append(str(path))
+            return False
+
+        with patch("web_app.RepoOnboardingService") as mocked_service, patch(
+            "web_app._repo_intelligence_service.provider_status",
+            return_value={"provider": "native", "gitnexus_enabled": False, "gitnexus_ui_url": "", "gitnexus_backend_available": False},
+        ), patch("web_app._repo_index_service.get_repo_profile", return_value=None), patch(
+            "web_app._repo_index_service.get_glossary",
+            return_value=None,
+        ), patch("web_app._repo_scm_service.detect_git_repo", side_effect=_detect_git_repo):
+            mocked_service.return_value.list_repos.return_value = [repo]
+            response = self.client.get(
+                "/repos",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(observed_paths, ["/repos/catalog_service"])
+
+    def test_repos_endpoint_omits_gitnexus_open_url_when_external_ui_is_not_configured(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="c:/repos/catalog_service",
+            local_path="c:/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            intelligence_provider="gitnexus_http",
+            gitnexus_index_status="ready",
+        )
+        with patch("web_app.RepoOnboardingService") as mocked_service, patch(
+            "web_app._repo_intelligence_service.provider_status",
+            return_value={
+                "provider": "gitnexus_http",
+                "gitnexus_enabled": True,
+                "gitnexus_use_skills": True,
+                "gitnexus_use_embeddings": False,
+                "gitnexus_indexed": True,
+                "gitnexus_indexed_at": "2026-03-23T09:01:00+00:00",
+                "gitnexus_index_status": "ready",
+                "gitnexus_index_error": "",
+                "gitnexus_last_fallback_reason": "",
+                "gitnexus_backend_available": True,
+                "gitnexus_ui_url": "",
+            },
+        ), patch("web_app._repo_index_service.get_repo_profile", return_value=RepoProfile(repo_id="catalog_service", indexed_at="2026-03-23T09:01:00+00:00", primary_stack="dotnet")), patch(
+            "web_app._repo_index_service.get_glossary",
+            return_value=None,
+        ), patch("web_app._repo_scm_service.detect_git_repo", return_value=False):
+            mocked_service.return_value.list_repos.return_value = [repo]
+            response = self.client.get(
+                "/repos",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["repos"][0]
+        self.assertEqual(payload["gitnexus_ui_url"], "")
+        self.assertEqual(payload["gitnexus_open_url"], "")
+
+    def test_gitnexus_reindex_endpoint_returns_status_and_ui_url(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="c:/repos/catalog_service",
+            local_path="c:/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            intelligence_provider="gitnexus_http",
+            gitnexus_indexed=True,
+            gitnexus_indexed_at="2026-03-23T09:05:00+00:00",
+            gitnexus_index_status="ready",
+        )
+        with patch("web_app.RepositoryRegistryService") as mocked_registry_cls, patch.object(
+            web_app._repo_intelligence_service._gitnexus_index_service,
+            "is_enabled_for_repo",
+            return_value=True,
+        ), patch.object(
+            web_app._repo_intelligence_service._gitnexus_index_service,
+            "analyze_repo",
+            return_value={
+                "provider": "gitnexus_http",
+                "success": True,
+                "gitnexus_index_status": "ready",
+                "gitnexus_index_error": "",
+                "gitnexus_indexed_at": "2026-03-23T09:05:00+00:00",
+            },
+        ), patch.object(
+            web_app._repo_intelligence_service._gitnexus_ui_link_service,
+            "build_repo_ui_url",
+            return_value=None,
+        ):
+            mocked_registry = mocked_registry_cls.return_value
+            mocked_registry.get_repo.side_effect = [repo, repo]
+            mocked_registry.refresh_repo_metadata.return_value = repo
+            response = self.client.post(
+                "/repos/catalog_service/gitnexus/reindex",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["repo_id"], "catalog_service")
+        self.assertEqual(payload["gitnexus_ui_url"], "")
+
+    def test_gitnexus_open_endpoint_returns_external_ui_url(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="/repos/catalog_service",
+            local_path="/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            gitnexus_index_status="ready",
+        )
+        with patch("web_app.RepositoryRegistryService") as mocked_registry_cls, patch.object(
+            web_app._repo_intelligence_service._gitnexus_ui_link_service,
+            "build_repo_ui_url",
+            return_value="https://gitnexus.example/ui/repo/catalog_service",
+        ):
+            mocked_registry = mocked_registry_cls.return_value
+            mocked_registry.get_repo.return_value = repo
+            response = self.client.get(
+                "/repos/catalog_service/gitnexus/open",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["repo_id"], "catalog_service")
+        self.assertEqual(payload["url"], "https://gitnexus.example/ui/repo/catalog_service")
+
+    def test_gitnexus_open_endpoint_does_not_call_backend_or_reindex(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="/repos/catalog_service",
+            local_path="/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            gitnexus_index_status="stale",
+        )
+        with patch("web_app.RepositoryRegistryService") as mocked_registry_cls, patch.object(
+            web_app._repo_intelligence_service._gitnexus_ui_link_service,
+            "build_repo_ui_url",
+            return_value="https://gitnexus.example/ui/repo/catalog_service",
+        ), patch.object(
+            web_app._repo_intelligence_service._gitnexus_bridge_service,
+            "probe_backend",
+        ) as mocked_probe, patch.object(
+            web_app._repo_intelligence_service._gitnexus_index_service,
+            "analyze_repo",
+        ) as mocked_analyze:
+            mocked_registry = mocked_registry_cls.return_value
+            mocked_registry.get_repo.return_value = repo
+            response = self.client.get(
+                "/repos/catalog_service/gitnexus/open",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        mocked_analyze.assert_not_called()
+        mocked_probe.assert_not_called()
+
+    def test_gitnexus_open_endpoint_returns_error_when_external_ui_url_is_missing(self) -> None:
+        repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path="/repos/catalog_service",
+            local_path="/repos/catalog_service",
+            display_name="Catalog Service",
+            default_branch="main",
+            indexed_at="2026-03-23T09:00:00+00:00",
+            status="indexed",
+            remote_url="https://bitbucket.org/acme/catalog_service.git",
+            gitnexus_index_status="ready",
+        )
+        with patch("web_app.RepositoryRegistryService") as mocked_registry_cls, patch.object(
+            web_app._repo_intelligence_service._gitnexus_ui_link_service,
+            "build_repo_ui_url",
+            return_value=None,
+        ):
+            mocked_registry = mocked_registry_cls.return_value
+            mocked_registry.get_repo.return_value = repo
+            response = self.client.get(
+                "/repos/catalog_service/gitnexus/open?lang=en",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"]["error"], "gitnexus_ui_url_not_configured")
+        self.assertIn("GitNexus external UI URL is not configured.", response.json()["detail"]["message"])
+
     def test_tracked_workflow_persists_model_routing_metadata(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
         routed_result = AgentResult(
@@ -284,6 +948,9 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Зареєстровані repo", repos_response.text)
         self.assertIn("repo.action.sync", repos_response.text)
         self.assertIn("repo.action.reindex", repos_response.text)
+        self.assertIn("repo.action.open_gitnexus", repos_response.text)
+        self.assertIn("repo.action.gitnexus_reindex", repos_response.text)
+        self.assertIn("data-gitnexus-open", repos_response.text)
         self.assertEqual(workflow_response.status_code, 200)
         self.assertIn("Технічні деталі", workflow_response.text)
         self.assertIn("Запустити workflow", workflow_response.text)
@@ -1131,7 +1798,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["result"]["repo_match"], "mismatch")
         self.assertEqual(payload["result"]["recommendation"], "Select the billing repository.")
         self.assertEqual(payload["result"]["change_actions"], [])
-        self.assertEqual(payload["result"]["likely_files"], ["Could not determine affected files"])
+        self.assertEqual(payload["result"]["likely_files"], [])
 
     def test_implementation_plan_workflow_returns_actionable_file_level_plan(self) -> None:
         run = self._create_persisted_run(
@@ -1229,12 +1896,13 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         result = response.json()["result"]
-        self.assertEqual(result["likely_files"], ["Could not determine affected files"])
+        self.assertEqual(result["repo_match"], "partial")
+        self.assertEqual(result["likely_files"], [])
         self.assertTrue(result["closest_areas"])
         self.assertEqual(result["closest_areas"][0]["area"], "src/reports")
         self.assertIn("No exact file match found", result["recommendation"])
         self.assertTrue(result["change_actions"])
-        self.assertEqual(result["change_actions"][0]["file"], "Could not determine affected files")
+        self.assertEqual(result["change_actions"][0]["file"], "src/reports")
 
     def test_pre_review_workflow_returns_verdict_and_drill_down(self) -> None:
         run = self._create_persisted_run(

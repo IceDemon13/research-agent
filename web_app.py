@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import secrets
 import re
+import urllib.parse
 from typing import Any
 from typing import Literal
 
@@ -40,6 +41,8 @@ from services.db_service import DatabaseService
 from services.i18n_service import DEFAULT_LOCALE, I18nService, SUPPORTED_LOCALES
 from services.permission_service import PermissionService
 from services.repo_index_service import RepositoryIndexService
+from services.repo_registry import RepositoryRegistryService
+from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_onboarding_service import RepoOnboardingService
 from services.run_service import RunService
 from services.scm_service import ScmService
@@ -49,9 +52,19 @@ app = FastAPI(title="Research Agent API", version="0.1.0")
 _failure_summary_service = RunService()
 _i18n_service = I18nService()
 _repo_index_service = RepositoryIndexService()
+_repo_intelligence_service = RepoIntelligenceService(index_service=_repo_index_service)
 _repo_scm_service = ScmService()
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SESSIONS: dict[str, dict[str, str]] = {}
+
+
+@app.middleware("http")
+async def _ensure_utf8_json_charset(request: Request, call_next):
+    response = await call_next(request)
+    content_type = str(response.headers.get("content-type", "") or "").strip().lower()
+    if content_type.startswith("application/json") and "charset=" not in content_type:
+        response.headers["content-type"] = "application/json; charset=utf-8"
+    return response
 
 
 @app.on_event("startup")
@@ -696,6 +709,17 @@ def _format_selection_reason(reasons: list[str], *, extra_reason: str = "") -> s
     return ", ".join(mapped) if mapped else "selected from the highest-confidence repository matches"
 
 
+def _clean_user_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        repaired = text.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return text
+    return repaired if repaired and repaired != text else text
+
+
 def _selection_confidence(
     *,
     path: str = "",
@@ -842,6 +866,140 @@ def _build_closest_areas(detail: RunDetail) -> list[AreaSuggestion]:
         )
     suggestions.sort(key=lambda item: (-item.confidence, item.area))
     return suggestions[:3]
+
+
+def _selection_candidates_from_provider(items: list[dict[str, Any]] | None) -> list[SelectionCandidate]:
+    candidates: list[SelectionCandidate] = []
+    for raw in list(items or []):
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name", "") or "").strip()
+        if not name:
+            continue
+        candidates.append(
+            SelectionCandidate(
+                name=name,
+                confidence=float(raw.get("confidence", 0.0) or 0.0),
+                reason=str(raw.get("reason", "") or "").strip(),
+            )
+        )
+    return candidates
+
+
+def _area_suggestions_from_provider(items: list[dict[str, Any]] | None) -> list[AreaSuggestion]:
+    suggestions: list[AreaSuggestion] = []
+    for raw in list(items or []):
+        if not isinstance(raw, dict):
+            continue
+        area = str(raw.get("area", "") or "").strip()
+        if not area:
+            continue
+        suggestions.append(
+            AreaSuggestion(
+                area=area,
+                confidence=float(raw.get("confidence", 0.0) or 0.0),
+                reason=str(raw.get("reason", "") or "").strip(),
+            )
+        )
+    return suggestions
+
+
+def _change_actions_from_provider(items: list[dict[str, Any]] | None) -> list[FileChangeAction]:
+    actions: list[FileChangeAction] = []
+    for raw in list(items or []):
+        if not isinstance(raw, dict):
+            continue
+        file_path = str(raw.get("file", "") or "").strip()
+        if not file_path:
+            continue
+        actions.append(
+            FileChangeAction(
+                file=file_path,
+                action=str(raw.get("action", "") or "modify").strip() or "modify",
+                description=str(raw.get("description", "") or "").strip(),
+            )
+        )
+    return actions
+
+
+def _provider_review_issues(items: list[dict[str, Any]] | None) -> list[ReviewIssue]:
+    issues: list[ReviewIssue] = []
+    for raw in list(items or []):
+        if not isinstance(raw, dict):
+            continue
+        file_path = str(raw.get("file", "") or "").strip()
+        issue = str(raw.get("issue", "") or "").strip()
+        if not file_path or not issue:
+            continue
+        issues.append(
+            ReviewIssue(
+                file=file_path,
+                issue=issue,
+                severity=str(raw.get("severity", "") or "").strip(),
+                impact=str(raw.get("impact", "") or "").strip(),
+                why=str(raw.get("why", "") or "").strip(),
+                evidence_type=str(raw.get("evidence_type", "") or "").strip(),
+                evidence_source=str(raw.get("evidence_source", "") or "").strip(),
+                evidence_snippet=str(raw.get("evidence_snippet", "") or "").strip(),
+                evidence_line=str(raw.get("evidence_line", "") or "").strip(),
+                evidence_confidence=float(raw.get("evidence_confidence", 0.0) or 0.0),
+            )
+        )
+    return issues
+
+
+def _gitnexus_workflow_result(
+    repo_id: str,
+    workflow_name: str,
+    task_text: str,
+    *,
+    changed_files: list[str] | None = None,
+) -> dict[str, Any]:
+    normalized_repo_id = str(repo_id or "").strip()
+    if not normalized_repo_id:
+        return {}
+    try:
+        return _repo_intelligence_service.query_for_workflow(
+            normalized_repo_id,
+            workflow_name,
+            task_text,
+            changed_files=list(changed_files or []),
+        )
+    except Exception:
+        return {}
+
+
+def _apply_provider_metadata(
+    detail: RunDetail,
+    workflow_name: str,
+    provider_payload: dict[str, Any] | None = None,
+) -> None:
+    payload = dict(provider_payload or {}) if isinstance(provider_payload, dict) else {}
+    fallback_to_native = bool(payload.get("fallback_to_native", False) or payload.get("provider_fallback", False))
+    provider_used = str(payload.get("provider_used", "") or payload.get("provider", "") or "").strip()
+    if fallback_to_native or not provider_used:
+        provider_used = "native"
+    detail.provider_used = provider_used
+    detail.provider_fallback = fallback_to_native
+    default_reason = {
+        "analyze_task": "Analyze-task workflow stays on the native provider.",
+        "structure_task": "Structure-task workflow stays on the native provider.",
+        "implementation_plan": "Implementation-plan workflow stayed on the native provider.",
+        "pre_review": "Pre-review stayed on the native provider.",
+    }.get(workflow_name, "Native provider was used.")
+    detail.provider_reason = str(
+        payload.get("provider_reason", "")
+        or payload.get("fallback_reason", "")
+        or default_reason
+    ).strip()
+
+
+def _persist_workflow_detail(run_record: RunRecord, detail: RunDetail) -> None:
+    _artifact_run_service(run_record).persist_run_detail(
+        run_record.run_id,
+        detail,
+        log_path=run_record.log_path,
+    )
 
 
 def _build_required_fixes(blocking_issues: list[str], files_to_check: list[str], *, locale: str = DEFAULT_LOCALE) -> list[RequiredFix]:
@@ -1009,6 +1167,9 @@ def _create_deterministic_pre_review_run(
             "was_escalated": False,
             "source_stage": "deterministic",
             "estimated_prompt_size": 0,
+            "provider_used": "native",
+            "provider_fallback": False,
+            "provider_reason": "Pre-review was blocked deterministically because no concrete artifact or diff exists.",
             "spec_result": None,
             "review_result": {
                 "status": "blocked_insufficient_artifact",
@@ -1576,6 +1737,8 @@ def _is_repo_mismatch(detail: RunDetail) -> bool:
 def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> AnalyzeTaskWorkflowResult:
     spec = dict(detail.spec_result or {})
     likely_files = _likely_files_from_detail(detail, locale=locale)
+    _apply_provider_metadata(detail, "analyze_task")
+    provider_payload: dict[str, Any] = {}
     missing_details: list[str] = []
     if not list(spec.get("acceptance_criteria", []) or []):
         missing_details.append(
@@ -1626,13 +1789,16 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
         if missing_details
         else ("Proceed to implementation planning." if locale == "en" else "Переходьте до плану імплементації.")
     )
+    if provider_payload.get("repo_match") == "mismatch" and not _is_repo_mismatch(detail):
+        task_quality_summary = "Task does not appear to match the selected repository." if locale == "en" else "Задача, ймовірно, не відповідає вибраному repo."
+        recommendation = str(provider_payload.get("recommendation", "") or recommendation).strip()
     if _is_repo_mismatch(detail):
         task_quality_summary = "Task does not appear to match the selected repository." if locale == "en" else "Задача, ймовірно, не відповідає вибраному repo."
         recommendation = str(detail.repo_relevance_next_action or detail.recommendation or "").strip()
     return AnalyzeTaskWorkflowResult(
         task_quality_summary=task_quality_summary,
         missing_details=missing_details,
-        risks=_limit_items(spec.get("risks", []) or []),
+        risks=_limit_items(provider_payload.get("risks", []) or spec.get("risks", []) or []),
         suggested_additions=suggested_additions,
         concrete_questions=_specific_questions_for_task(spec, str(detail.repo_id or "").strip(), likely_files, locale=locale),
         repo_match=_repo_match_payload(detail, include_unknown=bool(detail.repo_id)),
@@ -1643,6 +1809,7 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
 
 def _build_structure_task_result(run_record: RunRecord, detail: RunDetail, source_text: str, *, locale: str = DEFAULT_LOCALE) -> StructureTaskWorkflowResult:
     spec = dict(detail.spec_result or {})
+    _apply_provider_metadata(detail, "structure_task")
     fallback_title = str(source_text or "").strip().splitlines()[0][:120]
     title = _sanitize_structure_text(str(spec.get("title", "") or "").strip(), source_text, fallback=fallback_title)
     summary = _sanitize_structure_text(
@@ -1689,15 +1856,16 @@ def _build_structure_task_result(run_record: RunRecord, detail: RunDetail, sourc
 def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> ImplementationPlanWorkflowResult:
     spec = dict(detail.spec_result or {})
     likely_file_details = _build_likely_file_details(detail)
-    likely_files = [item.name for item in likely_file_details] if likely_file_details else _unknown_files_list(locale)
+    likely_files = [item.name for item in likely_file_details] if likely_file_details else []
     likely_module_details = _build_likely_module_details(detail)
     likely_modules = [item.name for item in likely_module_details]
     closest_areas = _build_closest_areas(detail)
     if _is_repo_mismatch(detail):
+        _apply_provider_metadata(detail, "implementation_plan")
         return ImplementationPlanWorkflowResult(
             repo_match="mismatch",
             repo_match_reason=str(detail.repo_relevance_reason or ("Repository mismatch detected." if locale == "en" else "Виявлено repo mismatch.")).strip(),
-            likely_files=_unknown_files_list(locale),
+            likely_files=[],
             likely_file_details=[],
             likely_modules=[],
             likely_module_details=[],
@@ -1706,8 +1874,68 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             risks=[str(detail.repo_relevance_reason or ("Task does not appear relevant to this repository." if locale == "en" else "Задача не виглядає релевантною для цього repo.")).strip()],
             validation_plan=[],
             recommendation=str(detail.repo_relevance_next_action or detail.recommendation or "").strip(),
+            configured_provider="native",
+            repo_metadata_provider=str(getattr(detail, "provider_used", "") or "native").strip() or "native",
+            allowlist_match=False,
+            gitnexus_enabled=False,
+            gitnexus_index_status="",
+            selection_decision="repo_mismatch",
+            provider_used=str(detail.provider_used or "native").strip() or "native",
+            provider_fallback=bool(detail.provider_fallback),
+            provider_reason=str(detail.provider_reason or "Repository mismatch prevented repo-specific planning.").strip(),
+            candidate_files_count=0,
+            selected_files_count=0,
+            top_candidate_files=[],
+            top_candidate_symbols=[],
+            top_closest_areas=closest_areas[:3],
             technical_run=_technical_run_link(run_record, detail),
         )
+    provider_payload = _gitnexus_workflow_result(
+        run_record.repo_id,
+        "implementation_plan",
+        str(run_record.goal or detail.goal or "").strip(),
+    )
+    _apply_provider_metadata(detail, "implementation_plan", provider_payload)
+    provider_file_details = _selection_candidates_from_provider(provider_payload.get("likely_file_details"))
+    provider_module_details = _selection_candidates_from_provider(provider_payload.get("likely_module_details"))
+    provider_closest_areas = _area_suggestions_from_provider(provider_payload.get("closest_areas"))
+    provider_top_candidate_files = _selection_candidates_from_provider(provider_payload.get("top_candidate_files"))
+    provider_top_candidate_symbols = _selection_candidates_from_provider(provider_payload.get("top_candidate_symbols"))
+    provider_top_closest_areas = _area_suggestions_from_provider(provider_payload.get("top_closest_areas"))
+    provider_change_actions = _change_actions_from_provider(provider_payload.get("change_actions"))
+    provider_used = str(provider_payload.get("provider_used", "") or detail.provider_used or "native").strip() or "native"
+    provider_fallback = bool(provider_payload.get("provider_fallback", False) or detail.provider_fallback)
+    provider_reason = _clean_user_text(
+        provider_payload.get("provider_reason", "")
+        or detail.provider_reason
+        or "Native repository intelligence was used."
+    )
+    configured_provider = str(provider_payload.get("configured_provider", "") or "native").strip() or "native"
+    repo_metadata_provider = str(provider_payload.get("repo_metadata_provider", "") or "native").strip() or "native"
+    allowlist_match = bool(provider_payload.get("allowlist_match", False))
+    gitnexus_enabled = bool(provider_payload.get("gitnexus_enabled", False))
+    gitnexus_index_status = str(provider_payload.get("gitnexus_index_status", "") or "").strip()
+    selection_decision = str(provider_payload.get("selection_decision", "") or "").strip()
+    candidate_files_count = int(provider_payload.get("candidate_files_count", 0) or 0)
+    selected_files_count = int(provider_payload.get("selected_files_count", 0) or 0)
+    if provider_file_details or provider_module_details or provider_closest_areas:
+        likely_file_details = provider_file_details or likely_file_details
+        likely_files = [item.name for item in likely_file_details] if likely_file_details else []
+        likely_module_details = provider_module_details or likely_module_details
+        likely_modules = [item.name for item in likely_module_details]
+        closest_areas = provider_closest_areas or closest_areas
+    if not candidate_files_count:
+        candidate_files_count = max(
+            len(provider_top_candidate_files),
+            len(provider_file_details),
+            len(likely_file_details),
+        )
+    if not selected_files_count:
+        selected_files_count = len(likely_file_details)
+    top_candidate_files = provider_top_candidate_files or likely_file_details[:5]
+    top_candidate_symbols = provider_top_candidate_symbols or likely_module_details[:5]
+    top_closest_areas = provider_top_closest_areas or closest_areas[:3]
+
     validation_plan = []
     validation = dict(detail.validation_result or {})
     if str(validation.get("validation_profile_used", "") or "").strip():
@@ -1725,34 +1953,119 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             if locale == "en"
             else "Спочатку перевірте затронуті файли, а за потреби запустіть ширшу validation по repo."
         )
-    change_actions = _build_change_actions(spec, likely_files, locale=locale)
-    recommendation = str(detail.recommendation or "").strip() or (
+
+    has_exact_targets = bool(likely_file_details or likely_module_details)
+    has_partial_targets = bool(closest_areas)
+    change_actions: list[FileChangeAction]
+    recommendation = _clean_user_text(provider_payload.get("recommendation", "") or detail.recommendation or "") or (
         "Review the likely files and validation plan before implementation."
         if locale == "en"
         else "Перегляньте ймовірні файли та план validation перед імплементацією."
     )
-    if likely_files == _unknown_files_list(locale) and closest_areas:
-        recommendation = (
+    if not likely_files and closest_areas:
+        recommendation = _clean_user_text(
             ("No exact file match found. Start with the closest subsystem areas: " if locale == "en" else "Точного збігу файлів не знайдено. Почніть із найближчих підсистем: ")
             + ", ".join(area.area for area in closest_areas[:3])
             + "."
         )
+
+    if has_exact_targets:
+        change_actions = provider_change_actions or _build_change_actions(spec, likely_files, locale=locale)
+        repo_match = "match"
+        repo_match_reason = _clean_user_text(
+            provider_payload.get("repo_match_reason", "")
+            or detail.repo_relevance_reason
+            or (
+                "Repository context produced plausible matches."
+                if locale == "en"
+                else "Контекст repo дав правдоподібні збіги."
+            )
+        )
+    elif has_partial_targets:
+        change_actions = [
+            FileChangeAction(
+                file=area.area,
+                action="inspect",
+                description=_clean_user_text(
+                    f"Inspect this subsystem first because repository intelligence found partial evidence here: {area.reason or area.area}."
+                    if locale == "en"
+                    else f"Спочатку перевірте цю підсистему, бо repo intelligence знайшов тут часткові сигнали: {area.reason or area.area}."
+                ),
+            )
+            for area in closest_areas[:3]
+        ]
+        repo_match = "partial"
+        repo_match_reason = _clean_user_text(
+            provider_reason
+            or provider_payload.get("repo_match_reason", "")
+            or detail.repo_relevance_reason
+            or (
+                "No strong repo-specific files were identified, but nearby subsystem areas were found."
+                if locale == "en"
+                else "Точних repo-specific файлів не знайдено, але знайдено близькі підсистеми."
+            )
+        )
+        recommendation = _clean_user_text(
+            ("No exact file match found. Start with the closest subsystem areas: " if locale == "en" else "Точного збігу файлів не знайдено. Почніть із найближчих підсистем: ")
+            + ", ".join(area.area for area in closest_areas[:3])
+            + "."
+        )
+    else:
+        change_actions = [
+            FileChangeAction(
+                file="",
+                action="clarify",
+                description=_clean_user_text(
+                    "No strong repo-specific targets were found. Clarify the task wording or verify that this repository is the right match."
+                    if locale == "en"
+                    else "Не знайдено сильних repo-specific цілей. Уточніть формулювання задачі або перевірте, що це правильний repo."
+                ),
+            )
+        ]
+        repo_match = "low_confidence"
+        repo_match_reason = _clean_user_text(
+            provider_reason
+            or provider_payload.get("repo_match_reason", "")
+            or (
+                "No strong repo-specific targets or closest subsystem areas were found."
+                if locale == "en"
+                else "Не знайдено сильних repo-specific цілей або близьких підсистем."
+            )
+        )
+        recommendation = _clean_user_text(
+            "No strong repo-specific targets were found. Use more specific task wording or verify that this repository is the right match."
+            if locale == "en"
+            else "Не знайдено сильних repo-specific цілей. Уточніть формулювання задачі або перевірте, що це правильний repo."
+        )
+
     return ImplementationPlanWorkflowResult(
-        repo_match="match" if str(detail.repo_relevance_status or "").strip() in {"relevant", ""} else str(detail.repo_relevance_status or "").strip(),
-        repo_match_reason=str(detail.repo_relevance_reason or ("Repository context produced plausible matches." if locale == "en" else "Контекст repo дав правдоподібні збіги.")).strip(),
+        repo_match=repo_match,
+        repo_match_reason=repo_match_reason,
         likely_files=likely_files,
         likely_file_details=likely_file_details,
         likely_modules=likely_modules,
         likely_module_details=likely_module_details,
-        closest_areas=closest_areas,
+        closest_areas=closest_areas if not has_exact_targets else closest_areas[:3],
         change_actions=change_actions,
-        risks=_limit_items(spec.get("risks", []) or [], max_items=6),
-        validation_plan=validation_plan,
+        risks=_limit_items(provider_payload.get("risks", []) or spec.get("risks", []) or [], max_items=6),
+        validation_plan=_limit_items(provider_payload.get("validation_plan", []) or validation_plan, max_items=6),
         recommendation=recommendation,
+        configured_provider=configured_provider,
+        repo_metadata_provider=repo_metadata_provider,
+        allowlist_match=allowlist_match,
+        gitnexus_enabled=gitnexus_enabled,
+        gitnexus_index_status=gitnexus_index_status,
+        selection_decision=selection_decision,
+        provider_used=provider_used,
+        provider_fallback=provider_fallback,
+        provider_reason=provider_reason,
+        candidate_files_count=candidate_files_count,
+        selected_files_count=selected_files_count,
+        top_candidate_files=top_candidate_files,
+        top_candidate_symbols=top_candidate_symbols,
+        top_closest_areas=top_closest_areas,
         technical_run=_technical_run_link(run_record, detail),
     )
-
-
 def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> PreReviewWorkflowResult:
     review = dict(detail.review_result or {})
     blocking_issues = _limit_items(
@@ -1769,6 +2082,14 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
     has_real_artifact = _pre_review_has_real_artifact(detail)
     review_status = str(review.get("status", "") or "").strip().lower()
     if not has_real_artifact:
+        _apply_provider_metadata(
+            detail,
+            "pre_review",
+            {
+                "provider_used": "native",
+                "provider_reason": "Pre-review was blocked deterministically because no concrete artifact or diff exists.",
+            },
+        )
         insufficient_reason = (
             "Insufficient implementation evidence. The system cannot safely produce file-level review findings yet."
             if locale == "en"
@@ -1813,17 +2134,33 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         pre_review_result.fix_and_retry_block_reason = str(fix_retry.get("reason", "") or "").strip()
         return pre_review_result
 
+    provider_payload = _gitnexus_workflow_result(
+        run_record.repo_id,
+        "pre_review",
+        str(run_record.goal or detail.goal or "").strip(),
+        changed_files=_pre_review_changed_file_universe(detail),
+    )
+    _apply_provider_metadata(detail, "pre_review", provider_payload)
+    provider_issue_details = _provider_review_issues(provider_payload.get("review_issues"))
+    if provider_issue_details:
+        files_to_check = _limit_items(
+            provider_payload.get("files_to_check", []) or [item.file for item in provider_issue_details],
+            max_items=8,
+        )
+        issue_details = provider_issue_details[:8]
+        global_blockers = _limit_items(provider_payload.get("global_blockers", []) or global_blockers, max_items=8)
+
     ready_for_human_review = not issue_details and not global_blockers and review_status in {"approved", "success", ""}
     review_verdict_confidence = 0.86 if ready_for_human_review and files_to_check else 0.92 if issue_details or global_blockers else 0.55
     required_fixes = _build_strong_required_fixes(issue_details, locale=locale)
     verdict = "ready_for_review" if ready_for_human_review else "blocked_actionable"
     decision_statement = _t(locale, "review.decision.safe") if ready_for_human_review else _t(locale, "review.decision.blocked")
-    blocking_explanation = (
+    blocking_explanation = str(provider_payload.get("blocking_explanation", "") or "").strip() or (
         _t(locale, "review.blocking.some", count=len(issue_details) + len(global_blockers))
         if issue_details or global_blockers
         else _t(locale, "review.blocking.none")
     )
-    recommendation = str(detail.recommendation or "").strip() or (
+    recommendation = str(provider_payload.get("recommendation", "") or detail.recommendation or "").strip() or (
         _t(locale, "review.recommendation.blocked")
         if issue_details or global_blockers
         else _t(locale, "review.recommendation.ready")
@@ -2129,6 +2466,9 @@ def _persist_tracked_run_detail(
         "was_escalated": bool(result.metadata.get("was_escalated", False)),
         "source_stage": str(result.metadata.get("source_stage", "") or "").strip(),
         "estimated_prompt_size": int(result.metadata.get("estimated_prompt_size", 0) or 0),
+        "provider_used": str(result.metadata.get("provider_used", "") or "").strip(),
+        "provider_fallback": bool(result.metadata.get("provider_fallback", False)),
+        "provider_reason": str(result.metadata.get("provider_reason", "") or "").strip(),
         "sync_status": str(sync_status.get("sync_status", "") or "").strip(),
         "local_head_before": str(sync_status.get("local_head_before", "") or "").strip(),
         "remote_head": str(sync_status.get("remote_head", "") or "").strip(),
@@ -2197,13 +2537,15 @@ def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
     profile_payload = repo_profile.to_dict() if repo_profile is not None else {}
     glossary = _repo_index_service.get_glossary(repo.repo_id)
     glossary_term_count = len(list(getattr(glossary, "terms", []) or [])) if glossary is not None else 0
+    provider_status = _repo_intelligence_service.provider_status(repo.repo_id)
     current_local_head = ""
     current_branch = ""
-    if _repo_scm_service.detect_git_repo(repo.resolved_local_path):
-        head_result = _repo_scm_service.get_head_commit_hash(repo.resolved_local_path)
+    git_probe_path = str(repo.local_path or "").strip()
+    if git_probe_path and _repo_scm_service.detect_git_repo(git_probe_path):
+        head_result = _repo_scm_service.get_head_commit_hash(git_probe_path)
         if head_result.success:
             current_local_head = str(head_result.data.get("commit_hash", "") or "").strip()
-        branch_result = _repo_scm_service.get_current_branch(repo.resolved_local_path)
+        branch_result = _repo_scm_service.get_current_branch(git_probe_path)
         if branch_result.success:
             current_branch = str(branch_result.data.get("branch_name", "") or "").strip()
     return {
@@ -2222,11 +2564,25 @@ def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
         "sync_status": repo.sync_status,
         "last_sync_at": repo.last_sync_at,
         "sync_error": repo.sync_error,
+        "intelligence_provider": repo.intelligence_provider,
+        "gitnexus_indexed": bool(repo.gitnexus_indexed),
+        "gitnexus_indexed_at": repo.gitnexus_indexed_at,
+        "gitnexus_index_status": repo.gitnexus_index_status,
+        "gitnexus_index_error": repo.gitnexus_index_error,
+        "gitnexus_last_fallback_reason": repo.gitnexus_last_fallback_reason,
+        "gitnexus_backend_available": bool(provider_status.get("gitnexus_backend_available", False)),
+        "gitnexus_ui_url": str(provider_status.get("gitnexus_ui_url", "") or "").strip(),
+        "gitnexus_open_url": (
+            f"/repos/{urllib.parse.quote(str(repo.repo_id or '').strip())}/gitnexus/open"
+            if str(provider_status.get("gitnexus_ui_url", "") or "").strip()
+            else ""
+        ),
         "current_local_head": current_local_head,
         "current_branch": current_branch,
         "analysis_stale": bool(current_local_head and repo.indexed_head and current_local_head != repo.indexed_head),
         "glossary_term_count": glossary_term_count,
         "profile": profile_payload,
+        "provider_status": provider_status,
     }
 
 
@@ -2695,6 +3051,89 @@ def reindex_repo(repo_id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail={"error": "repo_reindex_failed", "message": str(exc)}) from exc
 
 
+@app.post("/repos/{repo_id}/gitnexus/reindex")
+def reindex_repo_in_gitnexus(repo_id: str, request: Request) -> dict[str, Any]:
+    actor = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor,
+        "repo.onboard",
+        scope=PermissionScope(
+            repo_id=str(repo_id or "").strip(),
+            source_channel=actor.source_channel,
+        ),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    registry = RepositoryRegistryService()
+    repo = registry.get_repo(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail={"error": "repo_not_found", "message": f"Unknown repo_id: {repo_id}"})
+    index_service = _repo_intelligence_service._gitnexus_index_service
+    ui_link_service = _repo_intelligence_service._gitnexus_ui_link_service
+    if not index_service.is_enabled_for_repo(repo):
+        return {
+            "repo_id": str(repo_id or "").strip(),
+            "success": False,
+            "gitnexus_enabled": bool(settings.repo_intelligence.gitnexus_enabled),
+            "message": "GitNexus is disabled or not allowed for this repo.",
+        }
+    gitnexus_result = index_service.analyze_repo(repo, force=True)
+    if not bool(gitnexus_result.get("success", False)):
+        return {
+            "repo_id": repo.repo_id,
+            "success": False,
+            "gitnexus_enabled": True,
+            "gitnexus_index_status": str(gitnexus_result.get("gitnexus_index_status", "") or "").strip(),
+            "gitnexus_indexed_at": str(gitnexus_result.get("gitnexus_indexed_at", "") or "").strip(),
+            "gitnexus_ui_url": str(ui_link_service.build_repo_ui_url(repo) or "").strip(),
+            "message": str(gitnexus_result.get("gitnexus_index_error", "") or "GitNexus analyze failed.").strip(),
+        }
+    refreshed = registry.refresh_repo_metadata(repo.repo_id) or registry.get_repo(repo.repo_id) or repo
+    return {
+        "repo_id": refreshed.repo_id,
+        "success": True,
+        "gitnexus_enabled": True,
+        "gitnexus_index_status": str(refreshed.gitnexus_index_status or "").strip(),
+        "gitnexus_indexed_at": str(refreshed.gitnexus_indexed_at or "").strip(),
+        "gitnexus_ui_url": str(ui_link_service.build_repo_ui_url(refreshed) or "").strip(),
+        "message": "GitNexus analyze completed successfully.",
+    }
+
+
+@app.get("/repos/{repo_id}/gitnexus/open")
+def open_repo_in_gitnexus(repo_id: str, request: Request) -> dict[str, Any]:
+    locale = _locale_from_request(request)
+    actor = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor,
+        "repo.context.read",
+        scope=PermissionScope(
+            repo_id=str(repo_id or "").strip(),
+            source_channel=actor.source_channel,
+        ),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    registry = RepositoryRegistryService()
+    repo = registry.get_repo(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail={"error": "repo_not_found", "message": f"Unknown repo_id: {repo_id}"})
+    ui_link_service = _repo_intelligence_service._gitnexus_ui_link_service
+    ui_url = str(ui_link_service.build_repo_ui_url(repo) or "").strip()
+    if not ui_url:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "gitnexus_ui_url_not_configured",
+                "message": _t(locale, "repo.gitnexus.ui_url_missing"),
+            },
+        )
+    return {
+        "repo_id": repo.repo_id,
+        "url": ui_url,
+        "message": _t(locale, "repo.gitnexus.open_ready"),
+    }
+
 @app.post("/repos/{repo_id}/sync")
 def sync_repo(repo_id: str, request: Request) -> dict[str, Any]:
     actor = _build_actor_context(request)
@@ -2957,6 +3396,7 @@ def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any
     )
     detail = _load_run_detail_for_record(run_record)
     result = _build_analyze_task_result(run_record, detail, locale=locale)
+    _persist_workflow_detail(run_record, detail)
     return {
         "workflow": "analyze_task",
         "run_id": run_record.run_id,
@@ -2978,6 +3418,7 @@ def structure_task(payload: StructureTaskRequest, request: Request) -> dict[str,
     )
     detail = _load_run_detail_for_record(run_record)
     result = _build_structure_task_result(run_record, detail, payload.free_text, locale=locale)
+    _persist_workflow_detail(run_record, detail)
     return {
         "workflow": "structure_task",
         "run_id": run_record.run_id,
@@ -3000,6 +3441,7 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
     )
     detail = _load_run_detail_for_record(run_record)
     result = _build_implementation_plan_result(run_record, detail, locale=locale)
+    _persist_workflow_detail(run_record, detail)
     return {
         "workflow": "implementation_plan",
         "run_id": run_record.run_id,
@@ -3035,6 +3477,7 @@ def pre_review(payload: PreReviewRequest, request: Request) -> dict[str, Any]:
         )
     detail = _load_run_detail_for_record(run_record)
     result = _build_pre_review_result(run_record, detail, locale=locale)
+    _persist_workflow_detail(run_record, detail)
     return {
         "workflow": "pre_review",
         "run_id": run_record.run_id,

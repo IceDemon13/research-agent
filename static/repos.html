@@ -134,9 +134,17 @@
 
     function renderActionLinks(repo) {
       const repoId = encodeURIComponent(repo.repo_id || "");
+      const gitnexusLink = repo.gitnexus_open_url
+        ? `<button type="button" class="secondary" data-gitnexus-open="${auth.escapeHtml(repo.gitnexus_open_url)}">${auth.escapeHtml(auth.t("repo.action.open_gitnexus"))}</button>`
+        : `<button type="button" class="secondary" disabled title="${auth.escapeHtml(auth.t("repo.gitnexus.ui_url_missing"))}">${auth.escapeHtml(auth.t("repo.action.open_gitnexus"))}</button>`;
+      const gitnexusReindex = repo.provider_status?.gitnexus_enabled
+        ? `<button type="button" class="secondary" data-gitnexus-reindex="${auth.escapeHtml(repo.repo_id || "")}">${auth.escapeHtml(auth.t("repo.action.gitnexus_reindex"))}</button>`
+        : "";
       return `
         <a class="button-link" href="./workflow.html?type=implementation_plan&repo_id=${repoId}">${auth.escapeHtml(auth.t("repo.action.open_workflows"))}</a>
         <a class="button-link" href="./runs.html?repo_id=${repoId}">${auth.escapeHtml(auth.t("repo.action.open_runs"))}</a>
+        ${gitnexusLink}
+        ${gitnexusReindex}
       `;
     }
 
@@ -180,6 +188,7 @@
             <div><strong>${auth.escapeHtml(auth.t("repo.field.remote_url"))}</strong><br><span class="repo-mono">${auth.escapeHtml(repo.remote_url || "-")}</span></div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.local_path"))}</strong><br><span class="repo-mono">${auth.escapeHtml(repo.local_path || "-")}</span></div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.default_branch"))}</strong><br>${auth.escapeHtml(repo.default_branch || "-")}</div>
+            <div><strong>${auth.escapeHtml(auth.t("repo.field.provider"))}</strong><br>${auth.escapeHtml(repo.intelligence_provider || "native")}</div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.current_branch"))}</strong><br>${auth.escapeHtml(repo.current_branch || "-")}</div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.current_head"))}</strong><br><span class="repo-mono" title="${auth.escapeHtml(currentHead || "-")}">${auth.escapeHtml(shortHash(currentHead))}</span></div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.indexed_head"))}</strong><br><span class="repo-mono" title="${auth.escapeHtml(indexedHead || "-")}">${auth.escapeHtml(shortHash(indexedHead))}</span></div>
@@ -229,8 +238,16 @@
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.sync_status"))}</strong><br>${renderBadge(syncLabel, statusClass("sync", repo.sync_status || "stale"))}</p>
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.index_status"))}</strong><br>${renderBadge(indexLabel, statusClass("index", repo.index_status || "unavailable"))}</p>
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.reindex_required"))}</strong><br>${auth.escapeHtml(auth.boolLabel(Boolean(repo.reindex_required)))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_index_status"))}</strong><br>${auth.escapeHtml(repo.gitnexus_index_status || auth.t("repo.index.unavailable"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_indexed_at"))}</strong><br>${auth.escapeHtml(auth.formatDateTime(repo.gitnexus_indexed_at || ""))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_backend"))}</strong><br>${auth.escapeHtml(auth.boolLabel(Boolean(repo.gitnexus_backend_available)))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_ui_url"))}</strong><br><span class="repo-mono">${auth.escapeHtml(repo.gitnexus_ui_url || auth.t("common.none"))}</span></p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_skills"))}</strong><br>${auth.escapeHtml(auth.boolLabel(Boolean(repo.provider_status?.gitnexus_use_skills)))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_embeddings"))}</strong><br>${auth.escapeHtml(auth.boolLabel(Boolean(repo.provider_status?.gitnexus_use_embeddings)))}</p>
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.index_error"))}</strong><br>${auth.escapeHtml(showIndexError || auth.t("common.none"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_index_error"))}</strong><br>${auth.escapeHtml(repo.gitnexus_index_error || auth.t("common.none"))}</p>
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.sync_error"))}</strong><br>${auth.escapeHtml(showSyncError || auth.t("common.none"))}</p>
+                <p><strong>${auth.escapeHtml(auth.t("repo.field.fallback_reason"))}</strong><br>${auth.escapeHtml(repo.gitnexus_last_fallback_reason || auth.t("common.none"))}</p>
               </div>
             </div>
           </details>
@@ -264,17 +281,59 @@
       container.querySelectorAll("button[data-reindex]").forEach((button) => {
         button.addEventListener("click", () => runRepoAction(button, "reindex"));
       });
+      container.querySelectorAll("button[data-gitnexus-reindex]").forEach((button) => {
+        button.addEventListener("click", () => runRepoAction(button, "gitnexus-reindex"));
+      });
+      container.querySelectorAll("button[data-gitnexus-open]").forEach((button) => {
+        button.addEventListener("click", () => openGitNexus(button));
+      });
+    }
+
+    function openGitNexus(button) {
+      const openUrl = button.getAttribute("data-gitnexus-open") || "";
+      if (!openUrl) return;
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = auth.t("repo.action.open_gitnexus_loading");
+      auth.fetchJson(openUrl)
+        .then((payload) => {
+          const targetUrl = String(payload?.url || "").trim();
+          if (!targetUrl) {
+            throw new Error(auth.t("repo.gitnexus.ui_url_missing"));
+          }
+          window.open(targetUrl, "_blank", "noopener,noreferrer");
+        })
+        .catch((error) => {
+          setMessage(error.message || auth.t("common.failed"), "error");
+        })
+        .finally(() => {
+          button.disabled = false;
+          button.textContent = originalText;
+        });
     }
 
     async function runRepoAction(button, action) {
-      const repoId = button.getAttribute(`data-${action}`) || "";
+      const attributeMap = {
+        sync: "data-sync",
+        reindex: "data-reindex",
+        "gitnexus-reindex": "data-gitnexus-reindex"
+      };
+      const repoId = button.getAttribute(attributeMap[action] || `data-${action}`) || "";
       if (!repoId) return;
       setMessage("");
       const originalText = button.textContent;
       button.disabled = true;
-      button.textContent = auth.t(action === "sync" ? "repo.action.sync_loading" : "repo.action.reindex_loading");
+      const loadingKey = {
+        sync: "repo.action.sync_loading",
+        reindex: "repo.action.reindex_loading",
+        "gitnexus-reindex": "repo.action.gitnexus_reindex_loading"
+      }[action] || "common.loading";
+      button.textContent = auth.t(loadingKey);
       try {
-        const payload = await auth.fetchJson(`/repos/${encodeURIComponent(repoId)}/${action}`, { method: "POST" });
+        const path = action === "gitnexus-reindex"
+          ? `/repos/${encodeURIComponent(repoId)}/gitnexus/reindex`
+          : `/repos/${encodeURIComponent(repoId)}/${action}`;
+        const payload = await auth.fetchJson(path, { method: "POST" });
         setMessage(payload.message || auth.t("common.success"));
         await loadRepos();
       } catch (error) {

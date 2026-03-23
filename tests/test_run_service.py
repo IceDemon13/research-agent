@@ -638,6 +638,46 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(detail.source_stage, "initial")
         self.assertEqual(detail.estimated_prompt_size, 287)
 
+    def test_load_run_detail_hydrates_provider_metadata(self) -> None:
+        service = RunService(
+            storage_dir=self.workspace_root / "artifacts" / "runs",
+            persist=True,
+        )
+        actor = ActorContext(
+            actor_id="lead-1",
+            actor_type="cli",
+            role="techlead",
+            source_channel="cli",
+            display_name="Tech Lead",
+        )
+        run = service.start_run("Implementation plan", repo_id="sample", actor_context=actor)
+        finished_run = service.finish_run(run.run_id, "success")
+        service.persist_run_detail(
+            run.run_id,
+            {
+                "mode": "spec",
+                "goal": "Implementation plan",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+                "spec_result": {
+                    "title": "Implementation plan",
+                    "goal": "Implementation plan",
+                    "context": "Task context",
+                    "requirements": [],
+                    "acceptance_criteria": [],
+                    "risks": [],
+                },
+            },
+            log_path=finished_run.log_path,
+        )
+
+        detail = service.load_run_detail(run.run_id, run_record=finished_run, log_path=finished_run.log_path)
+
+        self.assertEqual(detail.provider_used, "gitnexus_http")
+        self.assertFalse(detail.provider_fallback)
+        self.assertEqual(detail.provider_reason, "GitNexus MCP evidence was used for implementation planning.")
+
     def test_persist_and_load_spec_run_detail(self) -> None:
         service = RunService(
             storage_dir=self.workspace_root / "artifacts" / "runs",

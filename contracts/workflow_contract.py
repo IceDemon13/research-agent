@@ -167,6 +167,20 @@ class StructureTaskWorkflowResult:
 class ImplementationPlanWorkflowResult:
     repo_match: str = ""
     repo_match_reason: str = ""
+    configured_provider: str = ""
+    repo_metadata_provider: str = ""
+    allowlist_match: bool = False
+    gitnexus_enabled: bool = False
+    gitnexus_index_status: str = ""
+    selection_decision: str = ""
+    provider_used: str = ""
+    provider_fallback: bool = False
+    provider_reason: str = ""
+    candidate_files_count: int = 0
+    selected_files_count: int = 0
+    top_candidate_files: list[SelectionCandidate] = field(default_factory=list)
+    top_candidate_symbols: list[SelectionCandidate] = field(default_factory=list)
+    top_closest_areas: list[AreaSuggestion] = field(default_factory=list)
     likely_files: list[str] = field(default_factory=list)
     likely_file_details: list[SelectionCandidate] = field(default_factory=list)
     likely_modules: list[str] = field(default_factory=list)
@@ -182,6 +196,20 @@ class ImplementationPlanWorkflowResult:
         return {
             "repo_match": self.repo_match,
             "repo_match_reason": self.repo_match_reason,
+            "configured_provider": self.configured_provider,
+            "repo_metadata_provider": self.repo_metadata_provider,
+            "allowlist_match": bool(self.allowlist_match),
+            "gitnexus_enabled": bool(self.gitnexus_enabled),
+            "gitnexus_index_status": self.gitnexus_index_status,
+            "selection_decision": self.selection_decision,
+            "provider_used": self.provider_used,
+            "provider_fallback": bool(self.provider_fallback),
+            "provider_reason": self.provider_reason,
+            "candidate_files_count": int(self.candidate_files_count),
+            "selected_files_count": int(self.selected_files_count),
+            "top_candidate_files": [item.to_dict() for item in self.top_candidate_files],
+            "top_candidate_symbols": [item.to_dict() for item in self.top_candidate_symbols],
+            "top_closest_areas": [item.to_dict() for item in self.top_closest_areas],
             "likely_files": list(self.likely_files),
             "likely_file_details": [item.to_dict() for item in self.likely_file_details],
             "likely_modules": list(self.likely_modules),

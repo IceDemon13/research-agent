@@ -1,0 +1,93 @@
+{
+  "run_id": "workflow-run-1",
+  "mode": "review",
+  "goal": "Pre-review flow",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "sample",
+  "jira_ticket": "",
+  "status": "success",
+  "started_at": "",
+  "finished_at": "",
+  "actor": null,
+  "actor_display_name": "",
+  "actor_username": "",
+  "decision": "pending",
+  "decided_by": "",
+  "decided_at": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_strategy": "",
+  "retry_strategy_reason": "",
+  "repeated_failure_detected": false,
+  "retry_context": null,
+  "failed_step": "",
+  "failure_code": "",
+  "failure_reason": "",
+  "root_cause_summary": "",
+  "final_result_summary": "",
+  "recommendation": "",
+  "run_outcome_type": "",
+  "model_used": "",
+  "routing_reason": "",
+  "was_escalated": false,
+  "source_stage": "",
+  "estimated_prompt_size": 0,
+  "provider_used": "native",
+  "provider_fallback": false,
+  "provider_reason": "Pre-review stayed on the native provider.",
+  "sync_status": "",
+  "local_head_before": "",
+  "remote_head": "",
+  "synced_before_run": false,
+  "repo_relevance_status": "",
+  "repo_relevance_confidence": 0.0,
+  "repo_relevance_reason": "",
+  "repo_relevance_next_action": "",
+  "log_path": "",
+  "pr_url": "",
+  "review_url": "",
+  "parent_run": null,
+  "previous_attempt_summary": null,
+  "child_runs": [],
+  "steps": [],
+  "spec_result": null,
+  "review_result": {
+    "status": "approved",
+    "summary": "Review is ready.",
+    "approved_files": [
+      "src/app.py"
+    ]
+  },
+  "research_result": null,
+  "implementation_result": {
+    "artifact_summary": {
+      "files_count": 1,
+      "file_paths": [
+        "src/app.py"
+      ]
+    }
+  },
+  "publication_result": null,
+  "validation_result": null,
+  "diff_result": {
+    "diff_available": true,
+    "files": [
+      {
+        "file_path": "src/app.py",
+        "change_type": "modified"
+      }
+    ]
+  },
+  "review_comments": [],
+  "policy_decisions": [],
+  "step_errors": [],
+  "sources": [],
+  "repo_context_summary": {
+    "files_used": [
+      "src/app.py"
+    ]
+  }
+}

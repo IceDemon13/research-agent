@@ -76,6 +76,9 @@ class RunDetail:
     was_escalated: bool = False
     source_stage: str = ""
     estimated_prompt_size: int = 0
+    provider_used: str = ""
+    provider_fallback: bool = False
+    provider_reason: str = ""
     sync_status: str = ""
     local_head_before: str = ""
     remote_head: str = ""
@@ -142,6 +145,9 @@ class RunDetail:
             "was_escalated": bool(self.was_escalated),
             "source_stage": self.source_stage,
             "estimated_prompt_size": int(self.estimated_prompt_size or 0),
+            "provider_used": self.provider_used,
+            "provider_fallback": bool(self.provider_fallback),
+            "provider_reason": self.provider_reason,
             "sync_status": self.sync_status,
             "local_head_before": self.local_head_before,
             "remote_head": self.remote_head,
@@ -231,6 +237,9 @@ class RunDetail:
             was_escalated=bool(item.get("was_escalated", False)),
             source_stage=str(item.get("source_stage", "") or "").strip(),
             estimated_prompt_size=int(item.get("estimated_prompt_size", 0) or 0),
+            provider_used=str(item.get("provider_used", "") or "").strip(),
+            provider_fallback=bool(item.get("provider_fallback", False)),
+            provider_reason=str(item.get("provider_reason", "") or "").strip(),
             sync_status=str(item.get("sync_status", "") or "").strip(),
             local_head_before=str(item.get("local_head_before", "") or "").strip(),
             remote_head=str(item.get("remote_head", "") or "").strip(),

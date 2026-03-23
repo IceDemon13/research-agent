@@ -107,7 +107,13 @@ class DatabaseService:
                 reindex_required INTEGER NOT NULL DEFAULT 0,
                 sync_status TEXT NOT NULL DEFAULT '',
                 last_sync_at TEXT NOT NULL DEFAULT '',
-                sync_error TEXT NOT NULL DEFAULT ''
+                sync_error TEXT NOT NULL DEFAULT '',
+                intelligence_provider TEXT NOT NULL DEFAULT 'native',
+                gitnexus_indexed INTEGER NOT NULL DEFAULT 0,
+                gitnexus_indexed_at TEXT NOT NULL DEFAULT '',
+                gitnexus_index_status TEXT NOT NULL DEFAULT '',
+                gitnexus_index_error TEXT NOT NULL DEFAULT '',
+                gitnexus_last_fallback_reason TEXT NOT NULL DEFAULT ''
             )
             """,
             """
@@ -275,6 +281,42 @@ class DatabaseService:
                 cursor,
                 "repos",
                 "sync_error",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "intelligence_provider",
+                "TEXT NOT NULL DEFAULT 'native'",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "gitnexus_indexed",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "gitnexus_indexed_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "gitnexus_index_status",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "gitnexus_index_error",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "gitnexus_last_fallback_reason",
                 "TEXT NOT NULL DEFAULT ''",
             )
             self._ensure_column(
@@ -793,9 +835,11 @@ class DatabaseService:
                     """
                     INSERT INTO repos (
                         repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
-                        index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error
+                        index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error,
+                        intelligence_provider, gitnexus_indexed, gitnexus_indexed_at, gitnexus_index_status,
+                        gitnexus_index_error, gitnexus_last_fallback_reason
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(repo_id) DO UPDATE SET
                         root_path = excluded.root_path,
                         local_path = excluded.local_path,
@@ -810,7 +854,13 @@ class DatabaseService:
                         reindex_required = excluded.reindex_required,
                         sync_status = excluded.sync_status,
                         last_sync_at = excluded.last_sync_at,
-                        sync_error = excluded.sync_error
+                        sync_error = excluded.sync_error,
+                        intelligence_provider = excluded.intelligence_provider,
+                        gitnexus_indexed = excluded.gitnexus_indexed,
+                        gitnexus_indexed_at = excluded.gitnexus_indexed_at,
+                        gitnexus_index_status = excluded.gitnexus_index_status,
+                        gitnexus_index_error = excluded.gitnexus_index_error,
+                        gitnexus_last_fallback_reason = excluded.gitnexus_last_fallback_reason
                     """
                 ),
                 self._params(
@@ -829,6 +879,12 @@ class DatabaseService:
                     repo_metadata.sync_status,
                     repo_metadata.last_sync_at,
                     repo_metadata.sync_error,
+                    repo_metadata.intelligence_provider,
+                    1 if repo_metadata.gitnexus_indexed else 0,
+                    repo_metadata.gitnexus_indexed_at,
+                    repo_metadata.gitnexus_index_status,
+                    repo_metadata.gitnexus_index_error,
+                    repo_metadata.gitnexus_last_fallback_reason,
                 ),
             )
 
@@ -836,7 +892,9 @@ class DatabaseService:
         return self._fetch_one(
             """
             SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
-                   index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error
+                   index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error,
+                   intelligence_provider, gitnexus_indexed, gitnexus_indexed_at, gitnexus_index_status,
+                   gitnexus_index_error, gitnexus_last_fallback_reason
             FROM repos
             WHERE repo_id = ?
             """,
@@ -853,7 +911,9 @@ class DatabaseService:
                 self._sql(
                     """
                     SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
-                           index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error
+                           index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error,
+                           intelligence_provider, gitnexus_indexed, gitnexus_indexed_at, gitnexus_index_status,
+                           gitnexus_index_error, gitnexus_last_fallback_reason
                     FROM repos
                     ORDER BY repo_id
                     """

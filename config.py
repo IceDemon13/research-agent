@@ -92,11 +92,24 @@ class _LoadedSettings(BaseSettings):
     pipeline_console_output_mode: str = "summary"
     pipeline_console_preview_chars: int = 1200
 
-    jira_base_url: str = "https://example.invalid"
+    jira_base_url: str = "http://gitnexus:3010"
     jira_email: str = ""
     jira_api_token: str = ""
     jira_allowed_projects: str = "TEL"
     jira_default_limit: int = 10
+    repo_intelligence_provider: str = "native"
+    gitnexus_enabled: bool = False
+    gitnexus_use_skills: bool = True
+    gitnexus_use_embeddings: bool = False
+    gitnexus_repo_allowlist: str = "catalog_service"
+    gitnexus_timeout_seconds: int = 120
+    gitnexus_version: str = "0.0.0"
+    gitnexus_port: int = 3010
+    gitnexus_home: str = "/gitnexus"
+    gitnexus_repo_root: str = "/repos"
+    gitnexus_internal_base_url: str = ""
+    gitnexus_external_ui_url: str = ""
+    gitnexus_external_base_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -218,6 +231,22 @@ class TelegramSettings:
     bot_token: str
 
 
+@dataclass(frozen=True, slots=True)
+class RepoIntelligenceSettings:
+    provider: str
+    gitnexus_enabled: bool
+    gitnexus_use_skills: bool
+    gitnexus_use_embeddings: bool
+    gitnexus_repo_allowlist: list[str]
+    gitnexus_timeout_seconds: int
+    gitnexus_version: str
+    gitnexus_port: int
+    gitnexus_home: str
+    gitnexus_repo_root: str
+    gitnexus_internal_base_url: str
+    gitnexus_external_ui_url: str
+
+
 class Settings:
     def __init__(self) -> None:
         self._loaded = _LoadedSettings()
@@ -335,6 +364,39 @@ class Settings:
     def telegram(self) -> TelegramSettings:
         return TelegramSettings(
             bot_token=self._loaded.telegram_bot_token,
+        )
+
+    @cached_property
+    def repo_intelligence(self) -> RepoIntelligenceSettings:
+        allowlist = [
+            item.strip().lower()
+            for item in str(self._loaded.gitnexus_repo_allowlist or "").split(",")
+            if item.strip()
+        ]
+        provider = str(self._loaded.repo_intelligence_provider or "native").strip().lower() or "native"
+        if provider == "gitnexus":
+            provider = "gitnexus_http"
+        if provider not in {"native", "gitnexus_http"}:
+            provider = "native"
+        gitnexus_port = max(1, int(self._loaded.gitnexus_port or 3010))
+        internal_base_url = str(self._loaded.gitnexus_internal_base_url or "").strip() or f"http://gitnexus:{gitnexus_port}"
+        external_ui_url = (
+            str(self._loaded.gitnexus_external_ui_url or "").strip()
+            or str(self._loaded.gitnexus_external_base_url or "").strip()
+        )
+        return RepoIntelligenceSettings(
+            provider=provider,
+            gitnexus_enabled=bool(self._loaded.gitnexus_enabled),
+            gitnexus_use_skills=bool(self._loaded.gitnexus_use_skills),
+            gitnexus_use_embeddings=bool(self._loaded.gitnexus_use_embeddings),
+            gitnexus_repo_allowlist=allowlist,
+            gitnexus_timeout_seconds=max(10, int(self._loaded.gitnexus_timeout_seconds or 120)),
+            gitnexus_version=str(self._loaded.gitnexus_version or "0.0.0").strip() or "0.0.0",
+            gitnexus_port=gitnexus_port,
+            gitnexus_home=str(self._loaded.gitnexus_home or "/gitnexus").strip() or "/gitnexus",
+            gitnexus_repo_root=str(self._loaded.gitnexus_repo_root or "/repos").strip() or "/repos",
+            gitnexus_internal_base_url=internal_base_url.rstrip("/"),
+            gitnexus_external_ui_url=external_ui_url.rstrip("/"),
         )
 
     def __getattr__(self, name: str):

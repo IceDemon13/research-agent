@@ -8,6 +8,7 @@ from config import settings
 from contracts.repo_metadata import RepoMetadata
 from contracts.repo_onboarding_contract import RepoOnboardingResult
 from services.repo_index_service import RepositoryIndexService
+from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
 from services.scm_service import ScmService, sanitize_remote_url
 
@@ -49,6 +50,7 @@ class RepoOnboardingService:
         registry_service: RepositoryRegistryService | None = None,
         scm_service: ScmService | None = None,
         index_service: RepositoryIndexService | None = None,
+        repo_intelligence_service: RepoIntelligenceService | None = None,
         clone_root: str | Path | None = None,
     ) -> None:
         self._registry_service = registry_service or RepositoryRegistryService()
@@ -56,6 +58,10 @@ class RepoOnboardingService:
         self._index_service = index_service or RepositoryIndexService(
             storage_path=self._registry_service.storage_path,
             scm_service=self._scm_service,
+        )
+        self._repo_intelligence_service = repo_intelligence_service or RepoIntelligenceService(
+            registry_service=self._registry_service,
+            index_service=self._index_service,
         )
         self._clone_root = Path(clone_root or settings.runtime.repo_clone_root).expanduser().resolve()
 
@@ -88,7 +94,8 @@ class RepoOnboardingService:
                 raise ValueError(f"Repository id is already registered: {normalized_repo_id}")
             if Path(existing_repo.resolved_local_path).resolve() != local_path:
                 raise ValueError(f"Repository id is already registered: {normalized_repo_id}")
-            self._index_service.refresh_repo_index(normalized_repo_id)
+            self._repo_intelligence_service.assign_provider_metadata(normalized_repo_id)
+            self._repo_intelligence_service.reindex_repo(normalized_repo_id)
             refreshed = self._registry_service.refresh_repo_metadata(normalized_repo_id) or existing_repo
             return RepoOnboardingResult(
                 repo_id=refreshed.repo_id,
@@ -129,7 +136,8 @@ class RepoOnboardingService:
             default_branch=resolved_branch,
             remote_url=normalized_remote_url,
         )
-        self._index_service.build_repo_index(normalized_repo_id)
+        self._repo_intelligence_service.assign_provider_metadata(normalized_repo_id)
+        self._repo_intelligence_service.reindex_repo(normalized_repo_id)
         refreshed_metadata = self._registry_service.refresh_repo_metadata(normalized_repo_id) or metadata
         return RepoOnboardingResult(
             repo_id=refreshed_metadata.repo_id,
@@ -155,7 +163,7 @@ class RepoOnboardingService:
             if head_result.success:
                 current_head = str(head_result.data.get("commit_hash", "") or "").strip()
         try:
-            _artifacts, rebuilt_head = self._index_service.rebuild_repo_index(normalized_repo_id)
+            rebuild_state = self._repo_intelligence_service.reindex_repo(normalized_repo_id)
         except Exception as exc:
             self._registry_service.update_repo_metadata(
                 normalized_repo_id,
@@ -177,10 +185,14 @@ class RepoOnboardingService:
         return {
             "repo_id": normalized_repo_id,
             "index_status": str(getattr(refreshed, "index_status", "") or "ready").strip() or "ready",
-            "indexed_head": str(rebuilt_head or getattr(refreshed, "indexed_head", "") or "").strip(),
+            "indexed_head": str(rebuild_state.get("indexed_head", getattr(refreshed, "indexed_head", "")) or "").strip(),
             "indexed_at": str(getattr(refreshed, "indexed_at", "") or datetime.now(timezone.utc).isoformat()).strip(),
-            "current_local_head": current_head or str(rebuilt_head or "").strip(),
+            "current_local_head": current_head or str(rebuild_state.get("indexed_head", "") or "").strip(),
             "reindex_required": bool(getattr(refreshed, "reindex_required", False)),
+            "intelligence_provider": str(getattr(refreshed, "intelligence_provider", "") or "native").strip() or "native",
+            "gitnexus_index_status": str(getattr(refreshed, "gitnexus_index_status", "") or "").strip(),
+            "gitnexus_indexed_at": str(getattr(refreshed, "gitnexus_indexed_at", "") or "").strip(),
+            "gitnexus_index_error": str(getattr(refreshed, "gitnexus_index_error", "") or "").strip(),
             "message": "Repository understanding artifacts rebuilt successfully.",
         }
 
@@ -279,7 +291,7 @@ class RepoOnboardingService:
         current_local_head = str(current_head_result.data.get("commit_hash", "") or "").strip() if current_head_result.success else ""
         effective_head = current_local_head or remote_head or local_head_before
         try:
-            reindex_state = self._index_service.ensure_index_for_head(
+            reindex_state = self._repo_intelligence_service.ensure_index_for_head(
                 normalized_repo_id,
                 current_head=effective_head,
                 force=bool(local_head_before and effective_head and local_head_before != effective_head),

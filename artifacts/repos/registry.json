@@ -15,8 +15,14 @@
       "index_error": "",
       "reindex_required": false,
       "sync_status": "sync_unavailable",
-      "last_sync_at": "2026-03-22T21:16:57.776860+00:00",
-      "sync_error": "fatal: unable to access 'https://bitbucket.org/telemartsoft/telemart.ai_sdlc.git/': Failed to connect to bitbucket.org port 443 after 478 ms: Could not connect to server"
+      "last_sync_at": "2026-03-23T11:34:35.709480+00:00",
+      "sync_error": "fatal: unable to access 'https://bitbucket.org/telemartsoft/telemart.ai_sdlc.git/': Failed to connect to bitbucket.org port 443 after 475 ms: Could not connect to server",
+      "intelligence_provider": "native",
+      "gitnexus_indexed": false,
+      "gitnexus_indexed_at": "",
+      "gitnexus_index_status": "",
+      "gitnexus_index_error": "",
+      "gitnexus_last_fallback_reason": ""
     }
   ]
 }

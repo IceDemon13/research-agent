@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import unittest
 import uuid
 from pathlib import Path
 from unittest.mock import patch
 
 from contracts.scm_contract import ScmOperationResult
+from config import RepoIntelligenceSettings
 from services.db_service import DatabaseService
+from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_onboarding_service import RepoOnboardingService
 from services.repo_registry import RepositoryRegistryService
 
@@ -290,6 +293,53 @@ class RepoOnboardingServiceTests(unittest.TestCase):
         self.assertEqual(result["index_status"], "ready")
         self.assertEqual(result["indexed_head"], "abc123def456")
         self.assertFalse(result["reindex_required"])
+
+    def test_onboard_repo_assigns_gitnexus_provider_for_allowlisted_repo(self) -> None:
+        repo_intelligence_service = RepoIntelligenceService(
+            registry_service=self.registry_service,
+            repo_settings=RepoIntelligenceSettings(
+                provider="gitnexus_http",
+                gitnexus_enabled=True,
+                gitnexus_use_skills=True,
+                gitnexus_use_embeddings=False,
+                gitnexus_repo_allowlist=["catalog_service"],
+                gitnexus_timeout_seconds=60,
+                gitnexus_version="latest",
+                gitnexus_port=3010,
+                gitnexus_home="/gitnexus",
+                gitnexus_repo_root="/repos",
+                gitnexus_internal_base_url="http://gitnexus:3010",
+                gitnexus_external_ui_url="https://gitnexus.vercel.app",
+            ),
+        )
+        service = RepoOnboardingService(
+            registry_service=self.registry_service,
+            scm_service=self.scm_service,
+            clone_root=self.clone_root,
+            repo_intelligence_service=repo_intelligence_service,
+        )
+
+        with patch.object(
+            repo_intelligence_service._gitnexus_index_service,
+            "analyze_repo",
+            return_value={
+                "provider": "gitnexus_http",
+                "success": True,
+                "gitnexus_index_status": "ready",
+                "gitnexus_index_error": "",
+                "gitnexus_indexed_at": "2026-03-23T11:00:00+00:00",
+            },
+        ):
+            service.onboard_repo(
+                repo_id="catalog_service",
+                display_name="Catalog Service",
+                remote_url="https://bitbucket.org/acme/catalog_service.git",
+                default_branch="main",
+            )
+
+        repo = self.registry_service.get_repo("catalog_service")
+        self.assertIsNotNone(repo)
+        self.assertEqual(repo.intelligence_provider, "gitnexus_http")
 
     def test_reindex_repo_returns_failed_state_when_rebuild_raises(self) -> None:
         self.service.onboard_repo(

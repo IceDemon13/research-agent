@@ -145,6 +145,7 @@ Run detail pages now surface debugging data directly from canonical run metadata
 Onboarding stores:
 - `remote_url`: the external Git URL used for cloning
 - `local_path`: the internal runtime path used by the app
+- `intelligence_provider`: `native` by default, or `gitnexus` for allowlisted POC repos
 
 For Docker deployments, `local_path` is typically `/repos/<repo_id>`.
 
@@ -169,6 +170,43 @@ Credential precedence:
 2. `BITBUCKET_API_TOKEN`
 3. `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`
 4. unauthenticated clean remote URL
+
+### Optional GitNexus POC
+
+The platform can use GitNexus as an optional repo-intelligence provider for allowlisted repos such as `catalog_service`, while keeping the native indexer as the default fallback.
+
+Environment flags:
+
+```dotenv
+REPO_INTELLIGENCE_PROVIDER=native
+GITNEXUS_ENABLED=false
+GITNEXUS_COMMAND=npx
+GITNEXUS_ARGS_BASE=-y gitnexus@latest
+GITNEXUS_USE_SKILLS=true
+GITNEXUS_USE_EMBEDDINGS=false
+GITNEXUS_REPO_ALLOWLIST=catalog_service
+GITNEXUS_TIMEOUT_SECONDS=120
+GITNEXUS_VERSION=latest
+GITNEXUS_PORT=3010
+GITNEXUS_HOME=/gitnexus
+GITNEXUS_REPO_ROOT=/repos
+GITNEXUS_INTERNAL_BASE_URL=http://gitnexus:3010
+GITNEXUS_EXTERNAL_UI_URL=https://gitnexus.vercel.app
+```
+
+GitNexus requirements and behavior:
+
+- the Docker POC can run GitNexus as a sidecar service via `docker compose up --build`
+- both the app and GitNexus sidecar share the same `/repos` mirror volume, so no duplicate clone pipeline is introduced
+- GitNexus keeps its own persistent home/registry volume under `GITNEXUS_HOME`
+- GitNexus Web UI is exposed on `GITNEXUS_EXTERNAL_BASE_URL`, and the repo page can open it per repo
+- repo page actions now include `Open in GitNexus` and `Rebuild in GitNexus`
+- the app-side GitNexus bridge still requires local CLI availability in the app runtime for direct analyze/query execution
+- runs locally inside the already onboarded repo mirror
+- manual reindex and head-change reindex both reuse the existing clone
+- the current POC only routes `implementation_plan` and `pre_review` to GitNexus on allowlisted repos
+- if GitNexus indexing or query fails, the app falls back to native repo intelligence without breaking workflows
+- embeddings stay disabled by default for the POC
 
 ## Metadata And Artifacts
 

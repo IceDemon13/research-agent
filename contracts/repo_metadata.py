@@ -23,6 +23,12 @@ class RepoMetadata:
     sync_status: str = ""
     last_sync_at: str = ""
     sync_error: str = ""
+    intelligence_provider: str = "native"
+    gitnexus_indexed: bool = False
+    gitnexus_indexed_at: str = ""
+    gitnexus_index_status: str = ""
+    gitnexus_index_error: str = ""
+    gitnexus_last_fallback_reason: str = ""
 
     @classmethod
     def from_dict(cls, payload: dict | None) -> "RepoMetadata":
@@ -45,6 +51,12 @@ class RepoMetadata:
             sync_status=str(item.get("sync_status", "")).strip(),
             last_sync_at=str(item.get("last_sync_at", "")).strip(),
             sync_error=str(item.get("sync_error", "")).strip(),
+            intelligence_provider=str(item.get("intelligence_provider", "native") or "native").strip() or "native",
+            gitnexus_indexed=bool(item.get("gitnexus_indexed", False)),
+            gitnexus_indexed_at=str(item.get("gitnexus_indexed_at", "")).strip(),
+            gitnexus_index_status=str(item.get("gitnexus_index_status", "")).strip(),
+            gitnexus_index_error=str(item.get("gitnexus_index_error", "")).strip(),
+            gitnexus_last_fallback_reason=str(item.get("gitnexus_last_fallback_reason", "")).strip(),
         )
 
     def to_dict(self) -> dict[str, str | bool]:
@@ -65,6 +77,12 @@ class RepoMetadata:
             "sync_status": self.sync_status,
             "last_sync_at": self.last_sync_at,
             "sync_error": self.sync_error,
+            "intelligence_provider": self.intelligence_provider,
+            "gitnexus_indexed": bool(self.gitnexus_indexed),
+            "gitnexus_indexed_at": self.gitnexus_indexed_at,
+            "gitnexus_index_status": self.gitnexus_index_status,
+            "gitnexus_index_error": self.gitnexus_index_error,
+            "gitnexus_last_fallback_reason": self.gitnexus_last_fallback_reason,
         }
 
     @property

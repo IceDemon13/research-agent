@@ -206,6 +206,12 @@ class RepositoryRegistryService:
             sync_status=current.sync_status,
             last_sync_at=current.last_sync_at,
             sync_error=current.sync_error,
+            intelligence_provider=current.intelligence_provider,
+            gitnexus_indexed=current.gitnexus_indexed,
+            gitnexus_indexed_at=current.gitnexus_indexed_at,
+            gitnexus_index_status=current.gitnexus_index_status,
+            gitnexus_index_error=current.gitnexus_index_error,
+            gitnexus_last_fallback_reason=current.gitnexus_last_fallback_reason,
         )
         updated_repos = [
             refreshed if repo.repo_id == refreshed.repo_id else repo
@@ -274,6 +280,12 @@ class RepositoryRegistryService:
         sync_status: str = "",
         last_sync_at: str = "",
         sync_error: str = "",
+        intelligence_provider: str = "native",
+        gitnexus_indexed: bool = False,
+        gitnexus_indexed_at: str = "",
+        gitnexus_index_status: str = "",
+        gitnexus_index_error: str = "",
+        gitnexus_last_fallback_reason: str = "",
     ) -> RepoMetadata:
         resolved_root_path = root_path.expanduser().resolve()
         detected_default_branch = _detect_default_branch(resolved_root_path) or (default_branch or "").strip()
@@ -299,6 +311,12 @@ class RepositoryRegistryService:
             sync_status=str(sync_status or "").strip(),
             last_sync_at=str(last_sync_at or "").strip(),
             sync_error=str(sync_error or "").strip(),
+            intelligence_provider=str(intelligence_provider or "native").strip() or "native",
+            gitnexus_indexed=bool(gitnexus_indexed),
+            gitnexus_indexed_at=str(gitnexus_indexed_at or "").strip(),
+            gitnexus_index_status=str(gitnexus_index_status or "").strip(),
+            gitnexus_index_error=str(gitnexus_index_error or "").strip(),
+            gitnexus_last_fallback_reason=str(gitnexus_last_fallback_reason or "").strip(),
         )
 
     def _load_state(self) -> RepoRegistryState:

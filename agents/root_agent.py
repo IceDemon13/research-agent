@@ -59,6 +59,7 @@ from services.repo_context_rules import (
     run_repo_context_rule_pipeline,
 )
 from services.repo_index_service import RepositoryIndexService
+from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_registry import RepositoryRegistryService, resolve_repo
 from services.permission_service import PermissionService, default_actor_context
 from services.publication_service import PublicationService
@@ -4123,6 +4124,10 @@ def _sync_repo_before_repo_aware_run(resolved_repo) -> dict:
     repo_id = str(getattr(resolved_repo, "repo_id", "") or "").strip()
     index_service = RepositoryIndexService()
     registry_service = RepositoryRegistryService()
+    repo_intelligence_service = RepoIntelligenceService(
+        registry_service=registry_service,
+        index_service=index_service,
+    )
     sync_timestamp = datetime.now(timezone.utc).isoformat()
 
     def _persist_sync(status: str, error: str = "") -> None:
@@ -4200,9 +4205,10 @@ def _sync_repo_before_repo_aware_run(resolved_repo) -> dict:
     )
     if local_head_before and remote_head and local_head_before == remote_head:
         try:
-            reindex_state = index_service.ensure_index_for_head(
+            reindex_state = repo_intelligence_service.ensure_index_for_head(
                 repo_id,
                 current_head=local_head_before,
+                repo_metadata=resolved_repo,
             ) if repo_id else {"rebuilt": False, "index_status": index_status, "indexed_head": indexed_head, "indexed_at": str(getattr(resolved_repo, "indexed_at", "") or "").strip(), "index_error": str(getattr(resolved_repo, "index_error", "") or "").strip()}
         except KeyError:
             reindex_state = {
@@ -4267,10 +4273,11 @@ def _sync_repo_before_repo_aware_run(resolved_repo) -> dict:
         effective_head = remote_head
     head_changed = bool(local_head_before and effective_head and local_head_before != effective_head)
     try:
-        reindex_state = index_service.ensure_index_for_head(
+        reindex_state = repo_intelligence_service.ensure_index_for_head(
             repo_id,
             current_head=effective_head,
             force=bool(head_changed or (effective_head and indexed_head and effective_head != indexed_head)),
+            repo_metadata=resolved_repo,
         ) if repo_id else {"rebuilt": False, "index_status": index_status or "ready", "indexed_head": indexed_head, "indexed_at": str(getattr(resolved_repo, "indexed_at", "") or "").strip(), "index_error": str(getattr(resolved_repo, "index_error", "") or "").strip()}
     except KeyError:
         reindex_state = {
