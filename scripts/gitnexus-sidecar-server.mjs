@@ -1,4 +1,5 @@
 import http from "node:http";
+import os from "node:os";
 import { spawn } from "node:child_process";
 
 const ENABLED = String(process.env.GITNEXUS_ENABLED || "").trim().toLowerCase() === "true";
@@ -6,6 +7,8 @@ const VERSION = String(process.env.GITNEXUS_VERSION || "latest").trim() || "late
 const PUBLIC_PORT = Number.parseInt(process.env.GITNEXUS_PORT || "3010", 10) || 3010;
 const INTERNAL_MCP_PORT = Number.parseInt(process.env.GITNEXUS_MCP_PORT_INTERNAL || String(PUBLIC_PORT + 1), 10) || (PUBLIC_PORT + 1);
 const CONTROL_ENABLED = String(process.env.GITNEXUS_CONTROL_ENABLED || "true").trim().toLowerCase() !== "false";
+const GITNEXUS_HOME = String(process.env.GITNEXUS_HOME || "/gitnexus").trim() || "/gitnexus";
+const GITNEXUS_REPO_ROOT = String(process.env.GITNEXUS_REPO_ROOT || "/repos").trim() || "/repos";
 const ANALYZE_OPTION_FLAGS = ["--force", "--skills", "--skip-embeddings"];
 
 let backendProcess = null;
@@ -39,6 +42,31 @@ function json(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function buildGitNexusEnv() {
+  return {
+    ...process.env,
+    HOME: GITNEXUS_HOME,
+    GITNEXUS_HOME,
+    GITNEXUS_REPO_ROOT,
+  };
+}
+
+function runtimeSnapshot({ cwd = GITNEXUS_HOME } = {}) {
+  let username = "";
+  try {
+    username = String(os.userInfo().username || "").trim();
+  } catch {
+    username = String(process.env.USER || process.env.USERNAME || "").trim();
+  }
+  return {
+    processUser: username,
+    home: String(buildGitNexusEnv().HOME || "").trim(),
+    gitnexusHome: GITNEXUS_HOME,
+    cwd: String(cwd || "").trim(),
+    repoRoot: GITNEXUS_REPO_ROOT,
+  };
+}
+
 function readRequestBody(request) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -48,11 +76,13 @@ function readRequestBody(request) {
   });
 }
 
-function runNpxCommand(args) {
+function runNpxCommand(args, options = {}) {
+  const resolvedCwd = String(options.cwd || GITNEXUS_HOME).trim() || GITNEXUS_HOME;
   return new Promise((resolve) => {
     const command = `npx ${args.join(" ")}`;
     const child = spawn("npx", args, {
-      env: { ...process.env },
+      cwd: resolvedCwd,
+      env: buildGitNexusEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -69,6 +99,7 @@ function runNpxCommand(args) {
         exitCode: typeof code === "number" ? code : -1,
         stdout: stdout.trim(),
         stderr: stderr.trim(),
+        runtime: runtimeSnapshot({ cwd: resolvedCwd }),
       });
     });
   });
@@ -119,7 +150,8 @@ function startBackend() {
   const args = ["-y", `gitnexus@${VERSION}`, "serve", "--host", "127.0.0.1", "--port", String(INTERNAL_MCP_PORT)];
   log("Starting GitNexus MCP backend", `command=npx ${args.join(" ")}`);
   backendProcess = spawn("npx", args, {
-    env: { ...process.env },
+    cwd: GITNEXUS_HOME,
+    env: buildGitNexusEnv(),
     stdio: ["ignore", "pipe", "pipe"],
   });
   backendProcess.stdout.on("data", (chunk) => {
@@ -194,7 +226,7 @@ async function buildAnalyzeInvocation({ repoPath, force, skipEmbeddings, useSkil
 async function runAnalyze({ repoPath, force, skipEmbeddings, useSkills }) {
   const invocation = await buildAnalyzeInvocation({ repoPath, force, skipEmbeddings, useSkills });
   const cliVersion = await getCliVersion();
-  const result = await runNpxCommand(invocation.args);
+  const result = await runNpxCommand(invocation.args, { cwd: GITNEXUS_HOME });
   if (result.exitCode === 0) {
     log("GitNexus analyze completed", `repoPath=${repoPath} exitCode=${result.exitCode} command=${result.command}`);
   } else {
@@ -215,6 +247,7 @@ async function runAnalyze({ repoPath, force, skipEmbeddings, useSkills }) {
     supportedFlags: invocation.supportedFlags,
     requestedFlags: invocation.requestedFlags,
     omittedFlags: invocation.omittedFlags,
+    runtime: result.runtime,
   };
 }
 
@@ -234,6 +267,9 @@ const server = http.createServer(async (request, response) => {
       backendExited,
       backendExitCode,
       mcpBaseUrl: `http://127.0.0.1:${INTERNAL_MCP_PORT}`,
+      serviceRuntime: runtimeSnapshot({ cwd: process.cwd() }),
+      analyzeRuntime: runtimeSnapshot({ cwd: GITNEXUS_HOME }),
+      backendRuntime: runtimeSnapshot({ cwd: GITNEXUS_HOME }),
     });
   }
 
@@ -279,6 +315,9 @@ const server = http.createServer(async (request, response) => {
       backendExitCode,
       version: VERSION,
       cliVersion,
+      serviceRuntime: runtimeSnapshot({ cwd: process.cwd() }),
+      analyzeRuntime: runtimeSnapshot({ cwd: GITNEXUS_HOME }),
+      backendRuntime: runtimeSnapshot({ cwd: GITNEXUS_HOME }),
     });
   }
 

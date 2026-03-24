@@ -9,6 +9,7 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 from config import settings
 from contracts.scm_contract import ScmOperationResult, ScmStatus
 from logger_utils import log_line
+from services.bitbucket_credentials import BitbucketCredentialResolver
 
 
 DEFAULT_SCM_OUTPUT_MAX_CHARS = 8000
@@ -16,6 +17,7 @@ BRANCH_SLUG_MAX_CHARS = 48
 TRUNCATION_SUFFIX = "\n...[TRUNCATED]"
 BITBUCKET_HOST = "bitbucket.org"
 REDACTED = "<redacted>"
+_BITBUCKET_CREDENTIAL_RESOLVER = BitbucketCredentialResolver()
 
 
 def build_feature_branch_name(goal: str, now: datetime | None = None) -> str:
@@ -54,21 +56,23 @@ def sanitize_remote_url(value: str) -> str:
     return urlunsplit(sanitized_parts)
 
 
-def resolve_bitbucket_auth_credentials() -> tuple[str, str] | None:
-    repo_token = str(getattr(settings.runtime, "bitbucket_repo_token", "") or "").strip()
-    api_token = str(settings.runtime.bitbucket_api_token or "").strip()
-    username = str(settings.runtime.bitbucket_username or "").strip()
-    app_password = str(settings.runtime.bitbucket_app_password or "").strip()
-    token_value = repo_token or api_token
-    if token_value:
-        return ("x-token-auth", token_value)
-    if username and app_password:
-        return (username, app_password)
+def resolve_bitbucket_auth_credentials(*, repo_id: str = "", remote_url: str = "", workspace: str = "") -> tuple[str, str] | None:
+    credentials = _BITBUCKET_CREDENTIAL_RESOLVER.resolve(
+        repo_id=repo_id,
+        remote_url=remote_url,
+        workspace=workspace,
+    )
+    if credentials.configured:
+        return (credentials.username, credentials.secret)
     return None
 
 
-def build_bitbucket_basic_auth_header() -> str:
-    credentials = resolve_bitbucket_auth_credentials()
+def build_bitbucket_basic_auth_header(*, repo_id: str = "", remote_url: str = "", workspace: str = "") -> str:
+    credentials = resolve_bitbucket_auth_credentials(
+        repo_id=repo_id,
+        remote_url=remote_url,
+        workspace=workspace,
+    )
     if credentials is None:
         return ""
     username, password = credentials
@@ -591,7 +595,7 @@ class ScmService:
         cleaned_remote_url = sanitize_remote_url(remote_url)
         if not _is_bitbucket_https_remote(cleaned_remote_url):
             return []
-        auth_header = build_bitbucket_basic_auth_header()
+        auth_header = build_bitbucket_basic_auth_header(remote_url=cleaned_remote_url)
         if not auth_header:
             return []
         return ["-c", f"http.extraHeader=Authorization: {auth_header}"]

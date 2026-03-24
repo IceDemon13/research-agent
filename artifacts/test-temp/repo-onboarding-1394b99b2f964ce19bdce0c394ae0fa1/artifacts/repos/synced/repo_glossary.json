@@ -1,0 +1,26 @@
+{
+  "repo_id": "synced",
+  "indexed_at": "2026-03-24T17:51:23.864096+00:00",
+  "terms": [
+    {
+      "term": "cloned",
+      "aliases": [
+        "cloneds"
+      ],
+      "sources": [
+        "README.md"
+      ],
+      "confidence": 0.37
+    },
+    {
+      "term": "readme",
+      "aliases": [
+        "readmes"
+      ],
+      "sources": [
+        "README.md"
+      ],
+      "confidence": 0.37
+    }
+  ]
+}

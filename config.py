@@ -98,7 +98,7 @@ class _LoadedSettings(BaseSettings):
     jira_allowed_projects: str = "TEL"
     jira_default_limit: int = 10
     repo_intelligence_provider: str = "native"
-    gitnexus_enabled: bool = False
+    gitnexus_enabled: bool = True
     gitnexus_use_skills: bool = True
     gitnexus_use_embeddings: bool = False
     gitnexus_repo_allowlist: str = "catalog_service"

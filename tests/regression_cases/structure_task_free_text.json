@@ -1,0 +1,22 @@
+{
+  "case_id": "structure_task_free_text_bonus_history",
+  "workflow_type": "structure_task",
+  "free_text": "Відображення типів бонусів в історії",
+  "use_live_jira": false,
+  "expected_signals": {
+    "workflow_starts": true,
+    "provider_used": "none",
+    "no_mojibake": true,
+    "no_repo_contamination": true,
+    "no_generic_placeholder": true,
+    "result_text": {
+      "contains": "типів бонусів"
+    }
+  },
+  "forbidden_signals": {
+    "result_text": {
+      "contains": "Specification generated"
+    }
+  },
+  "notes": "Перевіряє, що structure_task лишається repo-blind і дає практичний Jira-драфт."
+}

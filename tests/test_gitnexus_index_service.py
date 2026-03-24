@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from config import RepoIntelligenceSettings
 from contracts.repo_metadata import RepoMetadata
+from services.gitnexus_mcp_client import GitNexusMcpClient
 from services.gitnexus_index_service import GitNexusIndexService
 from services.repo_registry import RepositoryRegistryService
 
@@ -55,15 +56,81 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         self.service = GitNexusIndexService(
             repo_settings=self.settings,
             registry_service=self.registry,
+            mcp_client=self._build_mcp_client([str(self.repo.local_path)]),
         )
 
     def tearDown(self) -> None:
         shutil.rmtree(self.workspace_root, ignore_errors=True)
 
+    def _build_mcp_client(self, visible_repos: list[str]) -> GitNexusMcpClient:
+        client = MagicMock(spec=GitNexusMcpClient)
+        client.list_repos.return_value = {"repos": [{"repo_path": item} for item in visible_repos]}
+        return client
+
+    def test_repo_visibility_debug_normalizes_text_wrapped_json_array(self) -> None:
+        client = MagicMock(spec=GitNexusMcpClient)
+        client.list_repos.return_value = {
+            "text": '[{"name":"catalog_service","path":"/repos/catalog_service"}]'
+        }
+        service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=client,
+        )
+
+        payload = service.repo_visibility_debug(self.repo)
+
+        self.assertTrue(payload["visible"])
+        self.assertIn("/repos/catalog_service", payload["visible_repo_ids_or_paths"])
+        self.assertIn("catalog_service", payload["visible_repo_ids_or_paths"])
+
+    def test_repo_visibility_debug_normalizes_text_wrapped_json_array_with_trailing_helper_text(self) -> None:
+        client = MagicMock(spec=GitNexusMcpClient)
+        client.list_repos.return_value = {
+            "text": '[{"name":"catalog_service","path":"/repos/catalog_service"}]\n\n---\nNext: READ gitnexus://repo/catalog_service/context'
+        }
+        service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=client,
+        )
+
+        payload = service.repo_visibility_debug(self.repo)
+
+        self.assertTrue(payload["visible"])
+        self.assertIn("/repos/catalog_service", payload["visible_repo_ids_or_paths"])
+        self.assertNotIn('[{"name":"catalog_service","path":"/repos/catalog_service"}]', payload["visible_repo_ids_or_paths"])
+
+    def test_repo_visibility_debug_normalizes_direct_json_array(self) -> None:
+        client = MagicMock(spec=GitNexusMcpClient)
+        client.list_repos.return_value = [
+            {"name": "catalog_service", "path": "/repos/catalog_service"},
+        ]
+        service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=client,
+        )
+
+        payload = service.repo_visibility_debug(self.repo)
+
+        self.assertTrue(payload["visible"])
+        self.assertIn("/repos/catalog_service", payload["visible_repo_ids_or_paths"])
+        self.assertIn("catalog_service", payload["visible_repo_ids_or_paths"])
+
     def test_analyze_repo_posts_to_control_analyze_and_marks_ready(self) -> None:
-        with patch(
-            "services.gitnexus_index_service.urllib.request.urlopen",
-            return_value=_http_response(
+        def _fake_urlopen(request, timeout=0):
+            _ = timeout
+            if request.full_url.endswith("/control/health"):
+                return _http_response(
+                    {
+                        "success": True,
+                        "serviceRuntime": {"cwd": "/gitnexus"},
+                        "analyzeRuntime": {"gitnexusHome": "/gitnexus", "cwd": "/gitnexus"},
+                        "backendRuntime": {"gitnexusHome": "/gitnexus", "cwd": "/gitnexus"},
+                    }
+                )
+            return _http_response(
                 {
                     "success": True,
                     "repoPath": str(self.repo.local_path),
@@ -72,12 +139,17 @@ class GitNexusIndexServiceTests(unittest.TestCase):
                     "stdout": "ok",
                     "stderr": "",
                     "message": "GitNexus analyze completed successfully.",
+                    "runtime": {"gitnexusHome": "/gitnexus", "cwd": "/gitnexus"},
                 }
-            ),
+            )
+
+        with patch(
+            "services.gitnexus_index_service.urllib.request.urlopen",
+            side_effect=_fake_urlopen,
         ) as mocked_urlopen:
             result = self.service.analyze_repo(self.repo, force=True)
 
-        request = mocked_urlopen.call_args.args[0]
+        request = mocked_urlopen.call_args_list[1].args[0]
         body = json.loads(request.data.decode("utf-8"))
         self.assertEqual(request.full_url, "http://gitnexus:3010/control/analyze")
         self.assertEqual(body["repoPath"], str(self.repo.local_path))
@@ -89,21 +161,38 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         self.assertEqual(refreshed.gitnexus_index_status, "ready")
         self.assertEqual(refreshed.gitnexus_index_error, "")
         self.assertEqual(refreshed.gitnexus_last_fallback_reason, "")
+        self.assertEqual(result["gitnexus_home_used_for_analyze"], "/gitnexus")
+        self.assertEqual(result["gitnexus_home_used_for_backend"], "/gitnexus")
+        self.assertTrue(result["backend_repo_visible_after_analyze"])
+        self.assertGreaterEqual(result["backend_visible_repo_count"], 1)
+        self.assertTrue(result["raw_list_repos_result_excerpt"])
+        self.assertTrue(result["visibility_match_reason"])
+        self.assertIn("catalog_service", result["normalized_repo_visibility_targets"])
 
     def test_analyze_repo_marks_failed_when_control_api_returns_failure(self) -> None:
         with patch(
             "services.gitnexus_index_service.urllib.request.urlopen",
-            return_value=_http_response(
-                {
-                    "success": False,
-                    "repoPath": str(self.repo.local_path),
-                    "command": "gitnexus analyze",
-                    "exitCode": 1,
-                    "stdout": "",
-                    "stderr": "index failed",
-                    "message": "GitNexus analyze failed.",
-                }
-            ),
+            side_effect=[
+                _http_response(
+                    {
+                        "success": True,
+                        "analyzeRuntime": {"gitnexusHome": "/gitnexus"},
+                        "backendRuntime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+                _http_response(
+                    {
+                        "success": False,
+                        "repoPath": str(self.repo.local_path),
+                        "command": "gitnexus analyze",
+                        "exitCode": 1,
+                        "stdout": "",
+                        "stderr": "index failed",
+                        "message": "GitNexus analyze failed.",
+                        "runtime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+            ],
         ):
             result = self.service.analyze_repo(self.repo, force=True)
 
@@ -111,6 +200,117 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         refreshed = self.registry.get_repo("catalog_service")
         self.assertEqual(refreshed.gitnexus_index_status, "failed")
         self.assertEqual(refreshed.gitnexus_index_error, "index failed")
+
+    def test_analyze_repo_marks_failed_when_backend_cannot_see_repo_after_success(self) -> None:
+        self.service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=self._build_mcp_client(["/repos/other_service"]),
+        )
+        with patch(
+            "services.gitnexus_index_service.urllib.request.urlopen",
+            side_effect=[
+                _http_response(
+                    {
+                        "success": True,
+                        "analyzeRuntime": {"gitnexusHome": "/gitnexus"},
+                        "backendRuntime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+                _http_response(
+                    {
+                        "success": True,
+                        "repoPath": str(self.repo.local_path),
+                        "command": "gitnexus analyze",
+                        "exitCode": 0,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "message": "GitNexus analyze completed successfully.",
+                        "runtime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+            ],
+        ):
+            result = self.service.analyze_repo(self.repo, force=True)
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["gitnexus_index_status"], "failed")
+        self.assertIn("backend registry does not include repo", result["gitnexus_index_error"])
+        self.assertFalse(result["backend_repo_visible_after_analyze"])
+        refreshed = self.registry.get_repo("catalog_service")
+        self.assertEqual(refreshed.gitnexus_index_status, "failed")
+
+    def test_analyze_repo_marks_ready_when_backend_returns_repo_basename(self) -> None:
+        self.service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=self._build_mcp_client(["catalog_service"]),
+        )
+        with patch(
+            "services.gitnexus_index_service.urllib.request.urlopen",
+            side_effect=[
+                _http_response(
+                    {
+                        "success": True,
+                        "analyzeRuntime": {"gitnexusHome": "/gitnexus"},
+                        "backendRuntime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+                _http_response(
+                    {
+                        "success": True,
+                        "repoPath": str(self.repo.local_path),
+                        "command": "gitnexus analyze",
+                        "exitCode": 0,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "message": "GitNexus analyze completed successfully.",
+                        "runtime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+            ],
+        ):
+            result = self.service.analyze_repo(self.repo, force=True)
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["backend_repo_visible_after_analyze"])
+        self.assertTrue(result["visibility_match_reason"])
+
+    def test_analyze_repo_marks_ready_when_backend_returns_relative_path(self) -> None:
+        self.service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=self._build_mcp_client(["./catalog_service"]),
+        )
+        with patch(
+            "services.gitnexus_index_service.urllib.request.urlopen",
+            side_effect=[
+                _http_response(
+                    {
+                        "success": True,
+                        "analyzeRuntime": {"gitnexusHome": "/gitnexus"},
+                        "backendRuntime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+                _http_response(
+                    {
+                        "success": True,
+                        "repoPath": str(self.repo.local_path),
+                        "command": "gitnexus analyze",
+                        "exitCode": 0,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "message": "GitNexus analyze completed successfully.",
+                        "runtime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+            ],
+        ):
+            result = self.service.analyze_repo(self.repo, force=True)
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["backend_repo_visible_after_analyze"])
+        self.assertTrue(result["visibility_match_reason"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,22 @@
+{
+  "case_id": "pre_review_no_artifact_snapshot",
+  "workflow_type": "pre_review",
+  "repo_id": "sample",
+  "jira_ticket": "TEL-16666",
+  "jira_snapshot_title": "Перевірити задачу без artifact",
+  "jira_snapshot_text": "Потрібно запустити pre_review без наявного implementation artifact, щоб система коректно повернула blocked state.",
+  "use_live_jira": false,
+  "expected_signals": {
+    "workflow_starts": true,
+    "jira_fetch_succeeded": true,
+    "blocked_reason": "blocked_insufficient_artifact",
+    "issue_details_count": 0,
+    "no_mojibake": true
+  },
+  "forbidden_signals": {
+    "result_text": {
+      "contains": "src/"
+    }
+  },
+  "notes": "Перевіряє deterministic blocked state для pre_review без concrete artifact або diff."
+}

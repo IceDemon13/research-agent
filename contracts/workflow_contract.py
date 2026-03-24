@@ -124,6 +124,7 @@ class AnalyzeTaskWorkflowResult:
     suggested_additions: list[str] = field(default_factory=list)
     repo_match: dict | None = None
     recommendation: str = ""
+    technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
 
     def to_dict(self) -> dict:
@@ -135,6 +136,7 @@ class AnalyzeTaskWorkflowResult:
             "suggested_additions": list(self.suggested_additions),
             "repo_match": dict(self.repo_match or {}) if self.repo_match is not None else None,
             "recommendation": self.recommendation,
+            "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
         }
 
@@ -148,6 +150,7 @@ class StructureTaskWorkflowResult:
     risks: list[str] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)
     recommendation: str = ""
+    technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
 
     def to_dict(self) -> dict:
@@ -159,6 +162,7 @@ class StructureTaskWorkflowResult:
             "risks": list(self.risks),
             "open_questions": list(self.open_questions),
             "recommendation": self.recommendation,
+            "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
         }
 
@@ -190,6 +194,7 @@ class ImplementationPlanWorkflowResult:
     risks: list[str] = field(default_factory=list)
     validation_plan: list[str] = field(default_factory=list)
     recommendation: str = ""
+    technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
 
     def to_dict(self) -> dict:
@@ -219,6 +224,7 @@ class ImplementationPlanWorkflowResult:
             "risks": list(self.risks),
             "validation_plan": list(self.validation_plan),
             "recommendation": self.recommendation,
+            "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
         }
 
@@ -241,6 +247,7 @@ class PreReviewWorkflowResult:
     fix_and_retry_actionable: bool = False
     fix_and_retry_block_reason: str = ""
     recommendation: str = ""
+    technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
 
     def to_dict(self) -> dict:
@@ -261,5 +268,6 @@ class PreReviewWorkflowResult:
             "fix_and_retry_actionable": bool(self.fix_and_retry_actionable),
             "fix_and_retry_block_reason": self.fix_and_retry_block_reason,
             "recommendation": self.recommendation,
+            "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
         }

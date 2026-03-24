@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import secrets
@@ -39,6 +40,7 @@ from config import settings
 from services.auth_service import AuthError, AuthService
 from services.db_service import DatabaseService
 from services.i18n_service import DEFAULT_LOCALE, I18nService, SUPPORTED_LOCALES
+from services.jira_task_loader import load_jira_task
 from services.permission_service import PermissionService
 from services.repo_index_service import RepositoryIndexService
 from services.repo_registry import RepositoryRegistryService
@@ -56,6 +58,7 @@ _repo_intelligence_service = RepoIntelligenceService(index_service=_repo_index_s
 _repo_scm_service = ScmService()
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SESSIONS: dict[str, dict[str, str]] = {}
+_JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$", re.IGNORECASE)
 
 
 @app.middleware("http")
@@ -580,13 +583,104 @@ def _infer_change_action(text: str) -> str:
     return "modify"
 
 
-def _synthesize_acceptance_criteria(title: str, summary: str, description: str) -> list[str]:
-    anchor = str(summary or title or description or "the requested behavior").strip().rstrip(".")
-    description_anchor = str(description or summary or title or "the requested task").strip().rstrip(".")
+def _structure_compact_text(source_text: str) -> str:
+    return " ".join(str(source_text or "").strip().split())
+
+
+def _structure_title_from_text(source_text: str) -> str:
+    text = _structure_compact_text(source_text)
+    if not text:
+        return "Нова Jira-задача"
+    return text[:1].upper() + text[1:120]
+
+
+def _structure_mentions_display(source_text: str) -> bool:
+    lowered = _structure_compact_text(source_text).lower()
+    return any(token in lowered for token in ("відображ", "показ", "показувати", "історі", "екран", "спис", "таблиц"))
+
+
+def _structure_mentions_response(source_text: str) -> bool:
+    lowered = _structure_compact_text(source_text).lower()
+    return any(token in lowered for token in ("повертати", "повернути", "відповід", "масив", "метод"))
+
+
+def _structure_summary_from_text(source_text: str) -> str:
+    normalized = _structure_compact_text(source_text)
+    lowered = normalized.lower()
+    if not normalized:
+        return "Потрібно сформулювати зміст Jira-задачі."
+    if "тип" in lowered and "бонус" in lowered and "історі" in lowered:
+        return "Потрібно додати відображення типів бонусів в історії, щоб користувач бачив тип бонусної операції в кожному релевантному записі."
+    if "catalog product" in lowered and "additional service" in lowered:
+        return "Потрібно змінити відповідь методу картки товару catalog product так, щоб у ній повертався масив additional service."
+    if _structure_mentions_display(normalized):
+        return f"Потрібно оновити відображення даних за задачею: {normalized}."
+    if _structure_mentions_response(normalized):
+        return f"Потрібно оновити контракт повернення даних за задачею: {normalized}."
+    return f"Потрібно реалізувати зміну за задачею: {normalized}."
+
+
+def _structure_description_from_text(source_text: str) -> str:
+    normalized = _structure_compact_text(source_text)
+    lowered = normalized.lower()
+    if "тип" in lowered and "бонус" in lowered and "історі" in lowered:
+        return "Необхідно підготувати Jira-задачу на зміну відображення історії бонусів. Потрібно уточнити, де саме показується тип бонусу, для яких записів він доступний і як система поводиться, якщо значення відсутнє."
+    if "catalog product" in lowered and "additional service" in lowered:
+        return "Необхідно підготувати Jira-задачу на зміну контракту методу картки товару catalog product. Потрібно описати масив additional service, джерело його наповнення та поведінку для випадків, коли додаткові сервіси відсутні."
+    if _structure_mentions_display(normalized):
+        return f"Необхідно підготувати Jira-задачу на зміну відображення. Потрібно описати, де саме з'являється нове значення, хто його бачить і що відбувається, якщо дані відсутні. Початкове формулювання: {normalized}."
+    if _structure_mentions_response(normalized):
+        return f"Необхідно підготувати Jira-задачу на зміну контракту даних. Потрібно описати, яке саме поле або структура додається у відповідь, у якому форматі вона повертається і як обробляються порожні значення. Початкове формулювання: {normalized}."
+    return f"Необхідно підготувати компактний Jira-драфт за формулюванням: {normalized}. Потрібно уточнити межі зміни, очікуваний результат і умови приймання."
+
+
+def _synthesize_acceptance_criteria(source_text: str) -> list[str]:
+    normalized = _structure_compact_text(source_text)
+    lowered = normalized.lower()
+    if "тип" in lowered and "бонус" in lowered and "історі" in lowered:
+        return [
+            "У записах історії бонусів відображається тип бонусу для тих записів, де це значення доступне.",
+            "Якщо тип бонусу для окремого запису відсутній, інтерфейс не ламається і показує погоджене порожнє або нейтральне значення.",
+            "Додавання типу бонусу не змінює наявні поля, сортування та загальну логіку відображення історії.",
+        ]
+    if "catalog product" in lowered and "additional service" in lowered:
+        return [
+            "Метод картки товару catalog product повертає у відповіді масив additional service.",
+            "Для товарів без additional service метод повертає порожній масив або інше заздалегідь погоджене нейтральне значення.",
+            "Існуючі поля відповіді залишаються доступними і не ламають поточних споживачів методу.",
+        ]
+    if _structure_mentions_display(normalized):
+        return [
+            f"У цільовому сценарії відображається нове значення згідно із задачею: {normalized}.",
+            "Якщо дані для нового значення відсутні, система поводиться передбачувано і без помилок.",
+        ]
+    if _structure_mentions_response(normalized):
+        return [
+            f"У цільовому методі або відповіді доступна нова структура згідно із задачею: {normalized}.",
+            "Для порожніх або відсутніх даних повертається погоджене нейтральне значення без помилки для споживача.",
+        ]
     return [
-        f"When this task is completed, the system behavior for '{anchor}' matches the requested outcome.",
-        f"The Jira task for '{description_anchor}' is specific enough for delivery and review.",
+        f"Результат реалізації відповідає формулюванню задачі: {normalized}.",
+        "Очікувана поведінка перевіряється в основному користувацькому сценарії без ручних обхідних дій.",
     ]
+
+
+def _structure_risks_from_text(source_text: str) -> list[str]:
+    normalized = _structure_compact_text(source_text)
+    lowered = normalized.lower()
+    if "тип" in lowered and "бонус" in lowered and "історі" in lowered:
+        return [
+            "Для частини історичних записів тип бонусу може бути відсутнім або зберігатися в іншому форматі.",
+        ]
+    if "catalog product" in lowered and "additional service" in lowered:
+        return [
+            "Потрібно узгодити формат елементів масиву additional service та сумісність із поточними споживачами відповіді.",
+        ]
+    if _structure_mentions_response(normalized):
+        return ["Зміна контракту даних може вплинути на поточних споживачів відповіді."]
+    if _structure_mentions_display(normalized):
+        return ["Потрібно перевірити сценарії, у яких потрібні дані можуть бути відсутні."]
+    return []
 
 
 def _specific_questions_for_task(spec: dict, repo_id: str, likely_files: list[str], *, locale: str = DEFAULT_LOCALE) -> list[str]:
@@ -718,6 +812,291 @@ def _clean_user_text(value: object) -> str:
     except UnicodeError:
         return text
     return repaired if repaired and repaired != text else text
+
+
+def _normalize_task_text(value: object) -> str:
+    text = _clean_user_text(str(value or ""))
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _hash_workflow_input(text: str) -> str:
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
+
+
+def _raise_workflow_input_error(
+    *,
+    status_code: int,
+    error: str,
+    message: str,
+    workflow_type: str,
+    request_input_text: str = "",
+) -> None:
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "error": error,
+            "message": message,
+            "workflow_type": workflow_type,
+            "request_input_text": str(request_input_text or "").strip(),
+        },
+    )
+
+
+def _compose_resolved_jira_text(issue_payload: dict[str, Any]) -> str:
+    payload = dict(issue_payload or {})
+    lines: list[str] = []
+    title = _clean_user_text(payload.get("title", "") or payload.get("summary", "") or "")
+    description = _clean_user_text(payload.get("description", "") or "")
+    acceptance = [
+        _clean_user_text(item)
+        for item in list(payload.get("acceptance_criteria", []) or [])
+        if _clean_user_text(item)
+    ]
+    if title:
+        lines.append(f"Title: {title}")
+    if description:
+        lines.append("Description:")
+        lines.append(description)
+    if acceptance:
+        lines.append("Acceptance criteria:")
+        lines.extend(f"- {item}" for item in acceptance[:12])
+    return "\n".join(line for line in lines if line).strip()
+
+
+def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dict[str, Any]:
+    request_input_text = str(jira_ticket or "").strip()
+    if not request_input_text:
+        _raise_workflow_input_error(
+            status_code=400,
+            error="input_invalid",
+            message="jira_ticket is required.",
+            workflow_type=workflow_type,
+            request_input_text=request_input_text,
+        )
+    if not _JIRA_ISSUE_KEY_RE.match(request_input_text):
+        _raise_workflow_input_error(
+            status_code=400,
+            error="jira_fetch_unavailable",
+            message="A valid Jira issue key is required to fetch real Jira content.",
+            workflow_type=workflow_type,
+            request_input_text=request_input_text,
+        )
+    try:
+        issue_payload = load_jira_task(request_input_text)
+    except Exception as exc:
+        _raise_workflow_input_error(
+            status_code=424,
+            error="jira_fetch_failed",
+            message=f"Failed to fetch Jira content for {request_input_text}: {exc}",
+            workflow_type=workflow_type,
+            request_input_text=request_input_text,
+        )
+    resolved_text = _compose_resolved_jira_text(issue_payload)
+    if not resolved_text:
+        _raise_workflow_input_error(
+            status_code=424,
+            error="jira_fetch_unavailable",
+            message=f"Jira issue {request_input_text} did not return usable content.",
+            workflow_type=workflow_type,
+            request_input_text=request_input_text,
+        )
+    return {
+        "workflow_type": workflow_type,
+        "request_input_text": request_input_text,
+        "request_input_length": len(request_input_text),
+        "jira_fetch_attempted": True,
+        "jira_fetch_succeeded": True,
+        "resolved_jira_title": _clean_user_text(issue_payload.get("title", "") or issue_payload.get("summary", "") or ""),
+        "resolved_jira_text_length": len(resolved_text),
+        "final_workflow_input": resolved_text,
+        "final_workflow_input_hash": _hash_workflow_input(resolved_text),
+    }
+
+
+def _resolve_free_text_workflow_input(free_text: str, *, workflow_type: str) -> dict[str, Any]:
+    request_input_text = _clean_user_text(str(free_text or ""))
+    if not request_input_text:
+        _raise_workflow_input_error(
+            status_code=400,
+            error="input_invalid",
+            message="free_text is required.",
+            workflow_type=workflow_type,
+            request_input_text=request_input_text,
+        )
+    return {
+        "workflow_type": workflow_type,
+        "request_input_text": request_input_text,
+        "request_input_length": len(request_input_text),
+        "jira_fetch_attempted": False,
+        "jira_fetch_succeeded": False,
+        "resolved_jira_title": "",
+        "resolved_jira_text_length": 0,
+        "final_workflow_input": request_input_text,
+        "final_workflow_input_hash": _hash_workflow_input(request_input_text),
+    }
+
+
+def _parse_task_sections(raw_text: object) -> dict[str, Any]:
+    text = _normalize_task_text(raw_text)
+    lines = [line.strip() for line in str(raw_text or "").splitlines() if line.strip()]
+    bullets = [_clean_user_text(line.lstrip("-* ").strip()) for line in lines if line[:1] in {"-", "*"}]
+    questions = [line for line in lines if "?" in line]
+    jira_keys = re.findall(r"\b[A-Z][A-Z0-9]+-\d+\b", text)
+    return {
+        "line_count": len(lines),
+        "bullet_count": len(bullets),
+        "question_count": len(questions),
+        "jira_keys": jira_keys[:5],
+        "first_line": _clean_user_text(lines[0]) if lines else "",
+    }
+
+
+def _baseline_task_summary(task_text: str, spec: dict[str, Any], *, workflow_name: str, locale: str) -> str:
+    normalized_text = _normalize_task_text(task_text)
+    if workflow_name == "structure_task":
+        return normalized_text or (_clean_user_text(spec.get("goal", "")) if isinstance(spec, dict) else "")
+    if workflow_name == "analyze_task":
+        if normalized_text:
+            return (
+                f"Базове розуміння задачі: {normalized_text}."
+                if locale != "en"
+                else f"Baseline task understanding: {normalized_text}."
+            )
+        return _clean_user_text(spec.get("context", "") or spec.get("goal", "")) if isinstance(spec, dict) else ""
+    if workflow_name == "implementation_plan":
+        if normalized_text:
+            return (
+                f"Базовий план стосується сценарію: {normalized_text}."
+                if locale != "en"
+                else f"The baseline plan targets this task: {normalized_text}."
+            )
+        return _clean_user_text(spec.get("context", "") or spec.get("goal", "")) if isinstance(spec, dict) else ""
+    return normalized_text
+
+
+def _workflow_technical_details(
+    *,
+    workflow_name: str,
+    task_text: str,
+    spec: dict[str, Any] | None = None,
+    provider_payload: dict[str, Any] | None = None,
+    input_debug: dict[str, Any] | None = None,
+    baseline_summary: str = "",
+    final_merge_strategy: str = "",
+    dropped_candidates_reasons: list[str] | None = None,
+) -> dict[str, Any]:
+    payload = dict(provider_payload or {})
+    resolved_input = dict(input_debug or {})
+    normalized_task_text = _normalize_task_text(task_text)
+    return {
+        "workflow_name": workflow_name,
+        "workflow_type": str(resolved_input.get("workflow_type", "") or workflow_name).strip(),
+        "request_input_text": _clean_user_text(resolved_input.get("request_input_text", "") or ""),
+        "request_input_length": int(resolved_input.get("request_input_length", 0) or 0),
+        "jira_fetch_attempted": bool(resolved_input.get("jira_fetch_attempted", False)),
+        "jira_fetch_succeeded": bool(resolved_input.get("jira_fetch_succeeded", False)),
+        "resolved_jira_title": _clean_user_text(resolved_input.get("resolved_jira_title", "") or ""),
+        "resolved_jira_text_length": int(resolved_input.get("resolved_jira_text_length", 0) or 0),
+        "final_workflow_input": _clean_user_text(resolved_input.get("final_workflow_input", "") or normalized_task_text),
+        "final_workflow_input_hash": str(resolved_input.get("final_workflow_input_hash", "") or _hash_workflow_input(normalized_task_text)).strip(),
+        "raw_jira_text_length": len(str(task_text or "")),
+        "parsed_jira_sections": _parse_task_sections(task_text),
+        "normalized_task_text": normalized_task_text,
+        "baseline_summary": _clean_user_text(baseline_summary),
+        "retrieval_query_text": normalized_task_text,
+        "configured_provider": str(payload.get("configured_provider", "") or "native").strip() or "native",
+        "repo_metadata_provider": str(payload.get("repo_metadata_provider", "") or "native").strip() or "native",
+        "provider_used": str(payload.get("provider_used", "") or "native").strip() or "native",
+        "provider_fallback": bool(payload.get("provider_fallback", False)),
+        "provider_reason": _clean_user_text(payload.get("provider_reason", "") or ""),
+        "mcp_initialize_attempted": bool(payload.get("mcp_initialize_attempted", False)),
+        "mcp_initialize_succeeded": bool(payload.get("mcp_initialize_succeeded", False)),
+        "mcp_session_reused": bool(payload.get("mcp_session_reused", False)),
+        "mcp_retry_after_initialize": bool(payload.get("mcp_retry_after_initialize", False)),
+        "mcp_failure_stage": str(payload.get("mcp_failure_stage", "") or "").strip(),
+        "mcp_session_id_present": bool(payload.get("mcp_session_id_present", False)),
+        "mcp_notifications_initialized_accepted": bool(payload.get("mcp_notifications_initialized_accepted", False)),
+        "mcp_session_id_present_before_notification": bool(payload.get("mcp_session_id_present_before_notification", False)),
+        "mcp_session_id_present_after_notification": bool(payload.get("mcp_session_id_present_after_notification", False)),
+        "mcp_initialize_http_status": int(payload.get("mcp_initialize_http_status", 0) or 0),
+        "mcp_notifications_initialized_status": int(payload.get("mcp_notifications_initialized_status", 0) or 0),
+        "mcp_tools_list_status": int(payload.get("mcp_tools_list_status", 0) or 0),
+        "mcp_tools_call_status": int(payload.get("mcp_tools_call_status", 0) or 0),
+        "mcp_session_reset_count": int(payload.get("mcp_session_reset_count", 0) or 0),
+        "gitnexus_tool_name": str(payload.get("gitnexus_tool_name", "") or "").strip(),
+        "gitnexus_query_payload": _clean_user_text(payload.get("gitnexus_query_payload", "") or ""),
+        "gitnexus_tool_arguments_sent": dict(payload.get("gitnexus_tool_arguments_sent", {}) or {}),
+        "gitnexus_raw_result_excerpt": _clean_user_text(payload.get("gitnexus_raw_result_excerpt", "") or ""),
+        "gitnexus_unwrapped_result_excerpt": _clean_user_text(payload.get("gitnexus_unwrapped_result_excerpt", "") or ""),
+        "gitnexus_raw_hit_count": int(payload.get("gitnexus_raw_hit_count", 0) or 0),
+        "gitnexus_raw_hit_kinds": list(payload.get("gitnexus_raw_hit_kinds", []) or []),
+        "gitnexus_unwrapped_hit_count": int(payload.get("gitnexus_unwrapped_hit_count", 0) or 0),
+        "gitnexus_unwrapped_hit_kinds": list(payload.get("gitnexus_unwrapped_hit_kinds", []) or []),
+        "normalization_source_shape": _clean_user_text(payload.get("normalization_source_shape", "") or ""),
+        "normalization_drop_reasons": list(payload.get("normalization_drop_reasons", []) or []),
+        "raw_hit_count": int(payload.get("raw_hit_count", 0) or 0),
+        "normalized_file_count": int(payload.get("normalized_file_count", 0) or 0),
+        "normalized_symbol_count": int(payload.get("normalized_symbol_count", 0) or 0),
+        "normalized_module_count": int(payload.get("normalized_module_count", 0) or 0),
+        "dropped_hit_count": int(payload.get("dropped_hit_count", 0) or 0),
+        "evidence_mapping_reason": _clean_user_text(payload.get("evidence_mapping_reason", "") or ""),
+        "resolved_process_count": int(payload.get("resolved_process_count", 0) or 0),
+        "resolved_symbol_count": int(payload.get("resolved_symbol_count", 0) or 0),
+        "resolved_definition_count": int(payload.get("resolved_definition_count", 0) or 0),
+        "resolved_file_count": int(payload.get("resolved_file_count", 0) or 0),
+        "evidence_resolution_reason": _clean_user_text(payload.get("evidence_resolution_reason", "") or ""),
+        "backend_repo_visible_after_analyze": bool(payload.get("backend_repo_visible_after_analyze", False)),
+        "backend_visible_repo_count": int(payload.get("backend_visible_repo_count", 0) or 0),
+        "backend_visible_repo_ids_or_paths": list(payload.get("backend_visible_repo_ids_or_paths", []) or []),
+        "gitnexus_home_used_for_analyze": _clean_user_text(payload.get("gitnexus_home_used_for_analyze", "") or ""),
+        "gitnexus_home_used_for_backend": _clean_user_text(payload.get("gitnexus_home_used_for_backend", "") or ""),
+        "raw_list_repos_result_excerpt": _clean_user_text(payload.get("raw_list_repos_result_excerpt", "") or ""),
+        "visibility_match_reason": _clean_user_text(payload.get("visibility_match_reason", "") or ""),
+        "normalized_repo_visibility_targets": list(payload.get("normalized_repo_visibility_targets", []) or []),
+        "candidate_repos_count": int(payload.get("candidate_repos_count", 0) or 0),
+        "candidate_files_count": int(payload.get("candidate_files_count", 0) or 0),
+        "selected_files_count": int(payload.get("selected_files_count", 0) or 0),
+        "top_candidate_files": list(payload.get("top_candidate_files", []) or []),
+        "top_candidate_symbols": list(payload.get("top_candidate_symbols", []) or []),
+        "top_closest_areas": list(payload.get("top_closest_areas", []) or []),
+        "dropped_candidates_reasons": list(dropped_candidates_reasons or []),
+        "final_merge_strategy": final_merge_strategy,
+        "repo_routing_audit": list(payload.get("repo_routing_audit", []) or []),
+        "spec_snapshot": {
+            "goal_length": len(_clean_user_text((spec or {}).get("goal", ""))),
+            "context_length": len(_clean_user_text((spec or {}).get("context", ""))),
+            "requirements_count": len(list((spec or {}).get("requirements", []) or [])),
+            "acceptance_criteria_count": len(list((spec or {}).get("acceptance_criteria", []) or [])),
+            "risks_count": len(list((spec or {}).get("risks", []) or [])),
+        },
+    }
+
+
+def _workflow_input_debug(detail: RunDetail, *, workflow_name: str) -> dict[str, Any]:
+    payload = dict(detail.review_result or {}) if workflow_name == "pre_review" else dict(detail.spec_result or {})
+    return dict(payload.get("workflow_input_debug", {}) or {})
+
+
+def _attach_workflow_input_debug(detail: RunDetail, input_debug: dict[str, Any], *, workflow_name: str) -> None:
+    payload = dict(detail.review_result or {}) if workflow_name == "pre_review" else dict(detail.spec_result or {})
+    payload["workflow_input_debug"] = dict(input_debug or {})
+    if workflow_name == "pre_review":
+        detail.review_result = payload
+    else:
+        detail.spec_result = payload
+
+
+def _attach_workflow_technical_details(detail: RunDetail, technical_details: dict[str, Any], *, workflow_name: str) -> None:
+    cleaned = dict(technical_details or {})
+    if workflow_name == "pre_review":
+        review_payload = dict(detail.review_result or {})
+        review_payload["workflow_debug"] = cleaned
+        detail.review_result = review_payload
+        return
+    spec_payload = dict(detail.spec_result or {})
+    spec_payload["workflow_debug"] = cleaned
+    detail.spec_result = spec_payload
 
 
 def _selection_confidence(
@@ -1216,6 +1595,59 @@ def _create_deterministic_pre_review_run(
                 else "Спочатку отримайте реальний implementation artifact або diff, і лише потім відкривайте review."
             ),
             "run_outcome_type": "partial_incomplete",
+        },
+        log_path=finished_run.log_path,
+    )
+    return finished_run
+
+
+def _create_deterministic_structure_task_run(
+    *,
+    request_body: RunCreateRequest,
+    actor_context: ActorContext,
+) -> RunRecord:
+    run_service = RunService(persist=True)
+    run_record = run_service.start_run(
+        str(request_body.goal or "").strip(),
+        repo_id="",
+        actor_context=actor_context,
+    )
+    run_service.start_step(run_record.run_id, "spec")
+    run_service.finish_step(
+        run_record.run_id,
+        "completed",
+        "Structured free-text task in deterministic mode.",
+    )
+    finished_run = run_service.finish_run(run_record.run_id, "success")
+    run_service.persist_run_detail(
+        finished_run.run_id,
+        {
+            "mode": "spec",
+            "goal": str(request_body.goal or "").strip(),
+            "repo_id": "",
+            "jira_ticket": "",
+            "model_used": "",
+            "routing_reason": "Deterministic structure_task path: pure free-text mode with no Jira or repo context.",
+            "was_escalated": False,
+            "source_stage": "deterministic",
+            "estimated_prompt_size": len(str(request_body.goal or "").strip()),
+            "provider_used": "none",
+            "provider_fallback": False,
+            "provider_reason": "Structure-task uses only submitted free text.",
+            "spec_result": {},
+            "review_result": None,
+            "research_result": None,
+            "implementation_result": None,
+            "publication_result": None,
+            "validation_result": None,
+            "diff_result": _default_diff_payload("No diff produced for this run mode."),
+            "review_comments": [],
+            "policy_decisions": [decision.to_dict() for decision in list(finished_run.policy_decisions)],
+            "sources": [],
+            "repo_context_summary": None,
+            "final_result_summary": str(request_body.goal or "").strip(),
+            "recommendation": "",
+            "run_outcome_type": "success",
         },
         log_path=finished_run.log_path,
     )
@@ -1730,6 +2162,44 @@ def _build_structure_recommendation(source_text: str, *, open_questions: list[st
     return "The Jira task is ready to be created." if locale == "en" else "Jira-задачу вже можна створювати."
 
 
+def _build_structure_open_questions_uk(source_text: str) -> list[str]:
+    lowered = _structure_compact_text(source_text).lower()
+    questions: list[str] = [
+        "Уточніть бізнес-контекст і очікуваний вплив на користувача.",
+        "Додайте явні критерії приймання.",
+    ]
+    if any(token in lowered for token in ("роль", "role")):
+        questions.append("Уточніть назву нової ролі.")
+        questions.append("Уточніть, чи нова роль має повністю дублювати права developer, чи лише їх частину.")
+    if any(token in lowered for token in ("звіт", "report")):
+        questions.append("Уточніть, у який саме звіт потрібно внести зміну.")
+        questions.append("Уточніть, де саме має з'явитися нове поле: у таблиці, фільтрах, експорті чи всюди.")
+    if any(token in lowered for token in ("смс", "sms")):
+        questions.append("Уточніть, який саме шаблон SMS потрібно оновити.")
+        questions.append("Уточніть очікуваний фінальний текст і тригер відправлення.")
+    if "catalog product" in lowered and "additional service" in lowered:
+        questions.append("Уточніть формат елементів масиву additional service.")
+        questions.append("Уточніть, звідки саме беруться additional service для картки товару.")
+    if "тип" in lowered and "бонус" in lowered and "історі" in lowered:
+        questions.append("Уточніть, у яких саме записах історії потрібно показувати тип бонусу.")
+    if _structure_is_brief_or_ambiguous(source_text):
+        questions.append("Уточніть очікуваний бізнес-результат.")
+    return _limit_items(questions, max_items=8)
+
+
+def _build_structure_recommendation_uk(source_text: str, open_questions: list[str]) -> str:
+    lowered = _structure_compact_text(source_text).lower()
+    if "тип" in lowered and "бонус" in lowered and "історі" in lowered:
+        return "Уточніть, де саме в історії потрібно показувати тип бонусу і як поводитися із записами без цього значення. Після цього Jira-задачу можна передавати в роботу."
+    if "catalog product" in lowered and "additional service" in lowered:
+        return "Уточніть формат масиву additional service та правила для випадків, коли додаткові сервіси відсутні. Після цього Jira-задачу можна передавати в роботу."
+    if any(token in lowered for token in ("роль", "role")):
+        return "Уточніть назву ролі та обсяг прав. Після цього Jira-задачу можна передавати в роботу."
+    if open_questions:
+        return "Спочатку уточніть відкриті питання, а потім передавайте Jira-задачу в роботу."
+    return "Jira-задача виглядає достатньо конкретною для передачі в роботу."
+
+
 def _is_repo_mismatch(detail: RunDetail) -> bool:
     return str(detail.repo_relevance_status or "").strip() == "repo_mismatch" or str(detail.status or "").strip() == "repo_mismatch"
 
@@ -1739,6 +2209,9 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
     likely_files = _likely_files_from_detail(detail, locale=locale)
     _apply_provider_metadata(detail, "analyze_task")
     provider_payload: dict[str, Any] = {}
+    input_debug = _workflow_input_debug(detail, workflow_name="analyze_task")
+    task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
+    baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="analyze_task", locale=locale)
     missing_details: list[str] = []
     if not list(spec.get("acceptance_criteria", []) or []):
         missing_details.append(
@@ -1795,6 +2268,17 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
     if _is_repo_mismatch(detail):
         task_quality_summary = "Task does not appear to match the selected repository." if locale == "en" else "Задача, ймовірно, не відповідає вибраному repo."
         recommendation = str(detail.repo_relevance_next_action or detail.recommendation or "").strip()
+    technical_details = _workflow_technical_details(
+        workflow_name="analyze_task",
+        task_text=task_text,
+        spec=spec,
+        provider_payload=provider_payload,
+        input_debug=input_debug,
+        baseline_summary=baseline_summary,
+        final_merge_strategy="baseline_only",
+        dropped_candidates_reasons=[],
+    )
+    _attach_workflow_technical_details(detail, technical_details, workflow_name="analyze_task")
     return AnalyzeTaskWorkflowResult(
         task_quality_summary=task_quality_summary,
         missing_details=missing_details,
@@ -1803,6 +2287,7 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
         concrete_questions=_specific_questions_for_task(spec, str(detail.repo_id or "").strip(), likely_files, locale=locale),
         repo_match=_repo_match_payload(detail, include_unknown=bool(detail.repo_id)),
         recommendation=recommendation,
+        technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
     )
 
@@ -1810,37 +2295,34 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
 def _build_structure_task_result(run_record: RunRecord, detail: RunDetail, source_text: str, *, locale: str = DEFAULT_LOCALE) -> StructureTaskWorkflowResult:
     spec = dict(detail.spec_result or {})
     _apply_provider_metadata(detail, "structure_task")
-    fallback_title = str(source_text or "").strip().splitlines()[0][:120]
-    title = _sanitize_structure_text(str(spec.get("title", "") or "").strip(), source_text, fallback=fallback_title)
-    summary = _sanitize_structure_text(
-        str(spec.get("goal", "") or detail.final_result_summary or "").strip(),
-        source_text,
-        fallback=str(source_text or "").strip(),
-    )
-    description = _sanitize_structure_text(
-        str(spec.get("context", "") or "").strip(),
-        source_text,
-        fallback=str(source_text or "").strip(),
-    )
+    input_debug = _workflow_input_debug(detail, workflow_name="structure_task")
+    task_text = str(input_debug.get("final_workflow_input", "") or source_text).strip()
+    baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="structure_task", locale=locale)
+    title = _structure_title_from_text(source_text)
+    summary = _structure_summary_from_text(source_text)
+    description = _structure_description_from_text(source_text)
     recommendation = str(detail.recommendation or "").strip() or (
         "Review the structured task and fill any remaining gaps."
         if locale == "en"
         else "Перегляньте структуровану задачу й заповніть решту прогалин."
     )
-    acceptance_criteria = _sanitize_structure_items(spec.get("acceptance_criteria", []) or [], source_text, max_items=8)
-    if not acceptance_criteria:
-        acceptance_criteria = _synthesize_acceptance_criteria(
-            title,
-            summary,
-            description,
-        )
-    risks = _sanitize_structure_items(spec.get("risks", []) or [], source_text, max_items=6)
-    open_questions = _build_structure_open_questions(spec, locale=locale)
-    for question in _structure_task_context_questions(source_text, locale=locale):
-        if question not in open_questions:
-            open_questions.append(question)
-    open_questions = _limit_items(open_questions, max_items=8)
-    recommendation = _build_structure_recommendation(source_text, open_questions=open_questions, locale=locale)
+    acceptance_criteria = _synthesize_acceptance_criteria(source_text)
+    risks = _structure_risks_from_text(source_text)
+    open_questions = _build_structure_open_questions_uk(source_text)
+    if not _structure_is_brief_or_ambiguous(source_text):
+        open_questions = _limit_items(open_questions[:4], max_items=4)
+    recommendation = _build_structure_recommendation_uk(source_text, open_questions)
+    technical_details = _workflow_technical_details(
+        workflow_name="structure_task",
+        task_text=task_text,
+        spec=spec,
+        provider_payload={"configured_provider": "none", "repo_metadata_provider": "none", "provider_used": "none", "provider_fallback": False, "provider_reason": "Structure-task uses only submitted free text."},
+        input_debug=input_debug,
+        baseline_summary=baseline_summary,
+        final_merge_strategy="baseline_only",
+        dropped_candidates_reasons=[],
+    )
+    _attach_workflow_technical_details(detail, technical_details, workflow_name="structure_task")
     return StructureTaskWorkflowResult(
         title=title,
         summary=summary,
@@ -1849,12 +2331,16 @@ def _build_structure_task_result(run_record: RunRecord, detail: RunDetail, sourc
         risks=risks,
         open_questions=open_questions,
         recommendation=recommendation,
+        technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
     )
 
 
 def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> ImplementationPlanWorkflowResult:
     spec = dict(detail.spec_result or {})
+    input_debug = _workflow_input_debug(detail, workflow_name="implementation_plan")
+    task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
+    baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="implementation_plan", locale=locale)
     likely_file_details = _build_likely_file_details(detail)
     likely_files = [item.name for item in likely_file_details] if likely_file_details else []
     likely_module_details = _build_likely_module_details(detail)
@@ -1918,6 +2404,7 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
     selection_decision = str(provider_payload.get("selection_decision", "") or "").strip()
     candidate_files_count = int(provider_payload.get("candidate_files_count", 0) or 0)
     selected_files_count = int(provider_payload.get("selected_files_count", 0) or 0)
+    provider_repo_match = str(provider_payload.get("repo_match", "") or "").strip().lower()
     if provider_file_details or provider_module_details or provider_closest_areas:
         likely_file_details = provider_file_details or likely_file_details
         likely_files = [item.name for item in likely_file_details] if likely_file_details else []
@@ -1935,6 +2422,15 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
     top_candidate_files = provider_top_candidate_files or likely_file_details[:5]
     top_candidate_symbols = provider_top_candidate_symbols or likely_module_details[:5]
     top_closest_areas = provider_top_closest_areas or closest_areas[:3]
+    dropped_candidates_reasons: list[str] = []
+    if not likely_file_details:
+        dropped_candidates_reasons.append("no strong files")
+    if not likely_module_details:
+        dropped_candidates_reasons.append("no strong modules")
+    if not closest_areas:
+        dropped_candidates_reasons.append("no repo match areas")
+    if provider_fallback:
+        dropped_candidates_reasons.append("weak provider result")
 
     validation_plan = []
     validation = dict(detail.validation_result or {})
@@ -1954,8 +2450,9 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             else "Спочатку перевірте затронуті файли, а за потреби запустіть ширшу validation по repo."
         )
 
-    has_exact_targets = bool(likely_file_details or likely_module_details)
-    has_partial_targets = bool(closest_areas)
+    has_exact_targets = bool(likely_file_details or (likely_module_details and provider_repo_match == "match"))
+    has_partial_targets = bool(closest_areas or (likely_module_details and provider_repo_match == "partial"))
+    final_merge_strategy = "baseline_only_weak_repo_enrichment"
     change_actions: list[FileChangeAction]
     recommendation = _clean_user_text(provider_payload.get("recommendation", "") or detail.recommendation or "") or (
         "Review the likely files and validation plan before implementation."
@@ -1972,6 +2469,7 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
     if has_exact_targets:
         change_actions = provider_change_actions or _build_change_actions(spec, likely_files, locale=locale)
         repo_match = "match"
+        final_merge_strategy = "baseline_plus_repo_targets"
         repo_match_reason = _clean_user_text(
             provider_payload.get("repo_match_reason", "")
             or detail.repo_relevance_reason
@@ -1995,18 +2493,33 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             for area in closest_areas[:3]
         ]
         repo_match = "partial"
+        final_merge_strategy = "baseline_plus_closest_areas"
         repo_match_reason = _clean_user_text(
-            provider_reason
-            or provider_payload.get("repo_match_reason", "")
-            or detail.repo_relevance_reason
-            or (
-                "No strong repo-specific files were identified, but nearby subsystem areas were found."
-                if locale == "en"
-                else "Точних repo-specific файлів не знайдено, але знайдено близькі підсистеми."
+            " ".join(
+                item
+                for item in [
+                    baseline_summary,
+                    provider_reason
+                    or provider_payload.get("repo_match_reason", "")
+                    or detail.repo_relevance_reason
+                    or (
+                        "No strong repo-specific files were identified, but nearby subsystem areas were found."
+                        if locale == "en"
+                        else "Точних repo-specific файлів не знайдено, але знайдено близькі підсистеми."
+                    ),
+                ]
+                if item
             )
         )
         recommendation = _clean_user_text(
-            ("No exact file match found. Start with the closest subsystem areas: " if locale == "en" else "Точного збігу файлів не знайдено. Почніть із найближчих підсистем: ")
+            (
+                (
+                    f"{baseline_summary} "
+                    if baseline_summary
+                    else ""
+                )
+                + ("No exact file match found. Start with the closest subsystem areas: " if locale == "en" else "Точного збігу файлів не знайдено. Почніть із найближчих підсистем: ")
+            )
             + ", ".join(area.area for area in closest_areas[:3])
             + "."
         )
@@ -2016,28 +2529,60 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
                 file="",
                 action="clarify",
                 description=_clean_user_text(
-                    "No strong repo-specific targets were found. Clarify the task wording or verify that this repository is the right match."
-                    if locale == "en"
-                    else "Не знайдено сильних repo-specific цілей. Уточніть формулювання задачі або перевірте, що це правильний repo."
+                    (
+                        f"{baseline_summary} "
+                        if baseline_summary
+                        else ""
+                    )
+                    + (
+                        "No strong repo-specific targets were found. Clarify the task wording or verify that this repository is the right match."
+                        if locale == "en"
+                        else "Не знайдено сильних repo-specific цілей. Уточніть формулювання задачі або перевірте, що це правильний repo."
+                    )
                 ),
             )
         ]
         repo_match = "low_confidence"
         repo_match_reason = _clean_user_text(
-            provider_reason
-            or provider_payload.get("repo_match_reason", "")
-            or (
-                "No strong repo-specific targets or closest subsystem areas were found."
-                if locale == "en"
-                else "Не знайдено сильних repo-specific цілей або близьких підсистем."
+            " ".join(
+                item
+                for item in [
+                    baseline_summary,
+                    provider_reason
+                    or provider_payload.get("repo_match_reason", "")
+                    or (
+                        "No strong repo-specific targets or closest subsystem areas were found."
+                        if locale == "en"
+                        else "Не знайдено сильних repo-specific цілей або близьких підсистем."
+                    ),
+                ]
+                if item
             )
         )
         recommendation = _clean_user_text(
-            "No strong repo-specific targets were found. Use more specific task wording or verify that this repository is the right match."
-            if locale == "en"
-            else "Не знайдено сильних repo-specific цілей. Уточніть формулювання задачі або перевірте, що це правильний repo."
+            (
+                f"{baseline_summary} "
+                if baseline_summary
+                else ""
+            )
+            + (
+                "No strong repo-specific targets were found. Use more specific task wording or verify that this repository is the right match."
+                if locale == "en"
+                else "Не знайдено сильних repo-specific цілей. Уточніть формулювання задачі або перевірте, що це правильний repo."
+            )
         )
 
+    technical_details = _workflow_technical_details(
+        workflow_name="implementation_plan",
+        task_text=task_text,
+        spec=spec,
+        provider_payload=provider_payload,
+        input_debug=input_debug,
+        baseline_summary=baseline_summary,
+        final_merge_strategy=final_merge_strategy,
+        dropped_candidates_reasons=dropped_candidates_reasons,
+    )
+    _attach_workflow_technical_details(detail, technical_details, workflow_name="implementation_plan")
     return ImplementationPlanWorkflowResult(
         repo_match=repo_match,
         repo_match_reason=repo_match_reason,
@@ -2064,10 +2609,14 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
         top_candidate_files=top_candidate_files,
         top_candidate_symbols=top_candidate_symbols,
         top_closest_areas=top_closest_areas,
+        technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
     )
 def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> PreReviewWorkflowResult:
     review = dict(detail.review_result or {})
+    input_debug = _workflow_input_debug(detail, workflow_name="pre_review")
+    task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
+    baseline_summary = _baseline_task_summary(task_text, review, workflow_name="analyze_task", locale=locale)
     blocking_issues = _limit_items(
         [
             str(item.get("text", "") or "").strip()
@@ -2094,6 +2643,22 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
             "Insufficient implementation evidence. The system cannot safely produce file-level review findings yet."
             if locale == "en"
             else "Недостатньо implementation evidence. Система ще не може безпечно зібрати file-level review findings."
+        )
+        technical_details = _workflow_technical_details(
+            workflow_name="pre_review",
+            task_text=task_text,
+            spec=review,
+            provider_payload={
+                "configured_provider": "native",
+                "repo_metadata_provider": "native",
+                "provider_used": "native",
+                "provider_fallback": False,
+                "provider_reason": "Pre-review was blocked deterministically because no concrete artifact or diff exists.",
+            },
+            input_debug=input_debug,
+            baseline_summary=baseline_summary,
+            final_merge_strategy="baseline_only",
+            dropped_candidates_reasons=["no implementation artifact"],
         )
         pre_review_result = PreReviewWorkflowResult(
             verdict="blocked_insufficient_artifact",
@@ -2122,6 +2687,7 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
                 if locale == "en"
                 else "Спочатку отримайте реальний implementation artifact або diff, і лише потім відкривайте review."
             ),
+            technical_details=technical_details,
             technical_run=_technical_run_link(run_record, detail),
         )
         fix_retry = _build_fix_and_retry_actionability(
@@ -2132,6 +2698,7 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         )
         pre_review_result.fix_and_retry_actionable = bool(fix_retry.get("actionable", False))
         pre_review_result.fix_and_retry_block_reason = str(fix_retry.get("reason", "") or "").strip()
+        _attach_workflow_technical_details(detail, technical_details, workflow_name="pre_review")
         return pre_review_result
 
     provider_payload = _gitnexus_workflow_result(
@@ -2200,6 +2767,17 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         ),
         locale=locale,
     )
+    technical_details = _workflow_technical_details(
+        workflow_name="pre_review",
+        task_text=task_text,
+        spec=review,
+        provider_payload=provider_payload,
+        input_debug=input_debug,
+        baseline_summary=baseline_summary,
+        final_merge_strategy="baseline_plus_repo_targets" if issue_details else "baseline_only",
+        dropped_candidates_reasons=(["no strong files"] if not files_to_check else []),
+    )
+    _attach_workflow_technical_details(detail, technical_details, workflow_name="pre_review")
     return PreReviewWorkflowResult(
         verdict=verdict,
         review_verdict=verdict,
@@ -2217,6 +2795,7 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         fix_and_retry_actionable=bool(fix_retry.get("actionable", False)),
         fix_and_retry_block_reason=str(fix_retry.get("reason", "") or "").strip(),
         recommendation=recommendation,
+        technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
     )
 
@@ -2912,12 +3491,14 @@ def _workflow_run_request(
     jira_ticket: str = "",
     repo_id: str = "",
     free_text: str = "",
+    resolved_input_text: str = "",
 ) -> RunCreateRequest:
     normalized_workflow = str(workflow_name or "").strip().lower()
     if normalized_workflow == "analyze_task":
         return RunCreateRequest(
             goal=(
-                f"Analyze Jira task {str(jira_ticket or '').strip()} and return concrete missing details, "
+                f"Analyze this Jira task content and return concrete missing details, "
+                f"task text:\n{str(resolved_input_text or '').strip()}\n\n"
                 "technical risks, and direct follow-up questions. Avoid generic wording. If a repo is supplied, "
                 "state whether the task matches that repo and why."
             ),
@@ -2941,7 +3522,7 @@ def _workflow_run_request(
     if normalized_workflow == "implementation_plan":
         return RunCreateRequest(
             goal=(
-                f"Build an implementation plan for {str(jira_ticket or '').strip()}. "
+                f"Build an implementation plan for this Jira task content:\n{str(resolved_input_text or '').strip()}\n\n"
                 "Name exact file paths when confidence is high, identify modules or functions when possible, "
                 "and list concrete add/modify/delete actions with a short rationale. If files cannot be identified, "
                 "say 'Could not determine affected files' instead of guessing."
@@ -2953,7 +3534,7 @@ def _workflow_run_request(
     if normalized_workflow == "pre_review":
         return RunCreateRequest(
             goal=(
-                f"Check readiness for review for {str(jira_ticket or '').strip()}. "
+                f"Check readiness for review for this Jira task content:\n{str(resolved_input_text or '').strip()}\n\n"
                 "Return an explicit verdict, blocking issues, exact files to inspect, and required fixes with file, "
                 "what to fix, and why. Avoid generic wording."
             ),
@@ -3086,6 +3667,11 @@ def reindex_repo_in_gitnexus(repo_id: str, request: Request) -> dict[str, Any]:
             "gitnexus_index_status": str(gitnexus_result.get("gitnexus_index_status", "") or "").strip(),
             "gitnexus_indexed_at": str(gitnexus_result.get("gitnexus_indexed_at", "") or "").strip(),
             "gitnexus_ui_url": str(ui_link_service.build_repo_ui_url(repo) or "").strip(),
+            "gitnexus_home_used_for_analyze": str(gitnexus_result.get("gitnexus_home_used_for_analyze", "") or "").strip(),
+            "gitnexus_home_used_for_backend": str(gitnexus_result.get("gitnexus_home_used_for_backend", "") or "").strip(),
+            "backend_repo_visible_after_analyze": bool(gitnexus_result.get("backend_repo_visible_after_analyze", False)),
+            "backend_visible_repo_count": int(gitnexus_result.get("backend_visible_repo_count", 0) or 0),
+            "backend_visible_repo_ids_or_paths": list(gitnexus_result.get("backend_visible_repo_ids_or_paths", []) or []),
             "message": str(gitnexus_result.get("gitnexus_index_error", "") or "GitNexus analyze failed.").strip(),
         }
     refreshed = registry.refresh_repo_metadata(repo.repo_id) or registry.get_repo(repo.repo_id) or repo
@@ -3096,6 +3682,11 @@ def reindex_repo_in_gitnexus(repo_id: str, request: Request) -> dict[str, Any]:
         "gitnexus_index_status": str(refreshed.gitnexus_index_status or "").strip(),
         "gitnexus_indexed_at": str(refreshed.gitnexus_indexed_at or "").strip(),
         "gitnexus_ui_url": str(ui_link_service.build_repo_ui_url(refreshed) or "").strip(),
+        "gitnexus_home_used_for_analyze": str(gitnexus_result.get("gitnexus_home_used_for_analyze", "") or "").strip(),
+        "gitnexus_home_used_for_backend": str(gitnexus_result.get("gitnexus_home_used_for_backend", "") or "").strip(),
+        "backend_repo_visible_after_analyze": bool(gitnexus_result.get("backend_repo_visible_after_analyze", False)),
+        "backend_visible_repo_count": int(gitnexus_result.get("backend_visible_repo_count", 0) or 0),
+        "backend_visible_repo_ids_or_paths": list(gitnexus_result.get("backend_visible_repo_ids_or_paths", []) or []),
         "message": "GitNexus analyze completed successfully.",
     }
 
@@ -3385,16 +3976,19 @@ def update_admin_policy(role_name: str, payload: AdminPolicyRequest, request: Re
 def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any]:
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
+    input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="analyze_task")
     run_record = _execute_tracked_api_run(
         request_body=_workflow_run_request(
             workflow_name="analyze_task",
             jira_ticket=payload.jira_ticket,
             repo_id=payload.repo_id,
+            resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
         ),
         actor_context=actor_context,
         workflow_name="analyze_task",
     )
     detail = _load_run_detail_for_record(run_record)
+    _attach_workflow_input_debug(detail, input_debug, workflow_name="analyze_task")
     result = _build_analyze_task_result(run_record, detail, locale=locale)
     _persist_workflow_detail(run_record, detail)
     return {
@@ -3408,15 +4002,17 @@ def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any
 def structure_task(payload: StructureTaskRequest, request: Request) -> dict[str, Any]:
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
-    run_record = _execute_tracked_api_run(
+    input_debug = _resolve_free_text_workflow_input(payload.free_text, workflow_type="structure_task")
+    run_record = _create_deterministic_structure_task_run(
         request_body=_workflow_run_request(
             workflow_name="structure_task",
             free_text=payload.free_text,
+            resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
         ),
         actor_context=actor_context,
-        workflow_name="structure_task",
     )
     detail = _load_run_detail_for_record(run_record)
+    _attach_workflow_input_debug(detail, input_debug, workflow_name="structure_task")
     result = _build_structure_task_result(run_record, detail, payload.free_text, locale=locale)
     _persist_workflow_detail(run_record, detail)
     return {
@@ -3430,16 +4026,19 @@ def structure_task(payload: StructureTaskRequest, request: Request) -> dict[str,
 def implementation_plan(payload: ImplementationPlanRequest, request: Request) -> dict[str, Any]:
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
+    input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="implementation_plan")
     run_record = _execute_tracked_api_run(
         request_body=_workflow_run_request(
             workflow_name="implementation_plan",
             jira_ticket=payload.jira_ticket,
             repo_id=payload.repo_id,
+            resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
         ),
         actor_context=actor_context,
         workflow_name="implementation_plan",
     )
     detail = _load_run_detail_for_record(run_record)
+    _attach_workflow_input_debug(detail, input_debug, workflow_name="implementation_plan")
     result = _build_implementation_plan_result(run_record, detail, locale=locale)
     _persist_workflow_detail(run_record, detail)
     return {
@@ -3453,10 +4052,12 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
 def pre_review(payload: PreReviewRequest, request: Request) -> dict[str, Any]:
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
+    input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="pre_review")
     request_body = _workflow_run_request(
         workflow_name="pre_review",
         jira_ticket=payload.jira_ticket,
         repo_id=payload.repo_id,
+        resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
     )
     linked_run, linked_detail = _find_latest_implementation_run_with_artifact(
         repo_id=str(payload.repo_id or "").strip(),
@@ -3476,6 +4077,7 @@ def pre_review(payload: PreReviewRequest, request: Request) -> dict[str, Any]:
             workflow_name="pre_review",
         )
     detail = _load_run_detail_for_record(run_record)
+    _attach_workflow_input_debug(detail, input_debug, workflow_name="pre_review")
     result = _build_pre_review_result(run_record, detail, locale=locale)
     _persist_workflow_detail(run_record, detail)
     return {

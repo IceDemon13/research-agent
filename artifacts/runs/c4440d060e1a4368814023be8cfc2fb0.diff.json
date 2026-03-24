@@ -1,0 +1,43 @@
+{
+  "repo_id": "sample",
+  "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/implementation-mode-ab16748faa5e4bc2a445c6903b9af180/sample-repo",
+  "dry_run": true,
+  "files": [
+    {
+      "file_path": "src/app.py",
+      "relative_path": "src/app.py",
+      "change_type": "modified",
+      "operation_type": "update",
+      "diff": "--- a/src/app.py\n+++ b/src/app.py\n@@ -1,2 +1,2 @@\n def run() -> str:\n-    return 'ok'\n+    return 'updated'",
+      "diff_text": "--- a/src/app.py\n+++ b/src/app.py\n@@ -1,2 +1,2 @@\n def run() -> str:\n-    return 'ok'\n+    return 'updated'",
+      "status": "modified",
+      "additions_count": 1,
+      "deletions_count": 1,
+      "diff_chunks": [
+        {
+          "header": "@@ -1,2 +1,2 @@",
+          "lines": [
+            {
+              "type": "context",
+              "text": " def run() -> str:"
+            },
+            {
+              "type": "removed",
+              "text": "-    return 'ok'"
+            },
+            {
+              "type": "added",
+              "text": "+    return 'updated'"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "total_files_changed": 1,
+  "total_additions": 1,
+  "total_deletions": 1,
+  "truncated": false,
+  "reason": ""
+}

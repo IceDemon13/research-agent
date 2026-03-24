@@ -1,0 +1,26 @@
+{
+  "case_id": "analyze_task_snapshot_bonus_history",
+  "workflow_type": "analyze_task",
+  "repo_id": "sample",
+  "jira_ticket": "TEL-13422",
+  "jira_snapshot_title": "Відображення типів бонусів в історії",
+  "jira_snapshot_text": "Потрібно відображати типи бонусів в історії бонусних операцій, щоб користувач бачив природу нарахування або списання.",
+  "use_live_jira": false,
+  "expected_signals": {
+    "workflow_starts": true,
+    "jira_fetch_succeeded": true,
+    "final_workflow_input_length": {
+      "gt": 20
+    },
+    "request_input_text": {
+      "contains": "TEL-13422"
+    },
+    "no_mojibake": true
+  },
+  "forbidden_signals": {
+    "result_text": {
+      "contains": "TEL-13422"
+    }
+  },
+  "notes": "Перевіряє, що analyze_task використовує реальний Jira snapshot, а не лише issue key."
+}

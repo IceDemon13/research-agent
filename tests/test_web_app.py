@@ -41,11 +41,14 @@ class WebAppTests(unittest.TestCase):
         self._db_patch = patch("web_app._db_service", return_value=self.db_service)
         self._auth_patch = patch("web_app._auth_service", return_value=self.auth_service)
         self._header_fallback_patch = patch("web_app._allow_header_actor_fallback", return_value=True)
+        self._jira_loader_patch = patch("web_app.load_jira_task", side_effect=self._fake_load_jira_task)
         self._db_patch.start()
         self._auth_patch.start()
         self._header_fallback_patch.start()
+        self._jira_loader_patch.start()
 
     def tearDown(self) -> None:
+        self._jira_loader_patch.stop()
         self._header_fallback_patch.stop()
         self._auth_patch.stop()
         self._db_patch.stop()
@@ -93,6 +96,16 @@ class WebAppTests(unittest.TestCase):
         )
         self.assertIsNotNone(detail)
         return detail
+
+    @staticmethod
+    def _fake_load_jira_task(issue_key: str) -> dict:
+        key = str(issue_key or "").strip()
+        return {
+            "title": f"{key} title",
+            "summary": f"{key} summary",
+            "description": f"Detailed description for {key}.",
+            "acceptance_criteria": [f"{key} acceptance criteria"],
+        }
 
     def test_health_endpoint(self) -> None:
         response = self.client.get("/health")
@@ -236,6 +249,25 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.json()["result"]["verdict"], "blocked_insufficient_artifact")
         mocked_provider_query.assert_not_called()
 
+    def test_analyze_task_returns_explicit_error_when_jira_fetch_fails(self) -> None:
+        with patch("web_app.load_jira_task", side_effect=RuntimeError("jira offline")):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-404", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 424)
+        payload = response.json()["detail"]
+        self.assertEqual(payload["error"], "jira_fetch_failed")
+        self.assertEqual(payload["workflow_type"], "analyze_task")
+        self.assertEqual(payload["request_input_text"], "TEL-404")
+
     def test_implementation_plan_uses_gitnexus_payload_for_catalog_service(self) -> None:
         run_record = RunRecord(
             run_id="impl-plan-1",
@@ -256,6 +288,7 @@ class WebAppTests(unittest.TestCase):
             run_id="impl-plan-1",
             mode="spec",
             goal="Update bonus response in catalog service",
+            jira_ticket="TEL-1",
             repo_id="catalog_service",
             status="success",
             repo_relevance_status="relevant",
@@ -269,6 +302,14 @@ class WebAppTests(unittest.TestCase):
             "web_app._load_run_detail_for_record",
             return_value=detail,
         ), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Bonus response update",
+                "summary": "Bonus response update",
+                "description": "Expose the updated bonus response in catalog service.",
+                "acceptance_criteria": ["Bonus response returns the new fields."],
+            },
+        ), patch(
             "web_app._repo_intelligence_service.query_for_workflow",
                 return_value={
                     "provider": "gitnexus_http",
@@ -281,6 +322,53 @@ class WebAppTests(unittest.TestCase):
                     "provider_used": "gitnexus_http",
                     "provider_fallback": False,
                     "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+                    "mcp_initialize_attempted": True,
+                    "mcp_initialize_succeeded": True,
+                    "mcp_session_reused": False,
+                    "mcp_retry_after_initialize": False,
+                    "mcp_failure_stage": "",
+                    "mcp_session_id_present": True,
+                    "mcp_notifications_initialized_accepted": True,
+                    "mcp_session_id_present_before_notification": True,
+                    "mcp_session_id_present_after_notification": True,
+                    "mcp_initialize_http_status": 200,
+                    "mcp_notifications_initialized_status": 202,
+                    "mcp_tools_list_status": 200,
+                    "mcp_tools_call_status": 200,
+                    "mcp_session_reset_count": 0,
+                    "gitnexus_tool_name": "query",
+                    "gitnexus_query_payload": "Bonus response update | catalog service | bonus response updated fields",
+                    "gitnexus_tool_arguments_sent": {
+                        "query": "Bonus response update | catalog service | bonus response updated fields",
+                        "repo_path": "/repos/catalog_service",
+                    },
+                    "gitnexus_raw_result_excerpt": "{\"items\":[{\"files\":[\"src/Catalog.Api/Controllers/BonusController.cs\"]}]}",
+                    "gitnexus_unwrapped_result_excerpt": "{\"files\":[{\"path\":\"src/Catalog.Api/Controllers/BonusController.cs\"}],\"symbols\":[{\"symbol\":\"GetBonusInfoHandler\"}]}",
+                    "gitnexus_raw_hit_count": 3,
+                    "gitnexus_raw_hit_kinds": ["file", "symbol"],
+                    "gitnexus_unwrapped_hit_count": 3,
+                    "gitnexus_unwrapped_hit_kinds": ["file", "symbol"],
+                    "normalization_source_shape": "dict:text->dict:files,symbols",
+                    "normalization_drop_reasons": [],
+                    "raw_hit_count": 3,
+                    "normalized_file_count": 1,
+                    "normalized_symbol_count": 1,
+                    "normalized_module_count": 1,
+                    "dropped_hit_count": 0,
+                    "evidence_mapping_reason": "mapped file evidence into likely_files and likely_file_details",
+                    "resolved_process_count": 1,
+                    "resolved_symbol_count": 1,
+                    "resolved_definition_count": 1,
+                    "resolved_file_count": 1,
+                    "evidence_resolution_reason": "resolved concrete files from processes, process_symbols, and definitions",
+                    "backend_repo_visible_after_analyze": True,
+                    "backend_visible_repo_count": 1,
+                    "backend_visible_repo_ids_or_paths": ["/repos/catalog_service"],
+                    "gitnexus_home_used_for_analyze": "/gitnexus",
+                    "gitnexus_home_used_for_backend": "/gitnexus",
+                    "raw_list_repos_result_excerpt": "{\"repos\":[{\"repo_path\":\"/repos/catalog_service\"}]}",
+                    "visibility_match_reason": "matched exact normalized path or repo id from GitNexus list_repos",
+                    "normalized_repo_visibility_targets": ["/repos/catalog_service", "catalog_service"],
                     "candidate_files_count": 3,
                     "selected_files_count": 1,
                     "top_candidate_files": [
@@ -302,6 +390,14 @@ class WebAppTests(unittest.TestCase):
                             "area": "src/Catalog.Api/Controllers",
                             "confidence": 0.74,
                             "reason": "route match",
+                        }
+                    ],
+                    "repo_routing_audit": [
+                        {
+                            "repo_id": "catalog_service",
+                            "provider_used": "gitnexus_http",
+                            "selection_decision": "selected_gitnexus_http",
+                            "accepted": True,
                         }
                     ],
                     "likely_file_details": [
@@ -360,6 +456,53 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["selected_files_count"], 1)
         self.assertEqual(payload["top_candidate_files"][0]["name"], "src/Catalog.Api/Controllers/BonusController.cs")
         self.assertEqual(payload["top_candidate_symbols"][0]["name"], "GetBonusInfoHandler")
+        self.assertEqual(payload["technical_details"]["provider_used"], "gitnexus_http")
+        self.assertEqual(payload["technical_details"]["request_input_text"], "TEL-1")
+        self.assertTrue(payload["technical_details"]["jira_fetch_succeeded"])
+        self.assertIn("Expose the updated bonus response in catalog service.", payload["technical_details"]["final_workflow_input"])
+        self.assertEqual(payload["technical_details"]["candidate_files_count"], 3)
+        self.assertEqual(payload["technical_details"]["selected_files_count"], 1)
+        self.assertEqual(payload["technical_details"]["final_merge_strategy"], "baseline_plus_repo_targets")
+        self.assertTrue(payload["technical_details"]["mcp_initialize_attempted"])
+        self.assertTrue(payload["technical_details"]["mcp_initialize_succeeded"])
+        self.assertFalse(payload["technical_details"]["mcp_retry_after_initialize"])
+        self.assertEqual(payload["technical_details"]["mcp_failure_stage"], "")
+        self.assertTrue(payload["technical_details"]["mcp_session_id_present"])
+        self.assertTrue(payload["technical_details"]["mcp_notifications_initialized_accepted"])
+        self.assertTrue(payload["technical_details"]["mcp_session_id_present_before_notification"])
+        self.assertTrue(payload["technical_details"]["mcp_session_id_present_after_notification"])
+        self.assertEqual(payload["technical_details"]["mcp_initialize_http_status"], 200)
+        self.assertEqual(payload["technical_details"]["mcp_notifications_initialized_status"], 202)
+        self.assertEqual(payload["technical_details"]["mcp_tools_list_status"], 200)
+        self.assertEqual(payload["technical_details"]["mcp_tools_call_status"], 200)
+        self.assertEqual(payload["technical_details"]["mcp_session_reset_count"], 0)
+        self.assertEqual(payload["technical_details"]["gitnexus_tool_name"], "query")
+        self.assertIn("catalog service", payload["technical_details"]["gitnexus_query_payload"])
+        self.assertEqual(payload["technical_details"]["gitnexus_tool_arguments_sent"]["repo_path"], "/repos/catalog_service")
+        self.assertIn("catalog service", payload["technical_details"]["gitnexus_tool_arguments_sent"]["query"])
+        self.assertEqual(payload["technical_details"]["gitnexus_raw_hit_count"], 3)
+        self.assertEqual(payload["technical_details"]["gitnexus_unwrapped_hit_count"], 3)
+        self.assertEqual(payload["technical_details"]["gitnexus_unwrapped_hit_kinds"], ["file", "symbol"])
+        self.assertIn("BonusController", payload["technical_details"]["gitnexus_unwrapped_result_excerpt"])
+        self.assertEqual(payload["technical_details"]["normalization_source_shape"], "dict:text->dict:files,symbols")
+        self.assertEqual(payload["technical_details"]["normalized_module_count"], 1)
+        self.assertEqual(payload["technical_details"]["evidence_mapping_reason"], "mapped file evidence into likely_files and likely_file_details")
+        self.assertEqual(payload["technical_details"]["resolved_process_count"], 1)
+        self.assertEqual(payload["technical_details"]["resolved_symbol_count"], 1)
+        self.assertEqual(payload["technical_details"]["resolved_definition_count"], 1)
+        self.assertEqual(payload["technical_details"]["resolved_file_count"], 1)
+        self.assertIn("process_symbols", payload["technical_details"]["evidence_resolution_reason"])
+        self.assertTrue(payload["technical_details"]["backend_repo_visible_after_analyze"])
+        self.assertEqual(payload["technical_details"]["backend_visible_repo_count"], 1)
+        self.assertEqual(payload["technical_details"]["backend_visible_repo_ids_or_paths"], ["/repos/catalog_service"])
+        self.assertEqual(payload["technical_details"]["gitnexus_home_used_for_analyze"], "/gitnexus")
+        self.assertEqual(payload["technical_details"]["gitnexus_home_used_for_backend"], "/gitnexus")
+        self.assertIn("catalog_service", payload["technical_details"]["raw_list_repos_result_excerpt"])
+        self.assertTrue(payload["technical_details"]["visibility_match_reason"])
+        self.assertIn("catalog_service", payload["technical_details"]["normalized_repo_visibility_targets"])
+        self.assertIn("Bonus response update", payload["technical_details"]["baseline_summary"])
+        self.assertEqual(payload["technical_details"]["parsed_jira_sections"]["question_count"], 0)
+        self.assertEqual(payload["technical_details"]["repo_routing_audit"][0]["provider_used"], "gitnexus_http")
 
     def test_implementation_plan_downgrades_when_gitnexus_returns_no_targets(self) -> None:
         run_record = RunRecord(
@@ -381,6 +524,7 @@ class WebAppTests(unittest.TestCase):
             run_id="impl-plan-empty",
             mode="spec",
             goal="Update bonus response in catalog service",
+            jira_ticket="TEL-1000",
             repo_id="catalog_service",
             status="success",
             repo_relevance_status="relevant",
@@ -393,6 +537,14 @@ class WebAppTests(unittest.TestCase):
         with patch("web_app._execute_tracked_api_run", return_value=run_record), patch(
             "web_app._load_run_detail_for_record",
             return_value=detail,
+        ), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Add manufacturer field to the report",
+                "summary": "Add manufacturer field to the report",
+                "description": "The report should display manufacturer information.",
+                "acceptance_criteria": ["Manufacturer is visible in the target report."],
+            },
         ), patch(
             "web_app._repo_intelligence_service.query_for_workflow",
             return_value={
@@ -422,7 +574,7 @@ class WebAppTests(unittest.TestCase):
         ):
             response = self.client.post(
                 "/workflows/implementation-plan",
-                json={"jira_ticket": "TEL-EMPTY", "repo_id": "catalog_service"},
+                json={"jira_ticket": "TEL-1000", "repo_id": "catalog_service"},
                 headers={
                     "X-Actor-Id": "lead-1",
                     "X-Actor-Role": "techlead",
@@ -442,6 +594,14 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["configured_provider"], "gitnexus_http")
         self.assertEqual(payload["selection_decision"], "selected_gitnexus_http")
         self.assertIn("No strong repo-specific targets were found", payload["recommendation"])
+        self.assertEqual(payload["technical_details"]["provider_used"], "native")
+        self.assertTrue(payload["technical_details"]["provider_fallback"])
+        self.assertEqual(payload["technical_details"]["final_merge_strategy"], "baseline_only_weak_repo_enrichment")
+        self.assertIn("Add manufacturer field to the report", payload["technical_details"]["baseline_summary"])
+        self.assertEqual(payload["technical_details"]["request_input_text"], "TEL-1000")
+        self.assertIn("The report should display manufacturer information.", payload["technical_details"]["final_workflow_input"])
+        self.assertEqual(payload["technical_details"]["parsed_jira_sections"]["question_count"], 0)
+        self.assertIn("weak provider result", payload["technical_details"]["dropped_candidates_reasons"])
 
     def test_implementation_plan_ukrainian_response_is_utf8_clean(self) -> None:
         run_record = RunRecord(
@@ -475,6 +635,14 @@ class WebAppTests(unittest.TestCase):
             "web_app._load_run_detail_for_record",
             return_value=detail,
         ), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Оновити бонусний ендпойнт",
+                "summary": "Оновити бонусний ендпойнт",
+                "description": "Потрібно оновити відображення бонусів у відповіді сервісу.",
+                "acceptance_criteria": ["У відповіді повертаються оновлені бонусні поля."],
+            },
+        ), patch(
             "web_app._repo_intelligence_service.query_for_workflow",
             return_value={
                 "provider": "native",
@@ -503,7 +671,7 @@ class WebAppTests(unittest.TestCase):
         ):
             response = self.client.post(
                 "/workflows/implementation-plan",
-                json={"jira_ticket": "TEL-UTF", "repo_id": "catalog_service"},
+                json={"jira_ticket": "TEL-1001", "repo_id": "catalog_service"},
                 headers={
                     "X-Actor-Id": "lead-1",
                     "X-Actor-Role": "techlead",
@@ -675,6 +843,19 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(observed_paths, ["/repos/catalog_service"])
+
+    def test_workflow_page_binds_run_button_click_handler(self) -> None:
+        response = self.client.get("/ui/workflow.html")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="runWorkflowButton"', response.text)
+        self.assertIn('type="button"', response.text)
+        self.assertIn("disabled", response.text)
+        self.assertIn("workflowFieldsReady", response.text)
+        self.assertIn('addEventListener("click", submitWorkflow)', response.text)
+        self.assertIn('await auth.fetchJson(configItem.endpoint', response.text)
+        self.assertIn('Workflow form is still loading. Please wait a moment and try again.', response.text)
+        self.assertIn('field.required && !value', response.text)
 
     def test_repos_endpoint_omits_gitnexus_open_url_when_external_ui_is_not_configured(self) -> None:
         repo = RepoMetadata(
@@ -1578,75 +1759,72 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(payload["result"]["missing_details"])
         self.assertTrue(payload["result"]["concrete_questions"])
         self.assertIn("What exact observable behavior should change for the user when this task is complete?", payload["result"]["concrete_questions"])
+        self.assertTrue(payload["result"]["technical_details"]["jira_fetch_attempted"])
+        self.assertTrue(payload["result"]["technical_details"]["jira_fetch_succeeded"])
+        self.assertEqual(payload["result"]["technical_details"]["request_input_text"], "TEL-123")
+        self.assertIn("Detailed description for TEL-123.", payload["result"]["technical_details"]["final_workflow_input"])
         self.assertEqual(payload["result"]["technical_run"]["run_id"], run.run_id)
 
     def test_structure_task_workflow_endpoint_returns_structured_result(self) -> None:
-        run = self._create_persisted_run(
-            goal="Structure free text",
-            mode="spec",
-            detail_payload={
-                "spec_result": {
-                    "title": "Improve search results",
-                    "goal": "Make the search results more relevant.",
-                    "context": "Search quality needs improvement for catalog users.",
-                    "requirements": ["Tune ranking signals."],
-                    "acceptance_criteria": ["Search results should prioritize exact matches."],
-                    "risks": ["Ranking changes may affect category pages."],
-                },
-                "recommendation": "Review the structured task and confirm the acceptance criteria.",
+        response = self.client.post(
+            "/workflows/structure-task",
+            json={"free_text": "Improve search result relevance for the catalog."},
+            headers={
+                "X-Actor-Id": "lead-1",
+                "X-Actor-Role": "techlead",
+                "X-Source-Channel": "api",
+                "X-Lang": "en",
             },
         )
-
-        with patch("web_app._execute_tracked_api_run", return_value=run):
-            response = self.client.post(
-                "/workflows/structure-task",
-                json={"free_text": "Improve search result relevance for the catalog."},
-                headers={
-                    "X-Actor-Id": "lead-1",
-                    "X-Actor-Role": "techlead",
-                    "X-Source-Channel": "api",
-                    "X-Lang": "en",
-                },
-            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["workflow"], "structure_task")
-        self.assertEqual(payload["result"]["title"], "Improve search results")
-        self.assertEqual(payload["result"]["acceptance_criteria"][0], "Search results should prioritize exact matches.")
-        self.assertEqual(payload["result"]["technical_run"]["run_id"], run.run_id)
+        self.assertEqual(payload["result"]["title"], "Improve search result relevance for the catalog.")
+        self.assertTrue(payload["result"]["acceptance_criteria"])
+        self.assertEqual(payload["result"]["technical_details"]["provider_used"], "none")
+        self.assertEqual(payload["result"]["technical_details"]["request_input_text"], "Improve search result relevance for the catalog.")
+        self.assertEqual(payload["result"]["technical_details"]["final_workflow_input"], "Improve search result relevance for the catalog.")
+        self.assertTrue(payload["result"]["technical_run"]["run_id"])
 
     def test_structure_task_workflow_falls_back_to_acceptance_criteria(self) -> None:
-        run = self._create_persisted_run(
-            goal="Structure free text",
-            mode="spec",
-            detail_payload={
-                "spec_result": {
-                    "title": "Improve search results",
-                    "goal": "Make the search results more relevant.",
-                    "context": "Search quality needs improvement for catalog users.",
-                    "requirements": ["Tune ranking signals."],
-                    "acceptance_criteria": [],
-                    "risks": [],
-                },
+        response = self.client.post(
+            "/workflows/structure-task",
+            json={"free_text": "Improve search result relevance for the catalog."},
+            headers={
+                "X-Actor-Id": "lead-1",
+                "X-Actor-Role": "techlead",
+                "X-Source-Channel": "api",
+                "X-Lang": "en",
             },
         )
-
-        with patch("web_app._execute_tracked_api_run", return_value=run):
-            response = self.client.post(
-                "/workflows/structure-task",
-                json={"free_text": "Improve search result relevance for the catalog."},
-                headers={
-                    "X-Actor-Id": "lead-1",
-                    "X-Actor-Role": "techlead",
-                    "X-Source-Channel": "api",
-                    "X-Lang": "en",
-                },
-            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["result"]["acceptance_criteria"])
+
+    def test_structure_task_uses_only_free_text_without_jira_or_repo_provider(self) -> None:
+        with patch("web_app.load_jira_task") as mocked_jira_loader, patch(
+            "web_app._repo_intelligence_service.query_for_workflow"
+        ) as mocked_repo_query:
+            response = self.client.post(
+                "/workflows/structure-task",
+                json={"free_text": "оновити шаблон смс"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "uk",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["technical_details"]["provider_used"], "none")
+        self.assertFalse(payload["technical_details"]["jira_fetch_attempted"])
+        self.assertEqual(payload["technical_details"]["final_workflow_input"], "оновити шаблон смс")
+        mocked_jira_loader.assert_not_called()
+        mocked_repo_query.assert_not_called()
 
     def test_structure_task_workflow_keeps_role_request_repo_blind(self) -> None:
         run = self._create_persisted_run(
@@ -1681,7 +1859,7 @@ class WebAppTests(unittest.TestCase):
         result = response.json()["result"]
         self.assertEqual(
             sorted(result.keys()),
-            sorted(["title", "summary", "description", "acceptance_criteria", "risks", "open_questions", "recommendation", "technical_run"]),
+            sorted(["title", "summary", "description", "acceptance_criteria", "risks", "open_questions", "recommendation", "technical_details", "technical_run"]),
         )
         self.assertTrue(result["acceptance_criteria"])
         self.assertTrue(result["open_questions"])
@@ -1764,6 +1942,49 @@ class WebAppTests(unittest.TestCase):
         serialized = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("src/", serialized)
         self.assertNotIn(".py", serialized)
+
+    def test_structure_task_generates_practical_ukrainian_bonus_history_draft(self) -> None:
+        response = self.client.post(
+            "/workflows/structure-task",
+            json={"free_text": "Відображення типів бонусів в історії"},
+            headers={
+                "X-Actor-Id": "lead-1",
+                "X-Actor-Role": "techlead",
+                "X-Source-Channel": "api",
+                "X-Lang": "uk",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["result"]
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertEqual(result["title"], "Відображення типів бонусів в історії")
+        self.assertIn("типів бонусів", result["summary"])
+        self.assertIn("історії бонусів", result["description"])
+        self.assertTrue(any("тип бонусу" in item.lower() for item in result["acceptance_criteria"]))
+        self.assertNotIn("Specification generated", serialized)
+        self.assertNotIn("matches the requested outcome", serialized)
+
+    def test_structure_task_generates_practical_ukrainian_api_draft(self) -> None:
+        response = self.client.post(
+            "/workflows/structure-task",
+            json={"free_text": "повертати в методі картки товару catalog product масив з additional service"},
+            headers={
+                "X-Actor-Id": "lead-1",
+                "X-Actor-Role": "techlead",
+                "X-Source-Channel": "api",
+                "X-Lang": "uk",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["result"]
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertIn("catalog product", result["summary"])
+        self.assertIn("масив additional service", result["description"])
+        self.assertTrue(any("additional service" in item.lower() for item in result["acceptance_criteria"]))
+        self.assertTrue(any("порожній масив" in item.lower() for item in result["acceptance_criteria"]))
+        self.assertNotIn("Specification generated", serialized)
         self.assertNotIn("templateservice", serialized.lower())
 
     def test_implementation_plan_workflow_short_circuits_repo_mismatch(self) -> None:

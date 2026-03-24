@@ -31,10 +31,10 @@
       <p id="workflowDescription" class="muted"></p>
     </div>
 
-    <form id="workflowForm" class="card">
+    <form id="workflowForm" class="card" novalidate>
       <div id="dynamicFields"></div>
       <div class="toolbar">
-        <button class="primary" type="submit" data-i18n="common.run_workflow">Запустити workflow</button>
+        <button id="runWorkflowButton" class="primary" type="button" disabled data-i18n="common.run_workflow">Запустити workflow</button>
       </div>
     </form>
 
@@ -59,6 +59,7 @@
   <script>
     const auth = window.AuthUI;
     const workflowType = new URLSearchParams(window.location.search).get("type") || "analyze_task";
+    let workflowFieldsReady = false;
 
     const workflowConfig = {
       analyze_task: {
@@ -113,6 +114,8 @@
           : `<span>${labelText}</span><input id="${field.id}" type="${field.type}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}">`;
         container.appendChild(wrapper);
       });
+      workflowFieldsReady = true;
+      document.getElementById("runWorkflowButton").disabled = false;
     }
 
     function renderList(titleKey, items) {
@@ -369,13 +372,25 @@
       configureFixAndRetry(result, technicalRun);
     }
 
-    document.getElementById("workflowForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
+    async function submitWorkflow() {
+      if (!workflowFieldsReady) {
+        document.getElementById("errorBox").textContent = "Workflow form is still loading. Please wait a moment and try again.";
+        return;
+      }
       const configItem = workflowConfig[workflowType] || workflowConfig.analyze_task;
       const body = {};
-      configItem.fields.forEach((field) => {
-        body[field.id] = document.getElementById(field.id).value.trim();
-      });
+      for (const field of configItem.fields) {
+        const element = document.getElementById(field.id);
+        const value = String(element?.value || "").trim();
+        if (field.required && !value) {
+          document.getElementById("errorBox").textContent = `${auth.t(field.labelKey)}: ${auth.t("common.empty")}`;
+          if (element) {
+            element.focus();
+          }
+          return;
+        }
+        body[field.id] = value;
+      }
       document.getElementById("errorBox").textContent = "";
       try {
         const payload = await auth.fetchJson(configItem.endpoint, { method: "POST", body });
@@ -383,7 +398,13 @@
       } catch (error) {
         document.getElementById("errorBox").textContent = error.message;
       }
+    }
+
+    document.getElementById("workflowForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await submitWorkflow();
     });
+    document.getElementById("runWorkflowButton").addEventListener("click", submitWorkflow);
 
     auth.requireLogin({ redirectTo: "/ui/login.html" }).then((me) => {
       if (!me) return;

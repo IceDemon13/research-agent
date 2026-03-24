@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import urllib.error
 import urllib.request
 from typing import Any
@@ -18,6 +19,112 @@ def _safe_text(value: object) -> str:
     return str(value or "").strip()
 
 
+def _excerpt(value: object, limit: int = 600) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...[truncated]"
+
+
+def _headers_to_dict(headers: object) -> dict[str, str]:
+    if headers is None:
+        return {}
+    try:
+        items = headers.items()
+    except Exception:
+        return {}
+    normalized: dict[str, str] = {}
+    for key, value in items:
+        normalized[_safe_text(key)] = _safe_text(value)
+    return normalized
+
+
+def _is_server_not_initialized_error(message: object) -> bool:
+    return "server not initialized" in _safe_text(message).lower()
+
+
+def _parse_json_like_text(value: str) -> Any:
+    text = str(value or "").strip()
+    if not text:
+        raise json.JSONDecodeError("Empty payload", text, 0)
+    parsed = json.loads(text)
+    if isinstance(parsed, str):
+        nested = str(parsed or "").strip()
+        if nested[:1] in {"{", "["}:
+            try:
+                return _parse_json_like_text(nested)
+            except json.JSONDecodeError:
+                return parsed
+    return parsed
+
+
+def _parse_sse_payload(raw_payload: str) -> Any:
+    events: list[str] = []
+    current: list[str] = []
+    for raw_line in str(raw_payload or "").splitlines():
+        line = str(raw_line or "").rstrip()
+        if line.startswith("data:"):
+            current.append(line[5:].lstrip())
+            continue
+        if not line and current:
+            events.append("\n".join(current).strip())
+            current = []
+    if current:
+        events.append("\n".join(current).strip())
+    for event in reversed(events):
+        if not event or event == "[DONE]":
+            continue
+        try:
+            return _parse_json_like_text(event)
+        except json.JSONDecodeError:
+            continue
+    raise json.JSONDecodeError("No JSON object found in SSE payload", str(raw_payload or ""), 0)
+
+
+def _parse_mcp_http_payload(raw_payload: str, *, content_type: str = "") -> Any:
+    try:
+        return _parse_json_like_text(raw_payload)
+    except json.JSONDecodeError:
+        if "text/event-stream" in str(content_type or "").lower() or "data:" in str(raw_payload or ""):
+            return _parse_sse_payload(raw_payload)
+        for line in str(raw_payload or "").splitlines():
+            candidate = str(line or "").strip()
+            if candidate[:1] not in {"{", "["}:
+                continue
+            try:
+                return _parse_json_like_text(candidate)
+            except json.JSONDecodeError:
+                continue
+        raise
+
+
+def _looks_like_result_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return any(
+        key in payload
+        for key in (
+            "files",
+            "symbols",
+            "processes",
+            "changed_files",
+            "changed_symbols",
+            "affected_files",
+            "affected_symbols",
+            "affected_tests",
+            "related_files",
+            "tests",
+            "callers",
+            "callees",
+            "risk",
+            "status",
+            "target",
+            "symbol",
+            "file_path",
+        )
+    )
+
+
 def _config_from_settings(repo_settings: RepoIntelligenceSettings) -> GitNexusProviderConfig:
     return GitNexusProviderConfig(
         enabled=bool(repo_settings.gitnexus_enabled),
@@ -30,13 +137,33 @@ def _config_from_settings(repo_settings: RepoIntelligenceSettings) -> GitNexusPr
     )
 
 
+class _SharedSessionState:
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.next_request_id = 1
+        self.initialized = False
+        self.session_id = ""
+
+
 class GitNexusMcpClient:
+    _shared_states: dict[str, _SharedSessionState] = {}
+    _shared_states_lock = threading.Lock()
+
     def __init__(self, *, repo_settings: RepoIntelligenceSettings | None = None) -> None:
         self._repo_settings = repo_settings or settings.repo_intelligence
         self._config = _config_from_settings(self._repo_settings)
-        self._next_request_id = 1
-        self._initialized = False
-        self._session_id = ""
+        self._state = self._shared_state_for_base_url(self._config.internal_base_url)
+        self._debug_local = threading.local()
+
+    @classmethod
+    def _shared_state_for_base_url(cls, base_url: str) -> _SharedSessionState:
+        normalized = _safe_text(base_url).rstrip("/")
+        with cls._shared_states_lock:
+            state = cls._shared_states.get(normalized)
+            if state is None:
+                state = _SharedSessionState()
+                cls._shared_states[normalized] = state
+            return state
 
     @property
     def config(self) -> GitNexusProviderConfig:
@@ -45,55 +172,203 @@ class GitNexusMcpClient:
     def enabled(self) -> bool:
         return bool(self._config.enabled)
 
+    def last_debug_snapshot(self) -> dict[str, Any]:
+        payload = getattr(self._debug_local, "payload", None)
+        if isinstance(payload, dict):
+            return dict(payload)
+        return {}
+
+    def _reset_debug(self) -> None:
+        self._debug_local.payload = {
+            "mcp_initialize_attempted": False,
+            "mcp_initialize_succeeded": False,
+            "mcp_session_reused": False,
+            "mcp_retry_after_initialize": False,
+            "mcp_failure_stage": "",
+            "mcp_session_id_present": False,
+            "mcp_notifications_initialized_accepted": False,
+            "mcp_session_id_present_before_notification": False,
+            "mcp_session_id_present_after_notification": False,
+            "mcp_initialize_http_status": 0,
+            "mcp_notifications_initialized_status": 0,
+            "mcp_tools_list_status": 0,
+            "mcp_tools_call_status": 0,
+            "mcp_session_reset_count": 0,
+        }
+
+    def _update_debug(self, **values: Any) -> None:
+        current = self.last_debug_snapshot()
+        if not current:
+            self._reset_debug()
+            current = self.last_debug_snapshot()
+        current.update(values)
+        self._debug_local.payload = current
+
+    def _mark_failure_stage(self, stage: str) -> None:
+        self._update_debug(mcp_failure_stage=_safe_text(stage))
+
+    def _reset_session_state(self, *, count_reset: bool = True) -> None:
+        self._state.initialized = False
+        self._state.session_id = ""
+        if count_reset:
+            self._update_debug(
+                mcp_session_reset_count=int(self.last_debug_snapshot().get("mcp_session_reset_count", 0) or 0) + 1,
+                mcp_session_id_present=False,
+            )
+
+    def _status_field_for_stage(self, stage: str) -> str:
+        normalized = _safe_text(stage)
+        if normalized.startswith("initialize"):
+            return "mcp_initialize_http_status"
+        if normalized.startswith("notifications/initialized"):
+            return "mcp_notifications_initialized_status"
+        if normalized.startswith("tools/list"):
+            return "mcp_tools_list_status"
+        if normalized.startswith("tools/call"):
+            return "mcp_tools_call_status"
+        return ""
+
     def initialize(self) -> dict[str, Any]:
-        if self._initialized:
-            return {
-                "initialized": True,
-                "session_id": self._session_id,
-                "protocol_version": MCP_PROTOCOL_VERSION,
-            }
-        result = self._request(
-            "initialize",
-            params={
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "clientInfo": {"name": "research-agent", "version": "0.1.0"},
-                "capabilities": {},
-            },
-            include_session=False,
-        )
-        self._initialized = True
-        if isinstance(result, dict):
-            self._session_id = _safe_text(result.get("sessionId", "") or result.get("session_id", ""))
-        self._notify_initialized()
-        if isinstance(result, dict):
-            return result
-        return {"initialized": True, "result": result}
+        self._reset_debug()
+        with self._state.lock:
+            return self._ensure_initialized_locked(force=False)
 
     def list_tools(self) -> list[dict[str, Any]]:
-        self.initialize()
-        payload = self._request("tools/list", params={})
+        self._reset_debug()
+        payload = self._request_with_lifecycle("tools/list", params={}, request_stage="tools/list")
         if isinstance(payload, dict):
             tools = payload.get("tools", [])
             if isinstance(tools, list):
                 return [dict(item or {}) for item in tools if isinstance(item, dict)]
         return []
 
+    def list_repos(self) -> Any:
+        self._reset_debug()
+        payload = self._request_with_lifecycle(
+            "tools/call",
+            params={
+                "name": "list_repos",
+                "arguments": {},
+            },
+            request_stage="tools/call",
+        )
+        return self._extract_tool_payload(payload)
+
     def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        self.initialize()
-        payload = self._request(
+        self._reset_debug()
+        payload = self._request_with_lifecycle(
             "tools/call",
             params={
                 "name": _safe_text(tool_name),
                 "arguments": dict(arguments or {}),
             },
+            request_stage="tools/call",
         )
         return self._extract_tool_payload(payload)
 
+    def _ensure_initialized_locked(self, *, force: bool) -> dict[str, Any]:
+        if self._state.initialized and not force:
+            self._update_debug(
+                mcp_session_reused=True,
+                mcp_initialize_succeeded=True,
+                mcp_session_id_present=bool(self._state.session_id),
+            )
+            return {
+                "initialized": True,
+                "session_id": self._state.session_id,
+                "protocol_version": MCP_PROTOCOL_VERSION,
+            }
+        self._update_debug(mcp_initialize_attempted=True, mcp_session_reused=False)
+        last_error: RuntimeError | None = None
+        for attempt in range(2):
+            if attempt > 0:
+                self._update_debug(mcp_retry_after_initialize=True)
+                self._reset_session_state()
+            try:
+                result = self._request(
+                    "initialize",
+                    params={
+                        "protocolVersion": MCP_PROTOCOL_VERSION,
+                        "clientInfo": {"name": "research-agent", "version": "0.1.0"},
+                        "capabilities": {},
+                    },
+                    include_session=False,
+                    lifecycle_stage="initialize",
+                )
+                if isinstance(result, dict):
+                    body_session_id = _safe_text(result.get("sessionId", "") or result.get("session_id", ""))
+                    if body_session_id:
+                        self._state.session_id = body_session_id
+                self._update_debug(mcp_session_id_present=bool(self._state.session_id))
+                logger.debug(
+                    "GitNexus MCP initialize lifecycle: session_id_present=%s session_id=%s",
+                    bool(self._state.session_id),
+                    _safe_text(self._state.session_id),
+                )
+                if not self._state.session_id:
+                    self._mark_failure_stage("initialize")
+                    raise RuntimeError(
+                        "GitNexus MCP initialize completed without MCP-Session-Id. "
+                        "lifecycle_stage=initialize session_id_present=false"
+                    )
+                self._update_debug(mcp_session_id_present_before_notification=True)
+                self._notify_initialized()
+                self._state.initialized = True
+                self._update_debug(
+                    mcp_initialize_succeeded=True,
+                    mcp_failure_stage="",
+                    mcp_session_id_present=True,
+                    mcp_notifications_initialized_accepted=True,
+                    mcp_session_id_present_after_notification=bool(self._state.session_id),
+                )
+                if isinstance(result, dict):
+                    return result
+                return {"initialized": True, "result": result}
+            except RuntimeError as exc:
+                last_error = exc
+                stage = "notifications/initialized" if "notifications/initialized" in _safe_text(exc) else "initialize"
+                self._mark_failure_stage(stage)
+                if attempt == 0 and _is_server_not_initialized_error(exc):
+                    continue
+                self._reset_session_state()
+                raise
+        self._reset_session_state()
+        raise last_error or RuntimeError("GitNexus MCP initialize failed.")
+
+    def _request_with_lifecycle(self, method: str, *, params: dict[str, Any], request_stage: str) -> Any:
+        with self._state.lock:
+            self._ensure_initialized_locked(force=False)
+            try:
+                return self._request(
+                    method,
+                    params=params,
+                    lifecycle_stage=request_stage,
+                )
+            except RuntimeError as exc:
+                if not _is_server_not_initialized_error(exc):
+                    self._mark_failure_stage(request_stage)
+                    raise
+                self._update_debug(mcp_retry_after_initialize=True)
+                self._reset_session_state()
+                try:
+                    self._ensure_initialized_locked(force=True)
+                    result = self._request(
+                        method,
+                        params=params,
+                        lifecycle_stage=f"{request_stage}:retry_after_initialize",
+                    )
+                    self._update_debug(mcp_failure_stage="")
+                    return result
+                except RuntimeError:
+                    self._mark_failure_stage(f"{request_stage}:retry_after_initialize")
+                    raise
+
     def _notify_initialized(self) -> None:
         try:
-            self._request("notifications/initialized", params={}, include_id=False)
+            self._request("notifications/initialized", params={}, include_id=False, lifecycle_stage="notifications/initialized")
         except RuntimeError:
             logger.debug("GitNexus MCP initialized notification failed.", exc_info=True)
+            raise
 
     def _request(
         self,
@@ -102,6 +377,7 @@ class GitNexusMcpClient:
         params: dict[str, Any],
         include_id: bool = True,
         include_session: bool = True,
+        lifecycle_stage: str = "",
     ) -> Any:
         if not self.enabled():
             raise RuntimeError("GitNexus MCP is disabled.")
@@ -112,17 +388,23 @@ class GitNexusMcpClient:
             "params": dict(params or {}),
         }
         if include_id:
-            body["id"] = self._next_request_id
-            self._next_request_id += 1
+            body["id"] = self._state.next_request_id
+            self._state.next_request_id += 1
         encoded = json.dumps(body).encode("utf-8")
         headers = {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
             "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
         }
-        if include_session and self._session_id:
-            headers["MCP-Session-Id"] = self._session_id
-        logger.debug("GitNexus MCP request: %s", json.dumps(body, ensure_ascii=False))
+        if include_session and self._state.session_id:
+            headers["MCP-Session-Id"] = self._state.session_id
+        logger.debug(
+            "GitNexus MCP request: stage=%s body=%s headers=%s session_id_present=%s",
+            lifecycle_stage or method,
+            json.dumps(body, ensure_ascii=False),
+            json.dumps(headers, ensure_ascii=False),
+            bool(self._state.session_id),
+        )
         request = urllib.request.Request(
             url,
             data=encoded,
@@ -133,10 +415,37 @@ class GitNexusMcpClient:
             with urllib.request.urlopen(request, timeout=self._config.timeout_seconds) as response:
                 raw_payload = response.read().decode("utf-8", errors="replace")
                 response_headers = getattr(response, "headers", {}) or {}
+                status_field = self._status_field_for_stage(lifecycle_stage or method)
+                if status_field:
+                    self._update_debug(**{status_field: int(getattr(response, "status", 200) or 200)})
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"GitNexus MCP backend returned HTTP {exc.code}.") from exc
+            error_headers = _headers_to_dict(getattr(exc, "headers", {}) or {})
+            status_field = self._status_field_for_stage(lifecycle_stage or method)
+            if status_field:
+                self._update_debug(**{status_field: int(exc.code or 0)})
+            try:
+                error_body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                error_body = ""
+            logger.error(
+                "GitNexus MCP HTTP error. stage=%s status=%s headers=%s raw_excerpt=%s request=%s",
+                lifecycle_stage or method,
+                exc.code,
+                json.dumps(error_headers, ensure_ascii=False),
+                _excerpt(error_body),
+                json.dumps(body, ensure_ascii=False),
+            )
+            raise RuntimeError(
+                "GitNexus MCP backend returned HTTP "
+                f"{exc.code}. lifecycle_stage={lifecycle_stage or method} "
+                f"session_id_present={bool(self._state.session_id)} "
+                f"headers={json.dumps(error_headers, ensure_ascii=False)} "
+                f"raw_excerpt={_excerpt(error_body)}"
+            ) from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-            raise RuntimeError(_safe_text(exc) or "GitNexus MCP request failed.") from exc
+            raise RuntimeError(
+                f"{_safe_text(exc) or 'GitNexus MCP request failed.'} lifecycle_stage={lifecycle_stage or method}"
+            ) from exc
         logger.debug("GitNexus MCP response: %s", raw_payload)
         session_header = ""
         try:
@@ -144,41 +453,110 @@ class GitNexusMcpClient:
         except Exception:
             session_header = ""
         if session_header:
-            self._session_id = session_header
+            self._state.session_id = session_header
+        self._update_debug(mcp_session_id_present=bool(self._state.session_id))
+        content_type = ""
         try:
-            parsed = json.loads(raw_payload)
+            content_type = _safe_text(response_headers.get("Content-Type", ""))
+        except Exception:
+            content_type = ""
+        logger.debug(
+            "GitNexus MCP response: stage=%s headers=%s extracted_session_id=%s raw=%s",
+            lifecycle_stage or method,
+            json.dumps(_headers_to_dict(response_headers), ensure_ascii=False),
+            _safe_text(self._state.session_id),
+            raw_payload,
+        )
+        if str(lifecycle_stage or method).startswith("notifications/initialized"):
+            if (
+                int(self.last_debug_snapshot().get("mcp_notifications_initialized_status", 0) or 0) >= 200
+                and int(self.last_debug_snapshot().get("mcp_notifications_initialized_status", 0) or 0) < 300
+                and not _safe_text(raw_payload)
+            ):
+                self._update_debug(
+                    mcp_notifications_initialized_accepted=True,
+                    mcp_session_id_present_after_notification=bool(self._state.session_id),
+                )
+                return {"accepted": True}
+        try:
+            parsed = _parse_mcp_http_payload(raw_payload, content_type=content_type)
         except json.JSONDecodeError as exc:
-            raise RuntimeError("GitNexus MCP backend returned invalid JSON.") from exc
+            logger.error(
+                "GitNexus MCP invalid JSON response. stage=%s content_type=%s raw_excerpt=%s",
+                lifecycle_stage or method,
+                content_type or "",
+                _excerpt(raw_payload),
+            )
+            raise RuntimeError(
+                f"GitNexus MCP backend returned invalid JSON. lifecycle_stage={lifecycle_stage or method} "
+                f"session_id_present={bool(self._state.session_id)} "
+                f"content_type={content_type or '-'} raw_excerpt={_excerpt(raw_payload)}"
+            ) from exc
         if isinstance(parsed, dict) and parsed.get("error"):
             error_payload = parsed.get("error")
             if isinstance(error_payload, dict):
                 message = _safe_text(error_payload.get("message", "")) or json.dumps(error_payload, ensure_ascii=False)
             else:
                 message = _safe_text(error_payload)
-            raise RuntimeError(message or "GitNexus MCP call failed.")
+            raise RuntimeError(
+                f"{message or 'GitNexus MCP call failed.'} lifecycle_stage={lifecycle_stage or method} "
+                f"session_id_present={bool(self._state.session_id)}"
+            )
         if isinstance(parsed, dict):
             return parsed.get("result", parsed)
         return parsed
 
     def _extract_tool_payload(self, payload: Any) -> Any:
+        if isinstance(payload, str):
+            text = _safe_text(payload)
+            if text[:1] in {"{", "["}:
+                try:
+                    return self._extract_tool_payload(_parse_json_like_text(text))
+                except json.JSONDecodeError:
+                    pass
+            return {"text": text} if text else {}
+        if isinstance(payload, list):
+            normalized_items = [self._extract_tool_payload(item) for item in payload if item not in (None, "", [], {})]
+            dict_items = [item for item in normalized_items if isinstance(item, dict) and item]
+            if len(dict_items) == 1:
+                return dict_items[0]
+            if dict_items:
+                return {"items": dict_items}
+            return {"items": normalized_items} if normalized_items else {}
         if not isinstance(payload, dict):
             return payload
-        structured = payload.get("structuredContent")
-        if isinstance(structured, dict):
-            return structured
+        if _looks_like_result_payload(payload):
+            return payload
+        for key in ("structuredContent", "data", "item", "payload", "result"):
+            nested = payload.get(key)
+            if nested not in (None, "", [], {}):
+                return self._extract_tool_payload(nested)
+        items = payload.get("items")
+        if isinstance(items, list) and items:
+            return self._extract_tool_payload(items)
         content = payload.get("content")
         if isinstance(content, list):
             text_chunks: list[str] = []
+            normalized_items: list[Any] = []
             for item in content:
+                normalized = self._extract_tool_payload(item)
+                if isinstance(normalized, dict) and normalized:
+                    if _looks_like_result_payload(normalized):
+                        return normalized
+                    normalized_items.append(normalized)
                 if isinstance(item, dict):
                     text = _safe_text(item.get("text", ""))
                     if text:
                         text_chunks.append(text)
+            if len(normalized_items) == 1:
+                return normalized_items[0]
+            if normalized_items:
+                return {"items": normalized_items}
             if len(text_chunks) == 1:
-                try:
-                    return json.loads(text_chunks[0])
-                except json.JSONDecodeError:
-                    return {"text": text_chunks[0]}
+                return self._extract_tool_payload(text_chunks[0])
             if text_chunks:
                 return {"text": "\n".join(text_chunks)}
+        text = _safe_text(payload.get("text", ""))
+        if text:
+            return self._extract_tool_payload(text)
         return payload

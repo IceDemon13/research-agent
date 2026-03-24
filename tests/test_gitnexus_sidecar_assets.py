@@ -21,6 +21,10 @@ class GitNexusSidecarAssetsTests(unittest.TestCase):
         self.assertIn("--skills", content)
         self.assertIn("--force", content)
         self.assertIn("cliVersion", content)
+        self.assertIn("GITNEXUS_HOME", content)
+        self.assertIn("GITNEXUS_REPO_ROOT", content)
+        self.assertIn("backendRuntime", content)
+        self.assertIn("analyzeRuntime", content)
 
     def test_docker_compose_uses_sidecar_wrapper_script(self) -> None:
         compose_text = Path("docker-compose.yml").read_text(encoding="utf-8")

@@ -6,7 +6,7 @@
   "total_attempts": 1,
   "parent_run_id": "",
   "repo_id": "catalog_service",
-  "jira_ticket": "",
+  "jira_ticket": "TEL-1",
   "status": "success",
   "started_at": "",
   "finished_at": "",
@@ -56,7 +56,147 @@
   "spec_result": {
     "risks": [
       "Response contract change."
-    ]
+    ],
+    "workflow_input_debug": {
+      "workflow_type": "implementation_plan",
+      "request_input_text": "TEL-1",
+      "request_input_length": 5,
+      "jira_fetch_attempted": true,
+      "jira_fetch_succeeded": true,
+      "resolved_jira_title": "Bonus response update",
+      "resolved_jira_text_length": 157,
+      "final_workflow_input": "Title: Bonus response update\nDescription:\nExpose the updated bonus response in catalog service.\nAcceptance criteria:\n- Bonus response returns the new fields.",
+      "final_workflow_input_hash": "6a3a424dab7b15e88376ffafe8a96ee420ff1b1058f106cb5864e5afdf4bfd99"
+    },
+    "workflow_debug": {
+      "workflow_name": "implementation_plan",
+      "workflow_type": "implementation_plan",
+      "request_input_text": "TEL-1",
+      "request_input_length": 5,
+      "jira_fetch_attempted": true,
+      "jira_fetch_succeeded": true,
+      "resolved_jira_title": "Bonus response update",
+      "resolved_jira_text_length": 157,
+      "final_workflow_input": "Title: Bonus response update\nDescription:\nExpose the updated bonus response in catalog service.\nAcceptance criteria:\n- Bonus response returns the new fields.",
+      "final_workflow_input_hash": "6a3a424dab7b15e88376ffafe8a96ee420ff1b1058f106cb5864e5afdf4bfd99",
+      "raw_jira_text_length": 157,
+      "parsed_jira_sections": {
+        "line_count": 5,
+        "bullet_count": 1,
+        "question_count": 0,
+        "jira_keys": [],
+        "first_line": "Title: Bonus response update"
+      },
+      "normalized_task_text": "Title: Bonus response update Description: Expose the updated bonus response in catalog service. Acceptance criteria: - Bonus response returns the new fields.",
+      "baseline_summary": "The baseline plan targets this task: Title: Bonus response update Description: Expose the updated bonus response in catalog service. Acceptance criteria: - Bonus response returns the new fields..",
+      "retrieval_query_text": "Title: Bonus response update Description: Expose the updated bonus response in catalog service. Acceptance criteria: - Bonus response returns the new fields.",
+      "configured_provider": "gitnexus_http",
+      "repo_metadata_provider": "gitnexus_http",
+      "provider_used": "gitnexus_http",
+      "provider_fallback": false,
+      "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+      "mcp_initialize_attempted": true,
+      "mcp_initialize_succeeded": true,
+      "mcp_session_reused": false,
+      "mcp_retry_after_initialize": false,
+      "mcp_failure_stage": "",
+      "mcp_session_id_present": true,
+      "mcp_notifications_initialized_accepted": true,
+      "mcp_session_id_present_before_notification": true,
+      "mcp_session_id_present_after_notification": true,
+      "mcp_initialize_http_status": 200,
+      "mcp_notifications_initialized_status": 202,
+      "mcp_tools_list_status": 200,
+      "mcp_tools_call_status": 200,
+      "mcp_session_reset_count": 0,
+      "gitnexus_tool_name": "query",
+      "gitnexus_query_payload": "Bonus response update | catalog service | bonus response updated fields",
+      "gitnexus_tool_arguments_sent": {
+        "query": "Bonus response update | catalog service | bonus response updated fields",
+        "repo_path": "/repos/catalog_service"
+      },
+      "gitnexus_raw_result_excerpt": "{\"items\":[{\"files\":[\"src/Catalog.Api/Controllers/BonusController.cs\"]}]}",
+      "gitnexus_unwrapped_result_excerpt": "{\"files\":[{\"path\":\"src/Catalog.Api/Controllers/BonusController.cs\"}],\"symbols\":[{\"symbol\":\"GetBonusInfoHandler\"}]}",
+      "gitnexus_raw_hit_count": 3,
+      "gitnexus_raw_hit_kinds": [
+        "file",
+        "symbol"
+      ],
+      "gitnexus_unwrapped_hit_count": 3,
+      "gitnexus_unwrapped_hit_kinds": [
+        "file",
+        "symbol"
+      ],
+      "normalization_source_shape": "dict:text->dict:files,symbols",
+      "normalization_drop_reasons": [],
+      "raw_hit_count": 3,
+      "normalized_file_count": 1,
+      "normalized_symbol_count": 1,
+      "normalized_module_count": 1,
+      "dropped_hit_count": 0,
+      "evidence_mapping_reason": "mapped file evidence into likely_files and likely_file_details",
+      "resolved_process_count": 1,
+      "resolved_symbol_count": 1,
+      "resolved_definition_count": 1,
+      "resolved_file_count": 1,
+      "evidence_resolution_reason": "resolved concrete files from processes, process_symbols, and definitions",
+      "backend_repo_visible_after_analyze": true,
+      "backend_visible_repo_count": 1,
+      "backend_visible_repo_ids_or_paths": [
+        "/repos/catalog_service"
+      ],
+      "gitnexus_home_used_for_analyze": "/gitnexus",
+      "gitnexus_home_used_for_backend": "/gitnexus",
+      "raw_list_repos_result_excerpt": "{\"repos\":[{\"repo_path\":\"/repos/catalog_service\"}]}",
+      "visibility_match_reason": "matched exact normalized path or repo id from GitNexus list_repos",
+      "normalized_repo_visibility_targets": [
+        "/repos/catalog_service",
+        "catalog_service"
+      ],
+      "candidate_repos_count": 0,
+      "candidate_files_count": 3,
+      "selected_files_count": 1,
+      "top_candidate_files": [
+        {
+          "name": "src/Catalog.Api/Controllers/BonusController.cs",
+          "confidence": 0.91,
+          "reason": "route match, controller/action linkage"
+        }
+      ],
+      "top_candidate_symbols": [
+        {
+          "name": "GetBonusInfoHandler",
+          "confidence": 0.82,
+          "reason": "handler dependency linkage"
+        }
+      ],
+      "top_closest_areas": [
+        {
+          "area": "src/Catalog.Api/Controllers",
+          "confidence": 0.74,
+          "reason": "route match"
+        }
+      ],
+      "dropped_candidates_reasons": [
+        "no repo match areas"
+      ],
+      "final_merge_strategy": "baseline_plus_repo_targets",
+      "repo_routing_audit": [
+        {
+          "repo_id": "catalog_service",
+          "provider_used": "gitnexus_http",
+          "selection_decision": "selected_gitnexus_http",
+          "accepted": true
+        }
+      ],
+      "spec_snapshot": {
+        "goal_length": 0,
+        "context_length": 0,
+        "requirements_count": 0,
+        "acceptance_criteria_count": 0,
+        "risks_count": 1
+      }
+    }
   },
   "review_result": null,
   "research_result": null,

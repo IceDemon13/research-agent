@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "repo_id": "synced",
+  "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/repo-onboarding-1394b99b2f964ce19bdce0c394ae0fa1/repos/synced",
+  "main_docs_candidates": [
+    "README.md"
+  ],
+  "config_candidates": [],
+  "likely_test_paths": [],
+  "file_count": 1,
+  "indexed_at": "2026-03-24T17:51:23.864096+00:00",
+  "files": [
+    {
+      "path": "README.md",
+      "size": 15,
+      "extension": ".md",
+      "line_count": 1
+    }
+  ]
+}

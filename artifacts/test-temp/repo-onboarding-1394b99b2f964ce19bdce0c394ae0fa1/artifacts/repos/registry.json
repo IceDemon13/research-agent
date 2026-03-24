@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "repos": [
+    {
+      "repo_id": "synced",
+      "root_path": "C:\\work\\my repositories\\research-agent\\artifacts\\test-temp\\repo-onboarding-1394b99b2f964ce19bdce0c394ae0fa1\\repos\\synced",
+      "local_path": "C:\\work\\my repositories\\research-agent\\artifacts\\test-temp\\repo-onboarding-1394b99b2f964ce19bdce0c394ae0fa1\\repos\\synced",
+      "remote_url": "https://bitbucket.org/acme/synced.git",
+      "display_name": "Synced Repo",
+      "default_branch": "main",
+      "indexed_at": "2026-03-24T17:51:23.864096+00:00",
+      "status": "indexed",
+      "index_status": "ready",
+      "indexed_head": "new-head",
+      "index_error": "",
+      "reindex_required": false,
+      "sync_status": "synced",
+      "last_sync_at": "2026-03-24T17:51:18.458616+00:00",
+      "sync_error": "",
+      "intelligence_provider": "native",
+      "gitnexus_indexed": false,
+      "gitnexus_indexed_at": "",
+      "gitnexus_index_status": "",
+      "gitnexus_index_error": "",
+      "gitnexus_last_fallback_reason": ""
+    }
+  ]
+}

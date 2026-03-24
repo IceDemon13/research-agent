@@ -1,0 +1,45 @@
+{
+  "run_id": "497a628a1cba4fbe97e59a0f50c80030",
+  "goal": "оновити шаблон смс\n\nRewrite this into a Jira-ready task draft using only the free-text input. Do not use repo context and do not invent file paths, modules, functions, services, endpoints, or implementation details unless they are explicitly present in the input. If the input is ambiguous, keep the draft concise, add open questions, and reduce technical specificity.",
+  "status": "success",
+  "started_at": "2026-03-24T16:39:20.726404+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "",
+  "actor_context": {
+    "actor_id": "lead-1",
+    "actor_type": "api",
+    "role": "techlead",
+    "source_channel": "api",
+    "display_name": "Local API Developer",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-03-24T16:39:20.728409+00:00",
+  "steps": [
+    {
+      "name": "spec",
+      "status": "partial",
+      "started_at": "2026-03-24T16:39:20.727410+00:00",
+      "finished_at": "2026-03-24T16:39:20.728409+00:00",
+      "message": "Structured free-text task in deterministic mode.",
+      "error": null
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/497a628a1cba4fbe97e59a0f50c80030.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}

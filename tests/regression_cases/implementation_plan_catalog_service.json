@@ -1,0 +1,41 @@
+{
+  "case_id": "implementation_plan_catalog_service_snapshot",
+  "workflow_type": "implementation_plan",
+  "repo_id": "catalog_service",
+  "jira_ticket": "TEL-15555",
+  "jira_snapshot_title": "Повертати в методі картки товару catalog product масив з additional service",
+  "jira_snapshot_text": "Потрібно змінити метод картки товару catalog product так, щоб у відповіді повертався масив additional service.",
+  "use_live_jira": false,
+  "expected_signals": {
+    "workflow_starts": true,
+    "jira_fetch_succeeded": true,
+    "configured_provider": {
+      "in": [
+        "gitnexus_http",
+        "native"
+      ]
+    },
+    "provider_used": {
+      "in": [
+        "gitnexus_http",
+        "native"
+      ]
+    },
+    "repo_match": {
+      "in": [
+        "match",
+        "partial",
+        "low_confidence",
+        "unknown",
+        "mismatch"
+      ]
+    },
+    "no_mojibake": true
+  },
+  "forbidden_signals": {
+    "result_text": {
+      "contains": "Specification generated"
+    }
+  },
+  "notes": "Перевіряє, що implementation_plan стартує, чесно сигналізує repo match і не ламає текст."
+}

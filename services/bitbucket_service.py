@@ -1,17 +1,11 @@
 import json
-import re
 from urllib import error, parse, request
 
 from config import settings
 from contracts.pull_request_contract import PullRequestResult
 from logger_utils import log_line
 from services.scm_service import build_bitbucket_basic_auth_header
-
-
-BITBUCKET_REPO_PATTERNS = (
-    re.compile(r"^https?://bitbucket\.org/(?P<workspace>[^/]+)/(?P<repo>[^/.]+?)(?:\.git)?/?$"),
-    re.compile(r"^git@bitbucket\.org:(?P<workspace>[^/]+)/(?P<repo>[^/.]+?)(?:\.git)?$"),
-)
+from services.bitbucket_credentials import parse_bitbucket_remote
 
 
 class BitbucketService:
@@ -49,7 +43,11 @@ class BitbucketService:
                 error="Unsupported Bitbucket repository URL.",
             )
 
-        auth_header = self._build_auth_header()
+        auth_header = self._build_auth_header(
+            repo_id=repo_details["repo_slug"],
+            workspace=repo_details["workspace"],
+            remote_url=resolved_repo_url,
+        )
         if not auth_header:
             return PullRequestResult(
                 success=False,
@@ -143,15 +141,11 @@ class BitbucketService:
 
     @staticmethod
     def _parse_repo_url(repo_url: str) -> dict[str, str] | None:
-        for pattern in BITBUCKET_REPO_PATTERNS:
-            match = pattern.match(repo_url)
-            if match:
-                return {
-                    "workspace": str(match.group("workspace") or "").strip(),
-                    "repo_slug": str(match.group("repo") or "").strip(),
-                }
+        parsed = parse_bitbucket_remote(repo_url)
+        if parsed["workspace"] and parsed["repo_slug"]:
+            return parsed
         return None
 
     @staticmethod
-    def _build_auth_header() -> str:
-        return build_bitbucket_basic_auth_header()
+    def _build_auth_header(*, repo_id: str = "", workspace: str = "", remote_url: str = "") -> str:
+        return build_bitbucket_basic_auth_header(repo_id=repo_id, workspace=workspace, remote_url=remote_url)

@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 @dataclass(slots=True)
 class SpecContract:
     title: str = ""
+    summary: str = ""
+    functional_requirements: list[str] = field(default_factory=list)
+    backend_changes: list[str] = field(default_factory=list)
+    frontend_changes: list[str] = field(default_factory=list)
+    open_questions: list[str] = field(default_factory=list)
     goal: str = ""
     context: str = ""
     scope: list[str] = field(default_factory=list)
