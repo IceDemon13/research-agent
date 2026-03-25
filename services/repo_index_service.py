@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -414,6 +415,11 @@ class RepositoryIndexService:
     def repo_storage_dir(self, repo_id: str) -> Path:
         repo = self._require_repo(repo_id)
         return self._repo_storage_dir(repo.repo_id)
+
+    def clear_repo_storage(self, repo_id: str) -> None:
+        target_dir = self._repo_storage_dir(str(repo_id or "").strip())
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
 
     def _require_repo(self, repo_id: str):
         repo = self._registry_service.get_repo(repo_id)

@@ -207,6 +207,7 @@ class ScmServiceTests(unittest.TestCase):
             bitbucket_api_token="",
             bitbucket_username="",
             bitbucket_app_password="",
+            repo_clone_timeout_seconds=180,
         )
 
         with patch("services.scm_service.subprocess.run", return_value=completed) as mocked_run, patch.object(
@@ -228,6 +229,7 @@ class ScmServiceTests(unittest.TestCase):
         self.assertIn("https://bitbucket.org/acme/sample-repo.git", raw_command)
         self.assertNotIn("tok/en:+?&=@", " ".join(result.command))
         self.assertEqual(result.data["remote_url"], "https://bitbucket.org/acme/sample-repo.git")
+        self.assertEqual(mocked_run.call_args.kwargs["timeout"], 180)
 
     def test_clone_repo_sanitizes_git_error_output(self) -> None:
         target_path = self.workspace_root / "failed-clone"
@@ -236,13 +238,15 @@ class ScmServiceTests(unittest.TestCase):
             bitbucket_api_token="",
             bitbucket_username="",
             bitbucket_app_password="",
+            repo_clone_timeout_seconds=300,
         )
         completed = SimpleNamespace(
             returncode=1,
             stdout="",
             stderr=(
                 "fatal: could not read "
-                "https://x-token-auth:secret-token@bitbucket.org/acme/sample-repo.git"
+                "https://x-token-auth:secret-token@bitbucket.org/acme/sample-repo.git "
+                "Authorization: Basic dC10b2tlbg=="
             ),
         )
 
@@ -258,6 +262,8 @@ class ScmServiceTests(unittest.TestCase):
 
         self.assertFalse(result.success)
         self.assertNotIn("secret-token", result.error)
+        self.assertNotIn("Authorization: Basic dC10b2tlbg==", result.error)
+        self.assertIn("Authorization: Basic <redacted>", result.error)
         self.assertNotIn("x-token-auth:", result.error)
         self.assertIn("https://bitbucket.org/acme/sample-repo.git", result.error)
 

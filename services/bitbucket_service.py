@@ -16,6 +16,7 @@ class BitbucketService:
         target_branch: str,
         title: str,
         description: str,
+        credential_alias: str = "",
     ) -> PullRequestResult:
         resolved_repo_url = str(repo_url or "").strip()
         resolved_title = str(title or "").strip()
@@ -47,6 +48,7 @@ class BitbucketService:
             repo_id=repo_details["repo_slug"],
             workspace=repo_details["workspace"],
             remote_url=resolved_repo_url,
+            credential_alias=credential_alias,
         )
         if not auth_header:
             return PullRequestResult(
@@ -147,5 +149,5 @@ class BitbucketService:
         return None
 
     @staticmethod
-    def _build_auth_header(*, repo_id: str = "", workspace: str = "", remote_url: str = "") -> str:
-        return build_bitbucket_basic_auth_header(repo_id=repo_id, workspace=workspace, remote_url=remote_url)
+    def _build_auth_header(*, repo_id: str = "", workspace: str = "", remote_url: str = "", credential_alias: str = "") -> str:
+        return build_bitbucket_basic_auth_header(repo_id=repo_id, workspace=workspace, remote_url=remote_url, credential_alias=credential_alias)

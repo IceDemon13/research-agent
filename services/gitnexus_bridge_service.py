@@ -27,6 +27,12 @@ _QUERY_STOPWORDS = {
     "method", "field", "endpoint", "service", "repo", "task", "jira",
 }
 
+_QUERY_BOOST_TERMS = {
+    "field", "fields", "flag", "flags", "response", "request", "dto", "model",
+    "card", "list", "history", "product", "products", "catalog", "accessories",
+    "controller", "handler", "service",
+}
+
 
 def _safe_text(value: object) -> str:
     return str(value or "").strip()
@@ -155,6 +161,26 @@ def _tokenize_query_terms(value: str) -> list[str]:
     return result
 
 
+def _extract_focus_phrases(value: str) -> list[str]:
+    tokens = _tokenize_query_terms(value)
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for size in (3, 2):
+        for index in range(0, max(0, len(tokens) - size + 1)):
+            phrase_tokens = tokens[index:index + size]
+            if not any(token.lower() in _QUERY_BOOST_TERMS for token in phrase_tokens):
+                continue
+            phrase = " ".join(phrase_tokens).strip()
+            lowered = phrase.lower()
+            if not phrase or lowered in seen:
+                continue
+            seen.add(lowered)
+            phrases.append(phrase)
+            if len(phrases) >= 6:
+                return phrases
+    return phrases
+
+
 def _build_focused_query(task_text: str) -> str:
     lines = [_safe_text(line) for line in str(task_text or "").splitlines() if _safe_text(line)]
     title = lines[0] if lines else _safe_text(task_text)
@@ -163,13 +189,14 @@ def _build_focused_query(task_text: str) -> str:
         title = title[:160].rsplit(" ", 1)[0].strip() or title[:160].strip()
     quoted = re.findall(r"['\"`“”](.+?)['\"`“”]", str(task_text or ""))
     tokens = _tokenize_query_terms(task_text)
+    focus_phrases = _extract_focus_phrases(task_text)
     query_parts: list[str] = []
-    for value in [title] + quoted + [" ".join(tokens[:10])]:
+    for value in [title] + quoted + focus_phrases + tokens[:8]:
         part = _safe_text(value)
         if not part or part in query_parts:
             continue
         query_parts.append(part)
-    focused = " | ".join(query_parts[:3]).strip()
+    focused = " | ".join(query_parts[:6]).strip()
     return focused or _safe_text(task_text)
 
 

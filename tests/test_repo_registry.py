@@ -107,6 +107,56 @@ class RepositoryRegistryServiceTests(unittest.TestCase):
         self.assertEqual(second.root_path, first.root_path)
         self.assertEqual(len(self.service.list_repos()), 1)
 
+    def test_update_repo_metadata_persists_credential_alias(self) -> None:
+        repo_root = self.workspace_root / "alias-repo"
+        repo_root.mkdir(parents=True)
+        metadata = self.service.register_repo(
+            root_path=str(repo_root),
+            repo_id="alias-repo",
+            display_name="Alias Repo",
+        )
+
+        updated = self.service.update_repo_metadata(
+            metadata.repo_id,
+            credential_alias="CATALOG_TEST",
+            auth_mode="token",
+        )
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.credential_alias, "CATALOG_TEST")
+        self.assertEqual(updated.auth_mode, "token")
+
+    def test_deleted_repo_is_hidden_from_active_list_and_can_be_revived(self) -> None:
+        repo_root = self.workspace_root / "deleted-repo"
+        repo_root.mkdir(parents=True)
+        self.service.register_repo(
+            root_path=str(repo_root),
+            repo_id="deleted-repo",
+            display_name="Deleted Repo",
+            remote_url="https://bitbucket.org/acme/deleted-repo.git",
+        )
+        self.service.update_repo_metadata(
+            "deleted-repo",
+            is_deleted=True,
+            deleted_at="2026-03-25T00:00:00+00:00",
+            status="archived",
+        )
+
+        self.assertEqual([repo.repo_id for repo in self.service.list_repos()], [])
+        deleted = self.service.get_repo("deleted-repo", include_deleted=True)
+        self.assertIsNotNone(deleted)
+        self.assertTrue(deleted.is_deleted)
+
+        revived = self.service.register_repo(
+            root_path=str(repo_root),
+            repo_id="deleted-repo",
+            display_name="Deleted Repo",
+            remote_url="https://bitbucket.org/acme/deleted-repo.git",
+        )
+
+        self.assertFalse(revived.is_deleted)
+        self.assertEqual([repo.repo_id for repo in self.service.list_repos()], ["deleted-repo"])
+
 
 if __name__ == "__main__":
     unittest.main()

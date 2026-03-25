@@ -38,6 +38,7 @@ class _LoadedSettings(BaseSettings):
     validation_stop_on_failure: bool = False
     validation_output_max_chars: int = 4000
     validation_timeout_seconds: int = 120
+    repo_clone_timeout_seconds: int = 300
     bitbucket_api_base_url: str = "https://api.bitbucket.org/2.0"
     bitbucket_repo_token: str = ""
     bitbucket_username: str = ""
@@ -179,6 +180,7 @@ class RuntimeSettings:
     validation_stop_on_failure: bool
     validation_output_max_chars: int
     validation_timeout_seconds: int
+    repo_clone_timeout_seconds: int
     bitbucket_api_base_url: str
     bitbucket_repo_token: str
     bitbucket_username: str
@@ -313,6 +315,7 @@ class Settings:
             validation_stop_on_failure=self._loaded.validation_stop_on_failure,
             validation_output_max_chars=self._loaded.validation_output_max_chars,
             validation_timeout_seconds=self._loaded.validation_timeout_seconds,
+            repo_clone_timeout_seconds=max(30, int(self._loaded.repo_clone_timeout_seconds or 300)),
             bitbucket_api_base_url=self._loaded.bitbucket_api_base_url,
             bitbucket_repo_token=self._loaded.bitbucket_repo_token,
             bitbucket_username=self._loaded.bitbucket_username,

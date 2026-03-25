@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
+import re
 from typing import Any
 
 from config import RepoIntelligenceSettings, settings
@@ -16,6 +18,8 @@ from contracts.repo_metadata import RepoMetadata
 from services.gitnexus_bridge_service import GitNexusBridgeService
 from services.gitnexus_index_service import GitNexusIndexService
 from services.gitnexus_ui_link_service import GitNexusUiLinkService
+from services.historical_change_memory_service import HistoricalChangeMemoryService
+from services.multi_repo_routing_service import MultiRepoRoutingService
 from services.repo_index_service import RepositoryIndexService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
 
@@ -90,6 +94,347 @@ def _build_closest_areas(file_paths: list[str]) -> list[dict[str, Any]]:
         if len(areas) >= 3:
             break
     return areas
+
+
+_RERANK_STOPWORDS = {
+    "the", "and", "for", "with", "from", "this", "that", "task", "jira",
+    "додати", "оновити", "змінити", "потрібно", "методі", "метод", "для",
+}
+
+_REPO_GLOBAL_NOISE_TOKENS = {
+    "telemart", "catalog", "service", "tests", "test", "src", "api", "application",
+    "infrastructure", "contracts", "solution", "project",
+}
+
+_DOMAIN_PRIORITY_TOKENS = {
+    "accessories", "accessory", "product", "category", "request", "response",
+    "dto", "controller", "handler", "service", "external", "mainclient", "feature", "features",
+}
+
+_GENERIC_SYMBOL_NAMES = {
+    "handle",
+    "execute",
+    "validate",
+    "filter",
+    "onactionexecuting",
+    "program",
+    "startup",
+}
+
+
+def _normalized_match_path(path: str) -> tuple[str, str]:
+    normalized = _safe_text(path).replace("\\", "/").strip().lower().strip("/")
+    wrapped = f"/{normalized}/" if normalized else "/"
+    basename = Path(normalized).name.lower()
+    return wrapped, basename
+
+
+def _task_focus_terms(task_text: str) -> list[str]:
+    tokens = re.findall(r"[A-Za-zА-Яа-яІіЇїЄє0-9_][A-Za-zА-Яа-яІіЇїЄє0-9_/-]{2,}", _safe_text(task_text))
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in tokens:
+        token = _safe_text(raw).lower()
+        if not token or token in _RERANK_STOPWORDS or token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    phrases: list[str] = []
+    for size in (3, 2):
+        for index in range(0, max(0, len(normalized) - size + 1)):
+            phrase = " ".join(normalized[index:index + size]).strip()
+            if phrase and phrase not in seen:
+                seen.add(phrase)
+                phrases.append(phrase)
+    return normalized[:12] + phrases[:8]
+
+
+def _task_mentions_infra(task_text: str) -> bool:
+    lowered = _safe_text(task_text).lower()
+    keywords = ("startup", "program.cs", "db", "database", "migration", "dbup", "validator", "validation", "build", "test", "tests")
+    return any(keyword in lowered for keyword in keywords)
+
+
+def _task_mentions_price_download_export(task_text: str) -> bool:
+    lowered = _safe_text(task_text).lower()
+    keywords = ("price", "prices", "pricing", "download", "export", "csv", "xlsx", "file", "import")
+    return any(keyword in lowered for keyword in keywords)
+
+
+def _task_prefers_read_endpoints(task_text: str) -> bool:
+    lowered = _safe_text(task_text).lower()
+    signals = (
+        "return", "display", "show", "field", "list", "card", "response", "request",
+        "product", "products", "product info", "product by text", "product query",
+        "accessories", "accessory", "category", "mainclient", "external api", "external client",
+    )
+    return any(signal in lowered for signal in signals)
+
+
+def _is_generic_symbol_name(name: str) -> bool:
+    lowered = re.sub(r"[^a-z0-9]+", "", _safe_text(name).lower())
+    if not lowered:
+        return False
+    if lowered in _GENERIC_SYMBOL_NAMES:
+        return True
+    return (
+        lowered.startswith("trim")
+        or lowered.endswith("validator")
+        or lowered.endswith("filter")
+        or "validatoractionfilter" in lowered
+    )
+
+
+def _is_penalized_file(path: str) -> bool:
+    return _is_test_file(path) or _is_infra_file(path)
+
+
+def _is_test_file(path: str) -> bool:
+    wrapped, basename = _normalized_match_path(path)
+    return "/tests/" in wrapped or "/test/" in wrapped or basename.endswith(".csproj")
+
+
+def _is_infra_file(path: str) -> bool:
+    wrapped, basename = _normalized_match_path(path)
+    return (
+        basename == "program.cs"
+        or basename.startswith("startup.")
+        or "dbupdater" in basename
+        or "/dbup/" in wrapped
+        or "/migrations/" in wrapped
+        or "validatoractionfilter" in basename
+        or "/filters/" in wrapped
+        or "/validators/" in wrapped
+    )
+
+
+def _is_feature_file(path: str) -> bool:
+    lowered = _safe_text(path).replace("\\", "/").lower()
+    return any(
+        token in lowered
+        for token in (
+            "/controllers/",
+            "/handlers/",
+            "/requests/",
+            "/responses/",
+            "/dto",
+            "/contracts/",
+            "/services/",
+            "/features/",
+            "/product",
+            "/catalog",
+            "/accessor",
+            "/external/",
+            "/mainclient/",
+        )
+    )
+
+
+def _suppressed_repo_global_terms(items: list[dict[str, Any]]) -> set[str]:
+    token_counts: dict[str, int] = {}
+    path_count = 0
+    for item in list(items or []):
+        path = _safe_text(dict(item or {}).get("name", ""))
+        if not path:
+            continue
+        path_count += 1
+        path_tokens = {
+            token.lower()
+            for token in re.findall(r"[A-Za-zА-Яа-яІіЇїЄє0-9_]{3,}", path.replace("\\", "/"))
+        }
+        for token in path_tokens:
+            token_counts[token] = token_counts.get(token, 0) + 1
+    suppressed = set(_REPO_GLOBAL_NOISE_TOKENS)
+    threshold = max(3, int(path_count * 0.45)) if path_count else 3
+    for token, count in token_counts.items():
+        if token in _DOMAIN_PRIORITY_TOKENS:
+            continue
+        if count >= threshold:
+            suppressed.add(token)
+    return suppressed
+
+
+def _term_overlap_score(value: str, terms: list[str], suppressed_terms: set[str] | None = None) -> float:
+    lowered = _safe_text(value).replace("\\", "/").lower()
+    score = 0.0
+    suppressed = {item.lower() for item in list(suppressed_terms or set())}
+    for term in list(terms or [])[:12]:
+        if len(term) < 3:
+            continue
+        if " " not in term and term.lower() in suppressed:
+            continue
+        if term in lowered:
+            score += 0.12 if " " not in term else 0.18
+    return min(score, 0.6)
+
+
+def _basename_overlap_score(value: str, terms: list[str], suppressed_terms: set[str] | None = None) -> float:
+    basename = Path(_safe_text(value).replace("\\", "/")).name.lower()
+    score = 0.0
+    suppressed = {item.lower() for item in list(suppressed_terms or set())}
+    for term in list(terms or [])[:12]:
+        if len(term) < 3:
+            continue
+        if " " not in term and term.lower() in suppressed:
+            continue
+        if term in basename:
+            score += 0.16 if " " not in term else 0.22
+    return min(score, 0.5)
+
+
+def _read_endpoint_file_bonus(path: str, task_text: str) -> float:
+    if not _task_prefers_read_endpoints(task_text):
+        return 0.0
+    lowered = _safe_text(path).replace("\\", "/").lower()
+    bonus = 0.0
+    if "query" in lowered and "handler" in lowered:
+        bonus += 0.24
+    if any(token in lowered for token in ("productinfo", "productbytext", "productquery")):
+        bonus += 0.2
+    if any(token in lowered for token in ("/request", "/requests/", "/response", "/responses/", "/dto", "request.", "response.", "dto.")):
+        bonus += 0.14
+    if "/external/" in lowered or "mainclient" in lowered:
+        bonus += 0.18
+    if any(token in lowered for token in ("accessor", "product", "category", "card", "list")):
+        bonus += 0.1
+    return min(bonus, 0.5)
+
+
+def _read_endpoint_module_bonus(name: str, task_text: str) -> float:
+    if not _task_prefers_read_endpoints(task_text):
+        return 0.0
+    lowered = _safe_text(name).lower()
+    bonus = 0.0
+    if "query" in lowered and "handler" in lowered:
+        bonus += 0.22
+    if any(token in lowered for token in ("productinfo", "productbytext", "productquery")):
+        bonus += 0.18
+    if any(token in lowered for token in ("request", "response", "dto", "mainclient")):
+        bonus += 0.14
+    if any(token in lowered for token in ("accessor", "product", "category", "external")):
+        bonus += 0.1
+    return min(bonus, 0.45)
+
+
+def _price_download_export_penalty(name: str, task_text: str) -> float:
+    if _task_mentions_price_download_export(task_text):
+        return 0.0
+    lowered = _safe_text(name).replace("\\", "/").lower()
+    return 0.45 if any(token in lowered for token in ("price", "download", "export")) else 0.0
+
+
+def _rerank_file_details(items: list[dict[str, Any]], task_text: str) -> tuple[list[dict[str, Any]], bool]:
+    terms = _task_focus_terms(task_text)
+    infra_allowed = _task_mentions_infra(task_text)
+    suppressed_terms = _suppressed_repo_global_terms(items)
+    ranked: list[dict[str, Any]] = []
+    weak_only = False
+    for item in list(items or []):
+        candidate = dict(item or {})
+        path = _safe_text(candidate.get("name", ""))
+        if not path:
+            continue
+        base = float(candidate.get("confidence", 0.0) or 0.0)
+        lexical_overlap = _basename_overlap_score(path, terms, suppressed_terms)
+        path_domain_score = _term_overlap_score(path, terms, suppressed_terms)
+        symbol_overlap_score = 0.12 if any(token in path.lower() for token in ("handler", "controller", "service", "request", "response", "dto")) else 0.0
+        graph_neighbor_score = 0.08 if any(token in _safe_text(candidate.get("reason", "")).lower() for token in ("linkage", "impact", "definition", "process", "handler", "controller")) else 0.0
+        feature_bonus = 0.18 if (_is_feature_file(path) and (lexical_overlap > 0.0 or path_domain_score > 0.0)) else (0.06 if _is_feature_file(path) else 0.0)
+        read_endpoint_bonus = _read_endpoint_file_bonus(path, task_text)
+        infra_penalty = 1.1 if (_is_infra_file(path) and not infra_allowed) else 0.0
+        test_penalty = 1.25 if (_is_test_file(path) and not infra_allowed) else 0.0
+        price_download_penalty = _price_download_export_penalty(path, task_text)
+        raw_before_penalties = base + lexical_overlap + path_domain_score + symbol_overlap_score + graph_neighbor_score + feature_bonus + read_endpoint_bonus
+        raw_after_penalties = raw_before_penalties - infra_penalty - test_penalty - price_download_penalty
+        final_score = max(0.0, raw_after_penalties)
+        confidence = max(0.0, min(1.0, raw_after_penalties))
+        candidate["confidence"] = round(confidence, 3)
+        candidate["reason"] = _safe_text(candidate.get("reason", ""))
+        candidate["lexical_overlap_score"] = round(lexical_overlap, 3)
+        candidate["path_domain_score"] = round(path_domain_score + feature_bonus + read_endpoint_bonus, 3)
+        candidate["symbol_overlap_score"] = round(symbol_overlap_score, 3)
+        candidate["graph_neighbor_score"] = round(graph_neighbor_score, 3)
+        candidate["infra_penalty"] = round(infra_penalty, 3)
+        candidate["test_penalty"] = round(test_penalty, 3)
+        candidate["raw_score_before_penalties"] = round(raw_before_penalties, 3)
+        candidate["raw_score_after_penalties"] = round(raw_after_penalties, 3)
+        candidate["raw_score_before_normalization"] = round(raw_after_penalties, 3)
+        candidate["final_score"] = round(final_score, 3)
+        triggered_penalties: list[str] = []
+        if infra_penalty > 0.0:
+            triggered_penalties.append("infra")
+        if test_penalty > 0.0:
+            triggered_penalties.append("test")
+        if price_download_penalty > 0.0:
+            triggered_penalties.append("price_download")
+        candidate["triggered_penalties"] = triggered_penalties
+        candidate["_penalized"] = (infra_penalty + test_penalty + price_download_penalty) > 0.0
+        candidate["_overlap"] = lexical_overlap + path_domain_score
+        ranked.append(candidate)
+    ranked.sort(key=lambda item: (-(float(item.get("final_score", 0.0) or 0.0)), _safe_text(item.get("name", ""))))
+    kept = [item for item in ranked if not (item.get("_penalized") and float(item.get("final_score", 0.0) or 0.0) < 0.75)]
+    if not kept and ranked:
+        weak_only = True
+    elif kept and all(bool(item.get("_penalized", False)) for item in kept):
+        weak_only = True
+    cleaned = []
+    for index, item in enumerate(kept[:8], start=1):
+        clone = dict(item)
+        clone.pop("_penalized", None)
+        clone.pop("_overlap", None)
+        clone["ranking_position"] = index
+        cleaned.append(clone)
+    return cleaned, weak_only
+
+
+def _rerank_module_details(items: list[dict[str, Any]], task_text: str) -> list[dict[str, Any]]:
+    terms = _task_focus_terms(task_text)
+    strong_non_generic_present = any(
+        _safe_text(dict(item or {}).get("name", "")) and not _is_generic_symbol_name(_safe_text(dict(item or {}).get("name", "")))
+        for item in list(items or [])
+    )
+    ranked: list[dict[str, Any]] = []
+    for item in list(items or []):
+        candidate = dict(item or {})
+        name = _safe_text(candidate.get("name", ""))
+        if not name:
+            continue
+        base = float(candidate.get("confidence", 0.0) or 0.0)
+        overlap = _term_overlap_score(name, terms)
+        role_bonus = 0.1 if any(token in name.lower() for token in ("handler", "controller", "service", "request", "response")) else 0.0
+        proc_penalty = 0.35 if name.lower().startswith("proc_") else 0.0
+        read_bonus = _read_endpoint_module_bonus(name, task_text)
+        generic_penalty = 0.0
+        if _is_generic_symbol_name(name):
+            generic_penalty = 0.65 if overlap < 0.15 and read_bonus == 0.0 else 0.2
+        price_download_penalty = _price_download_export_penalty(name, task_text)
+        final_confidence = max(0.0, min(1.0, base + overlap + role_bonus + read_bonus - proc_penalty - generic_penalty - price_download_penalty))
+        candidate["confidence"] = final_confidence
+        candidate["_generic_symbol"] = _is_generic_symbol_name(name)
+        candidate["_proc_penalty"] = proc_penalty
+        candidate["_generic_penalty"] = generic_penalty
+        candidate["_price_download_penalty"] = price_download_penalty
+        ranked.append(candidate)
+    ranked.sort(
+        key=lambda item: (
+            -(float(item.get("confidence", 0.0) or 0.0)),
+            bool(item.get("_generic_symbol", False)),
+            float(item.get("_proc_penalty", 0.0) or 0.0),
+            _safe_text(item.get("name", "")),
+        )
+    )
+    if strong_non_generic_present:
+        preferred = [item for item in ranked if not bool(item.get("_generic_symbol", False))]
+        ranked = preferred if preferred else ranked
+    cleaned = []
+    for item in ranked[:6]:
+        clone = dict(item)
+        clone.pop("_proc_penalty", None)
+        clone.pop("_generic_symbol", None)
+        clone.pop("_generic_penalty", None)
+        clone.pop("_price_download_penalty", None)
+        cleaned.append(clone)
+    return _unique_selection_items(cleaned, limit=6)
 
 
 def _normalized_related_file_universe(normalized: NormalizedRepoIntelligenceResult) -> list[str]:
@@ -371,7 +716,7 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
                 "provider_reason": normalized.fallback_reason or "GitNexus returned weak or empty evidence, so the native provider was used.",
                 **mcp_debug,
             }
-        return self._to_workflow_payload(normalized, request.workflow_name, request.changed_files, mcp_debug=mcp_debug)
+        return self._to_workflow_payload(normalized, request.workflow_name, request.changed_files, task_text=request.task_text, mcp_debug=mcp_debug)
 
     def _build_implementation_plan_result(self, repo: RepoMetadata, request: RepoQueryRequest) -> tuple[NormalizedRepoIntelligenceResult, dict[str, Any]]:
         mcp_debug = _empty_mcp_debug()
@@ -439,6 +784,7 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
         workflow_name: str,
         request_changed_files: list[str],
         *,
+        task_text: str = "",
         mcp_debug: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         mcp_debug_payload = _merge_mcp_debug(_empty_mcp_debug(), mcp_debug)
@@ -453,11 +799,26 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             if test_path not in [item["name"] for item in likely_file_details]
         ]
         likely_file_details.extend(test_candidates)
+        likely_file_details, weak_indirect_file_evidence = _rerank_file_details(likely_file_details, task_text)
+        supplemental_test_candidates = [
+            {"name": test_path, "confidence": 0.55, "reason": "GitNexus targeted test evidence"}
+            for test_path in _unique_strings(
+                [test for context in normalized.contexts for test in context.tests]
+                + [test for impact in normalized.impacts for test in impact.affected_tests]
+            )[:4]
+            if test_path not in [item["name"] for item in likely_file_details]
+        ]
+        if supplemental_test_candidates:
+            likely_file_details = _unique_selection_items(
+                likely_file_details + supplemental_test_candidates,
+                limit=8,
+            )
         likely_module_details = _unique_selection_items(
             [_normalize_symbol_hit(hit) for hit in (list(normalized.symbols) + list(normalized.processes))[:6]],
             limit=6,
         )
-        closest_areas = _build_closest_areas(file_universe)
+        likely_module_details = _rerank_module_details(likely_module_details, task_text)
+        closest_areas = _build_closest_areas([item["name"] for item in likely_file_details])
         if not closest_areas:
             seen_areas: set[str] = set()
             for hit in list(normalized.processes) + list(normalized.symbols):
@@ -477,7 +838,7 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             int(mcp_debug_payload.get("resolved_definition_count", 0) or 0)
             or int(mcp_debug_payload.get("resolved_file_count", 0) or 0)
         )
-        process_only_evidence = bool(not concrete_file_count and not strong_definition_mapping and (closest_areas or likely_module_details))
+        process_only_evidence = bool((weak_indirect_file_evidence or not concrete_file_count) and not strong_definition_mapping and (closest_areas or likely_module_details or weak_indirect_file_evidence))
         if workflow_name == "pre_review":
             issue_details: list[dict[str, Any]] = []
             for file_path in changed_files[:8]:
@@ -555,10 +916,10 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             "workflow_name": workflow_name,
             "repo_match": "match" if (concrete_file_count or strong_definition_mapping) else ("partial" if process_only_evidence else "low_confidence"),
             "repo_match_reason": (
-                "GitNexus query/context/impact evidence resolved to concrete files or strong symbols."
+                "GitNexus query/context/impact evidence resolved to concrete domain files or strong symbols."
                 if (concrete_file_count or strong_definition_mapping)
                 else (
-                    "GitNexus returned only process-level evidence without direct file resolution."
+                    "GitNexus returned only partial or indirect evidence without direct domain-file resolution."
                     if process_only_evidence
                     else "GitNexus returned weak repo-aware evidence."
                 )
@@ -567,7 +928,7 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             "selected_files_count": concrete_file_count,
             "candidate_module_count": len(likely_module_details),
             "selected_module_count": len(likely_module_details),
-            "top_candidate_files": [_normalize_selection_hit(hit) for hit in normalized.files[:5]],
+            "top_candidate_files": likely_file_details[:5],
             "top_candidate_symbols": likely_module_details[:5],
             "top_closest_areas": closest_areas[:3],
             "likely_file_details": likely_file_details,
@@ -593,14 +954,10 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             ],
             "recommendation": (
                 f"Start with {', '.join([item['name'] for item in likely_file_details[:3]])}"
-                + (
-                    f"; then verify {', '.join([item['name'] for item in likely_module_details[:2]])}."
-                    if likely_module_details
-                    else "."
-                )
+                + "."
                 if concrete_file_count
                 else (
-                    "GitNexus found process-level or closest-area evidence only; inspect "
+                    "GitNexus found mostly indirect process-level or closest-area evidence; inspect "
                     + ", ".join([item["name"] for item in likely_module_details[:2]] or [area["area"] for area in closest_areas[:2]])
                     + " before selecting concrete files."
                     if process_only_evidence or likely_module_details or closest_areas
@@ -640,6 +997,13 @@ class RepoIntelligenceService:
         self._gitnexus_index_service = GitNexusIndexService(
             repo_settings=self._repo_settings,
             registry_service=self._registry_service,
+        )
+        self._historical_change_memory_service = HistoricalChangeMemoryService(
+            registry_service=self._registry_service,
+        )
+        self._multi_repo_routing_service = MultiRepoRoutingService(
+            registry_service=self._registry_service,
+            historical_memory_service=self._historical_change_memory_service,
         )
         self._gitnexus_ui_link_service = GitNexusUiLinkService(repo_settings=self._repo_settings)
         self._native_provider = NativeRepoIntelligenceProvider(
@@ -767,19 +1131,29 @@ class RepoIntelligenceService:
         task_text: str,
         *,
         changed_files: list[str] | None = None,
+        jira_key: str = "",
     ) -> dict[str, Any]:
         normalized_repo_id = normalize_repo_id(repo_id)
-        repo = self.assign_provider_metadata(normalized_repo_id) or self._registry_service.get_repo(normalized_repo_id)
+        routing_debug = self._multi_repo_routing_service.route(
+            workflow_name=_safe_text(workflow_name),
+            task_text=_safe_text(task_text),
+            jira_key=_safe_text(jira_key),
+            requested_repo_id=normalized_repo_id,
+            changed_files=_unique_strings(changed_files or []),
+        )
+        selected_repo_id = _safe_text(dict((routing_debug.get("selected_repos", []) or [{}])[0]).get("repo_id", ""))
+        effective_repo_id = normalize_repo_id(selected_repo_id or normalized_repo_id)
+        repo = self.assign_provider_metadata(effective_repo_id) or self._registry_service.get_repo(effective_repo_id)
         if repo is None:
-            raise KeyError(f"Unknown repo_id: {normalized_repo_id}")
+            raise KeyError(f"Unknown repo_id: {effective_repo_id or normalized_repo_id}")
         repo = self._promote_gitnexus_ready_repo(repo, workflow_name)
-        repo = self._registry_service.refresh_repo_metadata(normalized_repo_id) or repo
+        repo = self._registry_service.refresh_repo_metadata(repo.repo_id) or repo
         selection_debug = self._selection_debug(repo, workflow_name)
         if selection_debug["selected_provider"] != "gitnexus_http":
             payload = self._native_provider.query_for_workflow(
                 repo,
                 RepoQueryRequest(
-                    repo_id=normalized_repo_id,
+                    repo_id=repo.repo_id,
                     workflow_name=_safe_text(workflow_name),
                     task_text=_safe_text(task_text),
                     changed_files=_unique_strings(changed_files or []),
@@ -789,8 +1163,9 @@ class RepoIntelligenceService:
             payload["provider_used"] = "native"
             payload["provider_fallback"] = False
             payload["fallback_to_native"] = False
-            payload["candidate_repos_count"] = 1
+            payload["candidate_repos_count"] = max(1, len(list(routing_debug.get("candidate_repos", []) or [])))
             payload["repo_routing_audit"] = _repo_routing_audit(repo, selection_debug, provider_used="native")
+            payload.update(routing_debug)
             payload["provider_reason"] = {
                 "configured_native_provider": f"Workflow '{workflow_name}' stayed on the native provider because REPO_INTELLIGENCE_PROVIDER is not set to gitnexus_http.",
                 "gitnexus_disabled": f"Workflow '{workflow_name}' stayed on the native provider because GitNexus is disabled.",
@@ -802,7 +1177,7 @@ class RepoIntelligenceService:
             )
             return payload
         request = RepoQueryRequest(
-            repo_id=normalized_repo_id,
+            repo_id=repo.repo_id,
             workflow_name=_safe_text(workflow_name),
             task_text=_safe_text(task_text),
             changed_files=_unique_strings(changed_files or []),
@@ -813,7 +1188,7 @@ class RepoIntelligenceService:
             reason = _safe_text(exc) or "GitNexus provider query failed."
             mcp_debug = _merge_mcp_debug(_empty_mcp_debug(), self._gitnexus_bridge_service.last_debug_snapshot())
             self._registry_service.update_repo_metadata(
-                normalized_repo_id,
+                repo.repo_id,
                 gitnexus_last_fallback_reason=reason,
                 gitnexus_index_status="failed",
                 gitnexus_index_error=reason,
@@ -828,26 +1203,32 @@ class RepoIntelligenceService:
                 "provider_used": "native",
                 "provider_fallback": True,
                 "provider_reason": fallback_reason,
-                "candidate_repos_count": 1,
+                "candidate_repos_count": max(1, len(list(routing_debug.get("candidate_repos", []) or []))),
                 "repo_routing_audit": _repo_routing_audit(repo, selection_debug, provider_used="native"),
+                **routing_debug,
                 **mcp_debug,
                 **selection_debug,
             }
         if str(payload.get("provider_used", "") or "").strip() == "gitnexus_http" and not bool(payload.get("provider_fallback", False)):
             self._registry_service.update_repo_metadata(
-                normalized_repo_id,
+                repo.repo_id,
                 gitnexus_last_fallback_reason="",
                 gitnexus_index_status="ready",
                 gitnexus_index_error="",
             )
             payload["gitnexus_index_status"] = "ready"
         else:
-            self._registry_service.update_repo_metadata(normalized_repo_id, gitnexus_last_fallback_reason="")
+            self._registry_service.update_repo_metadata(repo.repo_id, gitnexus_last_fallback_reason="")
         payload["fallback_to_native"] = bool(payload.get("fallback_to_native", False))
         payload["provider_used"] = str(payload.get("provider_used", "") or ("native" if payload.get("provider") == "native" else "gitnexus_http")).strip()
         payload["provider_fallback"] = bool(payload.get("provider_fallback", payload["fallback_to_native"]))
-        payload["candidate_repos_count"] = int(payload.get("candidate_repos_count", 1) or 1)
+        payload["candidate_repos_count"] = max(
+            int(payload.get("candidate_repos_count", 0) or 0),
+            len(list(routing_debug.get("candidate_repos", []) or [])),
+            1,
+        )
         payload["repo_routing_audit"] = list(payload.get("repo_routing_audit", []) or _repo_routing_audit(repo, selection_debug, provider_used=payload["provider_used"]))
+        payload.update({key: value for key, value in routing_debug.items() if key not in {"candidate_repos_count"}})
         payload.update(selection_debug)
         return payload
 

@@ -20,6 +20,8 @@ services:
     build:
       context: .
     restart: unless-stopped
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,6 +48,7 @@ services:
       VALIDATION_BUILD_COMMAND: ${VALIDATION_BUILD_COMMAND:-}
       VALIDATION_LINT_COMMAND: ${VALIDATION_LINT_COMMAND:-}
       VALIDATION_TEST_COMMAND: ${VALIDATION_TEST_COMMAND:-}
+      REPO_CLONE_TIMEOUT_SECONDS: ${REPO_CLONE_TIMEOUT_SECONDS:-300}
       REPO_CLONE_ROOT: ${REPO_CLONE_ROOT:-/repos}
       REPO_INTELLIGENCE_PROVIDER: ${REPO_INTELLIGENCE_PROVIDER:-native}
       GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-false}

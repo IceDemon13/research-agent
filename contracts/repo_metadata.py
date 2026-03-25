@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 REGISTRY_VERSION = 1
@@ -29,6 +30,21 @@ class RepoMetadata:
     gitnexus_index_status: str = ""
     gitnexus_index_error: str = ""
     gitnexus_last_fallback_reason: str = ""
+    repo_group: str = ""
+    capability_tags: list[str] = field(default_factory=list)
+    historical_change_count: int = 0
+    historical_last_seen_at: str = ""
+    credential_alias: str = ""
+    auth_mode: str = ""
+    is_deleted: bool = False
+    deleted_at: str = ""
+    deleted_by: str = ""
+    delete_reason: str = ""
+    local_repo_state: str = ""
+    local_git_valid: bool = False
+    head_resolved: bool = False
+    recovered_by_reclone: bool = False
+    onboarding_last_error: str = ""
 
     @classmethod
     def from_dict(cls, payload: dict | None) -> "RepoMetadata":
@@ -57,9 +73,28 @@ class RepoMetadata:
             gitnexus_index_status=str(item.get("gitnexus_index_status", "")).strip(),
             gitnexus_index_error=str(item.get("gitnexus_index_error", "")).strip(),
             gitnexus_last_fallback_reason=str(item.get("gitnexus_last_fallback_reason", "")).strip(),
+            repo_group=str(item.get("repo_group", "")).strip(),
+            capability_tags=[
+                str(tag).strip()
+                for tag in list(item.get("capability_tags", []) or [])
+                if str(tag).strip()
+            ],
+            historical_change_count=max(0, int(item.get("historical_change_count", 0) or 0)),
+            historical_last_seen_at=str(item.get("historical_last_seen_at", "")).strip(),
+            credential_alias=str(item.get("credential_alias", "")).strip(),
+            auth_mode=str(item.get("auth_mode", "")).strip(),
+            is_deleted=bool(item.get("is_deleted", False)),
+            deleted_at=str(item.get("deleted_at", "")).strip(),
+            deleted_by=str(item.get("deleted_by", "")).strip(),
+            delete_reason=str(item.get("delete_reason", "")).strip(),
+            local_repo_state=str(item.get("local_repo_state", "")).strip(),
+            local_git_valid=bool(item.get("local_git_valid", False)),
+            head_resolved=bool(item.get("head_resolved", False)),
+            recovered_by_reclone=bool(item.get("recovered_by_reclone", False)),
+            onboarding_last_error=str(item.get("onboarding_last_error", "")).strip(),
         )
 
-    def to_dict(self) -> dict[str, str | bool]:
+    def to_dict(self) -> dict[str, Any]:
         local_path = self.resolved_local_path
         return {
             "repo_id": self.repo_id,
@@ -83,6 +118,21 @@ class RepoMetadata:
             "gitnexus_index_status": self.gitnexus_index_status,
             "gitnexus_index_error": self.gitnexus_index_error,
             "gitnexus_last_fallback_reason": self.gitnexus_last_fallback_reason,
+            "repo_group": self.repo_group,
+            "capability_tags": list(self.capability_tags),
+            "historical_change_count": int(self.historical_change_count or 0),
+            "historical_last_seen_at": self.historical_last_seen_at,
+            "credential_alias": self.credential_alias,
+            "auth_mode": self.auth_mode,
+            "is_deleted": bool(self.is_deleted),
+            "deleted_at": self.deleted_at,
+            "deleted_by": self.deleted_by,
+            "delete_reason": self.delete_reason,
+            "local_repo_state": self.local_repo_state,
+            "local_git_valid": bool(self.local_git_valid),
+            "head_resolved": bool(self.head_resolved),
+            "recovered_by_reclone": bool(self.recovered_by_reclone),
+            "onboarding_last_error": self.onboarding_last_error,
         }
 
     @property

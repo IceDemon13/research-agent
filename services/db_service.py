@@ -113,7 +113,48 @@ class DatabaseService:
                 gitnexus_indexed_at TEXT NOT NULL DEFAULT '',
                 gitnexus_index_status TEXT NOT NULL DEFAULT '',
                 gitnexus_index_error TEXT NOT NULL DEFAULT '',
-                gitnexus_last_fallback_reason TEXT NOT NULL DEFAULT ''
+                gitnexus_last_fallback_reason TEXT NOT NULL DEFAULT '',
+                repo_group TEXT NOT NULL DEFAULT '',
+                capability_tags_json TEXT NOT NULL DEFAULT '[]',
+                historical_change_count INTEGER NOT NULL DEFAULT 0,
+                historical_last_seen_at TEXT NOT NULL DEFAULT '',
+                credential_alias TEXT NOT NULL DEFAULT '',
+                auth_mode TEXT NOT NULL DEFAULT '',
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT NOT NULL DEFAULT '',
+                deleted_by TEXT NOT NULL DEFAULT '',
+                delete_reason TEXT NOT NULL DEFAULT '',
+                local_repo_state TEXT NOT NULL DEFAULT '',
+                local_git_valid INTEGER NOT NULL DEFAULT 0,
+                head_resolved INTEGER NOT NULL DEFAULT 0,
+                recovered_by_reclone INTEGER NOT NULL DEFAULT 0,
+                onboarding_last_error TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS historical_task (
+                jira_key TEXT PRIMARY KEY,
+                normalized_task_text TEXT NOT NULL DEFAULT '',
+                task_snapshot_text TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS historical_change (
+                change_id TEXT PRIMARY KEY,
+                jira_key TEXT NOT NULL,
+                repo_id TEXT NOT NULL,
+                commit_hash TEXT NOT NULL,
+                branch_name TEXT NOT NULL DEFAULT '',
+                committed_at TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS historical_change_file (
+                change_id TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                PRIMARY KEY (change_id, file_path)
             )
             """,
             """
@@ -321,6 +362,96 @@ class DatabaseService:
             )
             self._ensure_column(
                 cursor,
+                "repos",
+                "repo_group",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "capability_tags_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "historical_change_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "historical_last_seen_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "credential_alias",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "auth_mode",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "is_deleted",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "deleted_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "deleted_by",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "delete_reason",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "local_repo_state",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "local_git_valid",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "head_resolved",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "recovered_by_reclone",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repos",
+                "onboarding_last_error",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
                 "runs",
                 "attempt_index",
                 "INTEGER NOT NULL DEFAULT 1",
@@ -384,6 +515,8 @@ class DatabaseService:
             self._ensure_index(cursor, "idx_runs_status", "runs", "status")
             self._ensure_index(cursor, "idx_runs_actor_id", "runs", "actor_id")
             self._ensure_index(cursor, "idx_runs_repo_id", "runs", "repo_id")
+            self._ensure_index(cursor, "idx_historical_change_repo_id", "historical_change", "repo_id")
+            self._ensure_index(cursor, "idx_historical_change_jira_key", "historical_change", "jira_key")
             self._backfill_user_role_names(cursor)
         self._bootstrapped = True
         if role_capability_map:
@@ -837,9 +970,12 @@ class DatabaseService:
                         repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
                         index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error,
                         intelligence_provider, gitnexus_indexed, gitnexus_indexed_at, gitnexus_index_status,
-                        gitnexus_index_error, gitnexus_last_fallback_reason
+                        gitnexus_index_error, gitnexus_last_fallback_reason, repo_group, capability_tags_json,
+                        historical_change_count, historical_last_seen_at, credential_alias, auth_mode,
+                        is_deleted, deleted_at, deleted_by, delete_reason,
+                        local_repo_state, local_git_valid, head_resolved, recovered_by_reclone, onboarding_last_error
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(repo_id) DO UPDATE SET
                         root_path = excluded.root_path,
                         local_path = excluded.local_path,
@@ -860,7 +996,22 @@ class DatabaseService:
                         gitnexus_indexed_at = excluded.gitnexus_indexed_at,
                         gitnexus_index_status = excluded.gitnexus_index_status,
                         gitnexus_index_error = excluded.gitnexus_index_error,
-                        gitnexus_last_fallback_reason = excluded.gitnexus_last_fallback_reason
+                        gitnexus_last_fallback_reason = excluded.gitnexus_last_fallback_reason,
+                        repo_group = excluded.repo_group,
+                        capability_tags_json = excluded.capability_tags_json,
+                        historical_change_count = excluded.historical_change_count,
+                        historical_last_seen_at = excluded.historical_last_seen_at,
+                        credential_alias = excluded.credential_alias,
+                        auth_mode = excluded.auth_mode,
+                        is_deleted = excluded.is_deleted,
+                        deleted_at = excluded.deleted_at,
+                        deleted_by = excluded.deleted_by,
+                        delete_reason = excluded.delete_reason,
+                        local_repo_state = excluded.local_repo_state,
+                        local_git_valid = excluded.local_git_valid,
+                        head_resolved = excluded.head_resolved,
+                        recovered_by_reclone = excluded.recovered_by_reclone,
+                        onboarding_last_error = excluded.onboarding_last_error
                     """
                 ),
                 self._params(
@@ -885,21 +1036,40 @@ class DatabaseService:
                     repo_metadata.gitnexus_index_status,
                     repo_metadata.gitnexus_index_error,
                     repo_metadata.gitnexus_last_fallback_reason,
+                    repo_metadata.repo_group,
+                    json.dumps(list(repo_metadata.capability_tags or []), ensure_ascii=False, sort_keys=True),
+                    int(repo_metadata.historical_change_count or 0),
+                    repo_metadata.historical_last_seen_at,
+                    repo_metadata.credential_alias,
+                    repo_metadata.auth_mode,
+                    1 if repo_metadata.is_deleted else 0,
+                    repo_metadata.deleted_at,
+                    repo_metadata.deleted_by,
+                    repo_metadata.delete_reason,
+                    repo_metadata.local_repo_state,
+                    1 if repo_metadata.local_git_valid else 0,
+                    1 if repo_metadata.head_resolved else 0,
+                    1 if repo_metadata.recovered_by_reclone else 0,
+                    repo_metadata.onboarding_last_error,
                 ),
             )
 
     def fetch_repo(self, repo_id: str) -> dict | None:
-        return self._fetch_one(
+        row = self._fetch_one(
             """
             SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
                    index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error,
                    intelligence_provider, gitnexus_indexed, gitnexus_indexed_at, gitnexus_index_status,
-                   gitnexus_index_error, gitnexus_last_fallback_reason
+                   gitnexus_index_error, gitnexus_last_fallback_reason, repo_group, capability_tags_json,
+                   historical_change_count, historical_last_seen_at, credential_alias, auth_mode,
+                   is_deleted, deleted_at, deleted_by, delete_reason,
+                   local_repo_state, local_git_valid, head_resolved, recovered_by_reclone, onboarding_last_error
             FROM repos
             WHERE repo_id = ?
             """,
             self._params(str(repo_id or "").strip()),
         )
+        return self._normalize_repo_row(row) if row is not None else None
 
     def list_repos(self) -> list[dict]:
         if not self.enabled:
@@ -913,14 +1083,157 @@ class DatabaseService:
                     SELECT repo_id, root_path, local_path, remote_url, display_name, default_branch, status, indexed_at,
                            index_status, indexed_head, index_error, reindex_required, sync_status, last_sync_at, sync_error,
                            intelligence_provider, gitnexus_indexed, gitnexus_indexed_at, gitnexus_index_status,
-                           gitnexus_index_error, gitnexus_last_fallback_reason
+                           gitnexus_index_error, gitnexus_last_fallback_reason, repo_group, capability_tags_json,
+                           historical_change_count, historical_last_seen_at, credential_alias, auth_mode,
+                           is_deleted, deleted_at, deleted_by, delete_reason,
+                           local_repo_state, local_git_valid, head_resolved, recovered_by_reclone, onboarding_last_error
                     FROM repos
                     ORDER BY repo_id
                     """
                 )
             )
             rows = cursor.fetchall()
-        return [self._row_to_dict(row) for row in rows]
+        return [self._normalize_repo_row(self._row_to_dict(row)) for row in rows]
+
+    def upsert_historical_task(
+        self,
+        *,
+        jira_key: str,
+        normalized_task_text: str = "",
+        task_snapshot_text: str = "",
+    ) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    INSERT INTO historical_task (jira_key, normalized_task_text, task_snapshot_text, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(jira_key) DO UPDATE SET
+                        normalized_task_text = excluded.normalized_task_text,
+                        task_snapshot_text = excluded.task_snapshot_text,
+                        updated_at = excluded.updated_at
+                    """
+                ),
+                self._params(
+                    str(jira_key or "").strip().upper(),
+                    str(normalized_task_text or "").strip(),
+                    str(task_snapshot_text or "").strip(),
+                    _timestamp(),
+                ),
+            )
+
+    def replace_historical_changes_for_repo(self, repo_id: str, changes: list[dict]) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        resolved_repo_id = str(repo_id or "").strip()
+        with self._connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                self._sql(
+                    """
+                    DELETE FROM historical_change_file
+                    WHERE change_id IN (
+                        SELECT change_id FROM historical_change WHERE repo_id = ?
+                    )
+                    """
+                ),
+                self._params(resolved_repo_id),
+            )
+            cursor.execute(
+                self._sql("DELETE FROM historical_change WHERE repo_id = ?"),
+                self._params(resolved_repo_id),
+            )
+            for item in list(changes or []):
+                change = dict(item or {})
+                change_id = str(change.get("change_id", "") or "").strip()
+                if not change_id:
+                    continue
+                cursor.execute(
+                    self._sql(
+                        """
+                        INSERT INTO historical_change (
+                            change_id, jira_key, repo_id, commit_hash, branch_name, committed_at, created_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """
+                    ),
+                    self._params(
+                        change_id,
+                        str(change.get("jira_key", "") or "").strip().upper(),
+                        resolved_repo_id,
+                        str(change.get("commit_hash", "") or "").strip(),
+                        str(change.get("branch_name", "") or "").strip(),
+                        str(change.get("committed_at", "") or "").strip(),
+                        _timestamp(),
+                    ),
+                )
+                for file_path in list(change.get("changed_files", []) or []):
+                    normalized_path = str(file_path or "").strip()
+                    if not normalized_path:
+                        continue
+                    cursor.execute(
+                        self._sql(
+                            """
+                            INSERT INTO historical_change_file (change_id, file_path)
+                            VALUES (?, ?)
+                            ON CONFLICT(change_id, file_path) DO NOTHING
+                            """
+                        ),
+                        self._params(change_id, normalized_path),
+                    )
+
+    def fetch_historical_tasks(self) -> list[dict]:
+        return self._fetch_all(
+            """
+            SELECT jira_key, normalized_task_text, task_snapshot_text, updated_at
+            FROM historical_task
+            ORDER BY jira_key ASC
+            """,
+            self._params(),
+        )
+
+    def fetch_historical_changes(self, *, repo_id: str = "") -> list[dict]:
+        if not self.enabled:
+            return []
+        self.bootstrap_schema()
+        query = """
+            SELECT c.change_id, c.jira_key, c.repo_id, c.commit_hash, c.branch_name, c.committed_at, c.created_at,
+                   f.file_path
+            FROM historical_change c
+            LEFT JOIN historical_change_file f ON f.change_id = c.change_id
+        """
+        params: tuple = self._params()
+        if str(repo_id or "").strip():
+            query += " WHERE c.repo_id = ?"
+            params = self._params(str(repo_id or "").strip())
+        query += " ORDER BY c.committed_at DESC, c.change_id ASC, f.file_path ASC"
+        rows = self._fetch_all(query, params)
+        grouped: dict[str, dict] = {}
+        for row in rows:
+            change_id = str(row.get("change_id", "") or "").strip()
+            if not change_id:
+                continue
+            entry = grouped.setdefault(
+                change_id,
+                {
+                    "change_id": change_id,
+                    "jira_key": str(row.get("jira_key", "") or "").strip(),
+                    "repo_id": str(row.get("repo_id", "") or "").strip(),
+                    "commit_hash": str(row.get("commit_hash", "") or "").strip(),
+                    "branch_name": str(row.get("branch_name", "") or "").strip(),
+                    "committed_at": str(row.get("committed_at", "") or "").strip(),
+                    "created_at": str(row.get("created_at", "") or "").strip(),
+                    "changed_files": [],
+                },
+            )
+            file_path = str(row.get("file_path", "") or "").strip()
+            if file_path:
+                entry["changed_files"].append(file_path)
+        return list(grouped.values())
 
     def upsert_run(self, run: RunRecord) -> None:
         if not self.enabled:
@@ -1239,6 +1552,12 @@ class DatabaseService:
         if isinstance(row, sqlite3.Row):
             return {key: row[key] for key in row.keys()}
         return dict(row)
+
+    @classmethod
+    def _normalize_repo_row(cls, row: dict | None) -> dict:
+        payload = dict(row or {})
+        payload["capability_tags"] = cls._load_json_list(payload.pop("capability_tags_json", "[]"))
+        return payload
 
     @staticmethod
     def _load_json_list(value: str) -> list[str]:

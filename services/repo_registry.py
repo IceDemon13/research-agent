@@ -122,10 +122,10 @@ class RepositoryRegistryService:
             raise ValueError(f"Root path is not a directory: {local_path or root_path}")
 
         state = self._load_state()
-        existing_for_root = self._find_repo_by_root(state, str(resolved_root_path))
+        existing_for_root = self._find_repo_by_root(state, str(resolved_root_path), include_deleted=True)
         requested_repo_id = _normalize_repo_id(repo_id)
 
-        if existing_for_root is not None:
+        if existing_for_root is not None and not bool(existing_for_root.is_deleted):
             if requested_repo_id and existing_for_root.repo_id != requested_repo_id:
                 raise ValueError(
                     f"Root path is already registered as repo_id '{existing_for_root.repo_id}'."
@@ -137,6 +137,27 @@ class RepositoryRegistryService:
             _base_repo_id(resolved_root_path, display_name, repo_id),
             existing_repo_ids,
         )
+        existing_deleted = self._find_repo_by_id(state, final_repo_id, include_deleted=True)
+        if final_repo_id in existing_repo_ids and existing_deleted is not None and bool(existing_deleted.is_deleted):
+            metadata = self._build_repo_metadata(
+                repo_id=final_repo_id,
+                root_path=resolved_root_path,
+                display_name=display_name,
+                default_branch=default_branch,
+                remote_url=remote_url,
+                intelligence_provider=existing_deleted.intelligence_provider,
+                repo_group=existing_deleted.repo_group,
+                capability_tags=list(existing_deleted.capability_tags),
+                credential_alias=existing_deleted.credential_alias,
+                auth_mode=existing_deleted.auth_mode,
+            )
+            updated_repos = [
+                metadata if repo.repo_id == final_repo_id else repo
+                for repo in state.repos
+            ]
+            self._save_state(RepoRegistryState(version=state.version, repos=updated_repos))
+            self._sync_repo_to_db(metadata)
+            return metadata
         if final_repo_id in existing_repo_ids:
             raise ValueError(f"Repository id is already registered: {final_repo_id}")
 
@@ -173,15 +194,18 @@ class RepositoryRegistryService:
             display_name=default_display_name,
         )
 
-    def get_repo(self, repo_id: str) -> RepoMetadata | None:
+    def get_repo(self, repo_id: str, *, include_deleted: bool = False) -> RepoMetadata | None:
         normalized_repo_id = _normalize_repo_id(repo_id)
         if not normalized_repo_id:
             return None
         state = self._load_state()
-        return self._find_repo_by_id(state, normalized_repo_id)
+        return self._find_repo_by_id(state, normalized_repo_id, include_deleted=include_deleted)
 
-    def list_repos(self) -> list[RepoMetadata]:
-        return list(self._load_state().repos)
+    def list_repos(self, *, include_deleted: bool = False) -> list[RepoMetadata]:
+        repos = list(self._load_state().repos)
+        if include_deleted:
+            return repos
+        return [repo for repo in repos if not bool(repo.is_deleted)]
 
     def refresh_repo_metadata(self, repo_id: str) -> RepoMetadata | None:
         normalized_repo_id = _normalize_repo_id(repo_id)
@@ -212,6 +236,21 @@ class RepositoryRegistryService:
             gitnexus_index_status=current.gitnexus_index_status,
             gitnexus_index_error=current.gitnexus_index_error,
             gitnexus_last_fallback_reason=current.gitnexus_last_fallback_reason,
+            repo_group=current.repo_group,
+            capability_tags=list(current.capability_tags),
+            historical_change_count=int(current.historical_change_count or 0),
+            historical_last_seen_at=current.historical_last_seen_at,
+            credential_alias=current.credential_alias,
+            auth_mode=current.auth_mode,
+            is_deleted=bool(current.is_deleted),
+            deleted_at=current.deleted_at,
+            deleted_by=current.deleted_by,
+            delete_reason=current.delete_reason,
+            local_repo_state=current.local_repo_state,
+            local_git_valid=bool(current.local_git_valid),
+            head_resolved=bool(current.head_resolved),
+            recovered_by_reclone=bool(current.recovered_by_reclone),
+            onboarding_last_error=current.onboarding_last_error,
         )
         updated_repos = [
             refreshed if repo.repo_id == refreshed.repo_id else repo
@@ -251,7 +290,7 @@ class RepositoryRegistryService:
         if not normalized_repo_id:
             return None
         state = self._load_state()
-        current = self._find_repo_by_id(state, normalized_repo_id)
+        current = self._find_repo_by_id(state, normalized_repo_id, include_deleted=True)
         if current is None:
             return None
         payload = current.to_dict()
@@ -286,6 +325,21 @@ class RepositoryRegistryService:
         gitnexus_index_status: str = "",
         gitnexus_index_error: str = "",
         gitnexus_last_fallback_reason: str = "",
+        repo_group: str = "",
+        capability_tags: list[str] | None = None,
+        historical_change_count: int = 0,
+        historical_last_seen_at: str = "",
+        credential_alias: str = "",
+        auth_mode: str = "",
+        is_deleted: bool = False,
+        deleted_at: str = "",
+        deleted_by: str = "",
+        delete_reason: str = "",
+        local_repo_state: str = "",
+        local_git_valid: bool = False,
+        head_resolved: bool = False,
+        recovered_by_reclone: bool = False,
+        onboarding_last_error: str = "",
     ) -> RepoMetadata:
         resolved_root_path = root_path.expanduser().resolve()
         detected_default_branch = _detect_default_branch(resolved_root_path) or (default_branch or "").strip()
@@ -317,6 +371,25 @@ class RepositoryRegistryService:
             gitnexus_index_status=str(gitnexus_index_status or "").strip(),
             gitnexus_index_error=str(gitnexus_index_error or "").strip(),
             gitnexus_last_fallback_reason=str(gitnexus_last_fallback_reason or "").strip(),
+            repo_group=str(repo_group or "").strip(),
+            capability_tags=[
+                str(tag).strip()
+                for tag in list(capability_tags or [])
+                if str(tag).strip()
+            ],
+            historical_change_count=max(0, int(historical_change_count or 0)),
+            historical_last_seen_at=str(historical_last_seen_at or "").strip(),
+            credential_alias=str(credential_alias or "").strip(),
+            auth_mode=str(auth_mode or "").strip(),
+            is_deleted=bool(is_deleted),
+            deleted_at=str(deleted_at or "").strip(),
+            deleted_by=str(deleted_by or "").strip(),
+            delete_reason=str(delete_reason or "").strip(),
+            local_repo_state=str(local_repo_state or "").strip(),
+            local_git_valid=bool(local_git_valid),
+            head_resolved=bool(head_resolved),
+            recovered_by_reclone=bool(recovered_by_reclone),
+            onboarding_last_error=str(onboarding_last_error or "").strip(),
         )
 
     def _load_state(self) -> RepoRegistryState:
@@ -342,16 +415,20 @@ class RepositoryRegistryService:
             self._db_service.upsert_repo(metadata)
 
     @staticmethod
-    def _find_repo_by_id(state: RepoRegistryState, repo_id: str) -> RepoMetadata | None:
+    def _find_repo_by_id(state: RepoRegistryState, repo_id: str, *, include_deleted: bool = False) -> RepoMetadata | None:
         for repo in state.repos:
             if repo.repo_id == repo_id:
+                if not include_deleted and bool(repo.is_deleted):
+                    return None
                 return repo
         return None
 
     @staticmethod
-    def _find_repo_by_root(state: RepoRegistryState, root_path: str) -> RepoMetadata | None:
+    def _find_repo_by_root(state: RepoRegistryState, root_path: str, *, include_deleted: bool = False) -> RepoMetadata | None:
         for repo in state.repos:
             if repo.root_path == root_path:
+                if not include_deleted and bool(repo.is_deleted):
+                    return None
                 return repo
         return None
 
@@ -392,12 +469,17 @@ def ensure_default_repo(
     )
 
 
-def get_repo(repo_id: str, storage_path: str | Path | None = None) -> RepoMetadata | None:
-    return build_repo_registry_service(storage_path).get_repo(repo_id)
+def get_repo(
+    repo_id: str,
+    storage_path: str | Path | None = None,
+    *,
+    include_deleted: bool = False,
+) -> RepoMetadata | None:
+    return build_repo_registry_service(storage_path).get_repo(repo_id, include_deleted=include_deleted)
 
 
-def list_repos(storage_path: str | Path | None = None) -> list[RepoMetadata]:
-    return build_repo_registry_service(storage_path).list_repos()
+def list_repos(storage_path: str | Path | None = None, *, include_deleted: bool = False) -> list[RepoMetadata]:
+    return build_repo_registry_service(storage_path).list_repos(include_deleted=include_deleted)
 
 
 def refresh_repo_metadata(repo_id: str, storage_path: str | Path | None = None) -> RepoMetadata | None:

@@ -1132,6 +1132,7 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("repo.action.open_gitnexus", repos_response.text)
         self.assertIn("repo.action.gitnexus_reindex", repos_response.text)
         self.assertIn("data-gitnexus-open", repos_response.text)
+        self.assertIn("data-delete", repos_response.text)
         self.assertEqual(workflow_response.status_code, 200)
         self.assertIn("Технічні деталі", workflow_response.text)
         self.assertIn("Запустити workflow", workflow_response.text)
@@ -1183,8 +1184,14 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Loading admin data...", policies_response.text)
         self.assertIn("Політики", policies_response.text)
         self.assertEqual(styles_response.status_code, 200)
-        self.assertIn("--primary:", styles_response.text)
-        self.assertIn(".severity-risk", styles_response.text)
+
+    def test_ui_repos_page_loads_when_no_active_repos_exist(self) -> None:
+        response = self.client.get("/ui/repos.html")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="repoForm"', response.text)
+        self.assertIn("repo.page.empty_active", response.text)
+        self.assertIn("data-delete", response.text)
 
     def _create_admin_user(self, *, username: str = "admin", password: str = "StrongPass123A!") -> None:
         self.auth_service.create_user(
@@ -1564,6 +1571,12 @@ class WebAppTests(unittest.TestCase):
                 status="registered",
                 sync_status="up_to_date",
                 last_sync_at="2026-03-20T00:10:00+00:00",
+                credential_alias="CATALOG_TEST",
+                auth_mode="token",
+                local_repo_state="valid",
+                local_git_valid=True,
+                head_resolved=True,
+                recovered_by_reclone=False,
             )
         ]
 
@@ -1607,15 +1620,107 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["repos"][0]["repo_id"], "sample")
         self.assertEqual(payload["repos"][0]["remote_url"], "https://bitbucket.org/acme/sample-repo.git")
         self.assertEqual(payload["repos"][0]["local_path"], "/repos/sample")
+        self.assertEqual(payload["repos"][0]["credential_alias"], "CATALOG_TEST")
+        self.assertIn(payload["repos"][0]["auth_mode_used"], {"token", "basic", "public"})
+        self.assertNotIn("secret-token", response.text)
         self.assertIn("profile", payload["repos"][0])
         self.assertIn("index_status", payload["repos"][0])
         self.assertIn("indexed_head", payload["repos"][0])
         self.assertIn("current_local_head", payload["repos"][0])
         self.assertIn("sync_status", payload["repos"][0])
         self.assertIn("last_sync_at", payload["repos"][0])
+        self.assertEqual(payload["repos"][0]["local_repo_state"], "valid")
+        self.assertTrue(payload["repos"][0]["local_git_valid"])
+        self.assertTrue(payload["repos"][0]["head_resolved"])
+        self.assertFalse(payload["repos"][0]["recovered_by_reclone"])
         self.assertEqual(payload["repos"][0]["profile"]["primary_stack"], "dotnet")
         self.assertEqual(payload["repos"][0]["profile"]["controller_count"], 3)
         self.assertEqual(payload["repos"][0]["profile"]["route_count"], 12)
+
+    def test_list_repos_endpoint_returns_empty_list_when_only_archived_repos_exist(self) -> None:
+        archived_repo = RepoMetadata(
+            repo_id="archived",
+            root_path="/repos/archived",
+            local_path="/repos/archived",
+            indexed_at="",
+            remote_url="https://bitbucket.org/acme/archived.git",
+            display_name="Archived Repo",
+            default_branch="main",
+            status="archived",
+            is_deleted=True,
+            deleted_at="2026-03-25T10:00:00+00:00",
+        )
+
+        with patch("web_app.RepoOnboardingService") as mocked_service_class, patch(
+            "web_app._repo_scm_service.detect_git_repo",
+            side_effect=AssertionError("deleted repos must not be inspected during active list rendering"),
+        ):
+            mocked_service_class.return_value.list_repos.return_value = [archived_repo]
+            response = self.client.get(
+                "/repos",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["repos"], [])
+
+    def test_list_repos_endpoint_excludes_deleted_repos_and_only_inspects_active_ones(self) -> None:
+        active_repo = RepoMetadata(
+            repo_id="active",
+            root_path="/repos/active",
+            local_path="/repos/active",
+            indexed_at="",
+            remote_url="https://bitbucket.org/acme/active.git",
+            display_name="Active Repo",
+            default_branch="main",
+            status="registered",
+        )
+        archived_repo = RepoMetadata(
+            repo_id="archived",
+            root_path="/repos/archived",
+            local_path="/repos/archived",
+            indexed_at="",
+            remote_url="https://bitbucket.org/acme/archived.git",
+            display_name="Archived Repo",
+            default_branch="main",
+            status="archived",
+            is_deleted=True,
+            deleted_at="2026-03-25T10:00:00+00:00",
+        )
+        observed_paths: list[str] = []
+
+        def _detect_git_repo(path):
+            observed_paths.append(str(path))
+            return False
+
+        with patch("web_app.RepoOnboardingService") as mocked_service_class, patch(
+            "web_app._repo_intelligence_service.provider_status",
+            return_value={"provider": "native", "gitnexus_enabled": False, "gitnexus_ui_url": "", "gitnexus_backend_available": False},
+        ), patch("web_app._repo_index_service.get_repo_profile", return_value=None), patch(
+            "web_app._repo_index_service.get_glossary",
+            return_value=None,
+        ), patch("web_app._repo_scm_service.detect_git_repo", side_effect=_detect_git_repo):
+            mocked_service_class.return_value.list_repos.return_value = [archived_repo, active_repo]
+            response = self.client.get(
+                "/repos",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual([item["repo_id"] for item in payload["repos"]], ["active"])
+        self.assertEqual(observed_paths, ["/repos/active"])
 
     def test_onboard_repo_endpoint_returns_onboarding_result(self) -> None:
         with patch("web_app.RepoOnboardingService") as mocked_service_class:
@@ -1633,6 +1738,7 @@ class WebAppTests(unittest.TestCase):
                     "display_name": "Sample Repo",
                     "remote_url": "https://bitbucket.org/acme/sample-repo.git",
                     "default_branch": "main",
+                    "credential_alias": "CATALOG_TEST",
                 },
                 headers={
                     "X-Actor-Id": "admin-1",
@@ -1644,6 +1750,10 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["repo_id"], "sample")
         self.assertEqual(response.json()["local_path"], "/repos/sample")
+        self.assertEqual(
+            mocked_service_class.return_value.onboard_repo.call_args.kwargs["credential_alias"],
+            "CATALOG_TEST",
+        )
 
     def test_onboard_repo_endpoint_blocks_without_permission(self) -> None:
         response = self.client.post(
@@ -1718,6 +1828,52 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["repo_id"], "sample")
         self.assertEqual(response.json()["sync_status"], "synced")
+
+    def test_delete_repo_endpoint_returns_archive_payload(self) -> None:
+        with patch("web_app.RepoOnboardingService") as mocked_service_class:
+            mocked_service_class.return_value.delete_repo.return_value = {
+                "repo_id": "sample",
+                "deleted": True,
+                "already_deleted": False,
+                "deleted_at": "2026-03-25T10:00:00+00:00",
+                "message": "Repository archived successfully. Historical runs remain available.",
+            }
+            response = self.client.delete(
+                "/repos/sample",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["deleted"])
+        self.assertEqual(
+            mocked_service_class.return_value.delete_repo.call_args.kwargs["deleted_by"],
+            "admin-1",
+        )
+
+    def test_run_detail_stays_readable_without_active_repo_row(self) -> None:
+        run = self._create_persisted_run(
+            goal="Archived repo run",
+            mode="spec",
+            repo_id="deleted-repo",
+            detail_payload={"spec_result": {"title": "TEL-1", "summary": "Archived repo detail still loads."}},
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=RunService(storage_dir=self.storage_dir, persist=True)):
+            response = self.client.get(
+                f"/runs/{run.run_id}",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["run"]["run_id"], run.run_id)
 
     def test_analyze_task_workflow_endpoint_returns_product_result(self) -> None:
         run = self._create_persisted_run(

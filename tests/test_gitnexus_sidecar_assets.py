@@ -32,6 +32,8 @@ class GitNexusSidecarAssetsTests(unittest.TestCase):
         self.assertIn("gitnexus-sidecar-server.mjs", compose_text)
         self.assertIn("GITNEXUS_CONTROL_ENABLED", compose_text)
         self.assertIn("GITNEXUS_MCP_PORT_INTERNAL", compose_text)
+        self.assertIn("env_file:", compose_text)
+        self.assertIn("- .env", compose_text)
 
 
 if __name__ == "__main__":

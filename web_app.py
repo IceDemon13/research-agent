@@ -10,7 +10,7 @@ from typing import Any
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -48,6 +48,7 @@ from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_onboarding_service import RepoOnboardingService
 from services.run_service import RunService
 from services.scm_service import ScmService
+from services.bitbucket_credentials import BitbucketCredentialResolver, parse_bitbucket_remote
 
 
 app = FastAPI(title="Research Agent API", version="0.1.0")
@@ -56,6 +57,7 @@ _i18n_service = I18nService()
 _repo_index_service = RepositoryIndexService()
 _repo_intelligence_service = RepoIntelligenceService(index_service=_repo_index_service)
 _repo_scm_service = ScmService()
+_bitbucket_credential_resolver = BitbucketCredentialResolver()
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SESSIONS: dict[str, dict[str, str]] = {}
 _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$", re.IGNORECASE)
@@ -87,6 +89,7 @@ class RepoOnboardRequest(BaseModel):
     display_name: str
     remote_url: str
     default_branch: str = ""
+    credential_alias: str = ""
 
 
 class RunDecisionRequest(BaseModel):
@@ -1055,6 +1058,12 @@ def _workflow_technical_details(
         "visibility_match_reason": _clean_user_text(payload.get("visibility_match_reason", "") or ""),
         "normalized_repo_visibility_targets": list(payload.get("normalized_repo_visibility_targets", []) or []),
         "candidate_repos_count": int(payload.get("candidate_repos_count", 0) or 0),
+        "candidate_repos": list(payload.get("candidate_repos", []) or []),
+        "selected_repos": list(payload.get("selected_repos", []) or []),
+        "repo_routing_reason": _clean_user_text(payload.get("repo_routing_reason", "") or ""),
+        "historical_match_count": int(payload.get("historical_match_count", 0) or 0),
+        "top_historical_matches": list(payload.get("top_historical_matches", []) or []),
+        "top_historical_changed_files": list(payload.get("top_historical_changed_files", []) or []),
         "candidate_files_count": int(payload.get("candidate_files_count", 0) or 0),
         "selected_files_count": int(payload.get("selected_files_count", 0) or 0),
         "top_candidate_files": list(payload.get("top_candidate_files", []) or []),
@@ -1333,6 +1342,7 @@ def _gitnexus_workflow_result(
     task_text: str,
     *,
     changed_files: list[str] | None = None,
+    jira_key: str = "",
 ) -> dict[str, Any]:
     normalized_repo_id = str(repo_id or "").strip()
     if not normalized_repo_id:
@@ -1343,6 +1353,7 @@ def _gitnexus_workflow_result(
             workflow_name,
             task_text,
             changed_files=list(changed_files or []),
+            jira_key=str(jira_key or "").strip(),
         )
     except Exception:
         return {}
@@ -2207,10 +2218,15 @@ def _is_repo_mismatch(detail: RunDetail) -> bool:
 def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> AnalyzeTaskWorkflowResult:
     spec = dict(detail.spec_result or {})
     likely_files = _likely_files_from_detail(detail, locale=locale)
-    _apply_provider_metadata(detail, "analyze_task")
-    provider_payload: dict[str, Any] = {}
     input_debug = _workflow_input_debug(detail, workflow_name="analyze_task")
     task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
+    provider_payload = _gitnexus_workflow_result(
+        run_record.repo_id,
+        "analyze_task",
+        task_text,
+        jira_key=str(detail.jira_ticket or "").strip(),
+    )
+    _apply_provider_metadata(detail, "analyze_task", provider_payload)
     baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="analyze_task", locale=locale)
     missing_details: list[str] = []
     if not list(spec.get("acceptance_criteria", []) or []):
@@ -2380,6 +2396,7 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
         run_record.repo_id,
         "implementation_plan",
         str(run_record.goal or detail.goal or "").strip(),
+        jira_key=str(detail.jira_ticket or "").strip(),
     )
     _apply_provider_metadata(detail, "implementation_plan", provider_payload)
     provider_file_details = _selection_candidates_from_provider(provider_payload.get("likely_file_details"))
@@ -2706,6 +2723,7 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         "pre_review",
         str(run_record.goal or detail.goal or "").strip(),
         changed_files=_pre_review_changed_file_universe(detail),
+        jira_key=str(detail.jira_ticket or "").strip(),
     )
     _apply_provider_metadata(detail, "pre_review", provider_payload)
     provider_issue_details = _provider_review_issues(provider_payload.get("review_issues"))
@@ -3120,13 +3138,19 @@ def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
     current_local_head = ""
     current_branch = ""
     git_probe_path = str(repo.local_path or "").strip()
-    if git_probe_path and _repo_scm_service.detect_git_repo(git_probe_path):
+    if not bool(repo.is_deleted) and git_probe_path and _repo_scm_service.detect_git_repo(git_probe_path):
         head_result = _repo_scm_service.get_head_commit_hash(git_probe_path)
         if head_result.success:
             current_local_head = str(head_result.data.get("commit_hash", "") or "").strip()
         branch_result = _repo_scm_service.get_current_branch(git_probe_path)
         if branch_result.success:
             current_branch = str(branch_result.data.get("branch_name", "") or "").strip()
+    credential_debug = _bitbucket_credential_resolver.resolve(
+        repo_id=repo.repo_id,
+        remote_url=repo.remote_url,
+        workspace=parse_bitbucket_remote(repo.remote_url).get("workspace", ""),
+        credential_alias=str(repo.credential_alias or "").strip(),
+    ).safe_metadata()
     return {
         "repo_id": repo.repo_id,
         "display_name": repo.display_name,
@@ -3149,6 +3173,19 @@ def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
         "gitnexus_index_status": repo.gitnexus_index_status,
         "gitnexus_index_error": repo.gitnexus_index_error,
         "gitnexus_last_fallback_reason": repo.gitnexus_last_fallback_reason,
+        "credential_alias": repo.credential_alias,
+        "resolved_credential_alias": str(credential_debug.get("resolved_credential_alias", "") or "").strip(),
+        "auth_mode_used": str(credential_debug.get("auth_mode_used", "") or repo.auth_mode or "").strip(),
+        "used_global_fallback": bool(credential_debug.get("used_global_fallback", False)),
+        "is_deleted": bool(repo.is_deleted),
+        "deleted_at": str(repo.deleted_at or "").strip(),
+        "delete_reason": str(repo.delete_reason or "").strip(),
+        "local_repo_state": str(repo.local_repo_state or "").strip(),
+        "local_git_valid": bool(repo.local_git_valid),
+        "head_resolved": bool(repo.head_resolved),
+        "recovered_by_reclone": bool(repo.recovered_by_reclone),
+        "onboarding_last_error": str(repo.onboarding_last_error or "").strip(),
+        "clone_timeout_seconds": int(getattr(settings.runtime, "repo_clone_timeout_seconds", 300) or 300),
         "gitnexus_backend_available": bool(provider_status.get("gitnexus_backend_available", False)),
         "gitnexus_ui_url": str(provider_status.get("gitnexus_ui_url", "") or "").strip(),
         "gitnexus_open_url": (
@@ -3563,8 +3600,13 @@ def ui_root() -> RedirectResponse:
     return RedirectResponse(url="/ui/index.html", status_code=307)
 
 
+@app.get("/ui/repos.html")
+def ui_repos_page() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "repos.html")
+
+
 @app.get("/repos")
-def list_repos(request: Request) -> dict[str, Any]:
+def list_repos(request: Request, include_deleted: bool = False) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
     decision = PermissionService().evaluate(
         actor_context,
@@ -3573,7 +3615,10 @@ def list_repos(request: Request) -> dict[str, Any]:
     )
     if not decision.allowed:
         raise _permission_denied(decision)
-    repos = RepoOnboardingService().list_repos()
+    resolved_include_deleted = bool(include_deleted)
+    repos = RepoOnboardingService().list_repos(include_deleted=resolved_include_deleted)
+    if not resolved_include_deleted:
+        repos = [repo for repo in repos if not bool(getattr(repo, "is_deleted", False))]
     return {
         "count": len(repos),
         "repos": [_serialize_repo(repo) for repo in repos],
@@ -3599,6 +3644,7 @@ def onboard_repo(payload: RepoOnboardRequest, request: Request) -> dict[str, Any
             display_name=payload.display_name,
             remote_url=payload.remote_url,
             default_branch=payload.default_branch,
+            credential_alias=payload.credential_alias,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -3744,6 +3790,30 @@ def sync_repo(repo_id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail={"error": "repo_not_found", "message": str(exc)}) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"error": "repo_sync_failed", "message": str(exc)}) from exc
+
+
+@app.delete("/repos/{repo_id}")
+def delete_repo(repo_id: str, request: Request) -> dict[str, Any]:
+    actor = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor,
+        "integration.manage",
+        scope=PermissionScope(
+            repo_id=str(repo_id or "").strip(),
+            source_channel=actor.source_channel,
+        ),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    try:
+        return RepoOnboardingService().delete_repo(
+            repo_id,
+            deleted_by=str(actor.actor_id or "").strip(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail={"error": "repo_not_found", "message": str(exc)}) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error": "repo_delete_failed", "message": str(exc)}) from exc
 
 
 @app.post("/auth/login")

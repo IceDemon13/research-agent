@@ -162,14 +162,25 @@ Supported Bitbucket auth modes for clone/push/PR creation:
   Runtime auth uses `x-token-auth` and injects credentials only while git/HTTP commands run.
 - `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`
   Used as a fallback when token-based auth is not configured.
+- Alias-scoped env vars such as `BITBUCKET_REPO_TOKEN__TELEMART_CATALOG_TEST`
+  Useful when a repo is configured with a credential alias and should not use the global fallback.
 - Public repository access
   The clean remote URL is used without credentials.
 
 Credential precedence:
-1. `BITBUCKET_REPO_TOKEN`
-2. `BITBUCKET_API_TOKEN`
-3. `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`
-4. unauthenticated clean remote URL
+1. alias-scoped `BITBUCKET_*__<ALIAS>` credentials when a repo has `credential_alias`
+2. `BITBUCKET_REPO_TOKEN`
+3. `BITBUCKET_API_TOKEN`
+4. `BITBUCKET_USERNAME` + `BITBUCKET_APP_PASSWORD`
+5. unauthenticated clean remote URL
+
+For Docker Compose, the app service now loads `.env` through `env_file`, so alias-scoped variables are available inside the container without enumerating each one in `docker-compose.yml`.
+
+Example verification:
+
+```bash
+docker compose exec app printenv | grep BITBUCKET_REPO_TOKEN__TELEMART_CATALOG_TEST
+```
 
 ### Optional GitNexus POC
 

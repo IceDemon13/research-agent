@@ -15,7 +15,7 @@ from contracts.gitnexus_contract import (
     NormalizedRepoIntelligenceResult,
 )
 from contracts.repo_index import RepoFileIndex, RepoIndexArtifacts, RepoManifest
-from services.repo_intelligence_service import RepoIntelligenceService
+from services.repo_intelligence_service import RepoIntelligenceService, _rerank_file_details, _rerank_module_details
 from services.repo_registry import RepositoryRegistryService
 
 
@@ -458,6 +458,306 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         self.assertEqual(payload["selected_files_count"], 1)
         self.assertEqual(payload["resolved_file_count"], 1)
         self.assertEqual(payload["resolved_definition_count"], 1)
+
+    def test_implementation_plan_reranks_accessories_domain_above_infra_files(self) -> None:
+        normalized = NormalizedRepoIntelligenceResult(
+            files=[
+                GitNexusQueryHit(kind="file", name="src/Catalog.Api/Program.cs", file_path="src/Catalog.Api/Program.cs", score=0.91, reason="startup"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Infrastructure/DbUpdater.cs", file_path="src/Catalog.Infrastructure/DbUpdater.cs", score=0.88, reason="db updater"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Api/Filters/ValidatorActionFilter.cs", file_path="src/Catalog.Api/Filters/ValidatorActionFilter.cs", score=0.82, reason="filter"),
+                GitNexusQueryHit(kind="file", name="tests/Catalog.Tests/Catalog.Tests.csproj", file_path="tests/Catalog.Tests/Catalog.Tests.csproj", score=0.8, reason="tests"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Api/Controllers/ProductAccessoriesController.cs", file_path="src/Catalog.Api/Controllers/ProductAccessoriesController.cs", score=0.49, reason="accessories controller"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Application/Accessories/GetProductAccessoriesHandler.cs", file_path="src/Catalog.Application/Accessories/GetProductAccessoriesHandler.cs", score=0.52, reason="accessories handler"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Contracts/Responses/ProductAccessoriesResponse.cs", file_path="src/Catalog.Contracts/Responses/ProductAccessoriesResponse.cs", score=0.51, reason="response dto"),
+            ],
+            symbols=[
+                GitNexusQueryHit(kind="symbol", name="GetProductAccessoriesHandler", score=0.63, reason="handler match"),
+                GitNexusQueryHit(kind="symbol", name="ProductAccessoriesResponse", score=0.59, reason="response match"),
+            ],
+        )
+        debug = {
+            "resolved_file_count": 3,
+            "resolved_definition_count": 2,
+            "resolved_symbol_count": 2,
+            "resolved_process_count": 0,
+        }
+
+        with patch.object(self.service._gitnexus_provider, "_build_implementation_plan_result", return_value=(normalized, debug)):
+            payload = self.service.query_for_workflow(
+                "catalog_service",
+                "implementation_plan",
+                "Відображати accessories field у product card та product list для limiting product / limited product correspondence",
+            )
+
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertFalse(payload["provider_fallback"])
+        self.assertTrue(payload["likely_files"])
+        self.assertEqual(payload["top_candidate_files"][0]["name"], payload["likely_files"][0])
+        self.assertEqual(payload["change_actions"][0]["file"], payload["likely_files"][0])
+        self.assertIn(payload["likely_files"][0], payload["recommendation"])
+        self.assertEqual(
+            [item["name"] for item in payload["top_candidate_files"]],
+            payload["likely_files"][:len(payload["top_candidate_files"])],
+        )
+        top_three = " ".join(payload["likely_files"][:3])
+        self.assertTrue(
+            "ProductAccessoriesController.cs" in top_three
+            or "GetProductAccessoriesHandler.cs" in top_three
+        )
+        self.assertIn("GetProductAccessoriesHandler.cs", top_three)
+        self.assertNotIn("Program.cs", " ".join(payload["likely_files"][:3]))
+        self.assertNotIn("DbUpdater.cs", " ".join(payload["likely_files"][:3]))
+        self.assertNotIn("ValidatorActionFilter.cs", " ".join(payload["likely_files"][:5]))
+        self.assertNotIn(".csproj", " ".join(payload["likely_files"][:5]))
+        self.assertIn("final_score", payload["top_candidate_files"][0])
+        self.assertIn("confidence", payload["top_candidate_files"][0])
+        self.assertIn("lexical_overlap_score", payload["top_candidate_files"][0])
+        self.assertIn("infra_penalty", payload["top_candidate_files"][0])
+        self.assertIn("raw_score_before_penalties", payload["top_candidate_files"][0])
+        self.assertIn("raw_score_after_penalties", payload["top_candidate_files"][0])
+        self.assertIn("raw_score_before_normalization", payload["top_candidate_files"][0])
+        self.assertIn("triggered_penalties", payload["top_candidate_files"][0])
+        self.assertIn("ranking_position", payload["top_candidate_files"][0])
+        final_scores = [item["final_score"] for item in payload["top_candidate_files"]]
+        self.assertEqual(final_scores, sorted(final_scores, reverse=True))
+        self.assertTrue(all(0.0 <= float(item["confidence"]) <= 1.0 for item in payload["top_candidate_files"]))
+        self.assertGreaterEqual(
+            sum(
+                1
+                for item in payload["likely_files"][:5]
+                if any(token in item for token in ("Product", "Accessories", "Controller", "Handler", "Response", "Request", "External/MainClient"))
+            ),
+            3,
+        )
+        infra_candidates = {
+            item["name"]: item
+            for item in payload["top_candidate_files"]
+            if any(token in item["name"] for token in ("Program.cs", "DbUpdater.cs", "ValidatorActionFilter.cs", ".csproj"))
+        }
+        for item in infra_candidates.values():
+            self.assertTrue(item["infra_penalty"] > 0 or item["test_penalty"] > 0)
+            self.assertTrue(item["triggered_penalties"])
+        self.assertEqual(payload["repo_match"], "match")
+
+    def test_implementation_plan_downgrades_when_only_infra_files_survive(self) -> None:
+        normalized = NormalizedRepoIntelligenceResult(
+            files=[
+                GitNexusQueryHit(kind="file", name="src/Catalog.Api/Program.cs", file_path="src/Catalog.Api/Program.cs", score=0.91, reason="startup"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Infrastructure/DbUpdater.cs", file_path="src/Catalog.Infrastructure/DbUpdater.cs", score=0.88, reason="db updater"),
+                GitNexusQueryHit(kind="file", name="src/Catalog.Api/Filters/ValidatorActionFilter.cs", file_path="src/Catalog.Api/Filters/ValidatorActionFilter.cs", score=0.82, reason="filter"),
+            ],
+            processes=[
+                GitNexusQueryHit(kind="process", name="accessories correspondence", score=0.41, reason="business area match"),
+            ],
+        )
+
+        with patch.object(self.service._gitnexus_provider, "_build_implementation_plan_result", return_value=(normalized, {})):
+            payload = self.service.query_for_workflow(
+                "catalog_service",
+                "implementation_plan",
+                "Відображати accessories field у product card",
+            )
+
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertFalse(payload["provider_fallback"])
+        self.assertEqual(payload["repo_match"], "partial")
+        self.assertEqual(payload["top_candidate_files"], [])
+        self.assertEqual(payload["likely_files"], [])
+        self.assertEqual(payload["candidate_files_count"], 0)
+
+    def test_rerank_file_details_applies_non_zero_infra_and_test_penalties(self) -> None:
+        reranked, weak_only = _rerank_file_details(
+            [
+                {"name": "tests/Telemart.Catalog.Service.Tests/Telemart.Catalog.Service.Tests.csproj", "confidence": 0.9, "reason": "test project"},
+                {"name": "src/Telemart.Catalog.Service/Program.cs", "confidence": 0.92, "reason": "startup"},
+                {"name": "src/Telemart.Catalog.Service/DbUpdater.cs", "confidence": 0.88, "reason": "db updater"},
+                {"name": "src/Telemart.Catalog.Service/Filters/ValidatorActionFilter.cs", "confidence": 0.83, "reason": "filter"},
+                {"name": "src/Telemart.Catalog.Service/Controllers/ProductAccessoriesController.cs", "confidence": 0.52, "reason": "accessories controller"},
+            ],
+            "accessories field in product card and product list",
+        )
+
+        self.assertFalse(weak_only)
+        self.assertEqual(reranked[0]["name"], "src/Telemart.Catalog.Service/Controllers/ProductAccessoriesController.cs")
+        self.assertTrue(all(item["final_score"] >= reranked[-1]["final_score"] for item in reranked[:1]))
+
+    def test_rerank_file_details_marks_penalties_on_normalized_full_paths(self) -> None:
+        reranked, _ = _rerank_file_details(
+            [
+                {"name": "test/Telemart.Catalog.Service.Tests/Telemart.Catalog.Service.Tests.csproj", "confidence": 0.9, "reason": "test project"},
+                {"name": "src/Telemart.Catalog.Service/Program.cs", "confidence": 0.92, "reason": "startup"},
+                {"name": "src/Telemart.Catalog.Service/DbUpdater.cs", "confidence": 0.88, "reason": "db updater"},
+                {"name": "src/Telemart.Catalog.Service/Filters/ValidatorActionFilter.cs", "confidence": 0.83, "reason": "filter"},
+                {"name": "src/Telemart.Catalog.Service/Controllers/ProductAccessoriesController.cs", "confidence": 0.52, "reason": "accessories controller"},
+                {"name": "src/Telemart.Catalog.Service/Request/ProductAccessoriesRequest.cs", "confidence": 0.54, "reason": "request dto"},
+                {"name": "src/Telemart.Catalog.Service/External/MainClient/AccessoriesClient.cs", "confidence": 0.53, "reason": "external client"},
+            ],
+            "accessories field in product card and product list",
+        )
+
+        by_name = {item["name"]: item for item in reranked}
+        self.assertIn("src/Telemart.Catalog.Service/Controllers/ProductAccessoriesController.cs", by_name)
+        self.assertIn("src/Telemart.Catalog.Service/Request/ProductAccessoriesRequest.cs", by_name)
+        self.assertIn("src/Telemart.Catalog.Service/External/MainClient/AccessoriesClient.cs", by_name)
+        self.assertNotIn("test/Telemart.Catalog.Service.Tests/Telemart.Catalog.Service.Tests.csproj", by_name)
+        self.assertNotIn("src/Telemart.Catalog.Service/Program.cs", by_name)
+        self.assertNotIn("src/Telemart.Catalog.Service/DbUpdater.cs", by_name)
+        self.assertNotIn("src/Telemart.Catalog.Service/Filters/ValidatorActionFilter.cs", by_name)
+
+    def test_rerank_module_details_suppresses_generic_symbols_when_stronger_modules_exist(self) -> None:
+        reranked = _rerank_module_details(
+            [
+                {"name": "Handle", "confidence": 0.92, "reason": "generic method"},
+                {"name": "OnActionExecuting", "confidence": 0.89, "reason": "generic filter method"},
+                {"name": "TrimPattern", "confidence": 0.86, "reason": "generic helper"},
+                {"name": "QueryProductByTextHandler", "confidence": 0.61, "reason": "product query handler"},
+                {"name": "QueryProductInfoHandler", "confidence": 0.6, "reason": "product info handler"},
+                {"name": "MainClient", "confidence": 0.57, "reason": "external client"},
+            ],
+            "Return accessories field in product card and product list response",
+        )
+
+        names = [item["name"] for item in reranked]
+        self.assertIn("QueryProductByTextHandler", names[:3])
+        self.assertIn("QueryProductInfoHandler", names[:3])
+        self.assertIn("MainClient", names[:5])
+        self.assertNotIn("Handle", names)
+        self.assertNotIn("OnActionExecuting", names)
+        self.assertNotIn("TrimPattern", names)
+
+    def test_implementation_plan_uses_top1_repo_selected_by_multi_repo_routing(self) -> None:
+        second_repo_root = self.workspace_root / "billing_service"
+        (second_repo_root / ".git").mkdir(parents=True, exist_ok=True)
+        self.registry.register_repo(
+            root_path=str(second_repo_root),
+            repo_id="billing_service",
+            display_name="Billing Service",
+            default_branch="main",
+        )
+        self.registry.update_repo_metadata("catalog_service", capability_tags=["accessories", "product", "catalog"])
+        self.service._historical_change_memory_service._save_json_state(
+            {
+                "tasks": [
+                    {
+                        "jira_key": "TEL-7154",
+                        "normalized_task_text": "return accessories field in product card response",
+                        "task_snapshot_text": "Return accessories field in product card response",
+                        "updated_at": "2026-03-25T10:00:00+00:00",
+                    }
+                ],
+                "changes": [
+                    {
+                        "change_id": "catalog_service:TEL-7154:abc123",
+                        "jira_key": "TEL-7154",
+                        "repo_id": "catalog_service",
+                        "commit_hash": "abc123",
+                        "branch_name": "feature/TEL-7154-accessories",
+                        "committed_at": "2026-03-25T10:00:00+00:00",
+                        "changed_files": ["src/Catalog/Product/QueryProductInfoHandler.cs"],
+                    }
+                ],
+            }
+        )
+        with patch.object(self.service, "assign_provider_metadata", side_effect=lambda repo_id: self.registry.get_repo(repo_id)), patch.object(
+            self.service._native_provider,
+            "query_for_workflow",
+            return_value={"provider": "native", "provider_used": "native", "provider_fallback": False, "provider_reason": "native"},
+        ) as native_query, patch.object(
+            self.service._gitnexus_provider,
+            "query_for_workflow",
+            return_value={"provider": "gitnexus_http", "provider_used": "gitnexus_http", "provider_fallback": False, "provider_reason": "gitnexus", "likely_file_details": [], "likely_module_details": [], "closest_areas": []},
+        ) as gitnexus_query:
+            payload = self.service.query_for_workflow(
+                "billing_service",
+                "implementation_plan",
+                "Return accessories field in product card response",
+                jira_key="TEL-7154",
+            )
+
+        active_call = gitnexus_query.call_args or native_query.call_args
+        self.assertIsNotNone(active_call)
+        called_repo = active_call.args[0]
+        self.assertEqual(called_repo.repo_id, "catalog_service")
+        self.assertEqual(payload["selected_repos"][0]["repo_id"], "catalog_service")
+        self.assertEqual(payload["candidate_repos"][0]["repo_id"], "catalog_service")
+        self.assertIn(payload["provider_used"], {"native", "gitnexus_http"})
+
+    def test_implementation_plan_prefers_product_query_and_mainclient_over_generic_symbols(self) -> None:
+        normalized = NormalizedRepoIntelligenceResult(
+            files=[
+                GitNexusQueryHit(
+                    kind="file",
+                    name="src/Telemart.Catalog.Service/Handlers/QueryProductByTextHandler.cs",
+                    file_path="src/Telemart.Catalog.Service/Handlers/QueryProductByTextHandler.cs",
+                    score=0.62,
+                    reason="product query handler",
+                ),
+                GitNexusQueryHit(
+                    kind="file",
+                    name="src/Telemart.Catalog.Service/Handlers/QueryProductInfoHandler.cs",
+                    file_path="src/Telemart.Catalog.Service/Handlers/QueryProductInfoHandler.cs",
+                    score=0.61,
+                    reason="product info handler",
+                ),
+                GitNexusQueryHit(
+                    kind="file",
+                    name="src/Telemart.Catalog.Service/External/MainClient.cs",
+                    file_path="src/Telemart.Catalog.Service/External/MainClient.cs",
+                    score=0.58,
+                    reason="external api client",
+                ),
+                GitNexusQueryHit(
+                    kind="file",
+                    name="src/Telemart.Catalog.Service/Handlers/DownloadPriceHandler.cs",
+                    file_path="src/Telemart.Catalog.Service/Handlers/DownloadPriceHandler.cs",
+                    score=0.94,
+                    reason="price export handler",
+                ),
+                GitNexusQueryHit(
+                    kind="file",
+                    name="src/Telemart.Catalog.Service/Filters/ValidatorActionFilter.cs",
+                    file_path="src/Telemart.Catalog.Service/Filters/ValidatorActionFilter.cs",
+                    score=0.83,
+                    reason="validation filter",
+                ),
+            ],
+            symbols=[
+                GitNexusQueryHit(kind="symbol", name="Handle", score=0.95, reason="generic method"),
+                GitNexusQueryHit(kind="symbol", name="OnActionExecuting", score=0.92, reason="generic filter method"),
+                GitNexusQueryHit(kind="symbol", name="TrimPattern", score=0.9, reason="generic helper"),
+                GitNexusQueryHit(kind="symbol", name="QueryProductByTextHandler", score=0.67, reason="query handler"),
+                GitNexusQueryHit(kind="symbol", name="QueryProductInfoHandler", score=0.66, reason="product info handler"),
+                GitNexusQueryHit(kind="symbol", name="MainClient", score=0.61, reason="external client"),
+            ],
+        )
+
+        with patch.object(self.service._gitnexus_provider, "_build_implementation_plan_result", return_value=(normalized, {"resolved_file_count": 3, "resolved_definition_count": 2})):
+            payload = self.service.query_for_workflow(
+                "catalog_service",
+                "implementation_plan",
+                "Return accessories field in product card and product list response for category correspondence",
+            )
+
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertFalse(payload["provider_fallback"])
+        top_three = payload["likely_files"][:3]
+        self.assertTrue(
+            any(item.endswith("QueryProductByTextHandler.cs") for item in top_three)
+            or any(item.endswith("QueryProductInfoHandler.cs") for item in top_three)
+        )
+        self.assertIn("src/Telemart.Catalog.Service/External/MainClient.cs", payload["likely_files"][:5])
+        self.assertNotEqual(
+            payload["top_candidate_files"][0]["name"],
+            "src/Telemart.Catalog.Service/Handlers/DownloadPriceHandler.cs",
+        )
+        self.assertNotIn(
+            "src/Telemart.Catalog.Service/Filters/ValidatorActionFilter.cs",
+            payload["likely_files"][:5],
+        )
+        self.assertNotIn("Handle", payload["likely_modules"])
+        self.assertNotIn("OnActionExecuting", payload["likely_modules"])
+        self.assertNotIn("TrimPattern", payload["likely_modules"])
+        self.assertIn(payload["likely_files"][0], payload["recommendation"])
 
     def test_pre_review_consumes_detect_changes_context_and_impact(self) -> None:
         normalized = NormalizedRepoIntelligenceResult(

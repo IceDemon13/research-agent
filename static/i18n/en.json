@@ -302,6 +302,7 @@
   "repo.page.subtitle": "See sync/index health, current HEAD values, and rebuild repository analysis when needed.",
   "repo.page.list_title": "Registered repositories",
   "repo.page.empty": "No repositories have been registered yet.",
+  "repo.page.empty_active": "No active repositories yet. Archived repositories are hidden from this view.",
   "repo.page.load_failed": "Failed to load repositories.",
   "repo.onboard.title": "Onboard repo",
   "repo.onboard.subtitle": "Register a clean Git remote URL without embedding tokens in the address.",

@@ -52,7 +52,12 @@
           <span data-i18n="repo.field.default_branch">Default Branch</span>
           <input id="defaultBranchInput" data-i18n-placeholder="repo.placeholder.default_branch" placeholder="main">
         </label>
+        <label>
+          <span>Credential Alias</span>
+          <input id="credentialAliasInput" placeholder="CATALOG_TEST">
+        </label>
       </div>
+      <p class="muted">Leave empty to use global Bitbucket credentials. Set an alias to use repo-specific credentials from environment.</p>
       <div class="actions">
         <button type="submit" class="primary" data-i18n="repo.action.onboard">Підключити repo</button>
         <button id="refreshButton" type="button" class="secondary" data-i18n="common.refresh">Оновити</button>
@@ -189,6 +194,8 @@
             <div><strong>${auth.escapeHtml(auth.t("repo.field.local_path"))}</strong><br><span class="repo-mono">${auth.escapeHtml(repo.local_path || "-")}</span></div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.default_branch"))}</strong><br>${auth.escapeHtml(repo.default_branch || "-")}</div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.provider"))}</strong><br>${auth.escapeHtml(repo.intelligence_provider || "native")}</div>
+            <div><strong>Credential Alias</strong><br>${auth.escapeHtml(repo.credential_alias || "-")}</div>
+            <div><strong>Auth Mode</strong><br>${auth.escapeHtml(repo.auth_mode_used || "-")}</div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.current_branch"))}</strong><br>${auth.escapeHtml(repo.current_branch || "-")}</div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.current_head"))}</strong><br><span class="repo-mono" title="${auth.escapeHtml(currentHead || "-")}">${auth.escapeHtml(shortHash(currentHead))}</span></div>
             <div><strong>${auth.escapeHtml(auth.t("repo.field.indexed_head"))}</strong><br><span class="repo-mono" title="${auth.escapeHtml(indexedHead || "-")}">${auth.escapeHtml(shortHash(indexedHead))}</span></div>
@@ -203,6 +210,7 @@
           <div class="actions">
             <button type="button" class="secondary" data-sync="${auth.escapeHtml(repo.repo_id || "")}">${auth.escapeHtml(auth.t("repo.action.sync"))}</button>
             <button type="button" class="primary" data-reindex="${auth.escapeHtml(repo.repo_id || "")}">${auth.escapeHtml(auth.t("repo.action.reindex"))}</button>
+            <button type="button" class="secondary" data-delete="${auth.escapeHtml(repo.repo_id || "")}">Delete repo</button>
             ${renderActionLinks(repo)}
           </div>
 
@@ -271,7 +279,7 @@
     function renderRepos(repos) {
       const container = document.getElementById("reposContainer");
       if (!Array.isArray(repos) || !repos.length) {
-        container.innerHTML = `<div class="empty-state">${auth.escapeHtml(auth.t("repo.page.empty"))}</div>`;
+        container.innerHTML = `<div class="empty-state">${auth.escapeHtml(auth.t("repo.page.empty_active"))}</div>`;
         return;
       }
       container.innerHTML = repos.map(renderRepoCard).join("");
@@ -286,6 +294,9 @@
       });
       container.querySelectorAll("button[data-gitnexus-open]").forEach((button) => {
         button.addEventListener("click", () => openGitNexus(button));
+      });
+      container.querySelectorAll("button[data-delete]").forEach((button) => {
+        button.addEventListener("click", () => deleteRepo(button));
       });
     }
 
@@ -344,6 +355,27 @@
       }
     }
 
+    async function deleteRepo(button) {
+      const repoId = button.getAttribute("data-delete") || "";
+      if (!repoId) return;
+      const confirmed = window.confirm("Delete this repo from active use? Historical runs will stay available, but active clone/index/routing state will be removed.");
+      if (!confirmed) return;
+      setMessage("");
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Deleting...";
+      try {
+        const payload = await auth.fetchJson(`/repos/${encodeURIComponent(repoId)}`, { method: "DELETE" });
+        setMessage(payload.message || "Repository archived successfully.");
+        await loadRepos();
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
     async function loadRepos() {
       setLoadingState();
       setMessage("");
@@ -366,7 +398,8 @@
             repo_id: document.getElementById("repoIdInput").value.trim(),
             display_name: document.getElementById("displayNameInput").value.trim(),
             remote_url: document.getElementById("remoteUrlInput").value.trim(),
-            default_branch: document.getElementById("defaultBranchInput").value.trim()
+            default_branch: document.getElementById("defaultBranchInput").value.trim(),
+            credential_alias: document.getElementById("credentialAliasInput").value.trim()
           }
         });
         document.getElementById("repoForm").reset();

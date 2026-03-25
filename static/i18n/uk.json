@@ -302,6 +302,7 @@
   "repo.page.subtitle": "Переглядайте sync/index стан, поточні значення HEAD та вручну перебудовуйте аналіз repo, коли це потрібно.",
   "repo.page.list_title": "Зареєстровані repo",
   "repo.page.empty": "Ще немає зареєстрованих repo.",
+  "repo.page.empty_active": "Активних repo ще немає. Архівні repo приховано з цього списку.",
   "repo.page.load_failed": "Не вдалося завантажити repo.",
   "repo.onboard.title": "Підключити repo",
   "repo.onboard.subtitle": "Зареєструйте чистий Git URL без токенів у рядку адреси.",

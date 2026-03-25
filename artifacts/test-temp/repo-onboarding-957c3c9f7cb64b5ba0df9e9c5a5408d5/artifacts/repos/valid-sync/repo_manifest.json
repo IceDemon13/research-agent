@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "repo_id": "valid-sync",
+  "root_path": "C:/work/my repositories/research-agent/artifacts/test-temp/repo-onboarding-957c3c9f7cb64b5ba0df9e9c5a5408d5/repos/valid-sync",
+  "main_docs_candidates": [
+    "README.md"
+  ],
+  "config_candidates": [],
+  "likely_test_paths": [],
+  "file_count": 1,
+  "indexed_at": "2026-03-25T16:29:37.597015+00:00",
+  "files": [
+    {
+      "path": "README.md",
+      "size": 15,
+      "extension": ".md",
+      "line_count": 1
+    }
+  ]
+}

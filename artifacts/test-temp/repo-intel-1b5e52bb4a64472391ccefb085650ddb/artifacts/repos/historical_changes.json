@@ -1,0 +1,35 @@
+{
+  "tasks": [],
+  "changes": [
+    {
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "repo_id": "catalog_service",
+      "commit_hash": "4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "branch_name": "",
+      "committed_at": "2026-03-14T09:49:08+02:00",
+      "changed_files": [
+        ".gitignore",
+        "agent.py",
+        "config.py",
+        "jira-mcp-server/audit.py",
+        "jira-mcp-server/auth.py",
+        "jira-mcp-server/config.py",
+        "jira-mcp-server/jira_client.py",
+        "jira-mcp-server/server.py",
+        "jira-mcp-server/test_jira.py",
+        "jira-mcp-server/validators.py",
+        "jira_mcp_agent.py",
+        "llm_factory.py",
+        "main.py",
+        "mcp_client.py",
+        "mcp_jira_tools.py",
+        "research_agent.py",
+        "root_agent.py",
+        "simple_chat_agent.py",
+        "telegram_bot.py",
+        "test_jira_tool.py"
+      ]
+    }
+  ]
+}
