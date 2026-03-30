@@ -14,6 +14,7 @@ from contracts.validation_contract import (
     ValidationStepResult,
 )
 from logger_utils import log_line
+from services.repo_validation_service import RepoValidationService
 from services.repo_registry import RepositoryRegistryService
 
 
@@ -34,6 +35,13 @@ UNITTEST_CASE_RE = re.compile(
 class ValidationService:
     def __init__(self, storage_path: str | Path | None = None) -> None:
         self._registry_service = RepositoryRegistryService(storage_path=storage_path)
+        self._repo_validation_service = RepoValidationService()
+
+    def is_validation_runner_available(self) -> bool:
+        return self._repo_validation_service.is_available()
+
+    def validation_runner_type(self) -> str:
+        return self._repo_validation_service.runner_type()
 
     def run_validation(
         self,
@@ -71,12 +79,17 @@ class ValidationService:
         warnings: list[str] = []
         errors: list[str] = []
         steps: list[ValidationStepResult] = []
+        validation_runner_available = self._repo_validation_service.is_available()
+        validation_runner_type = self._repo_validation_service.runner_type() if validation_runner_available else ""
 
         if not repo_root.exists() or not repo_root.is_dir():
             return ValidationResult(
                 repo_id=repo_id,
                 overall_status="failed",
                 errors=[f"Resolved repo root does not exist: {repo_root.as_posix()}"],
+                validation_runner_available=validation_runner_available,
+                validation_runner_type=validation_runner_type,
+                validation_timeout_seconds=effective_timeout_seconds,
             )
 
         environment_setup = self._prepare_validation_environment(
@@ -118,6 +131,9 @@ class ValidationService:
                 stderr="",
                 errors=errors,
                 warnings=warnings,
+                validation_runner_available=validation_runner_available,
+                validation_runner_type=validation_runner_type,
+                validation_timeout_seconds=effective_timeout_seconds,
             )
         if not command_list:
             warnings.append("No validation commands were configured or detected.")
@@ -133,6 +149,88 @@ class ValidationService:
                 environment_setup_logs=str(environment_setup.get("environment_setup_logs", "") or "").strip(),
                 dependency_install_status=str(environment_setup.get("dependency_install_status", "") or "").strip(),
                 warnings=warnings,
+                validation_runner_available=validation_runner_available,
+                validation_runner_type=validation_runner_type,
+                validation_timeout_seconds=effective_timeout_seconds,
+            )
+
+        if validation_runner_available and self._repo_validation_service.can_handle(command_list):
+            runner_payload = self._repo_validation_service.execute(
+                repo_id=repo_id,
+                repo_path=repo_root,
+                commands=command_list,
+                timeout_seconds=effective_timeout_seconds,
+            )
+            steps = self._repo_validation_service.build_steps(runner_payload)
+            if not steps and str(runner_payload.get("error", "") or "").strip():
+                errors.append(str(runner_payload.get("error", "")).strip())
+            overall_status = self._overall_status(steps)
+            summary = self._summarize_test_results(
+                steps,
+                output_max_chars=effective_output_max_chars,
+            )
+            stage_diagnostics = self._build_stage_diagnostics(
+                repo_root=repo_root,
+                steps=steps,
+                payload=runner_payload,
+                summary=summary,
+            )
+            outcome_type = self._classify_validation_outcome(
+                overall_status=overall_status,
+                summary=summary,
+                steps=steps,
+                warnings=warnings,
+                errors=errors,
+                validation_path_exists=bool(command_list),
+                failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
+            )
+            return ValidationResult(
+                repo_id=repo_id,
+                overall_status=overall_status,
+                steps=steps,
+                passed=overall_status == "success" and summary["failed_tests"] == 0 and summary["total_tests"] > 0,
+                outcome_type=outcome_type,
+                validation_scope=validation_scope,
+                validation_profile_used=validation_profile_used,
+                targeted_validation=targeted_validation,
+                environment_related_failure=outcome_type in {
+                    "validation_environment_not_ready",
+                    "validation_missing_dependency",
+                    "validation_misconfigured",
+                },
+                environment_prepared=bool(environment_setup.get("environment_prepared", False)),
+                environment_setup_logs=str(environment_setup.get("environment_setup_logs", "") or "").strip(),
+                dependency_install_status=str(environment_setup.get("dependency_install_status", "") or "").strip(),
+                total_tests=summary["total_tests"],
+                passed_tests=summary["passed_tests"],
+                failed_tests=summary["failed_tests"],
+                failed_test_cases=summary["failed_test_cases"],
+                stdout=summary["stdout"],
+                stderr=summary["stderr"],
+                errors=errors,
+                warnings=warnings,
+                restore_supported=bool(stage_diagnostics.get("restore_supported", False)),
+                restore_pass=bool(stage_diagnostics.get("restore_pass", False)),
+                restore_commands_run=list(stage_diagnostics.get("restore_commands_run", []) or []),
+                restore_failed_commands=list(stage_diagnostics.get("restore_failed_commands", []) or []),
+                restore_stdout_excerpt=str(stage_diagnostics.get("restore_stdout_excerpt", "") or ""),
+                restore_stderr_excerpt=str(stage_diagnostics.get("restore_stderr_excerpt", "") or ""),
+                restore_auth_missing_guess=bool(stage_diagnostics.get("restore_auth_missing_guess", False)),
+                nuget_config_detected=bool(stage_diagnostics.get("nuget_config_detected", False)),
+                private_feed_detected=bool(stage_diagnostics.get("private_feed_detected", False)),
+                effective_nuget_config_paths=list(stage_diagnostics.get("effective_nuget_config_paths", []) or []),
+                effective_package_sources=list(stage_diagnostics.get("effective_package_sources", []) or []),
+                effective_package_source_names=list(stage_diagnostics.get("effective_package_source_names", []) or []),
+                source_mapping_detected=bool(stage_diagnostics.get("source_mapping_detected", False)),
+                credential_provider_detected=bool(stage_diagnostics.get("credential_provider_detected", False)),
+                restore_used_configfile=str(stage_diagnostics.get("restore_used_configfile", "") or ""),
+                restore_used_sources_safe=list(stage_diagnostics.get("restore_used_sources_safe", []) or []),
+                restore_auth_mode_guess=str(stage_diagnostics.get("restore_auth_mode_guess", "") or ""),
+                restore_secret_redaction_applied=bool(stage_diagnostics.get("restore_secret_redaction_applied", False)),
+                failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
+                validation_runner_available=True,
+                validation_runner_type=validation_runner_type,
+                validation_timeout_seconds=effective_timeout_seconds,
             )
 
         log_line(
@@ -173,6 +271,12 @@ class ValidationService:
             steps,
             output_max_chars=effective_output_max_chars,
         )
+        stage_diagnostics = self._build_stage_diagnostics(
+            repo_root=repo_root,
+            steps=steps,
+            payload=None,
+            summary=summary,
+        )
         outcome_type = self._classify_validation_outcome(
             overall_status=overall_status,
             summary=summary,
@@ -180,6 +284,7 @@ class ValidationService:
             warnings=warnings,
             errors=errors,
             validation_path_exists=any(str(step.command or "").strip() for step in list(steps)),
+            failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
         )
         return ValidationResult(
             repo_id=repo_id,
@@ -206,6 +311,28 @@ class ValidationService:
             stderr=summary["stderr"],
             errors=errors,
             warnings=warnings,
+            restore_supported=bool(stage_diagnostics.get("restore_supported", False)),
+            restore_pass=bool(stage_diagnostics.get("restore_pass", False)),
+            restore_commands_run=list(stage_diagnostics.get("restore_commands_run", []) or []),
+            restore_failed_commands=list(stage_diagnostics.get("restore_failed_commands", []) or []),
+            restore_stdout_excerpt=str(stage_diagnostics.get("restore_stdout_excerpt", "") or ""),
+            restore_stderr_excerpt=str(stage_diagnostics.get("restore_stderr_excerpt", "") or ""),
+            restore_auth_missing_guess=bool(stage_diagnostics.get("restore_auth_missing_guess", False)),
+            nuget_config_detected=bool(stage_diagnostics.get("nuget_config_detected", False)),
+            private_feed_detected=bool(stage_diagnostics.get("private_feed_detected", False)),
+            effective_nuget_config_paths=list(stage_diagnostics.get("effective_nuget_config_paths", []) or []),
+            effective_package_sources=list(stage_diagnostics.get("effective_package_sources", []) or []),
+            effective_package_source_names=list(stage_diagnostics.get("effective_package_source_names", []) or []),
+            source_mapping_detected=bool(stage_diagnostics.get("source_mapping_detected", False)),
+            credential_provider_detected=bool(stage_diagnostics.get("credential_provider_detected", False)),
+            restore_used_configfile=str(stage_diagnostics.get("restore_used_configfile", "") or ""),
+            restore_used_sources_safe=list(stage_diagnostics.get("restore_used_sources_safe", []) or []),
+            restore_auth_mode_guess=str(stage_diagnostics.get("restore_auth_mode_guess", "") or ""),
+            restore_secret_redaction_applied=bool(stage_diagnostics.get("restore_secret_redaction_applied", False)),
+            failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
+            validation_runner_available=validation_runner_available,
+            validation_runner_type=validation_runner_type,
+            validation_timeout_seconds=effective_timeout_seconds,
         )
 
     def _resolve_command_plan(
@@ -581,12 +708,15 @@ class ValidationService:
         warnings: list[str],
         errors: list[str],
         validation_path_exists: bool,
+        failure_reason_guess: str = "",
     ) -> str:
         normalized_status = str(overall_status or "").strip().lower()
         if normalized_status == "success":
             return "validation_passed"
         if not validation_path_exists:
             return "validation_misconfigured"
+        if str(failure_reason_guess or "").strip():
+            return str(failure_reason_guess or "").strip()
 
         combined_text = "\n".join(
             [
@@ -632,6 +762,137 @@ class ValidationService:
             return "validation_misconfigured"
         if int(summary.get("failed_tests", 0) or 0) > 0:
             return "validation_failed_code"
+        return "validation_environment_not_ready"
+
+    def _build_stage_diagnostics(
+        self,
+        *,
+        repo_root: Path,
+        steps: list[ValidationStepResult],
+        payload: dict | None,
+        summary: dict,
+    ) -> dict:
+        restore_steps = [step for step in list(steps) if str(step.name or "").strip().lower() == "restore"]
+        restore_commands_run = [str(step.command or "").strip() for step in restore_steps if str(step.command or "").strip()]
+        restore_failed_commands = [str(step.command or "").strip() for step in restore_steps if str(step.status or "").strip().lower() == "failed" and str(step.command or "").strip()]
+        nuget_config_path = self._detect_nuget_config(repo_root)
+        nuget_config_detected = bool(payload.get("nuget_config_detected")) if payload else bool(nuget_config_path)
+        private_feed_detected = bool(payload.get("private_feed_detected")) if payload else self._detect_private_feed(nuget_config_path)
+        failure_reason_guess = str(payload.get("failure_reason_guess", "") or "").strip() if payload else ""
+        restore_auth_missing_guess = bool(payload.get("restore_auth_missing_guess", False)) if payload else False
+        if not failure_reason_guess:
+            failure_reason_guess = self._guess_failure_reason(
+                steps=steps,
+                summary=summary,
+                private_feed_detected=private_feed_detected,
+            )
+        if not restore_auth_missing_guess:
+            restore_auth_missing_guess = failure_reason_guess == "restore_auth_missing"
+        return {
+            "restore_supported": bool(payload.get("restore_supported", False)) if payload else bool(restore_steps),
+            "restore_pass": bool(payload.get("restore_pass", False)) if payload else bool(restore_steps) and all(str(step.status or "").strip().lower() == "success" for step in restore_steps),
+            "restore_commands_run": list(payload.get("restore_commands_run", []) or restore_commands_run) if payload else restore_commands_run,
+            "restore_failed_commands": list(payload.get("restore_failed_commands", []) or restore_failed_commands) if payload else restore_failed_commands,
+            "restore_stdout_excerpt": str(payload.get("restore_stdout_excerpt", "") or "") if payload else self._step_output_excerpt(restore_steps, stream="stdout"),
+            "restore_stderr_excerpt": str(payload.get("restore_stderr_excerpt", "") or "") if payload else self._step_output_excerpt(restore_steps, stream="stderr"),
+            "restore_auth_missing_guess": restore_auth_missing_guess,
+            "nuget_config_detected": nuget_config_detected,
+            "private_feed_detected": private_feed_detected,
+            "effective_nuget_config_paths": list(payload.get("effective_nuget_config_paths", []) or ([nuget_config_path] if nuget_config_path else [])) if payload else ([nuget_config_path] if nuget_config_path else []),
+            "effective_package_sources": list(payload.get("effective_package_sources", []) or []) if payload else [],
+            "effective_package_source_names": list(payload.get("effective_package_source_names", []) or []) if payload else [],
+            "source_mapping_detected": bool(payload.get("source_mapping_detected", False)) if payload else False,
+            "credential_provider_detected": bool(payload.get("credential_provider_detected", False)) if payload else False,
+            "restore_used_configfile": str(payload.get("restore_used_configfile", "") or nuget_config_path) if payload else nuget_config_path,
+            "restore_used_sources_safe": list(payload.get("restore_used_sources_safe", []) or []) if payload else [],
+            "restore_auth_mode_guess": str(payload.get("restore_auth_mode_guess", "") or ("config_without_credentials" if private_feed_detected else "anonymous_or_public")) if payload else ("config_without_credentials" if private_feed_detected else "anonymous_or_public"),
+            "restore_secret_redaction_applied": bool(payload.get("restore_secret_redaction_applied", False)) if payload else False,
+            "failure_reason_guess": failure_reason_guess,
+        }
+
+    @staticmethod
+    def _step_output_excerpt(steps: list[ValidationStepResult], *, stream: str) -> str:
+        values = []
+        for step in list(steps):
+            value = str(getattr(step, stream, "") or "").strip()
+            if value:
+                values.append(value)
+        return "\n\n".join(values)[:1000]
+
+    @staticmethod
+    def _detect_nuget_config(repo_root: Path) -> str:
+        candidates = sorted(repo_root.rglob("NuGet.Config")) + sorted(repo_root.rglob("nuget.config"))
+        for item in candidates:
+            if item.exists() and item.is_file():
+                return item.as_posix()
+        return ""
+
+    @staticmethod
+    def _detect_private_feed(nuget_config_path: str) -> bool:
+        if not nuget_config_path:
+            return False
+        try:
+            content = Path(nuget_config_path).read_text(encoding="utf-8", errors="replace").lower()
+        except OSError:
+            return False
+        return any(
+            marker in content
+            for marker in (
+                "pkgs.dev.azure.com",
+                "visualstudio.com",
+                "artifacts.",
+                "pkgs.",
+                "myget.org",
+                "jfrog",
+                "artifactory",
+                "nexus",
+                "proget",
+            )
+        )
+
+    @staticmethod
+    def _guess_failure_reason(
+        *,
+        steps: list[ValidationStepResult],
+        summary: dict,
+        private_feed_detected: bool,
+    ) -> str:
+        combined_text = "\n".join(
+            [
+                *(str(step.stdout or "") for step in list(steps)),
+                *(str(step.stderr or "") for step in list(steps)),
+            ]
+        ).lower()
+        if any(
+            marker in combined_text
+            for marker in (
+                "no module named",
+                "modulenotfounderror",
+                "cannot import name",
+                "importerror",
+                "pytest: no module named",
+            )
+        ):
+            return "validation_missing_dependency"
+        restore_failed = any(str(step.name or "").strip().lower() == "restore" and str(step.status or "").strip().lower() == "failed" for step in steps)
+        build_failed = any(str(step.name or "").strip().lower() == "build" and str(step.status or "").strip().lower() == "failed" for step in steps)
+        test_failed = any(str(step.name or "").strip().lower() == "test" and str(step.status or "").strip().lower() == "failed" for step in steps)
+        if any(marker in combined_text for marker in ("timed out", "timeout")):
+            return "infra_timeout"
+        if restore_failed:
+            if any(marker in combined_text for marker in ("401", "403", "unauthorized", "forbidden", "authentication", "credential", "unable to load the service index")):
+                return "restore_auth_missing"
+            if "nu1101" in combined_text or "unable to find package" in combined_text:
+                return "package_not_found_private" if private_feed_detected else "package_not_found_public"
+            if any(marker in combined_text for marker in ("no such file or directory", "not found", "sdk", "workload")):
+                return "unsupported_environment"
+            return "unsupported_environment"
+        if build_failed:
+            if any(marker in combined_text for marker in ("error cs", ": error", "build failed")):
+                return "build_compile_error"
+            return "build_compile_error"
+        if test_failed or int(summary.get("failed_tests", 0) or 0) > 0:
+            return "test_failure"
         return "validation_environment_not_ready"
 
     @staticmethod

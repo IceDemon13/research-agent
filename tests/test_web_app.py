@@ -504,6 +504,120 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["technical_details"]["parsed_jira_sections"]["question_count"], 0)
         self.assertEqual(payload["technical_details"]["repo_routing_audit"][0]["provider_used"], "gitnexus_http")
 
+    def test_implementation_plan_preserves_selected_files_by_repo_in_technical_details(self) -> None:
+        run_record = RunRecord(
+            run_id="impl-plan-multi-1",
+            goal="Return accessories field across catalog and pricing",
+            status="success",
+            started_at="2026-03-25T09:00:00+00:00",
+            finished_at="2026-03-25T09:02:00+00:00",
+            repo_id="catalog_service",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        detail = RunDetail(
+            run_id="impl-plan-multi-1",
+            mode="spec",
+            goal="Return accessories field across catalog and pricing",
+            jira_ticket="TEL-7154",
+            repo_id="catalog_service",
+            status="success",
+            repo_relevance_status="relevant",
+            repo_relevance_reason="Catalog service matches the requested area.",
+            spec_result={"risks": []},
+            validation_result={},
+            repo_context_summary={},
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Accessories response update",
+                "summary": "Accessories response update",
+                "description": "Return accessories field across catalog and pricing.",
+                "acceptance_criteria": ["Accessories field is returned."],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus and file targeting were used.",
+                "selection_decision": "selected_gitnexus_http",
+                "gitnexus_enabled": True,
+                "allowlist_match": True,
+                "gitnexus_index_status": "ready",
+                "selected_repos": [{"repo_id": "catalog_service"}, {"repo_id": "pricing_service"}],
+                "candidate_repos": [{"repo_id": "catalog_service"}, {"repo_id": "pricing_service"}],
+                "likely_files": ["src/Catalog/Product/QueryProductInfoHandler.cs"],
+                "likely_file_details": [{"name": "src/Catalog/Product/QueryProductInfoHandler.cs", "confidence": 0.91, "reason": "surviving_exact_jira"}],
+                "top_candidate_files": [{"name": "src/Catalog/Product/QueryProductInfoHandler.cs", "confidence": 0.91, "reason": "surviving_exact_jira"}],
+                "candidate_files_count": 1,
+                "selected_files_count": 1,
+                "total_candidate_file_count": 3,
+                "total_selected_file_count": 3,
+                "selected_files_by_repo": {
+                    "catalog_service": [{"file": "src/Catalog/Product/QueryProductInfoHandler.cs", "confidence": 0.91, "final_score": 1.82, "reason": "surviving_exact_jira", "triggered_penalties": [], "source_signals": ["surviving_exact_jira"]}],
+                    "pricing_service": [{"file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs", "confidence": 0.64, "final_score": 1.28, "reason": "historical_similarity", "triggered_penalties": [], "source_signals": ["historical_similarity"]}],
+                },
+                "candidate_files_by_repo": {
+                    "catalog_service": [{"file": "src/Catalog/Product/QueryProductInfoHandler.cs", "confidence": 0.91, "final_score": 1.82, "reason": "surviving_exact_jira", "triggered_penalties": [], "source_signals": ["surviving_exact_jira"]}],
+                    "pricing_service": [{"file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs", "confidence": 0.64, "final_score": 1.28, "reason": "historical_similarity", "triggered_penalties": [], "source_signals": ["historical_similarity"]}],
+                },
+                "top_candidate_files_by_repo": {
+                    "catalog_service": [{"file": "src/Catalog/Product/QueryProductInfoHandler.cs"}],
+                    "pricing_service": [{"file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs"}],
+                },
+                "top_candidate_symbols_by_repo": {
+                    "catalog_service": [{"name": "QueryProductInfoHandler", "confidence": 0.88, "reason": "provider symbol"}],
+                    "pricing_service": [{"name": "ProductAccessoryPriceDto", "confidence": 0.63, "reason": "historical symbol"}],
+                },
+                "repo_file_match_reason_by_repo": {
+                    "catalog_service": "implementation_plan: top file src/Catalog/Product/QueryProductInfoHandler.cs from surviving_exact_jira",
+                    "pricing_service": "implementation_plan: top file src/Pricing/Contracts/ProductAccessoryPriceDto.cs from historical_similarity",
+                },
+                "repo_file_match_quality_by_repo": {"catalog_service": "exact", "pricing_service": "partial"},
+                "multi_repo_file_targeting_summary": "Top file targets by repo: catalog_service -> src/Catalog/Product/QueryProductInfoHandler.cs; pricing_service -> src/Pricing/Contracts/ProductAccessoryPriceDto.cs.",
+                "execution_mode": "safe_top1_write",
+                "writable_repo_id": "catalog_service",
+                "writable_files": ["src/Catalog/Product/QueryProductInfoHandler.cs"],
+                "readonly_repo_ids": ["pricing_service"],
+                "readonly_files_by_repo": {
+                    "pricing_service": [{"file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs", "confidence": 0.64, "final_score": 1.28, "reason": "historical_similarity", "triggered_penalties": [], "source_signals": ["historical_similarity"]}],
+                },
+                "implementation_scope_summary": "Writable repo: catalog_service. Writable files (1): src/Catalog/Product/QueryProductInfoHandler.cs. Read-only repos: pricing_service.",
+                "scope_enforcement_reason": "Code changes are currently restricted to the top-ranked repository and approved file shortlist. Other selected repositories are preserved as read-only context.",
+                "recommendation": "Start with catalog and pricing file targets.",
+            },
+        ):
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={"jira_ticket": "TEL-7154", "repo_id": "catalog_service"},
+                headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        technical = response.json()["result"]["technical_details"]
+        self.assertIn("catalog_service", technical["selected_files_by_repo"])
+        self.assertIn("pricing_service", technical["selected_files_by_repo"])
+        self.assertEqual(technical["repo_file_match_quality_by_repo"]["catalog_service"], "exact")
+        self.assertEqual(technical["total_selected_file_count"], 3)
+        self.assertEqual(technical["writable_repo_id"], "catalog_service")
+        self.assertEqual(technical["writable_files"], ["src/Catalog/Product/QueryProductInfoHandler.cs"])
+        self.assertEqual(technical["readonly_repo_ids"], ["pricing_service"])
+        self.assertIn("pricing_service", technical["readonly_files_by_repo"])
+        self.assertIn("Writable repo", technical["implementation_scope_summary"])
+
     def test_implementation_plan_downgrades_when_gitnexus_returns_no_targets(self) -> None:
         run_record = RunRecord(
             run_id="impl-plan-empty",
@@ -1133,6 +1247,13 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("repo.action.gitnexus_reindex", repos_response.text)
         self.assertIn("data-gitnexus-open", repos_response.text)
         self.assertIn("data-delete", repos_response.text)
+        self.assertIn("bulkSyncButton", repos_response.text)
+        self.assertIn("bulkReindexButton", repos_response.text)
+        self.assertIn("bulkBackfillButton", repos_response.text)
+        self.assertIn("runBenchmarkButton", repos_response.text)
+        self.assertIn("loadLatestBenchmarkButton", repos_response.text)
+        self.assertIn("benchmarkWorstFiles", repos_response.text)
+        self.assertIn("benchmarkConfusions", repos_response.text)
         self.assertEqual(workflow_response.status_code, 200)
         self.assertIn("Технічні деталі", workflow_response.text)
         self.assertIn("Запустити workflow", workflow_response.text)
@@ -1633,9 +1754,250 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(payload["repos"][0]["local_git_valid"])
         self.assertTrue(payload["repos"][0]["head_resolved"])
         self.assertFalse(payload["repos"][0]["recovered_by_reclone"])
+        self.assertIn("onboarding_clone_status", payload["repos"][0])
+        self.assertIn("onboarding_git_history_available", payload["repos"][0])
+        self.assertIn("onboarding_historical_commit_count", payload["repos"][0])
+        self.assertIn("last_error", payload["repos"][0])
+        self.assertIn("last_completed_at", payload["repos"][0])
         self.assertEqual(payload["repos"][0]["profile"]["primary_stack"], "dotnet")
         self.assertEqual(payload["repos"][0]["profile"]["controller_count"], 3)
         self.assertEqual(payload["repos"][0]["profile"]["route_count"], 12)
+
+    def test_repo_fleet_health_endpoint_returns_summary(self) -> None:
+        with patch.object(web_app, "_repo_fleet_service") as mocked_fleet_service:
+            mocked_fleet_service.fleet_health.return_value = {
+                "active_repo_count": 2,
+                "archived_repo_count": 1,
+                "repos_with_sync_ok": 2,
+                "repos_with_index_ready": 1,
+                "repos_with_historical_backfill_ready": 1,
+                "repos_with_failures": 1,
+                "last_bulk_action_name": "sync_all_active",
+                "last_bulk_action_status": "completed",
+                "last_bulk_action_time": "2026-03-25T12:00:00+00:00",
+                "repos": [],
+            }
+            response = self.client.get(
+                "/repos/fleet-health",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["active_repo_count"], 2)
+
+    def test_bulk_backfill_endpoint_uses_fleet_service(self) -> None:
+        with patch.object(web_app, "_repo_fleet_service") as mocked_fleet_service:
+            mocked_fleet_service.bulk_backfill_active_repos.return_value = {
+                "action": "backfill_all_active",
+                "repo_count": 2,
+                "success_count": 2,
+                "failure_count": 0,
+                "status": "completed",
+                "results": [],
+            }
+            response = self.client.post(
+                "/repos/bulk/backfill",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["action"], "backfill_all_active")
+
+    def test_learning_health_endpoint_returns_summary(self) -> None:
+        with patch.object(web_app, "_repo_fleet_service") as mocked_fleet_service:
+            mocked_fleet_service.learning_health.return_value = {
+                "active_repo_count": 2,
+                "repos_with_learning_ready": 1,
+                "repos_with_surviving_ready": 1,
+                "total_historical_commit_count": 10,
+                "total_jira_linked_commit_count": 4,
+                "total_surviving_snippet_count": 7,
+            }
+            response = self.client.get(
+                "/repos/learning-health",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_surviving_snippet_count"], 7)
+
+    def test_bulk_recompute_learning_endpoint_uses_fleet_service(self) -> None:
+        with patch.object(web_app, "_repo_fleet_service") as mocked_fleet_service:
+            mocked_fleet_service.bulk_recompute_learning.return_value = {
+                "repo_count": 2,
+                "success_count": 2,
+                "failure_count": 0,
+                "status": "completed",
+            }
+            response = self.client.post(
+                "/repos/bulk/recompute-learning",
+                json={
+                    "date_from": "2026-01-01",
+                    "date_to": "2026-02-01",
+                    "include_merge_commits": True,
+                    "full_recompute": True,
+                    "build_mode": "historical_only",
+                    "max_commits_per_repo": 25,
+                },
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "completed")
+        kwargs = mocked_fleet_service.bulk_recompute_learning.call_args.kwargs
+        self.assertEqual(kwargs["build_mode"], "historical_only")
+        self.assertTrue(kwargs["include_merge_commits"])
+
+    def test_latest_routing_benchmark_endpoint_returns_summary(self) -> None:
+        with patch.object(web_app, "_routing_benchmark_service") as mocked_benchmark_service:
+            mocked_benchmark_service.latest_result.return_value = {
+                "total_cases": 3,
+                "repo_top1_accuracy": 0.67,
+                "repo_top3_accuracy": 1.0,
+                "file_precision_at_5": 0.42,
+                "file_recall_at_5": 0.58,
+                "artifact_path": "artifacts/routing_benchmarks/latest.json",
+            }
+            response = self.client.get(
+                "/routing-benchmark/latest",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+        self.assertEqual(response.json()["result"]["total_cases"], 3)
+
+    def test_latest_routing_benchmark_worst_files_endpoint_returns_diagnostics(self) -> None:
+        with patch.object(web_app, "_benchmark_file_diagnostics_service") as mocked_diagnostics_service:
+            mocked_diagnostics_service.compute_worst_file_cases.return_value = {
+                "available": True,
+                "repo_exact_set_but_file_miss_count": 2,
+                "repo_exact_set_but_file_miss_cases": [{"jira_key": "TEL-TRADEIN-1"}],
+            }
+            response = self.client.get(
+                "/routing-benchmark/worst-files",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+        self.assertEqual(response.json()["repo_exact_set_but_file_miss_count"], 2)
+
+    def test_latest_routing_benchmark_confusions_endpoint_returns_diagnostics(self) -> None:
+        with patch.object(web_app, "_benchmark_file_diagnostics_service") as mocked_diagnostics_service:
+            mocked_diagnostics_service.compute_confusions.return_value = {
+                "available": True,
+                "recommended_penalty_tokens": [{"token": "orderservice", "count": 3}],
+                "recommended_positive_path_boosts": [{"token": "handlers", "count": 4}],
+            }
+            response = self.client.get(
+                "/routing-benchmark/confusions",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["recommended_penalty_tokens"][0]["token"], "orderservice")
+
+    def test_generate_routing_benchmark_cases_endpoint_returns_summary(self) -> None:
+        with patch.object(web_app, "_benchmark_case_generation_service") as mocked_generation_service:
+            mocked_generation_service.generate_cases.return_value = {
+                "total_historical_jira_keys_scanned": 12,
+                "total_cases_generated": 7,
+                "skipped_weak_cases": 5,
+                "single_repo_cases": 6,
+                "multi_repo_cases": 1,
+                "quality_tier_counts": {"strong_single_repo": 6, "strong_multi_repo": 1},
+                "artifact_path": "artifacts/routing_benchmarks/generated_cases_20260325T100000Z.json",
+                "latest_artifact_path": "artifacts/routing_benchmarks/generated_cases_latest.json",
+                "cases_preview": [],
+            }
+            response = self.client.post(
+                "/routing-benchmark/generate-cases",
+                json={"include_deleted": False, "include_weak": False, "hydrate_jira_snapshots": True, "max_expected_files": 5},
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_cases_generated"], 7)
+        self.assertTrue(mocked_generation_service.generate_cases.call_args.kwargs["hydrate_jira_snapshots"])
+
+    def test_bulk_hydrate_jira_snapshots_endpoint_returns_summary(self) -> None:
+        with patch.object(
+            web_app._benchmark_case_generation_service._historical_change_memory_service,
+            "hydrate_jira_snapshots_for_active_repos",
+            return_value={
+                "jira_key_count": 5,
+                "jira_snapshot_fetch_attempted": 5,
+                "jira_snapshot_fetch_succeeded": 4,
+                "jira_snapshot_fetch_failed": 1,
+                "jira_snapshot_fetch_skipped": 0,
+            },
+        ) as mocked_hydrate:
+            response = self.client.post(
+                "/repos/bulk/hydrate-jira-snapshots",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["jira_snapshot_fetch_succeeded"], 4)
+        mocked_hydrate.assert_called_once()
+
+    def test_latest_generated_routing_benchmark_cases_endpoint_returns_summary(self) -> None:
+        with patch.object(web_app, "_benchmark_case_generation_service") as mocked_generation_service:
+            mocked_generation_service.latest_generated_cases_summary.return_value = {
+                "total_historical_jira_keys_scanned": 12,
+                "total_cases_generated": 7,
+                "artifact_path": "artifacts/routing_benchmarks/generated_cases_latest.json",
+                "cases_preview": [{"jira_key": "TEL-1"}],
+            }
+            response = self.client.get(
+                "/routing-benchmark/cases/latest",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+        self.assertEqual(response.json()["result"]["total_cases_generated"], 7)
 
     def test_list_repos_endpoint_returns_empty_list_when_only_archived_repos_exist(self) -> None:
         archived_repo = RepoMetadata(
@@ -2407,6 +2769,94 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["result"]["required_fixes"][0]["file"], "src/app.py")
         self.assertIn("legacy payload shape", payload["result"]["required_fixes"][0]["what_to_fix"])
         self.assertIn("Update src/app.py", payload["result"]["required_fixes"][0]["exact_action"])
+
+    def test_pre_review_explains_scope_restrictions_when_writable_shortlist_is_empty(self) -> None:
+        run = self._create_persisted_run(
+            goal="Pre review",
+            mode="review",
+            repo_id="sample",
+            detail_payload={
+                "review_result": {
+                    "status": "blocked",
+                    "summary": "Changes are not ready for human review yet.",
+                    "issues": ["src/app.py still returns the legacy payload shape."],
+                    "approved_files": ["src/app.py"],
+                },
+                "implementation_result": {
+                    "artifact_summary": {
+                        "files_count": 1,
+                        "file_paths": ["src/app.py"],
+                    }
+                },
+                "diff_result": {
+                    "diff_available": True,
+                    "files": [{"file_path": "src/app.py", "change_type": "modified"}],
+                },
+            },
+        )
+
+        with patch("web_app._find_latest_implementation_run_with_artifact", return_value=(run, self._load_persisted_run_detail(run))), patch(
+            "web_app._execute_tracked_api_run",
+            return_value=run,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus and bounded scope were used.",
+                "review_issues": [
+                    {
+                        "file": "src/app.py",
+                        "issue": "src/app.py still returns the legacy payload shape.",
+                        "severity": "critical",
+                        "impact": "breaks API",
+                        "why": "The new contract is not returned yet.",
+                    }
+                ],
+                "files_to_check": ["src/app.py"],
+                "global_blockers": [],
+                "blocking_explanation": "Blocked because src/app.py still returns the legacy payload shape.",
+                "recommendation": "Fix the payload shape before opening review.",
+                "selected_repos": [{"repo_id": "sample"}, {"repo_id": "billing_service"}],
+                "selected_files_by_repo": {
+                    "billing_service": [{"file": "src/Billing/BonusSyncHandler.cs", "confidence": 0.61, "reason": "historical_similarity"}],
+                },
+                "writable_repo_id": "sample",
+                "writable_files": [],
+                "readonly_repo_ids": ["billing_service"],
+                "readonly_files_by_repo": {
+                    "billing_service": [{"file": "src/Billing/BonusSyncHandler.cs", "confidence": 0.61, "reason": "historical_similarity"}],
+                },
+                "execution_mode": "safe_top1_write",
+                "implementation_scope_summary": "Top-ranked repo sample is selected, but no approved writable files were found.",
+                "scope_enforcement_reason": "Code changes are blocked because the top-ranked repository has no approved writable files.",
+                "scope_blocked": True,
+                "scope_execution_ready": False,
+                "writable_file_count": 0,
+                "readonly_repo_count": 1,
+                "readonly_file_count": 1,
+            },
+        ):
+            response = self.client.post(
+                "/workflows/pre-review",
+                json={"jira_ticket": "TEL-789", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        result = response.json()["result"]
+        self.assertFalse(result["fix_and_retry_actionable"])
+        self.assertIn("no approved writable files", result["fix_and_retry_block_reason"].lower())
+        self.assertEqual(result["writable_repo_id"], "sample")
+        self.assertEqual(result["writable_files"], [])
+        self.assertEqual(result["readonly_repo_ids"], ["billing_service"])
+        self.assertIn("no approved writable files", result["recommendation"].lower())
+        self.assertTrue(result["technical_details"]["scope_blocked"])
 
     def test_pre_review_workflow_returns_mixed_severity_issue_details(self) -> None:
         run = self._create_persisted_run(

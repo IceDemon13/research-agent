@@ -1,0 +1,11 @@
+{
+  "last_bulk_action": {
+    "action": "reindex_all_active",
+    "started_at": "2026-03-28T22:17:00.285690+00:00",
+    "completed_at": "2026-03-28T22:17:00.285690+00:00",
+    "repo_count": 2,
+    "success_count": 2,
+    "failure_count": 0,
+    "status": "completed"
+  }
+}

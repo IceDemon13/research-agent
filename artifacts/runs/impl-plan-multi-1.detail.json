@@ -1,0 +1,324 @@
+{
+  "run_id": "impl-plan-multi-1",
+  "mode": "spec",
+  "goal": "Return accessories field across catalog and pricing",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "catalog_service",
+  "jira_ticket": "TEL-7154",
+  "status": "success",
+  "started_at": "",
+  "finished_at": "",
+  "actor": null,
+  "actor_display_name": "",
+  "actor_username": "",
+  "decision": "pending",
+  "decided_by": "",
+  "decided_at": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_strategy": "",
+  "retry_strategy_reason": "",
+  "repeated_failure_detected": false,
+  "retry_context": null,
+  "failed_step": "",
+  "failure_code": "",
+  "failure_reason": "",
+  "root_cause_summary": "",
+  "final_result_summary": "",
+  "recommendation": "",
+  "run_outcome_type": "",
+  "model_used": "",
+  "routing_reason": "",
+  "was_escalated": false,
+  "source_stage": "",
+  "estimated_prompt_size": 0,
+  "provider_used": "gitnexus_http",
+  "provider_fallback": false,
+  "provider_reason": "GitNexus and file targeting were used.",
+  "sync_status": "",
+  "local_head_before": "",
+  "remote_head": "",
+  "synced_before_run": false,
+  "repo_relevance_status": "relevant",
+  "repo_relevance_confidence": 0.0,
+  "repo_relevance_reason": "Catalog service matches the requested area.",
+  "repo_relevance_next_action": "",
+  "log_path": "",
+  "pr_url": "",
+  "review_url": "",
+  "parent_run": null,
+  "previous_attempt_summary": null,
+  "child_runs": [],
+  "steps": [],
+  "spec_result": {
+    "risks": [],
+    "execution_mode_requested": "safe_top1_write",
+    "workflow_input_debug": {
+      "workflow_type": "implementation_plan",
+      "request_input_text": "TEL-7154",
+      "request_input_length": 8,
+      "jira_fetch_attempted": true,
+      "jira_fetch_succeeded": true,
+      "resolved_jira_title": "Accessories response update",
+      "resolved_jira_text_length": 154,
+      "final_workflow_input": "Title: Accessories response update\nDescription:\nReturn accessories field across catalog and pricing.\nAcceptance criteria:\n- Accessories field is returned.",
+      "final_workflow_input_hash": "5ad4a64f6cb89eef4db8c50d3cdc269f220be8d84c8c18e43233ca56815522e3"
+    },
+    "workflow_debug": {
+      "workflow_name": "implementation_plan",
+      "workflow_type": "implementation_plan",
+      "request_input_text": "TEL-7154",
+      "request_input_length": 8,
+      "jira_fetch_attempted": true,
+      "jira_fetch_succeeded": true,
+      "resolved_jira_title": "Accessories response update",
+      "resolved_jira_text_length": 154,
+      "final_workflow_input": "Title: Accessories response update\nDescription:\nReturn accessories field across catalog and pricing.\nAcceptance criteria:\n- Accessories field is returned.",
+      "final_workflow_input_hash": "5ad4a64f6cb89eef4db8c50d3cdc269f220be8d84c8c18e43233ca56815522e3",
+      "raw_jira_text_length": 154,
+      "parsed_jira_sections": {
+        "line_count": 5,
+        "bullet_count": 1,
+        "question_count": 0,
+        "jira_keys": [],
+        "first_line": "Title: Accessories response update"
+      },
+      "normalized_task_text": "Title: Accessories response update Description: Return accessories field across catalog and pricing. Acceptance criteria: - Accessories field is returned.",
+      "baseline_summary": "The baseline plan targets this task: Title: Accessories response update Description: Return accessories field across catalog and pricing. Acceptance criteria: - Accessories field is returned..",
+      "retrieval_query_text": "Title: Accessories response update Description: Return accessories field across catalog and pricing. Acceptance criteria: - Accessories field is returned.",
+      "configured_provider": "gitnexus_http",
+      "repo_metadata_provider": "gitnexus_http",
+      "provider_used": "gitnexus_http",
+      "provider_fallback": false,
+      "provider_reason": "GitNexus and file targeting were used.",
+      "mcp_initialize_attempted": false,
+      "mcp_initialize_succeeded": false,
+      "mcp_session_reused": false,
+      "mcp_retry_after_initialize": false,
+      "mcp_failure_stage": "",
+      "mcp_session_id_present": false,
+      "mcp_notifications_initialized_accepted": false,
+      "mcp_session_id_present_before_notification": false,
+      "mcp_session_id_present_after_notification": false,
+      "mcp_initialize_http_status": 0,
+      "mcp_notifications_initialized_status": 0,
+      "mcp_tools_list_status": 0,
+      "mcp_tools_call_status": 0,
+      "mcp_session_reset_count": 0,
+      "gitnexus_tool_name": "",
+      "gitnexus_query_payload": "",
+      "gitnexus_tool_arguments_sent": {},
+      "gitnexus_raw_result_excerpt": "",
+      "gitnexus_unwrapped_result_excerpt": "",
+      "gitnexus_raw_hit_count": 0,
+      "gitnexus_raw_hit_kinds": [],
+      "gitnexus_unwrapped_hit_count": 0,
+      "gitnexus_unwrapped_hit_kinds": [],
+      "normalization_source_shape": "",
+      "normalization_drop_reasons": [],
+      "raw_hit_count": 0,
+      "normalized_file_count": 0,
+      "normalized_symbol_count": 0,
+      "normalized_module_count": 0,
+      "dropped_hit_count": 0,
+      "evidence_mapping_reason": "",
+      "resolved_process_count": 0,
+      "resolved_symbol_count": 0,
+      "resolved_definition_count": 0,
+      "resolved_file_count": 0,
+      "evidence_resolution_reason": "",
+      "backend_repo_visible_after_analyze": false,
+      "backend_visible_repo_count": 0,
+      "backend_visible_repo_ids_or_paths": [],
+      "gitnexus_home_used_for_analyze": "",
+      "gitnexus_home_used_for_backend": "",
+      "raw_list_repos_result_excerpt": "",
+      "visibility_match_reason": "",
+      "normalized_repo_visibility_targets": [],
+      "candidate_repos_count": 0,
+      "candidate_repos": [
+        {
+          "repo_id": "catalog_service"
+        },
+        {
+          "repo_id": "pricing_service"
+        }
+      ],
+      "selected_repos": [
+        {
+          "repo_id": "catalog_service"
+        },
+        {
+          "repo_id": "pricing_service"
+        }
+      ],
+      "repo_routing_reason": "",
+      "historical_match_count": 0,
+      "top_historical_matches": [],
+      "top_historical_changed_files": [],
+      "candidate_files_count": 1,
+      "selected_files_count": 1,
+      "total_candidate_file_count": 3,
+      "total_selected_file_count": 3,
+      "top_candidate_files": [
+        {
+          "name": "src/Catalog/Product/QueryProductInfoHandler.cs",
+          "confidence": 0.91,
+          "reason": "surviving_exact_jira"
+        }
+      ],
+      "top_candidate_symbols": [],
+      "top_closest_areas": [],
+      "candidate_files_by_repo": {
+        "catalog_service": [
+          {
+            "file": "src/Catalog/Product/QueryProductInfoHandler.cs",
+            "confidence": 0.91,
+            "final_score": 1.82,
+            "reason": "surviving_exact_jira",
+            "triggered_penalties": [],
+            "source_signals": [
+              "surviving_exact_jira"
+            ]
+          }
+        ],
+        "pricing_service": [
+          {
+            "file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs",
+            "confidence": 0.64,
+            "final_score": 1.28,
+            "reason": "historical_similarity",
+            "triggered_penalties": [],
+            "source_signals": [
+              "historical_similarity"
+            ]
+          }
+        ]
+      },
+      "selected_files_by_repo": {
+        "catalog_service": [
+          {
+            "file": "src/Catalog/Product/QueryProductInfoHandler.cs",
+            "confidence": 0.91,
+            "final_score": 1.82,
+            "reason": "surviving_exact_jira",
+            "triggered_penalties": [],
+            "source_signals": [
+              "surviving_exact_jira"
+            ]
+          }
+        ],
+        "pricing_service": [
+          {
+            "file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs",
+            "confidence": 0.64,
+            "final_score": 1.28,
+            "reason": "historical_similarity",
+            "triggered_penalties": [],
+            "source_signals": [
+              "historical_similarity"
+            ]
+          }
+        ]
+      },
+      "top_candidate_files_by_repo": {
+        "catalog_service": [
+          {
+            "file": "src/Catalog/Product/QueryProductInfoHandler.cs"
+          }
+        ],
+        "pricing_service": [
+          {
+            "file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs"
+          }
+        ]
+      },
+      "top_candidate_symbols_by_repo": {
+        "catalog_service": [
+          {
+            "name": "QueryProductInfoHandler",
+            "confidence": 0.88,
+            "reason": "provider symbol"
+          }
+        ],
+        "pricing_service": [
+          {
+            "name": "ProductAccessoryPriceDto",
+            "confidence": 0.63,
+            "reason": "historical symbol"
+          }
+        ]
+      },
+      "repo_file_match_reason_by_repo": {
+        "catalog_service": "implementation_plan: top file src/Catalog/Product/QueryProductInfoHandler.cs from surviving_exact_jira",
+        "pricing_service": "implementation_plan: top file src/Pricing/Contracts/ProductAccessoryPriceDto.cs from historical_similarity"
+      },
+      "repo_file_match_quality_by_repo": {
+        "catalog_service": "exact",
+        "pricing_service": "partial"
+      },
+      "multi_repo_file_targeting_summary": "Top file targets by repo: catalog_service -> src/Catalog/Product/QueryProductInfoHandler.cs; pricing_service -> src/Pricing/Contracts/ProductAccessoryPriceDto.cs.",
+      "execution_mode": "safe_top1_write",
+      "writable_repo_id": "catalog_service",
+      "writable_files": [
+        "src/Catalog/Product/QueryProductInfoHandler.cs"
+      ],
+      "readonly_repo_ids": [
+        "pricing_service"
+      ],
+      "readonly_files_by_repo": {
+        "pricing_service": [
+          {
+            "file": "src/Pricing/Contracts/ProductAccessoryPriceDto.cs",
+            "confidence": 0.64,
+            "final_score": 1.28,
+            "reason": "historical_similarity",
+            "triggered_penalties": [],
+            "source_signals": [
+              "historical_similarity"
+            ]
+          }
+        ]
+      },
+      "implementation_scope_summary": "Writable repo: catalog_service. Writable files (1): src/Catalog/Product/QueryProductInfoHandler.cs. Read-only repos: pricing_service.",
+      "scope_enforcement_reason": "Code changes are currently restricted to the top-ranked repository and approved file shortlist. Other selected repositories are preserved as read-only context.",
+      "scope_blocked": false,
+      "scope_execution_ready": false,
+      "writable_file_count": 0,
+      "readonly_repo_count": 0,
+      "readonly_file_count": 0,
+      "attempted_out_of_scope_files": [],
+      "blocked_out_of_scope_files": [],
+      "writable_file_plan": [],
+      "readonly_plan_by_repo": {},
+      "implementation_file_plan": [],
+      "dropped_candidates_reasons": [
+        "no strong modules",
+        "no repo match areas"
+      ],
+      "final_merge_strategy": "baseline_plus_repo_targets",
+      "repo_routing_audit": [],
+      "spec_snapshot": {
+        "goal_length": 0,
+        "context_length": 0,
+        "requirements_count": 0,
+        "acceptance_criteria_count": 0,
+        "risks_count": 0
+      }
+    }
+  },
+  "review_result": null,
+  "research_result": null,
+  "implementation_result": null,
+  "publication_result": null,
+  "validation_result": {},
+  "diff_result": null,
+  "review_comments": [],
+  "policy_decisions": [],
+  "step_errors": [],
+  "sources": [],
+  "repo_context_summary": {}
+}

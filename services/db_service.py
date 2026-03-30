@@ -136,6 +136,9 @@ class DatabaseService:
                 jira_key TEXT PRIMARY KEY,
                 normalized_task_text TEXT NOT NULL DEFAULT '',
                 task_snapshot_text TEXT NOT NULL DEFAULT '',
+                jira_snapshot_title TEXT NOT NULL DEFAULT '',
+                jira_snapshot_text TEXT NOT NULL DEFAULT '',
+                jira_snapshot_acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
                 updated_at TEXT NOT NULL
             )
             """,
@@ -146,6 +149,8 @@ class DatabaseService:
                 repo_id TEXT NOT NULL,
                 commit_hash TEXT NOT NULL,
                 branch_name TEXT NOT NULL DEFAULT '',
+                subject TEXT NOT NULL DEFAULT '',
+                raw_refs TEXT NOT NULL DEFAULT '',
                 committed_at TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
@@ -155,6 +160,75 @@ class DatabaseService:
                 change_id TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 PRIMARY KEY (change_id, file_path)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS historical_change_hunk (
+                change_id TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                hunk_index INTEGER NOT NULL,
+                added_line_count INTEGER NOT NULL DEFAULT 0,
+                removed_line_count INTEGER NOT NULL DEFAULT 0,
+                hunk_header TEXT NOT NULL DEFAULT '',
+                snippet_excerpt TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (change_id, file_path, hunk_index)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS historical_comment (
+                comment_id TEXT PRIMARY KEY,
+                jira_key TEXT NOT NULL,
+                repo_id TEXT NOT NULL DEFAULT '',
+                author_name TEXT NOT NULL DEFAULT '',
+                author_role_hint TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                body TEXT NOT NULL DEFAULT '',
+                normalized_body TEXT NOT NULL DEFAULT '',
+                comment_type TEXT NOT NULL DEFAULT '',
+                is_requirement_like INTEGER NOT NULL DEFAULT 0,
+                is_implementation_like INTEGER NOT NULL DEFAULT 0,
+                is_noise_like INTEGER NOT NULL DEFAULT 0,
+                extracted_entities_json TEXT NOT NULL DEFAULT '[]',
+                extracted_feature_terms_json TEXT NOT NULL DEFAULT '[]',
+                extracted_path_hints_json TEXT NOT NULL DEFAULT '[]',
+                extracted_repo_hints_json TEXT NOT NULL DEFAULT '[]',
+                timing_phase TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS surviving_change_snippet (
+                repo_id TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                current_head_commit TEXT NOT NULL DEFAULT '',
+                source_commit_hash TEXT NOT NULL DEFAULT '',
+                jira_key TEXT NOT NULL DEFAULT '',
+                line_start INTEGER NOT NULL DEFAULT 0,
+                line_end INTEGER NOT NULL DEFAULT 0,
+                snippet_text TEXT NOT NULL DEFAULT '',
+                symbol_name TEXT NOT NULL DEFAULT '',
+                symbol_kind TEXT NOT NULL DEFAULT '',
+                blamed_at TEXT NOT NULL DEFAULT '',
+                built_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (repo_id, file_path, source_commit_hash, jira_key, line_start, line_end)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS repo_learning_state (
+                repo_id TEXT PRIMARY KEY,
+                learning_last_date_from TEXT NOT NULL DEFAULT '',
+                learning_last_date_to TEXT NOT NULL DEFAULT '',
+                learning_last_build_mode TEXT NOT NULL DEFAULT '',
+                learning_last_commit_count INTEGER NOT NULL DEFAULT 0,
+                learning_last_jira_count INTEGER NOT NULL DEFAULT 0,
+                learning_last_surviving_snippet_count INTEGER NOT NULL DEFAULT 0,
+                raw_extracted_key_candidate_count INTEGER NOT NULL DEFAULT 0,
+                canonical_jira_key_count INTEGER NOT NULL DEFAULT 0,
+                salvaged_jira_key_count INTEGER NOT NULL DEFAULT 0,
+                skipped_invalid_key_candidate_count INTEGER NOT NULL DEFAULT 0,
+                sample_canonical_jira_keys_json TEXT NOT NULL DEFAULT '[]',
+                learning_last_completed_at TEXT NOT NULL DEFAULT '',
+                learning_last_error TEXT NOT NULL DEFAULT ''
             )
             """,
             """
@@ -452,6 +526,162 @@ class DatabaseService:
             )
             self._ensure_column(
                 cursor,
+                "historical_change",
+                "subject",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_change",
+                "raw_refs",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_snapshot_title",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_snapshot_text",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_snapshot_acceptance_criteria_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "repo_id",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "author_name",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "author_role_hint",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "created_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "body",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "normalized_body",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "comment_type",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "is_requirement_like",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "is_implementation_like",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "is_noise_like",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "extracted_entities_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "extracted_feature_terms_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "extracted_path_hints_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "extracted_repo_hints_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "timing_phase",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_comment",
+                "metadata_json",
+                "TEXT NOT NULL DEFAULT '{}'",
+            )
+            self._ensure_column(
+                cursor,
+                "repo_learning_state",
+                "raw_extracted_key_candidate_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repo_learning_state",
+                "canonical_jira_key_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repo_learning_state",
+                "salvaged_jira_key_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repo_learning_state",
+                "skipped_invalid_key_candidate_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                cursor,
+                "repo_learning_state",
+                "sample_canonical_jira_keys_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
                 "runs",
                 "attempt_index",
                 "INTEGER NOT NULL DEFAULT 1",
@@ -517,6 +747,12 @@ class DatabaseService:
             self._ensure_index(cursor, "idx_runs_repo_id", "runs", "repo_id")
             self._ensure_index(cursor, "idx_historical_change_repo_id", "historical_change", "repo_id")
             self._ensure_index(cursor, "idx_historical_change_jira_key", "historical_change", "jira_key")
+            self._ensure_index(cursor, "idx_historical_change_hunk_change_id", "historical_change_hunk", "change_id")
+            self._ensure_index(cursor, "idx_historical_comment_jira_key", "historical_comment", "jira_key")
+            self._ensure_index(cursor, "idx_historical_comment_repo_id", "historical_comment", "repo_id")
+            self._ensure_index(cursor, "idx_historical_comment_jira_key_created_at", "historical_comment", "jira_key, created_at")
+            self._ensure_index(cursor, "idx_surviving_change_snippet_repo_id", "surviving_change_snippet", "repo_id")
+            self._ensure_index(cursor, "idx_surviving_change_snippet_jira_key", "surviving_change_snippet", "jira_key")
             self._backfill_user_role_names(cursor)
         self._bootstrapped = True
         if role_capability_map:
@@ -1101,28 +1337,58 @@ class DatabaseService:
         jira_key: str,
         normalized_task_text: str = "",
         task_snapshot_text: str = "",
+        jira_snapshot_title: str = "",
+        jira_snapshot_text: str = "",
+        jira_snapshot_acceptance_criteria_json: str = "[]",
     ) -> None:
         if not self.enabled:
+            return
+        resolved_key = str(jira_key or "").strip().upper()
+        if not resolved_key:
             return
         self.bootstrap_schema()
         with self._connection() as connection:
             connection.cursor().execute(
                 self._sql(
                     """
-                    INSERT INTO historical_task (jira_key, normalized_task_text, task_snapshot_text, updated_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO historical_task (
+                        jira_key, normalized_task_text, task_snapshot_text,
+                        jira_snapshot_title, jira_snapshot_text, jira_snapshot_acceptance_criteria_json,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(jira_key) DO UPDATE SET
                         normalized_task_text = excluded.normalized_task_text,
                         task_snapshot_text = excluded.task_snapshot_text,
+                        jira_snapshot_title = excluded.jira_snapshot_title,
+                        jira_snapshot_text = excluded.jira_snapshot_text,
+                        jira_snapshot_acceptance_criteria_json = excluded.jira_snapshot_acceptance_criteria_json,
                         updated_at = excluded.updated_at
                     """
                 ),
                 self._params(
-                    str(jira_key or "").strip().upper(),
+                    resolved_key,
                     str(normalized_task_text or "").strip(),
                     str(task_snapshot_text or "").strip(),
+                    str(jira_snapshot_title or "").strip(),
+                    str(jira_snapshot_text or "").strip(),
+                    str(jira_snapshot_acceptance_criteria_json or "[]").strip() or "[]",
                     _timestamp(),
                 ),
+            )
+
+    def delete_historical_tasks(self, jira_keys: list[str]) -> None:
+        if not self.enabled:
+            return
+        resolved = [str(item or "").strip().upper() for item in list(jira_keys or []) if str(item or "").strip()]
+        if not resolved:
+            return
+        self.bootstrap_schema()
+        placeholders = ", ".join(self._sql("?") for _ in resolved)
+        with self._connection() as connection:
+            connection.cursor().execute(
+                f"DELETE FROM historical_task WHERE jira_key IN ({placeholders})",
+                self._params(*resolved),
             )
 
     def replace_historical_changes_for_repo(self, repo_id: str, changes: list[dict]) -> None:
@@ -1156,9 +1422,9 @@ class DatabaseService:
                     self._sql(
                         """
                         INSERT INTO historical_change (
-                            change_id, jira_key, repo_id, commit_hash, branch_name, committed_at, created_at
+                            change_id, jira_key, repo_id, commit_hash, branch_name, subject, raw_refs, committed_at, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """
                     ),
                     self._params(
@@ -1167,6 +1433,8 @@ class DatabaseService:
                         resolved_repo_id,
                         str(change.get("commit_hash", "") or "").strip(),
                         str(change.get("branch_name", "") or "").strip(),
+                        str(change.get("subject", "") or "").strip(),
+                        str(change.get("raw_refs", "") or "").strip(),
                         str(change.get("committed_at", "") or "").strip(),
                         _timestamp(),
                     ),
@@ -1186,22 +1454,241 @@ class DatabaseService:
                         self._params(change_id, normalized_path),
                     )
 
+    def replace_historical_change_hunks_for_repo(self, repo_id: str, hunks: list[dict]) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        resolved_repo_id = str(repo_id or "").strip()
+        with self._connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                self._sql(
+                    """
+                    DELETE FROM historical_change_hunk
+                    WHERE change_id IN (
+                        SELECT change_id FROM historical_change WHERE repo_id = ?
+                    )
+                    """
+                ),
+                self._params(resolved_repo_id),
+            )
+            for item in list(hunks or []):
+                hunk = dict(item or {})
+                change_id = str(hunk.get("change_id", "") or "").strip()
+                file_path = str(hunk.get("file_path", "") or "").strip()
+                if not change_id or not file_path:
+                    continue
+                cursor.execute(
+                    self._sql(
+                        """
+                        INSERT INTO historical_change_hunk (
+                            change_id, file_path, hunk_index, added_line_count, removed_line_count, hunk_header, snippet_excerpt
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(change_id, file_path, hunk_index) DO UPDATE SET
+                            added_line_count = excluded.added_line_count,
+                            removed_line_count = excluded.removed_line_count,
+                            hunk_header = excluded.hunk_header,
+                            snippet_excerpt = excluded.snippet_excerpt
+                        """
+                    ),
+                    self._params(
+                        change_id,
+                        file_path,
+                        int(hunk.get("hunk_index", 0) or 0),
+                        int(hunk.get("added_line_count", 0) or 0),
+                        int(hunk.get("removed_line_count", 0) or 0),
+                        str(hunk.get("hunk_header", "") or "").strip(),
+                        str(hunk.get("snippet_excerpt", "") or "").strip(),
+                        ),
+                    )
+
+    def replace_historical_comments_for_jira_key(self, jira_key: str, comments: list[dict]) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        resolved_jira_key = str(jira_key or "").strip().upper()
+        if not resolved_jira_key:
+            return
+        with self._connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                self._sql("DELETE FROM historical_comment WHERE jira_key = ?"),
+                self._params(resolved_jira_key),
+            )
+            for item in list(comments or []):
+                comment = dict(item or {})
+                comment_id = str(comment.get("comment_id", "") or "").strip()
+                if not comment_id:
+                    continue
+                cursor.execute(
+                    self._sql(
+                        """
+                        INSERT INTO historical_comment (
+                            comment_id, jira_key, repo_id, author_name, author_role_hint, created_at,
+                            body, normalized_body, comment_type,
+                            is_requirement_like, is_implementation_like, is_noise_like,
+                            extracted_entities_json, extracted_feature_terms_json,
+                            extracted_path_hints_json, extracted_repo_hints_json,
+                            timing_phase, metadata_json
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """
+                    ),
+                    self._params(
+                        comment_id,
+                        resolved_jira_key,
+                        str(comment.get("repo_id", "") or "").strip(),
+                        str(comment.get("author_name", "") or "").strip(),
+                        str(comment.get("author_role_hint", "") or "").strip(),
+                        str(comment.get("created_at", "") or "").strip(),
+                        str(comment.get("body", "") or ""),
+                        str(comment.get("normalized_body", "") or ""),
+                        str(comment.get("comment_type", "") or "").strip(),
+                        1 if bool(comment.get("is_requirement_like", False)) else 0,
+                        1 if bool(comment.get("is_implementation_like", False)) else 0,
+                        1 if bool(comment.get("is_noise_like", False)) else 0,
+                        json.dumps(list(comment.get("extracted_entities", []) or []), ensure_ascii=False, sort_keys=True),
+                        json.dumps(list(comment.get("extracted_feature_terms", []) or []), ensure_ascii=False, sort_keys=True),
+                        json.dumps(list(comment.get("extracted_path_hints", []) or []), ensure_ascii=False, sort_keys=True),
+                        json.dumps(list(comment.get("extracted_repo_hints", []) or []), ensure_ascii=False, sort_keys=True),
+                        str(comment.get("timing_phase", "") or "").strip(),
+                        json.dumps(dict(comment.get("metadata", {}) or {}), ensure_ascii=False, sort_keys=True),
+                    ),
+                )
+
+    def replace_surviving_change_snippets_for_repo(self, repo_id: str, snippets: list[dict]) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        resolved_repo_id = str(repo_id or "").strip()
+        with self._connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                self._sql("DELETE FROM surviving_change_snippet WHERE repo_id = ?"),
+                self._params(resolved_repo_id),
+            )
+            for item in list(snippets or []):
+                snippet = dict(item or {})
+                file_path = str(snippet.get("file_path", "") or "").strip()
+                if not file_path:
+                    continue
+                cursor.execute(
+                    self._sql(
+                        """
+                        INSERT INTO surviving_change_snippet (
+                            repo_id, file_path, current_head_commit, source_commit_hash, jira_key,
+                            line_start, line_end, snippet_text, symbol_name, symbol_kind, blamed_at, built_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """
+                    ),
+                    self._params(
+                        resolved_repo_id,
+                        file_path,
+                        str(snippet.get("current_head_commit", "") or "").strip(),
+                        str(snippet.get("source_commit_hash", "") or "").strip(),
+                        str(snippet.get("jira_key", "") or "").strip().upper(),
+                        int(snippet.get("line_start", 0) or 0),
+                        int(snippet.get("line_end", 0) or 0),
+                        str(snippet.get("snippet_text", "") or "").strip(),
+                        str(snippet.get("symbol_name", "") or "").strip(),
+                        str(snippet.get("symbol_kind", "") or "").strip(),
+                        str(snippet.get("blamed_at", "") or "").strip(),
+                        str(snippet.get("built_at", "") or "").strip(),
+                    ),
+                )
+
+    def upsert_repo_learning_state(
+        self,
+        *,
+        repo_id: str,
+        learning_last_date_from: str = "",
+        learning_last_date_to: str = "",
+        learning_last_build_mode: str = "",
+        learning_last_commit_count: int = 0,
+        learning_last_jira_count: int = 0,
+        learning_last_surviving_snippet_count: int = 0,
+        raw_extracted_key_candidate_count: int = 0,
+        canonical_jira_key_count: int = 0,
+        salvaged_jira_key_count: int = 0,
+        skipped_invalid_key_candidate_count: int = 0,
+        sample_canonical_jira_keys_json: str = "[]",
+        learning_last_completed_at: str = "",
+        learning_last_error: str = "",
+    ) -> None:
+        if not self.enabled:
+            return
+        self.bootstrap_schema()
+        with self._connection() as connection:
+            connection.cursor().execute(
+                self._sql(
+                    """
+                    INSERT INTO repo_learning_state (
+                        repo_id, learning_last_date_from, learning_last_date_to, learning_last_build_mode,
+                        learning_last_commit_count, learning_last_jira_count, learning_last_surviving_snippet_count,
+                        raw_extracted_key_candidate_count, canonical_jira_key_count, salvaged_jira_key_count,
+                        skipped_invalid_key_candidate_count, sample_canonical_jira_keys_json,
+                        learning_last_completed_at, learning_last_error
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(repo_id) DO UPDATE SET
+                        learning_last_date_from = excluded.learning_last_date_from,
+                        learning_last_date_to = excluded.learning_last_date_to,
+                        learning_last_build_mode = excluded.learning_last_build_mode,
+                        learning_last_commit_count = excluded.learning_last_commit_count,
+                        learning_last_jira_count = excluded.learning_last_jira_count,
+                        learning_last_surviving_snippet_count = excluded.learning_last_surviving_snippet_count,
+                        raw_extracted_key_candidate_count = excluded.raw_extracted_key_candidate_count,
+                        canonical_jira_key_count = excluded.canonical_jira_key_count,
+                        salvaged_jira_key_count = excluded.salvaged_jira_key_count,
+                        skipped_invalid_key_candidate_count = excluded.skipped_invalid_key_candidate_count,
+                        sample_canonical_jira_keys_json = excluded.sample_canonical_jira_keys_json,
+                        learning_last_completed_at = excluded.learning_last_completed_at,
+                        learning_last_error = excluded.learning_last_error
+                    """
+                ),
+                self._params(
+                    str(repo_id or "").strip(),
+                    str(learning_last_date_from or "").strip(),
+                    str(learning_last_date_to or "").strip(),
+                    str(learning_last_build_mode or "").strip(),
+                    int(learning_last_commit_count or 0),
+                    int(learning_last_jira_count or 0),
+                    int(learning_last_surviving_snippet_count or 0),
+                    int(raw_extracted_key_candidate_count or 0),
+                    int(canonical_jira_key_count or 0),
+                    int(salvaged_jira_key_count or 0),
+                    int(skipped_invalid_key_candidate_count or 0),
+                    str(sample_canonical_jira_keys_json or "[]").strip() or "[]",
+                    str(learning_last_completed_at or "").strip(),
+                    str(learning_last_error or "").strip(),
+                ),
+            )
+
     def fetch_historical_tasks(self) -> list[dict]:
-        return self._fetch_all(
+        rows = self._fetch_all(
             """
-            SELECT jira_key, normalized_task_text, task_snapshot_text, updated_at
+            SELECT jira_key, normalized_task_text, task_snapshot_text,
+                   jira_snapshot_title, jira_snapshot_text, jira_snapshot_acceptance_criteria_json,
+                   updated_at
             FROM historical_task
             ORDER BY jira_key ASC
             """,
             self._params(),
         )
+        for row in rows:
+            row["jira_snapshot_acceptance_criteria"] = self._load_json_list(
+                row.pop("jira_snapshot_acceptance_criteria_json", "[]")
+            )
+        return rows
 
     def fetch_historical_changes(self, *, repo_id: str = "") -> list[dict]:
         if not self.enabled:
             return []
         self.bootstrap_schema()
         query = """
-            SELECT c.change_id, c.jira_key, c.repo_id, c.commit_hash, c.branch_name, c.committed_at, c.created_at,
+            SELECT c.change_id, c.jira_key, c.repo_id, c.commit_hash, c.branch_name, c.subject, c.raw_refs, c.committed_at, c.created_at,
                    f.file_path
             FROM historical_change c
             LEFT JOIN historical_change_file f ON f.change_id = c.change_id
@@ -1225,6 +1712,9 @@ class DatabaseService:
                     "repo_id": str(row.get("repo_id", "") or "").strip(),
                     "commit_hash": str(row.get("commit_hash", "") or "").strip(),
                     "branch_name": str(row.get("branch_name", "") or "").strip(),
+                    "subject": str(row.get("subject", "") or "").strip(),
+                    "commit_message": str(row.get("subject", "") or "").strip(),
+                    "raw_refs": str(row.get("raw_refs", "") or "").strip(),
                     "committed_at": str(row.get("committed_at", "") or "").strip(),
                     "created_at": str(row.get("created_at", "") or "").strip(),
                     "changed_files": [],
@@ -1234,6 +1724,94 @@ class DatabaseService:
             if file_path:
                 entry["changed_files"].append(file_path)
         return list(grouped.values())
+
+    def fetch_historical_change_hunks(self, *, repo_id: str = "") -> list[dict]:
+        query = """
+            SELECT h.change_id, c.repo_id, c.jira_key, h.file_path, h.hunk_index,
+                   h.added_line_count, h.removed_line_count, h.hunk_header, h.snippet_excerpt
+            FROM historical_change_hunk h
+            JOIN historical_change c ON c.change_id = h.change_id
+        """
+        params: tuple = self._params()
+        if str(repo_id or "").strip():
+            query += " WHERE c.repo_id = ?"
+            params = self._params(str(repo_id or "").strip())
+        query += " ORDER BY c.committed_at DESC, h.change_id ASC, h.file_path ASC, h.hunk_index ASC"
+        return self._fetch_all(query, params)
+
+    def fetch_surviving_change_snippets(self, *, repo_id: str = "", jira_key: str = "") -> list[dict]:
+        query = """
+            SELECT repo_id, file_path, current_head_commit, source_commit_hash, jira_key,
+                   line_start, line_end, snippet_text, symbol_name, symbol_kind, blamed_at, built_at
+            FROM surviving_change_snippet
+        """
+        clauses: list[str] = []
+        params: list[str] = []
+        if str(repo_id or "").strip():
+            clauses.append("repo_id = ?")
+            params.append(str(repo_id or "").strip())
+        if str(jira_key or "").strip():
+            clauses.append("jira_key = ?")
+            params.append(str(jira_key or "").strip().upper())
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY repo_id ASC, file_path ASC, line_start ASC"
+        return self._fetch_all(query, self._params(*params))
+
+    def fetch_historical_comments(self, *, jira_key: str = "", repo_id: str = "") -> list[dict]:
+        if not self.enabled:
+            return []
+        self.bootstrap_schema()
+        query = """
+            SELECT comment_id, jira_key, repo_id, author_name, author_role_hint, created_at,
+                   body, normalized_body, comment_type,
+                   is_requirement_like, is_implementation_like, is_noise_like,
+                   extracted_entities_json, extracted_feature_terms_json,
+                   extracted_path_hints_json, extracted_repo_hints_json,
+                   timing_phase, metadata_json
+            FROM historical_comment
+        """
+        clauses: list[str] = []
+        params: list[str] = []
+        if str(jira_key or "").strip():
+            clauses.append("jira_key = ?")
+            params.append(str(jira_key or "").strip().upper())
+        if str(repo_id or "").strip():
+            clauses.append("repo_id = ?")
+            params.append(str(repo_id or "").strip())
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY jira_key ASC, created_at ASC, comment_id ASC"
+        rows = self._fetch_all(query, self._params(*params))
+        for row in rows:
+            row["extracted_entities"] = self._load_json_list(row.pop("extracted_entities_json", "[]"))
+            row["extracted_feature_terms"] = self._load_json_list(row.pop("extracted_feature_terms_json", "[]"))
+            row["extracted_path_hints"] = self._load_json_list(row.pop("extracted_path_hints_json", "[]"))
+            row["extracted_repo_hints"] = self._load_json_list(row.pop("extracted_repo_hints_json", "[]"))
+            row["metadata"] = self._load_json_dict(row.pop("metadata_json", "{}"))
+            row["is_requirement_like"] = bool(row.get("is_requirement_like", 0))
+            row["is_implementation_like"] = bool(row.get("is_implementation_like", 0))
+            row["is_noise_like"] = bool(row.get("is_noise_like", 0))
+        return rows
+
+    def fetch_repo_learning_state(self, *, repo_id: str = "") -> list[dict]:
+        query = """
+            SELECT repo_id, learning_last_date_from, learning_last_date_to, learning_last_build_mode,
+                   learning_last_commit_count, learning_last_jira_count, learning_last_surviving_snippet_count,
+                   raw_extracted_key_candidate_count, canonical_jira_key_count, salvaged_jira_key_count,
+                   skipped_invalid_key_candidate_count, sample_canonical_jira_keys_json,
+                   learning_last_completed_at, learning_last_error
+            FROM repo_learning_state
+        """
+        params: tuple = self._params()
+        if str(repo_id or "").strip():
+            query += " WHERE repo_id = ?"
+            params = self._params(str(repo_id or "").strip())
+        query += " ORDER BY repo_id ASC"
+        rows = self._fetch_all(query, params)
+        for row in rows:
+            row["sample_canonical_jira_keys"] = self._load_json_list(row.pop("sample_canonical_jira_keys_json", "[]"))
+        return rows
 
     def upsert_run(self, run: RunRecord) -> None:
         if not self.enabled:

@@ -11,6 +11,7 @@ from contracts.repo_onboarding_contract import RepoOnboardingResult
 from services.repo_index_service import RepositoryIndexService
 from services.repo_intelligence_service import RepoIntelligenceService
 from services.historical_change_memory_service import HistoricalChangeMemoryService
+from services.repo_learning_service import RepoLearningService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
 from services.scm_service import ScmService, sanitize_remote_url
 from services.bitbucket_credentials import BitbucketCredentialResolver, parse_bitbucket_remote
@@ -58,6 +59,7 @@ class RepoOnboardingService:
         clone_root: str | Path | None = None,
         credential_resolver: BitbucketCredentialResolver | None = None,
         historical_change_memory_service: HistoricalChangeMemoryService | None = None,
+        repo_learning_service: RepoLearningService | None = None,
     ) -> None:
         self._registry_service = registry_service or RepositoryRegistryService()
         self._scm_service = scm_service or ScmService()
@@ -71,6 +73,11 @@ class RepoOnboardingService:
         )
         self._historical_change_memory_service = historical_change_memory_service or HistoricalChangeMemoryService(
             registry_service=self._registry_service,
+            db_service=getattr(self._registry_service, "_db_service", None),
+        )
+        self._repo_learning_service = repo_learning_service or RepoLearningService(
+            registry_service=self._registry_service,
+            historical_change_memory_service=self._historical_change_memory_service,
             db_service=getattr(self._registry_service, "_db_service", None),
         )
         self._clone_root = Path(clone_root or settings.runtime.repo_clone_root).expanduser().resolve()
@@ -327,6 +334,7 @@ class RepoOnboardingService:
             self._remove_local_checkout(local_path)
         self._index_service.clear_repo_storage(normalized_repo_id)
         self._historical_change_memory_service.purge_repo_history(normalized_repo_id)
+        self._repo_learning_service.purge_repo_learning(normalized_repo_id)
 
         timestamp = datetime.now(timezone.utc).isoformat()
         self._registry_service.update_repo_metadata(

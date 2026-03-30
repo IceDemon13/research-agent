@@ -27,6 +27,8 @@ services:
         condition: service_healthy
       gitnexus:
         condition: service_started
+      validation-runner:
+        condition: service_started
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -48,10 +50,14 @@ services:
       VALIDATION_BUILD_COMMAND: ${VALIDATION_BUILD_COMMAND:-}
       VALIDATION_LINT_COMMAND: ${VALIDATION_LINT_COMMAND:-}
       VALIDATION_TEST_COMMAND: ${VALIDATION_TEST_COMMAND:-}
+      VALIDATION_RUNNER_ENABLED: ${VALIDATION_RUNNER_ENABLED:-true}
+      VALIDATION_RUNNER_BASE_URL: ${VALIDATION_RUNNER_BASE_URL:-http://validation-runner:8091}
+      VALIDATION_RUNNER_TYPE: ${VALIDATION_RUNNER_TYPE:-http_dotnet_sdk}
+      VALIDATION_RUNNER_TIMEOUT_SECONDS: ${VALIDATION_RUNNER_TIMEOUT_SECONDS:-180}
       REPO_CLONE_TIMEOUT_SECONDS: ${REPO_CLONE_TIMEOUT_SECONDS:-300}
       REPO_CLONE_ROOT: ${REPO_CLONE_ROOT:-/repos}
       REPO_INTELLIGENCE_PROVIDER: ${REPO_INTELLIGENCE_PROVIDER:-native}
-      GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-false}
+      GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-true}
       GITNEXUS_USE_SKILLS: ${GITNEXUS_USE_SKILLS:-true}
       GITNEXUS_USE_EMBEDDINGS: ${GITNEXUS_USE_EMBEDDINGS:-false}
       GITNEXUS_REPO_ALLOWLIST: ${GITNEXUS_REPO_ALLOWLIST:-catalog_service}
@@ -83,11 +89,56 @@ services:
       - app_data:/app/data
       - app_repos:/repos
 
+  validation-runner:
+    build:
+      context: .
+      dockerfile: docker/validation-runner.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      VALIDATION_RUNNER_PORT: ${VALIDATION_RUNNER_PORT:-8091}
+      VALIDATION_RUNNER_ALLOWED_ROOTS: ${VALIDATION_RUNNER_ALLOWED_ROOTS:-/app/artifacts/temp-workspaces,/repos}
+      VALIDATION_RUNNER_OUTPUT_MAX_CHARS: ${VALIDATION_RUNNER_OUTPUT_MAX_CHARS:-12000}
+      VALIDATION_RUNNER_GLOBAL_NUGET_CONFIG_PATHS: ${VALIDATION_RUNNER_GLOBAL_NUGET_CONFIG_PATHS:-/root/.nuget/NuGet/NuGet.Config,/root/.config/NuGet/NuGet.Config,/validation/machine-nuget-config/Microsoft.VisualStudio.Offline.config,/validation/machine-nuget-config/Microsoft.VisualStudio.FallbackLocation.config}
+      VALIDATION_RUNNER_GLOBAL_NUGET_CONFIG_DIRS: ${VALIDATION_RUNNER_GLOBAL_NUGET_CONFIG_DIRS:-/root/.nuget/NuGet/config,/validation/machine-nuget-config}
+      VALIDATION_RUNNER_EXTRA_NUGET_SOURCES: ${VALIDATION_RUNNER_EXTRA_NUGET_SOURCES:-https://nuget.telemart.ua/v3/index.json}
+      VALIDATION_RUNNER_MACHINE_NUGET_CONFIG_DIR: ${VALIDATION_RUNNER_MACHINE_NUGET_CONFIG_DIR:-C:/Program Files (x86)/NuGet/Config}
+      VSS_NUGET_EXTERNAL_FEED_ENDPOINTS: ${VSS_NUGET_EXTERNAL_FEED_ENDPOINTS:-}
+      ARTIFACTS_CREDENTIALPROVIDER_FEED_ENDPOINTS: ${ARTIFACTS_CREDENTIALPROVIDER_FEED_ENDPOINTS:-}
+      NUGET_CREDENTIALPROVIDER_SESSIONTOKENCACHE_ENABLED: ${NUGET_CREDENTIALPROVIDER_SESSIONTOKENCACHE_ENABLED:-}
+      NUGET_PLUGIN_PATHS: ${NUGET_PLUGIN_PATHS:-}
+      NUGET_PACKAGES: ${NUGET_PACKAGES:-}
+      NUGET_HTTP_CACHE_PATH: ${NUGET_HTTP_CACHE_PATH:-}
+    volumes:
+      - app_artifacts:/app/artifacts
+      - app_repos:/repos
+      - type: bind
+        source: ${APPDATA}/NuGet
+        target: /root/.nuget/NuGet
+        read_only: true
+      - type: bind
+        source: ${APPDATA}/NuGet/config
+        target: /root/.nuget/NuGet/config
+        read_only: true
+      - type: bind
+        source: ${USERPROFILE}/.nuget/packages
+        target: /root/.nuget/packages
+      - type: bind
+        source: ${VALIDATION_RUNNER_MACHINE_NUGET_CONFIG_DIR:-C:/Program Files (x86)/NuGet/Config}
+        target: /validation/machine-nuget-config
+        read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3).read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   gitnexus:
     image: node:22-trixie
     restart: unless-stopped
     environment:
-      GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-false}
+      GITNEXUS_ENABLED: ${GITNEXUS_ENABLED:-true}
       GITNEXUS_CONTROL_ENABLED: ${GITNEXUS_CONTROL_ENABLED:-true}
       GITNEXUS_VERSION: ${GITNEXUS_VERSION:-latest}
       GITNEXUS_PORT: ${GITNEXUS_PORT:-3010}
@@ -101,10 +152,32 @@ services:
       - /opt/gitnexus-sidecar-server.mjs
     ports:
       - "${GITNEXUS_PORT:-3010}:${GITNEXUS_PORT:-3010}"
+      - "${GITNEXUS_MCP_PORT_INTERNAL:-3011}:${GITNEXUS_MCP_PORT_INTERNAL:-3011}"
     volumes:
       - app_repos:/repos
       - gitnexus_home:/gitnexus
       - ./scripts/gitnexus-sidecar-server.mjs:/opt/gitnexus-sidecar-server.mjs:ro
+
+  gitnexus-web:
+    image: node:22-trixie
+    restart: unless-stopped
+    working_dir: /opt
+    depends_on:
+      gitnexus:
+        condition: service_started
+    command: >
+      bash -lc "
+        apt-get update &&
+        apt-get install -y git &&
+        if [ ! -d /opt/GitNexus ]; then
+          git clone https://github.com/abhigyanpatwari/GitNexus.git /opt/GitNexus;
+        fi &&
+        cd /opt/GitNexus/gitnexus-web &&
+        npm install &&
+        npm run dev -- --host 0.0.0.0 --port 5173
+      "
+    ports:
+      - "5173:5173"
 
 volumes:
   postgres_data:
@@ -114,3 +187,4 @@ volumes:
   app_data:
   app_repos:
   gitnexus_home:
+

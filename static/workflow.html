@@ -168,6 +168,32 @@
       `;
     }
 
+    function renderScopePreview(result) {
+      const writableFiles = Array.isArray(result?.writable_files) ? result.writable_files.filter(Boolean) : [];
+      const readonlyRepoIds = Array.isArray(result?.readonly_repo_ids) ? result.readonly_repo_ids.filter(Boolean) : [];
+      const readonlyFilesByRepo = result?.readonly_files_by_repo && typeof result.readonly_files_by_repo === "object"
+        ? result.readonly_files_by_repo
+        : {};
+      const readonlyBlocks = readonlyRepoIds.map((repoId) => {
+        const files = Array.isArray(readonlyFilesByRepo[repoId]) ? readonlyFilesByRepo[repoId] : [];
+        const fileNames = files
+          .map((item) => typeof item === "string" ? item : (item?.file || item?.name || ""))
+          .filter(Boolean)
+          .slice(0, 3);
+        return `<li><strong>${auth.escapeHtml(repoId)}</strong>: ${fileNames.length ? auth.escapeHtml(fileNames.join(", ")) : auth.t("workflow.result.none")}</li>`;
+      }).join("");
+      return `
+        <div>
+          <strong>Bounded scope:</strong>
+          <p>${auth.escapeHtml(result?.implementation_scope_summary || result?.scope_enforcement_reason || "Code changes are currently restricted to the top-ranked repository and approved file shortlist. Other selected repositories are preserved as read-only context.")}</p>
+          <p><strong>Writable repo:</strong> ${auth.escapeHtml(result?.writable_repo_id || "-")}</p>
+          ${renderList("workflow.result.likely_files", writableFiles)}
+          <p><strong>Read-only repos:</strong> ${readonlyRepoIds.length ? auth.escapeHtml(readonlyRepoIds.join(", ")) : auth.t("workflow.result.none")}</p>
+          ${readonlyBlocks ? `<div><strong>Read-only files by repo:</strong><ul>${readonlyBlocks}</ul></div>` : ""}
+        </div>
+      `;
+    }
+
     function renderRequiredFixes(items) {
       const values = Array.isArray(items) ? items.filter(Boolean) : [];
       if (!values.length) {
@@ -327,6 +353,7 @@
           <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
         `;
         bodyBox.innerHTML = `
+          ${renderScopePreview(result)}
           ${renderList("workflow.result.likely_files", result.likely_files)}
           ${renderSelectionDetails("workflow.result.file_selection_reason", result.likely_file_details)}
           ${renderList("workflow.result.likely_modules", result.likely_modules)}
@@ -353,6 +380,7 @@
           <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
         `;
         bodyBox.innerHTML = `
+          ${renderScopePreview(result)}
           <p><strong>${auth.t("workflow.result.decision_statement")}:</strong> ${auth.escapeHtml(result.decision_statement || "-")}</p>
           <p><strong>${auth.t("workflow.result.attempted")}:</strong> ${auth.escapeHtml(result.review_summary?.attempted || "-")}</p>
           <p><strong>${auth.t("workflow.result.what_is_wrong")}:</strong> ${auth.escapeHtml(result.review_summary?.what_is_wrong || "-")}</p>

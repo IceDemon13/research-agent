@@ -40,6 +40,7 @@ class MultiRepoRoutingService:
         jira_key: str = "",
         requested_repo_id: str = "",
         changed_files: list[str] | None = None,
+        read_only: bool = False,
     ) -> dict[str, Any]:
         repos = list(self._registry_service.list_repos() or [])
         normalized_requested_repo_id = normalize_repo_id(requested_repo_id)
@@ -51,8 +52,18 @@ class MultiRepoRoutingService:
                 "historical_match_count": 0,
                 "top_historical_matches": [],
                 "top_historical_changed_files": [],
+                "used_existing_historical_state": True,
+                "skipped_recompute_in_read_only_mode": bool(read_only),
+                "repos_missing_precomputed_history": [],
             }
-        self._historical_memory_service.ensure_history_for_repos(repos)
+        repos_missing_precomputed_history = [
+            repo.repo_id
+            for repo in repos
+            if int(getattr(repo, "historical_change_count", 0) or 0) <= 0
+            and self._historical_memory_service._existing_history_count_for_repo(repo.repo_id) <= 0
+        ]
+        if not read_only:
+            self._historical_memory_service.ensure_history_for_repos(repos)
         repo_scores: list[dict[str, Any]] = []
         historical_matches = self._historical_memory_service.find_matches(
             task_text=task_text,
@@ -96,8 +107,12 @@ class MultiRepoRoutingService:
         selected_repo_ids: list[str] = []
         strong_history = bool(top_candidate and float(top_candidate.get("score", 0.0) or 0.0) >= 0.75 and int(top_candidate.get("historical_match_count", 0) or 0) > 0)
         if strong_history:
-            selected_repo_ids = [_safe_text(top_candidate.get("repo_id", ""))]
-            routing_reason = f"Selected {_safe_text(top_candidate.get('repo_id', ''))} from historical multi-repo evidence."
+            selected_repo_ids = self._selected_repo_ids_from_scores(repo_scores)
+            routing_reason = (
+                f"Selected {', '.join(selected_repo_ids)} from historical multi-repo evidence."
+                if len(selected_repo_ids) > 1
+                else f"Selected {_safe_text(top_candidate.get('repo_id', ''))} from historical multi-repo evidence."
+            )
         elif normalized_requested_repo_id:
             selected_repo_ids = [normalized_requested_repo_id]
             routing_reason = "Fell back to the requested repo because historical routing evidence was weak or unavailable."
@@ -108,17 +123,47 @@ class MultiRepoRoutingService:
                 if selected_repo_ids
                 else "No strong routing evidence was found."
             )
-        selected_repos = [item for item in repo_scores if _safe_text(item.get("repo_id", "")) in selected_repo_ids][:1]
-        top_matches = top_candidate.get("top_historical_matches", []) if top_candidate else []
-        top_changed_files = top_candidate.get("top_historical_changed_files", []) if top_candidate else []
+        selected_repos = [item for item in repo_scores if _safe_text(item.get("repo_id", "")) in selected_repo_ids]
+        top_matches = []
+        top_changed_files = []
+        for selected in selected_repos:
+            top_matches.extend(list(selected.get("top_historical_matches", []) or []))
+            top_changed_files.extend(list(selected.get("top_historical_changed_files", []) or []))
+        dedup_changed_files: list[str] = []
+        seen_changed_files: set[str] = set()
+        for item in top_changed_files:
+            normalized = _safe_text(item)
+            if not normalized or normalized in seen_changed_files:
+                continue
+            seen_changed_files.add(normalized)
+            dedup_changed_files.append(normalized)
         return {
             "candidate_repos": repo_scores[:5],
             "selected_repos": selected_repos,
             "repo_routing_reason": routing_reason,
             "historical_match_count": sum(int(item.get("historical_match_count", 0) or 0) for item in selected_repos) if selected_repos else 0,
-            "top_historical_matches": top_matches[:5],
-            "top_historical_changed_files": top_changed_files[:8],
+            "top_historical_matches": top_matches[:8],
+            "top_historical_changed_files": dedup_changed_files[:12],
+            "used_existing_historical_state": True,
+            "skipped_recompute_in_read_only_mode": bool(read_only),
+            "repos_missing_precomputed_history": repos_missing_precomputed_history,
         }
+
+    @staticmethod
+    def _selected_repo_ids_from_scores(repo_scores: list[dict[str, Any]]) -> list[str]:
+        if not repo_scores:
+            return []
+        top_score = float(repo_scores[0].get("score", 0.0) or 0.0)
+        selected: list[str] = []
+        for item in list(repo_scores or []):
+            score = float(item.get("score", 0.0) or 0.0)
+            match_count = int(item.get("historical_match_count", 0) or 0)
+            repo_id = _safe_text(item.get("repo_id", ""))
+            if not repo_id:
+                continue
+            if score >= max(0.75, top_score - 0.2) and match_count > 0:
+                selected.append(repo_id)
+        return selected or [_safe_text(repo_scores[0].get("repo_id", ""))]
 
     @staticmethod
     def _top_changed_files(matches: list[dict[str, Any]]) -> list[str]:

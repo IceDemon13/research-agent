@@ -11,6 +11,7 @@ const GITNEXUS_HOME = String(process.env.GITNEXUS_HOME || "/gitnexus").trim() ||
 const GITNEXUS_REPO_ROOT = String(process.env.GITNEXUS_REPO_ROOT || "/repos").trim() || "/repos";
 const ANALYZE_OPTION_FLAGS = ["--force", "--skills", "--skip-embeddings"];
 
+
 let backendProcess = null;
 let backendExited = false;
 let backendExitCode = null;
@@ -147,7 +148,7 @@ function startBackend() {
     log("GitNexus sidecar disabled; backend process will not start.");
     return;
   }
-  const args = ["-y", `gitnexus@${VERSION}`, "serve", "--host", "127.0.0.1", "--port", String(INTERNAL_MCP_PORT)];
+  const args = ["-y", `gitnexus@${VERSION}`, "serve", "--host", "0.0.0.0", "--port", String(INTERNAL_MCP_PORT)];
   log("Starting GitNexus MCP backend", `command=npx ${args.join(" ")}`);
   backendProcess = spawn("npx", args, {
     cwd: GITNEXUS_HOME,

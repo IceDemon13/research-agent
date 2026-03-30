@@ -75,6 +75,84 @@
         <div class="empty-state" data-i18n="common.loading">Завантаження...</div>
       </div>
     </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <h2>Fleet health</h2>
+        <div class="actions">
+          <button id="bulkSyncButton" type="button" class="secondary">Refresh/sync all active repos</button>
+          <button id="bulkReindexButton" type="button" class="secondary">Reindex all active repos</button>
+          <button id="bulkBackfillButton" type="button" class="secondary">Backfill history for all active repos</button>
+          <button id="bulkHydrateJiraButton" type="button" class="secondary">Hydrate Jira snapshots</button>
+          <button id="bulkLearningAllButton" type="button" class="secondary">Recompute learning</button>
+          <button id="bulkLearningHistoricalButton" type="button" class="secondary">Recompute historical</button>
+          <button id="bulkLearningSurvivingButton" type="button" class="secondary">Recompute surviving</button>
+        </div>
+      </div>
+      <div class="grid" style="margin-bottom:12px;">
+        <label>
+          <span>Date from</span>
+          <input id="learningDateFromInput" type="date">
+        </label>
+        <label>
+          <span>Date to</span>
+          <input id="learningDateToInput" type="date">
+        </label>
+        <label>
+          <span>Max commits/repo</span>
+          <input id="learningMaxCommitsInput" type="number" min="0" step="1" placeholder="0">
+        </label>
+        <label>
+          <span>Include merge commits</span>
+          <input id="learningIncludeMergesInput" type="checkbox">
+        </label>
+        <label>
+          <span>Full recompute</span>
+          <input id="learningFullRecomputeInput" type="checkbox">
+        </label>
+      </div>
+      <div id="fleetHealthSummary" class="repo-summary-grid">
+        <div><strong>Active repos</strong><br>-</div>
+        <div><strong>Archived repos</strong><br>-</div>
+        <div><strong>Sync OK</strong><br>-</div>
+        <div><strong>Index ready</strong><br>-</div>
+        <div><strong>History ready</strong><br>-</div>
+        <div><strong>Failures</strong><br>-</div>
+        <div><strong>Learning ready</strong><br>-</div>
+        <div><strong>Surviving ready</strong><br>-</div>
+        <div><strong>Surviving snippets</strong><br>-</div>
+      </div>
+      <div id="fleetHealthMeta" class="muted"></div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <h2>Routing benchmark</h2>
+        <div class="actions">
+          <button id="runBenchmarkButton" type="button" class="secondary">Run benchmark</button>
+          <button id="loadLatestBenchmarkButton" type="button" class="secondary">Load latest result</button>
+        </div>
+      </div>
+      <p class="muted">Paste benchmark cases as JSON array or {"cases":[...]}.</p>
+      <textarea id="benchmarkCasesInput" rows="8" style="width:100%;font-family:monospace;">[
+  {
+    "jira_key": "TEL-0000",
+    "expected_repo_ids": ["catalog_service"],
+    "expected_files": []
+  }
+]</textarea>
+      <div id="benchmarkSummary" class="repo-summary-grid" style="margin-top:12px;">
+        <div><strong>Total cases</strong><br>-</div>
+        <div><strong>Repo top1</strong><br>-</div>
+        <div><strong>Repo top3</strong><br>-</div>
+        <div><strong>File precision@5</strong><br>-</div>
+        <div><strong>File recall@5</strong><br>-</div>
+        <div><strong>Artifact</strong><br>-</div>
+      </div>
+      <div id="benchmarkFailures" class="muted"></div>
+      <div id="benchmarkWorstFiles" class="muted" style="margin-top:12px;"></div>
+      <div id="benchmarkConfusions" class="muted" style="margin-top:12px;"></div>
+    </section>
   </div>
 
   <script>
@@ -256,6 +334,12 @@
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.gitnexus_index_error"))}</strong><br>${auth.escapeHtml(repo.gitnexus_index_error || auth.t("common.none"))}</p>
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.sync_error"))}</strong><br>${auth.escapeHtml(showSyncError || auth.t("common.none"))}</p>
                 <p><strong>${auth.escapeHtml(auth.t("repo.field.fallback_reason"))}</strong><br>${auth.escapeHtml(repo.gitnexus_last_fallback_reason || auth.t("common.none"))}</p>
+                <p><strong>Learning mode</strong><br>${auth.escapeHtml(repo.learning_last_build_mode || auth.t("common.none"))}</p>
+                <p><strong>Learning commits</strong><br>${auth.escapeHtml(String(repo.learning_last_commit_count || 0))}</p>
+                <p><strong>Learning Jira links</strong><br>${auth.escapeHtml(String(repo.learning_last_jira_count || 0))}</p>
+                <p><strong>Surviving snippets</strong><br>${auth.escapeHtml(String(repo.learning_last_surviving_snippet_count || 0))}</p>
+                <p><strong>Learning completed</strong><br>${auth.escapeHtml(auth.formatDateTime(repo.learning_last_completed_at || ""))}</p>
+                <p><strong>Learning error</strong><br>${auth.escapeHtml(repo.learning_last_error || auth.t("common.none"))}</p>
               </div>
             </div>
           </details>
@@ -274,6 +358,124 @@
 
     function setLoadingState() {
       document.getElementById("reposContainer").innerHTML = `<div class="empty-state">${auth.escapeHtml(auth.t("common.loading"))}</div>`;
+    }
+
+    function renderFleetHealth(payload) {
+      const summary = payload || {};
+      document.getElementById("fleetHealthSummary").innerHTML = `
+        <div><strong>Active repos</strong><br>${auth.escapeHtml(String(summary.active_repo_count ?? 0))}</div>
+        <div><strong>Archived repos</strong><br>${auth.escapeHtml(String(summary.archived_repo_count ?? 0))}</div>
+        <div><strong>Sync OK</strong><br>${auth.escapeHtml(String(summary.repos_with_sync_ok ?? 0))}</div>
+        <div><strong>Index ready</strong><br>${auth.escapeHtml(String(summary.repos_with_index_ready ?? 0))}</div>
+        <div><strong>History ready</strong><br>${auth.escapeHtml(String(summary.repos_with_historical_backfill_ready ?? 0))}</div>
+        <div><strong>Failures</strong><br>${auth.escapeHtml(String(summary.repos_with_failures ?? 0))}</div>
+        <div><strong>Learning ready</strong><br>${auth.escapeHtml(String(summary.repos_with_learning_ready ?? 0))}</div>
+        <div><strong>Surviving ready</strong><br>${auth.escapeHtml(String(summary.repos_with_surviving_ready ?? 0))}</div>
+        <div><strong>Surviving snippets</strong><br>${auth.escapeHtml(String(summary.total_surviving_snippet_count ?? 0))}</div>
+      `;
+      const metaParts = [];
+      if (summary.last_bulk_action_name) metaParts.push(`Last action: ${summary.last_bulk_action_name}`);
+      if (summary.last_bulk_action_status) metaParts.push(`Status: ${summary.last_bulk_action_status}`);
+      if (summary.last_bulk_action_time) metaParts.push(`Completed: ${auth.formatDateTime(summary.last_bulk_action_time)}`);
+      if (summary.last_learning_action_status) metaParts.push(`Learning: ${summary.last_learning_action_status}`);
+      if (summary.last_learning_action_time) metaParts.push(`Learning completed: ${auth.formatDateTime(summary.last_learning_action_time)}`);
+      document.getElementById("fleetHealthMeta").textContent = metaParts.join(" | ");
+    }
+
+    function learningPayload(buildMode) {
+      return {
+        build_mode: buildMode,
+        date_from: document.getElementById("learningDateFromInput").value.trim(),
+        date_to: document.getElementById("learningDateToInput").value.trim(),
+        include_merge_commits: Boolean(document.getElementById("learningIncludeMergesInput").checked),
+        full_recompute: Boolean(document.getElementById("learningFullRecomputeInput").checked),
+        max_commits_per_repo: Number(document.getElementById("learningMaxCommitsInput").value || 0)
+      };
+    }
+
+    function renderBenchmarkSummary(result) {
+      if (!result) {
+        document.getElementById("benchmarkSummary").innerHTML = `
+          <div><strong>Total cases</strong><br>-</div>
+          <div><strong>Repo top1</strong><br>-</div>
+          <div><strong>Repo top3</strong><br>-</div>
+          <div><strong>File precision@5</strong><br>-</div>
+          <div><strong>File recall@5</strong><br>-</div>
+          <div><strong>Artifact</strong><br>-</div>
+        `;
+        document.getElementById("benchmarkFailures").textContent = "";
+        document.getElementById("benchmarkWorstFiles").textContent = "";
+        document.getElementById("benchmarkConfusions").textContent = "";
+        return;
+      }
+      document.getElementById("benchmarkSummary").innerHTML = `
+        <div><strong>Total cases</strong><br>${auth.escapeHtml(String(result.total_cases ?? 0))}</div>
+        <div><strong>Repo top1</strong><br>${auth.escapeHtml(String(result.repo_top1_accuracy ?? 0))}</div>
+        <div><strong>Repo top3</strong><br>${auth.escapeHtml(String(result.repo_top3_accuracy ?? 0))}</div>
+        <div><strong>File precision@5</strong><br>${auth.escapeHtml(String(result.file_precision_at_5 ?? 0))}</div>
+        <div><strong>File recall@5</strong><br>${auth.escapeHtml(String(result.file_recall_at_5 ?? 0))}</div>
+        <div><strong>Artifact</strong><br>${auth.escapeHtml(String(result.artifact_path || "-"))}</div>
+      `;
+      const worst = Array.isArray(result.worst_failing_cases) ? result.worst_failing_cases.slice(0, 3) : [];
+      document.getElementById("benchmarkFailures").textContent = worst.length
+        ? `Worst cases: ${worst.map((item) => `${item.jira_key || "-"} -> ${item.selected_repo_id || "-"}`).join(" | ")}`
+        : "";
+    }
+
+    function renderBenchmarkWorstFiles(payload) {
+      const node = document.getElementById("benchmarkWorstFiles");
+      if (!payload || payload.available === false) {
+        node.textContent = "";
+        return;
+      }
+      const repoExactMisses = Array.isArray(payload.repo_exact_set_but_file_miss_cases)
+        ? payload.repo_exact_set_but_file_miss_cases.slice(0, 3)
+        : [];
+      const worstPrecision = Array.isArray(payload.worst_file_precision_cases)
+        ? payload.worst_file_precision_cases.slice(0, 3)
+        : [];
+      const lines = [];
+      if (repoExactMisses.length) {
+        lines.push(`Repo-correct/file-wrong: ${repoExactMisses.map((item) => `${item.jira_key || "-"} (p=${item.file_precision_at_5 ?? 0}, r=${item.file_recall_at_5 ?? 0})`).join(" | ")}`);
+      }
+      if (worstPrecision.length) {
+        lines.push(`Worst file precision: ${worstPrecision.map((item) => `${item.jira_key || "-"} (${item.file_precision_at_5 ?? 0})`).join(" | ")}`);
+      }
+      node.textContent = lines.join(" || ");
+    }
+
+    function renderBenchmarkConfusions(payload) {
+      const node = document.getElementById("benchmarkConfusions");
+      if (!payload || payload.available === false) {
+        node.textContent = "";
+        return;
+      }
+      const penalties = Array.isArray(payload.recommended_penalty_tokens)
+        ? payload.recommended_penalty_tokens.slice(0, 5).map((item) => item.token)
+        : [];
+      const boosts = Array.isArray(payload.recommended_positive_path_boosts)
+        ? payload.recommended_positive_path_boosts.slice(0, 5).map((item) => item.token)
+        : [];
+      const locality = Number(payload.multi_repo_locality_violations || 0);
+      const parts = [];
+      if (penalties.length) parts.push(`Penalty candidates: ${penalties.join(", ")}`);
+      if (boosts.length) parts.push(`Boost candidates: ${boosts.join(", ")}`);
+      if (locality) parts.push(`Repo-local ranking warnings: ${locality}`);
+      node.textContent = parts.join(" | ");
+    }
+
+    async function loadBenchmarkDiagnostics() {
+      try {
+        const [worstFiles, confusions] = await Promise.all([
+          auth.fetchJson("/routing-benchmark/worst-files"),
+          auth.fetchJson("/routing-benchmark/confusions")
+        ]);
+        renderBenchmarkWorstFiles(worstFiles);
+        renderBenchmarkConfusions(confusions);
+      } catch (error) {
+        document.getElementById("benchmarkWorstFiles").textContent = "";
+        document.getElementById("benchmarkConfusions").textContent = "";
+      }
     }
 
     function renderRepos(repos) {
@@ -388,6 +590,101 @@
       }
     }
 
+    async function loadFleetHealth() {
+      try {
+        const payload = await auth.fetchJson("/repos/fleet-health");
+        renderFleetHealth(payload);
+      } catch (error) {
+        document.getElementById("fleetHealthMeta").textContent = error.message || "Failed to load fleet health.";
+      }
+    }
+
+    async function runBulkAction(button, path, successMessage) {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Running...";
+      setMessage("");
+      try {
+        const payload = await auth.fetchJson(path, { method: "POST" });
+        setMessage(payload.status ? `${successMessage} (${payload.status})` : successMessage);
+        await loadRepos();
+        await loadFleetHealth();
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function runLearningAction(button, buildMode, successMessage) {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Running...";
+      setMessage("");
+      try {
+        const payload = await auth.fetchJson("/repos/bulk/recompute-learning", {
+          method: "POST",
+          body: learningPayload(buildMode)
+        });
+        setMessage(payload.status ? `${successMessage} (${payload.status})` : successMessage);
+        await loadRepos();
+        await loadFleetHealth();
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function runBenchmark() {
+      const input = document.getElementById("benchmarkCasesInput").value.trim();
+      if (!input) {
+        setMessage("Benchmark cases JSON is required.", "error");
+        return;
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(input);
+      } catch (error) {
+        setMessage("Benchmark cases JSON is invalid.", "error");
+        return;
+      }
+      const body = Array.isArray(parsed) ? { cases: parsed } : parsed;
+      const button = document.getElementById("runBenchmarkButton");
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Running...";
+      setMessage("");
+      try {
+        const payload = await auth.fetchJson("/routing-benchmark/run", { method: "POST", body });
+        renderBenchmarkSummary(payload);
+        await loadBenchmarkDiagnostics();
+        setMessage("Routing benchmark finished.");
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function loadLatestBenchmark() {
+      try {
+        const payload = await auth.fetchJson("/routing-benchmark/latest");
+        renderBenchmarkSummary(payload.available ? payload.result : null);
+        if (payload.available) {
+          await loadBenchmarkDiagnostics();
+        } else {
+          renderBenchmarkWorstFiles(null);
+          renderBenchmarkConfusions(null);
+        }
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      }
+    }
+
     document.getElementById("repoForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       setMessage("");
@@ -411,6 +708,15 @@
     });
 
     document.getElementById("refreshButton").addEventListener("click", loadRepos);
+    document.getElementById("bulkSyncButton").addEventListener("click", (event) => runBulkAction(event.currentTarget, "/repos/bulk/sync", "Bulk sync finished."));
+    document.getElementById("bulkReindexButton").addEventListener("click", (event) => runBulkAction(event.currentTarget, "/repos/bulk/reindex", "Bulk reindex finished."));
+    document.getElementById("bulkBackfillButton").addEventListener("click", (event) => runBulkAction(event.currentTarget, "/repos/bulk/backfill", "Bulk historical backfill finished."));
+    document.getElementById("bulkHydrateJiraButton").addEventListener("click", (event) => runBulkAction(event.currentTarget, "/repos/bulk/hydrate-jira-snapshots", "Bulk Jira snapshot hydration finished."));
+    document.getElementById("bulkLearningAllButton").addEventListener("click", (event) => runLearningAction(event.currentTarget, "all", "Bulk learning recompute finished."));
+    document.getElementById("bulkLearningHistoricalButton").addEventListener("click", (event) => runLearningAction(event.currentTarget, "historical_only", "Bulk historical recompute finished."));
+    document.getElementById("bulkLearningSurvivingButton").addEventListener("click", (event) => runLearningAction(event.currentTarget, "surviving_only", "Bulk surviving recompute finished."));
+    document.getElementById("runBenchmarkButton").addEventListener("click", runBenchmark);
+    document.getElementById("loadLatestBenchmarkButton").addEventListener("click", loadLatestBenchmark);
     document.getElementById("logoutLink").addEventListener("click", (event) => {
       event.preventDefault();
       auth.logout();
@@ -423,6 +729,8 @@
         name: me.user.display_name || me.user.username || "-"
       });
       await loadRepos();
+      await loadFleetHealth();
+      await loadLatestBenchmark();
     });
   </script>
 </body>

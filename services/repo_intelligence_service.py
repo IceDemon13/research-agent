@@ -15,10 +15,12 @@ from contracts.gitnexus_contract import (
     NormalizedRepoIntelligenceResult,
 )
 from contracts.repo_metadata import RepoMetadata
+from services.bounded_implementation_service import BoundedImplementationService
 from services.gitnexus_bridge_service import GitNexusBridgeService
 from services.gitnexus_index_service import GitNexusIndexService
 from services.gitnexus_ui_link_service import GitNexusUiLinkService
 from services.historical_change_memory_service import HistoricalChangeMemoryService
+from services.multi_repo_file_targeting_service import MultiRepoFileTargetingService
 from services.multi_repo_routing_service import MultiRepoRoutingService
 from services.repo_index_service import RepositoryIndexService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
@@ -480,6 +482,60 @@ def _repo_routing_audit(repo: RepoMetadata | None, selection_debug: dict[str, An
             "provider_used": str(provider_used or selection_debug.get("selected_provider", "") or "native").strip(),
         }
     ]
+
+
+def _file_target_entry_to_selection(entry: dict[str, Any]) -> dict[str, Any]:
+    lexical_overlap = round(float(entry.get("lexical_task_overlap_score", entry.get("lexical_overlap_score", 0.0)) or 0.0), 3)
+    return {
+        "name": _safe_text(entry.get("file", "") or entry.get("name", "")),
+        "confidence": float(entry.get("confidence", 0.0) or 0.0),
+        "reason": _safe_text(entry.get("reason", "")),
+        "surviving_score": round(float(entry.get("surviving_score", 0.0) or 0.0), 3),
+        "historical_score": round(float(entry.get("historical_score", 0.0) or 0.0), 3),
+        "provider_score": round(float(entry.get("provider_score", 0.0) or 0.0), 3),
+        "lexical_task_overlap_score": lexical_overlap,
+        "lexical_overlap_score": lexical_overlap,
+        "path_domain_score": round(float(entry.get("path_domain_score", 0.0) or 0.0), 3),
+        "symbol_overlap_score": round(float(entry.get("symbol_overlap_score", 0.0) or 0.0), 3),
+        "graph_neighbor_score": round(float(entry.get("graph_neighbor_score", 0.0) or 0.0), 3),
+        "infra_penalty": round(float(entry.get("infra_penalty", 0.0) or 0.0), 3),
+        "test_penalty": round(float(entry.get("test_penalty", 0.0) or 0.0), 3),
+        "generated_penalty": round(float(entry.get("generated_penalty", 0.0) or 0.0), 3),
+        "raw_score_before_penalties": round(float(entry.get("raw_score_before_penalties", 0.0) or 0.0), 3),
+        "raw_score_after_penalties": round(float(entry.get("raw_score_after_penalties", 0.0) or 0.0), 3),
+        "raw_score_before_normalization": round(float(entry.get("raw_score_before_normalization", 0.0) or 0.0), 3),
+        "final_score": round(float(entry.get("final_score", 0.0) or 0.0), 3),
+        "ranking_position": int(entry.get("ranking_position", 0) or 0),
+        "triggered_penalties": list(entry.get("triggered_penalties", []) or []),
+        "source_signals": list(entry.get("source_signals", []) or []),
+    }
+
+
+def _file_target_entry_to_change_action(entry: dict[str, Any]) -> dict[str, Any]:
+    file_path = _safe_text(entry.get("file", "") or entry.get("name", ""))
+    reason = _safe_text(entry.get("reason", "")) or "targeted by multi-repo file targeting"
+    return {
+        "file": file_path,
+        "action": "modify",
+        "description": f"Inspect or update this file because {reason}.",
+    }
+
+
+def _repo_targeting_summary_text(targeting_payload: dict[str, Any]) -> str:
+    summary = _safe_text(targeting_payload.get("multi_repo_file_targeting_summary", ""))
+    if summary:
+        return f"Top file targets by repo: {summary}."
+    selected_by_repo = dict(targeting_payload.get("selected_files_by_repo", {}) or {})
+    fragments: list[str] = []
+    for repo_id, entries in list(selected_by_repo.items())[:3]:
+        files = [
+            _safe_text(dict(item or {}).get("file", "") or dict(item or {}).get("name", ""))
+            for item in list(entries or [])[:3]
+            if _safe_text(dict(item or {}).get("file", "") or dict(item or {}).get("name", ""))
+        ]
+        if files:
+            fragments.append(f"{_safe_text(repo_id)} -> {', '.join(files)}")
+    return f"Top file targets by repo: {'; '.join(fragments)}." if fragments else ""
 
 
 def _empty_mcp_debug() -> dict[str, Any]:
@@ -1005,6 +1061,12 @@ class RepoIntelligenceService:
             registry_service=self._registry_service,
             historical_memory_service=self._historical_change_memory_service,
         )
+        self._multi_repo_file_targeting_service = MultiRepoFileTargetingService(
+            registry_service=self._registry_service,
+            historical_change_memory_service=self._historical_change_memory_service,
+            index_service=self._index_service,
+        )
+        self._bounded_implementation_service = BoundedImplementationService()
         self._gitnexus_ui_link_service = GitNexusUiLinkService(repo_settings=self._repo_settings)
         self._native_provider = NativeRepoIntelligenceProvider(
             index_service=self._index_service,
@@ -1089,6 +1151,97 @@ class RepoIntelligenceService:
             "normalized_repo_visibility_targets": list(visibility_debug.get("normalized_repo_visibility_targets", []) or []),
         }
 
+    def _attach_multi_repo_file_targeting(
+        self,
+        *,
+        payload: dict[str, Any],
+        effective_repo_id: str,
+        workflow_name: str,
+        task_text: str,
+        jira_key: str,
+        changed_files: list[str],
+        routing_debug: dict[str, Any],
+    ) -> dict[str, Any]:
+        targeting_payload = self._multi_repo_file_targeting_service.build_targets(
+            workflow_type=_safe_text(workflow_name),
+            task_text=_safe_text(task_text),
+            selected_repos=list(routing_debug.get("selected_repos", []) or []),
+            jira_key=_safe_text(jira_key),
+            manual_repo_override=_safe_text(effective_repo_id),
+            changed_files=_unique_strings(changed_files or []),
+            provider_payload_by_repo={normalize_repo_id(effective_repo_id): dict(payload or {})},
+        )
+        payload.update(targeting_payload)
+        normalized_effective_repo_id = normalize_repo_id(effective_repo_id)
+        candidate_files_by_repo = dict(targeting_payload.get("candidate_files_by_repo", {}) or {})
+        selected_files_by_repo = dict(targeting_payload.get("selected_files_by_repo", {}) or {})
+        top_candidate_symbols_by_repo = dict(targeting_payload.get("top_candidate_symbols_by_repo", {}) or {})
+        top_candidate_entries = list(candidate_files_by_repo.get(normalized_effective_repo_id, []) or [])
+        selected_entries = list(selected_files_by_repo.get(normalized_effective_repo_id, []) or [])
+        symbol_entries = list(top_candidate_symbols_by_repo.get(normalized_effective_repo_id, []) or [])
+        if top_candidate_entries:
+            payload["top_candidate_files"] = [_file_target_entry_to_selection(item) for item in top_candidate_entries[:5]]
+            payload["candidate_files_count"] = len(top_candidate_entries)
+        if selected_entries:
+            payload["likely_files"] = [_safe_text(item.get("file", "") or item.get("name", "")) for item in selected_entries if _safe_text(item.get("file", "") or item.get("name", ""))]
+            payload["likely_file_details"] = [_file_target_entry_to_selection(item) for item in selected_entries[:8]]
+            payload["selected_files_count"] = len(selected_entries)
+            if _safe_text(workflow_name).lower() == "pre_review" and not list(payload.get("files_to_check", []) or []):
+                payload["files_to_check"] = list(payload["likely_files"][:8])
+            if _safe_text(workflow_name).lower() == "implementation_plan":
+                payload["change_actions"] = [_file_target_entry_to_change_action(item) for item in selected_entries[:8]]
+        if symbol_entries:
+            payload["top_candidate_symbols"] = [
+                {
+                    "name": _safe_text(item.get("name", "")),
+                    "confidence": float(item.get("confidence", 0.0) or 0.0),
+                    "reason": _safe_text(item.get("reason", "")),
+                }
+                for item in symbol_entries[:5]
+                if _safe_text(item.get("name", ""))
+            ]
+            if not list(payload.get("likely_modules", []) or []):
+                payload["likely_modules"] = [_safe_text(item.get("name", "")) for item in symbol_entries[:6] if _safe_text(item.get("name", ""))]
+                payload["likely_module_details"] = list(payload["top_candidate_symbols"])
+        payload["total_candidate_file_count"] = int(targeting_payload.get("total_candidate_file_count", 0) or 0)
+        payload["total_selected_file_count"] = int(targeting_payload.get("total_selected_file_count", 0) or 0)
+        summary_text = _repo_targeting_summary_text(targeting_payload)
+        if summary_text:
+            payload["multi_repo_file_targeting_summary"] = summary_text
+            existing_recommendation = _safe_text(payload.get("recommendation", ""))
+            if summary_text not in existing_recommendation:
+                payload["recommendation"] = f"{existing_recommendation} {summary_text}".strip() if existing_recommendation else summary_text
+        return payload
+
+    def _attach_bounded_scope(
+        self,
+        *,
+        payload: dict[str, Any],
+        workflow_name: str,
+        task_text: str,
+        execution_mode: str,
+    ) -> dict[str, Any]:
+        selected_repos = list(payload.get("selected_repos", []) or [])
+        top_repo_id = normalize_repo_id(
+            _safe_text(dict(selected_repos[0]).get("repo_id", "")) if selected_repos and isinstance(selected_repos[0], dict) else ""
+        )
+        if not top_repo_id:
+            top_repo_id = normalize_repo_id(payload.get("repo_id", "") or "")
+        scope_payload = self._bounded_implementation_service.resolve_scope(
+            workflow_type=_safe_text(workflow_name),
+            task_text=_safe_text(task_text),
+            selected_repos=selected_repos,
+            selected_files_by_repo=dict(payload.get("selected_files_by_repo", {}) or {}),
+            top_repo_id=top_repo_id,
+            execution_mode=execution_mode,
+        )
+        payload.update(scope_payload)
+        if _safe_text(workflow_name).lower() == "implementation_plan":
+            file_plan = list(scope_payload.get("writable_file_plan", []) or [])
+            if file_plan:
+                payload["implementation_file_plan"] = file_plan
+        return payload
+
     def resolve_provider_name(self, repo_id: str, workflow_name: str = "") -> str:
         repo = self._registry_service.get_repo(normalize_repo_id(repo_id))
         repo = self._promote_gitnexus_ready_repo(repo, workflow_name)
@@ -1132,6 +1285,7 @@ class RepoIntelligenceService:
         *,
         changed_files: list[str] | None = None,
         jira_key: str = "",
+        execution_mode: str = "",
     ) -> dict[str, Any]:
         normalized_repo_id = normalize_repo_id(repo_id)
         routing_debug = self._multi_repo_routing_service.route(
@@ -1175,7 +1329,21 @@ class RepoIntelligenceService:
                 str(selection_debug.get("selection_decision", "")),
                 f"Workflow '{workflow_name}' uses the native provider.",
             )
-            return payload
+            payload = self._attach_multi_repo_file_targeting(
+                payload=payload,
+                effective_repo_id=repo.repo_id,
+                workflow_name=workflow_name,
+                task_text=task_text,
+                jira_key=jira_key,
+                changed_files=_unique_strings(changed_files or []),
+                routing_debug=routing_debug,
+            )
+            return self._attach_bounded_scope(
+                payload=payload,
+                workflow_name=workflow_name,
+                task_text=task_text,
+                execution_mode=execution_mode,
+            )
         request = RepoQueryRequest(
             repo_id=repo.repo_id,
             workflow_name=_safe_text(workflow_name),
@@ -1194,7 +1362,7 @@ class RepoIntelligenceService:
                 gitnexus_index_error=reason,
             )
             fallback_reason = f"GitNexus provider query failed: {reason}. Fell back to the native provider."
-            return {
+            payload = {
                 "provider": "native",
                 "available": False,
                 "fallback_to_native": True,
@@ -1209,6 +1377,21 @@ class RepoIntelligenceService:
                 **mcp_debug,
                 **selection_debug,
             }
+            payload = self._attach_multi_repo_file_targeting(
+                payload=payload,
+                effective_repo_id=repo.repo_id,
+                workflow_name=workflow_name,
+                task_text=task_text,
+                jira_key=jira_key,
+                changed_files=_unique_strings(changed_files or []),
+                routing_debug=routing_debug,
+            )
+            return self._attach_bounded_scope(
+                payload=payload,
+                workflow_name=workflow_name,
+                task_text=task_text,
+                execution_mode=execution_mode,
+            )
         if str(payload.get("provider_used", "") or "").strip() == "gitnexus_http" and not bool(payload.get("provider_fallback", False)):
             self._registry_service.update_repo_metadata(
                 repo.repo_id,
@@ -1230,7 +1413,21 @@ class RepoIntelligenceService:
         payload["repo_routing_audit"] = list(payload.get("repo_routing_audit", []) or _repo_routing_audit(repo, selection_debug, provider_used=payload["provider_used"]))
         payload.update({key: value for key, value in routing_debug.items() if key not in {"candidate_repos_count"}})
         payload.update(selection_debug)
-        return payload
+        payload = self._attach_multi_repo_file_targeting(
+            payload=payload,
+            effective_repo_id=repo.repo_id,
+            workflow_name=workflow_name,
+            task_text=task_text,
+            jira_key=jira_key,
+            changed_files=_unique_strings(changed_files or []),
+            routing_debug=routing_debug,
+        )
+        return self._attach_bounded_scope(
+            payload=payload,
+            workflow_name=workflow_name,
+            task_text=task_text,
+            execution_mode=execution_mode,
+        )
 
     def provider_status(self, repo_id: str) -> dict[str, Any]:
         normalized_repo_id = normalize_repo_id(repo_id)

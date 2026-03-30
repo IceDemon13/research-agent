@@ -193,6 +193,15 @@ class ImplementationPlanWorkflowResult:
     change_actions: list[FileChangeAction] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
     validation_plan: list[str] = field(default_factory=list)
+    execution_mode: str = ""
+    selected_repos: list[dict] = field(default_factory=list)
+    selected_files_by_repo: dict = field(default_factory=dict)
+    writable_repo_id: str = ""
+    writable_files: list[str] = field(default_factory=list)
+    readonly_repo_ids: list[str] = field(default_factory=list)
+    readonly_files_by_repo: dict = field(default_factory=dict)
+    implementation_scope_summary: str = ""
+    scope_enforcement_reason: str = ""
     recommendation: str = ""
     technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
@@ -223,6 +232,15 @@ class ImplementationPlanWorkflowResult:
             "change_actions": [item.to_dict() for item in self.change_actions],
             "risks": list(self.risks),
             "validation_plan": list(self.validation_plan),
+            "execution_mode": self.execution_mode,
+            "selected_repos": list(self.selected_repos),
+            "selected_files_by_repo": dict(self.selected_files_by_repo or {}),
+            "writable_repo_id": self.writable_repo_id,
+            "writable_files": list(self.writable_files),
+            "readonly_repo_ids": list(self.readonly_repo_ids),
+            "readonly_files_by_repo": dict(self.readonly_files_by_repo or {}),
+            "implementation_scope_summary": self.implementation_scope_summary,
+            "scope_enforcement_reason": self.scope_enforcement_reason,
             "recommendation": self.recommendation,
             "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
@@ -246,6 +264,15 @@ class PreReviewWorkflowResult:
     ready_for_crucible: bool = False
     fix_and_retry_actionable: bool = False
     fix_and_retry_block_reason: str = ""
+    execution_mode: str = ""
+    selected_repos: list[dict] = field(default_factory=list)
+    selected_files_by_repo: dict = field(default_factory=dict)
+    writable_repo_id: str = ""
+    writable_files: list[str] = field(default_factory=list)
+    readonly_repo_ids: list[str] = field(default_factory=list)
+    readonly_files_by_repo: dict = field(default_factory=dict)
+    implementation_scope_summary: str = ""
+    scope_enforcement_reason: str = ""
     recommendation: str = ""
     technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
@@ -267,6 +294,15 @@ class PreReviewWorkflowResult:
             "ready_for_crucible": bool(self.ready_for_crucible),
             "fix_and_retry_actionable": bool(self.fix_and_retry_actionable),
             "fix_and_retry_block_reason": self.fix_and_retry_block_reason,
+            "execution_mode": self.execution_mode,
+            "selected_repos": list(self.selected_repos),
+            "selected_files_by_repo": dict(self.selected_files_by_repo or {}),
+            "writable_repo_id": self.writable_repo_id,
+            "writable_files": list(self.writable_files),
+            "readonly_repo_ids": list(self.readonly_repo_ids),
+            "readonly_files_by_repo": dict(self.readonly_files_by_repo or {}),
+            "implementation_scope_summary": self.implementation_scope_summary,
+            "scope_enforcement_reason": self.scope_enforcement_reason,
             "recommendation": self.recommendation,
             "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,

@@ -57,6 +57,7 @@
     "risks": [
       "Response contract change."
     ],
+    "execution_mode_requested": "safe_top1_write",
     "workflow_input_debug": {
       "workflow_type": "implementation_plan",
       "request_input_text": "TEL-1",
@@ -162,6 +163,8 @@
       "top_historical_changed_files": [],
       "candidate_files_count": 3,
       "selected_files_count": 1,
+      "total_candidate_file_count": 0,
+      "total_selected_file_count": 0,
       "top_candidate_files": [
         {
           "name": "src/Catalog.Api/Controllers/BonusController.cs",
@@ -183,6 +186,30 @@
           "reason": "route match"
         }
       ],
+      "candidate_files_by_repo": {},
+      "selected_files_by_repo": {},
+      "top_candidate_files_by_repo": {},
+      "top_candidate_symbols_by_repo": {},
+      "repo_file_match_reason_by_repo": {},
+      "repo_file_match_quality_by_repo": {},
+      "multi_repo_file_targeting_summary": "",
+      "execution_mode": "",
+      "writable_repo_id": "",
+      "writable_files": [],
+      "readonly_repo_ids": [],
+      "readonly_files_by_repo": {},
+      "implementation_scope_summary": "",
+      "scope_enforcement_reason": "",
+      "scope_blocked": false,
+      "scope_execution_ready": false,
+      "writable_file_count": 0,
+      "readonly_repo_count": 0,
+      "readonly_file_count": 0,
+      "attempted_out_of_scope_files": [],
+      "blocked_out_of_scope_files": [],
+      "writable_file_plan": [],
+      "readonly_plan_by_repo": {},
+      "implementation_file_plan": [],
       "dropped_candidates_reasons": [
         "no repo match areas"
       ],

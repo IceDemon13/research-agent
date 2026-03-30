@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from contracts.validation_contract import ValidationCommand
 from contracts.validation_contract import ValidationStepResult
+from services.repo_validation_service import RepoValidationService
 from services.repo_registry import RepositoryRegistryService
 from services.validation_service import ValidationService
 
@@ -315,6 +316,144 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(result.validation_profile_used, "python_targeted")
         self.assertTrue(result.targeted_validation)
         self.assertTrue(any("tests/test_smoke.py" in command for command in recorded_commands))
+
+    def test_validation_service_uses_validation_runner_for_dotnet_commands(self) -> None:
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": True,
+                    "steps": [
+                        {
+                            "name": "restore",
+                            "command": 'dotnet restore "/repos/sample/Sample.sln" --nologo --configfile "/repos/sample/NuGet.Config"',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Restore succeeded.",
+                            "stderr": "",
+                            "duration": 1.0,
+                        },
+                        {
+                            "name": "build",
+                            "command": 'dotnet build "/repos/sample/Sample.sln" --nologo',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Build succeeded.",
+                            "stderr": "",
+                            "duration": 1.5,
+                        },
+                        {
+                            "name": "test",
+                            "command": 'dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Passed! 1 passed in 0.10s",
+                            "stderr": "",
+                            "duration": 2.0,
+                        },
+                    ],
+                    "restore_supported": True,
+                    "restore_pass": True,
+                    "restore_commands_run": ['dotnet restore "/repos/sample/Sample.sln" --nologo --configfile "/repos/sample/NuGet.Config"'],
+                    "restore_failed_commands": [],
+                    "restore_stdout_excerpt": "Restore succeeded.",
+                    "restore_stderr_excerpt": "",
+                    "restore_auth_missing_guess": False,
+                    "nuget_config_detected": True,
+                    "private_feed_detected": True,
+                    "effective_nuget_config_paths": ["/repos/sample/NuGet.Config"],
+                    "effective_package_sources": ["private@pkgs.dev.azure.com", "nuget.org@api.nuget.org"],
+                    "effective_package_source_names": ["private", "nuget.org"],
+                    "source_mapping_detected": True,
+                    "credential_provider_detected": True,
+                    "restore_used_configfile": "/repos/sample/NuGet.Config",
+                    "restore_used_sources_safe": ["private@pkgs.dev.azure.com", "nuget.org@api.nuget.org"],
+                    "restore_auth_mode_guess": "credential_provider",
+                    "restore_secret_redaction_applied": True,
+                    "failure_reason_guess": "",
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[
+                ValidationCommand(name="build", command='dotnet build "/repos/sample/Sample.sln" --nologo'),
+                ValidationCommand(name="test", command='dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build'),
+            ],
+        )
+
+        self.assertEqual(result.overall_status, "success")
+        self.assertTrue(result.validation_runner_available)
+        self.assertEqual(result.validation_runner_type, "http_dotnet_sdk")
+        self.assertEqual(len(result.steps), 3)
+        self.assertTrue(result.restore_supported)
+        self.assertTrue(result.restore_pass)
+        self.assertTrue(result.nuget_config_detected)
+        self.assertTrue(result.private_feed_detected)
+        self.assertTrue(result.source_mapping_detected)
+        self.assertTrue(result.credential_provider_detected)
+        self.assertIn("private", result.effective_package_source_names)
+        self.assertEqual(result.restore_used_configfile, "/repos/sample/NuGet.Config")
+        self.assertIn("Build succeeded", result.stdout)
+
+    def test_validation_service_classifies_restore_auth_failure(self) -> None:
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": False,
+                    "steps": [
+                        {
+                            "name": "restore",
+                            "command": 'dotnet restore "/repos/sample/Sample.sln" --nologo --configfile "/repos/sample/NuGet.Config"',
+                            "exit_code": 1,
+                            "status": "failed",
+                            "stdout": "",
+                            "stderr": "error: Unable to load the service index for source https://pkgs.dev.azure.com/example/index.json. Response status code does not indicate success: 401 (Unauthorized).",
+                            "duration": 1.0,
+                        }
+                    ],
+                    "restore_supported": True,
+                    "restore_pass": False,
+                    "restore_commands_run": ['dotnet restore "/repos/sample/Sample.sln" --nologo --configfile "/repos/sample/NuGet.Config"'],
+                    "restore_failed_commands": ['dotnet restore "/repos/sample/Sample.sln" --nologo --configfile "/repos/sample/NuGet.Config"'],
+                    "restore_stdout_excerpt": "",
+                    "restore_stderr_excerpt": "401 Unauthorized",
+                    "restore_auth_missing_guess": True,
+                    "nuget_config_detected": True,
+                    "private_feed_detected": True,
+                    "failure_reason_guess": "restore_auth_missing",
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[ValidationCommand(name="build", command='dotnet build "/repos/sample/Sample.sln" --nologo')],
+        )
+
+        self.assertEqual(result.overall_status, "failed")
+        self.assertEqual(result.outcome_type, "restore_auth_missing")
+        self.assertTrue(result.restore_supported)
+        self.assertFalse(result.restore_pass)
+        self.assertTrue(result.restore_auth_missing_guess)
 
 
 if __name__ == "__main__":

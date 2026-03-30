@@ -682,6 +682,85 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         self.assertEqual(payload["candidate_repos"][0]["repo_id"], "catalog_service")
         self.assertIn(payload["provider_used"], {"native", "gitnexus_http"})
 
+    def test_query_for_workflow_preserves_selected_files_by_repo_from_file_targeting(self) -> None:
+        second_repo_root = self.workspace_root / "billing_service"
+        (second_repo_root / ".git").mkdir(parents=True, exist_ok=True)
+        self.registry.register_repo(
+            root_path=str(second_repo_root),
+            repo_id="billing_service",
+            display_name="Billing Service",
+            default_branch="main",
+        )
+        with patch.object(
+            self.service._multi_repo_routing_service,
+            "route",
+            return_value={
+                "candidate_repos": [{"repo_id": "catalog_service"}, {"repo_id": "billing_service"}],
+                "selected_repos": [{"repo_id": "catalog_service"}, {"repo_id": "billing_service"}],
+                "repo_routing_reason": "historical multi-repo match",
+                "historical_match_count": 2,
+            },
+        ), patch.object(
+            self.service._native_provider,
+            "query_for_workflow",
+            return_value={"provider": "native", "provider_used": "native", "provider_fallback": False, "provider_reason": "native"},
+        ), patch.object(
+            self.service._multi_repo_file_targeting_service,
+            "build_targets",
+            return_value={
+                "candidate_files_by_repo": {
+                    "catalog_service": [
+                        {"file": "src/Catalog/Product/QueryProductInfoHandler.cs", "confidence": 0.91, "reason": "surviving_exact_jira", "final_score": 1.82, "surviving_score": 0.7, "historical_score": 0.65, "provider_score": 0.47, "lexical_task_overlap_score": 0.0, "path_domain_score": 0.0, "symbol_overlap_score": 0.0, "graph_neighbor_score": 0.0, "infra_penalty": 0.0, "test_penalty": 0.0, "generated_penalty": 0.0, "ranking_position": 1, "triggered_penalties": [], "source_signals": ["surviving_exact_jira", "provider_file"]},
+                    ],
+                    "billing_service": [
+                        {"file": "src/Billing/BonusSyncHandler.cs", "confidence": 0.62, "reason": "historical_similarity", "final_score": 1.24, "surviving_score": 0.0, "historical_score": 0.44, "provider_score": 0.0, "lexical_task_overlap_score": 0.1, "path_domain_score": 0.18, "symbol_overlap_score": 0.0, "graph_neighbor_score": 0.0, "infra_penalty": 0.0, "test_penalty": 0.0, "generated_penalty": 0.0, "ranking_position": 1, "triggered_penalties": [], "source_signals": ["historical_similarity"]},
+                    ],
+                },
+                "selected_files_by_repo": {
+                    "catalog_service": [
+                        {"file": "src/Catalog/Product/QueryProductInfoHandler.cs", "confidence": 0.91, "reason": "surviving_exact_jira", "final_score": 1.82, "surviving_score": 0.7, "historical_score": 0.65, "provider_score": 0.47, "lexical_task_overlap_score": 0.0, "path_domain_score": 0.0, "symbol_overlap_score": 0.0, "graph_neighbor_score": 0.0, "infra_penalty": 0.0, "test_penalty": 0.0, "generated_penalty": 0.0, "ranking_position": 1, "triggered_penalties": [], "source_signals": ["surviving_exact_jira", "provider_file"]},
+                    ],
+                    "billing_service": [
+                        {"file": "src/Billing/BonusSyncHandler.cs", "confidence": 0.62, "reason": "historical_similarity", "final_score": 1.24, "surviving_score": 0.0, "historical_score": 0.44, "provider_score": 0.0, "lexical_task_overlap_score": 0.1, "path_domain_score": 0.18, "symbol_overlap_score": 0.0, "graph_neighbor_score": 0.0, "infra_penalty": 0.0, "test_penalty": 0.0, "generated_penalty": 0.0, "ranking_position": 1, "triggered_penalties": [], "source_signals": ["historical_similarity"]},
+                    ],
+                },
+                "top_candidate_files_by_repo": {
+                    "catalog_service": [{"file": "src/Catalog/Product/QueryProductInfoHandler.cs"}],
+                    "billing_service": [{"file": "src/Billing/BonusSyncHandler.cs"}],
+                },
+                "top_candidate_symbols_by_repo": {
+                    "catalog_service": [{"name": "QueryProductInfoHandler", "confidence": 0.88, "reason": "provider symbol"}],
+                    "billing_service": [{"name": "BonusSyncHandler", "confidence": 0.61, "reason": "historical symbol"}],
+                },
+                "repo_file_match_reason_by_repo": {
+                    "catalog_service": "implementation_plan: top file src/Catalog/Product/QueryProductInfoHandler.cs from surviving_exact_jira",
+                    "billing_service": "implementation_plan: top file src/Billing/BonusSyncHandler.cs from historical_similarity",
+                },
+                "repo_file_match_quality_by_repo": {"catalog_service": "exact", "billing_service": "partial"},
+                "total_selected_file_count": 2,
+                "total_candidate_file_count": 2,
+                "multi_repo_file_targeting_summary": "catalog_service -> src/Catalog/Product/QueryProductInfoHandler.cs; billing_service -> src/Billing/BonusSyncHandler.cs",
+            },
+        ):
+            payload = self.service.query_for_workflow(
+                "catalog_service",
+                "analyze_task",
+                "Show bonus info in product card",
+                jira_key="TEL-7154",
+            )
+
+        self.assertIn("catalog_service", payload["selected_files_by_repo"])
+        self.assertIn("billing_service", payload["selected_files_by_repo"])
+        self.assertEqual(payload["likely_files"][0], "src/Catalog/Product/QueryProductInfoHandler.cs")
+        self.assertEqual(payload["top_candidate_files"][0]["name"], "src/Catalog/Product/QueryProductInfoHandler.cs")
+        self.assertEqual(payload["total_selected_file_count"], 2)
+        self.assertIn("billing_service", payload["multi_repo_file_targeting_summary"])
+        self.assertEqual(payload["writable_repo_id"], "catalog_service")
+        self.assertEqual(payload["writable_files"], ["src/Catalog/Product/QueryProductInfoHandler.cs"])
+        self.assertEqual(payload["readonly_repo_ids"], ["billing_service"])
+        self.assertIn("billing_service", payload["readonly_files_by_repo"])
+        self.assertIn("Writable repo", payload["implementation_scope_summary"])
+
     def test_implementation_plan_prefers_product_query_and_mainclient_over_generic_symbols(self) -> None:
         normalized = NormalizedRepoIntelligenceResult(
             files=[

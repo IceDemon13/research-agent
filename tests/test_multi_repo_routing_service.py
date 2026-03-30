@@ -4,6 +4,7 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from services.historical_change_memory_service import HistoricalChangeMemoryService
 from services.multi_repo_routing_service import MultiRepoRoutingService
@@ -104,6 +105,48 @@ class MultiRepoRoutingServiceTests(unittest.TestCase):
 
         self.assertEqual(result["selected_repos"][0]["repo_id"], "billing_service")
         self.assertTrue(all(item["repo_id"] != "catalog_service" for item in result["candidate_repos"]))
+
+    def test_route_preserves_multi_repo_selection_when_multiple_repos_have_strong_history(self) -> None:
+        self.registry.update_repo_metadata("billing_service", capability_tags=["accessories", "product"])
+        state = self.memory_service._load_json_state()
+        state["changes"].append(
+            {
+                "change_id": "billing_service:TEL-7154:def456",
+                "jira_key": "TEL-7154",
+                "repo_id": "billing_service",
+                "commit_hash": "def456",
+                "branch_name": "feature/TEL-7154-billing",
+                "committed_at": "2026-03-25T10:05:00+00:00",
+                "changed_files": ["src/Billing/Product/AccessoryBridge.cs"],
+            }
+        )
+        self.memory_service._save_json_state(state)
+
+        result = self.router.route(
+            workflow_name="implementation_plan",
+            task_text="Return accessories field in product card response",
+            jira_key="TEL-7154",
+        )
+
+        self.assertGreaterEqual(len(result["selected_repos"]), 2)
+        self.assertIn("catalog_service", [item["repo_id"] for item in result["selected_repos"]])
+        self.assertIn("billing_service", [item["repo_id"] for item in result["selected_repos"]])
+
+    def test_route_does_not_recompute_history_in_read_only_mode(self) -> None:
+        with patch.object(
+            self.memory_service,
+            "ensure_history_for_repos",
+            side_effect=AssertionError("read-only routing must not recompute history"),
+        ):
+            result = self.router.route(
+                workflow_name="implementation_plan",
+                task_text="Return accessories field in product card response",
+                jira_key="TEL-7154",
+                read_only=True,
+            )
+
+        self.assertTrue(result["skipped_recompute_in_read_only_mode"])
+        self.assertEqual(result["repos_missing_precomputed_history"], ["billing_service"])
 
 
 if __name__ == "__main__":

@@ -75,6 +75,28 @@ class ValidationResult:
     stderr: str = ""
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    restore_supported: bool = False
+    restore_pass: bool = False
+    restore_commands_run: list[str] = field(default_factory=list)
+    restore_failed_commands: list[str] = field(default_factory=list)
+    restore_stdout_excerpt: str = ""
+    restore_stderr_excerpt: str = ""
+    restore_auth_missing_guess: bool = False
+    nuget_config_detected: bool = False
+    private_feed_detected: bool = False
+    effective_nuget_config_paths: list[str] = field(default_factory=list)
+    effective_package_sources: list[str] = field(default_factory=list)
+    effective_package_source_names: list[str] = field(default_factory=list)
+    source_mapping_detected: bool = False
+    credential_provider_detected: bool = False
+    restore_used_configfile: str = ""
+    restore_used_sources_safe: list[str] = field(default_factory=list)
+    restore_auth_mode_guess: str = ""
+    restore_secret_redaction_applied: bool = False
+    failure_reason_guess: str = ""
+    validation_runner_available: bool = False
+    validation_runner_type: str = ""
+    validation_timeout_seconds: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -98,4 +120,26 @@ class ValidationResult:
             "stderr": self.stderr,
             "errors": list(self.errors),
             "warnings": list(self.warnings),
+            "restore_supported": self.restore_supported,
+            "restore_pass": self.restore_pass,
+            "restore_commands_run": list(self.restore_commands_run),
+            "restore_failed_commands": list(self.restore_failed_commands),
+            "restore_stdout_excerpt": self.restore_stdout_excerpt,
+            "restore_stderr_excerpt": self.restore_stderr_excerpt,
+            "restore_auth_missing_guess": self.restore_auth_missing_guess,
+            "nuget_config_detected": self.nuget_config_detected,
+            "private_feed_detected": self.private_feed_detected,
+            "effective_nuget_config_paths": list(self.effective_nuget_config_paths),
+            "effective_package_sources": list(self.effective_package_sources),
+            "effective_package_source_names": list(self.effective_package_source_names),
+            "source_mapping_detected": self.source_mapping_detected,
+            "credential_provider_detected": self.credential_provider_detected,
+            "restore_used_configfile": self.restore_used_configfile,
+            "restore_used_sources_safe": list(self.restore_used_sources_safe),
+            "restore_auth_mode_guess": self.restore_auth_mode_guess,
+            "restore_secret_redaction_applied": self.restore_secret_redaction_applied,
+            "failure_reason_guess": self.failure_reason_guess,
+            "validation_runner_available": self.validation_runner_available,
+            "validation_runner_type": self.validation_runner_type,
+            "validation_timeout_seconds": self.validation_timeout_seconds,
         }

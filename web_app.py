@@ -38,14 +38,19 @@ from contracts.workflow_contract import (
 )
 from config import settings
 from services.auth_service import AuthError, AuthService
+from services.benchmark_file_diagnostics_service import BenchmarkFileDiagnosticsService
+from services.benchmark_case_generation_service import BenchmarkCaseGenerationService
 from services.db_service import DatabaseService
 from services.i18n_service import DEFAULT_LOCALE, I18nService, SUPPORTED_LOCALES
 from services.jira_task_loader import load_jira_task
 from services.permission_service import PermissionService
+from services.repo_fleet_service import RepoFleetService
 from services.repo_index_service import RepositoryIndexService
+from services.repo_knowledge_pack_service import RepoKnowledgePackService
 from services.repo_registry import RepositoryRegistryService
 from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_onboarding_service import RepoOnboardingService
+from services.routing_benchmark_service import RoutingBenchmarkService
 from services.run_service import RunService
 from services.scm_service import ScmService
 from services.bitbucket_credentials import BitbucketCredentialResolver, parse_bitbucket_remote
@@ -55,8 +60,13 @@ app = FastAPI(title="Research Agent API", version="0.1.0")
 _failure_summary_service = RunService()
 _i18n_service = I18nService()
 _repo_index_service = RepositoryIndexService()
+_repo_knowledge_pack_service = RepoKnowledgePackService()
 _repo_intelligence_service = RepoIntelligenceService(index_service=_repo_index_service)
 _repo_scm_service = ScmService()
+_repo_fleet_service = RepoFleetService()
+_routing_benchmark_service = RoutingBenchmarkService()
+_benchmark_file_diagnostics_service = BenchmarkFileDiagnosticsService()
+_benchmark_case_generation_service = BenchmarkCaseGenerationService()
 _bitbucket_credential_resolver = BitbucketCredentialResolver()
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SESSIONS: dict[str, dict[str, str]] = {}
@@ -92,6 +102,46 @@ class RepoOnboardRequest(BaseModel):
     credential_alias: str = ""
 
 
+class RoutingBenchmarkCaseRequest(BaseModel):
+    jira_key: str
+    expected_repo_ids: list[str]
+    expected_files: list[str] = []
+    task_text: str = ""
+
+
+class RoutingBenchmarkRequest(BaseModel):
+    cases: list[RoutingBenchmarkCaseRequest]
+
+
+class RoutingBenchmarkCaseGenerationRequest(BaseModel):
+    include_deleted: bool = False
+    include_weak: bool = False
+    include_empty_context: bool = False
+    hydrate_jira_snapshots: bool = False
+    max_expected_files: int = 5
+
+
+class RepoLearningRecomputeRequest(BaseModel):
+    date_from: str = ""
+    date_to: str = ""
+    repo_ids: list[str] = []
+    include_merge_commits: bool = False
+    full_recompute: bool = False
+    build_mode: Literal["historical_only", "surviving_only", "all"] = "all"
+    max_commits_per_repo: int = 0
+
+
+class RepoCommentHydrationRequest(BaseModel):
+    repo_ids: list[str] = []
+    force_refresh: bool = False
+
+
+class RepoCommentLearningRequest(BaseModel):
+    repo_ids: list[str] = []
+    force_refresh: bool = False
+    rebuild_repo_knowledge: bool = False
+
+
 class RunDecisionRequest(BaseModel):
     note: str = ""
 
@@ -105,6 +155,7 @@ class RunRetryRequest(BaseModel):
 class AnalyzeTaskRequest(BaseModel):
     jira_ticket: str
     repo_id: str = ""
+    execution_mode: Literal["safe_top1_write", "dry_run_all_selected", "plan_only"] = "plan_only"
 
 
 class StructureTaskRequest(BaseModel):
@@ -114,11 +165,13 @@ class StructureTaskRequest(BaseModel):
 class ImplementationPlanRequest(BaseModel):
     jira_ticket: str
     repo_id: str
+    execution_mode: Literal["safe_top1_write", "dry_run_all_selected", "plan_only"] = "safe_top1_write"
 
 
 class PreReviewRequest(BaseModel):
     jira_ticket: str
     repo_id: str
+    execution_mode: Literal["safe_top1_write", "dry_run_all_selected", "plan_only"] = "safe_top1_write"
 
 
 class FixAndRetryRequest(BaseModel):
@@ -1066,9 +1119,35 @@ def _workflow_technical_details(
         "top_historical_changed_files": list(payload.get("top_historical_changed_files", []) or []),
         "candidate_files_count": int(payload.get("candidate_files_count", 0) or 0),
         "selected_files_count": int(payload.get("selected_files_count", 0) or 0),
+        "total_candidate_file_count": int(payload.get("total_candidate_file_count", 0) or 0),
+        "total_selected_file_count": int(payload.get("total_selected_file_count", 0) or 0),
         "top_candidate_files": list(payload.get("top_candidate_files", []) or []),
         "top_candidate_symbols": list(payload.get("top_candidate_symbols", []) or []),
         "top_closest_areas": list(payload.get("top_closest_areas", []) or []),
+        "candidate_files_by_repo": dict(payload.get("candidate_files_by_repo", {}) or {}),
+        "selected_files_by_repo": dict(payload.get("selected_files_by_repo", {}) or {}),
+        "top_candidate_files_by_repo": dict(payload.get("top_candidate_files_by_repo", {}) or {}),
+        "top_candidate_symbols_by_repo": dict(payload.get("top_candidate_symbols_by_repo", {}) or {}),
+        "repo_file_match_reason_by_repo": dict(payload.get("repo_file_match_reason_by_repo", {}) or {}),
+        "repo_file_match_quality_by_repo": dict(payload.get("repo_file_match_quality_by_repo", {}) or {}),
+        "multi_repo_file_targeting_summary": _clean_user_text(payload.get("multi_repo_file_targeting_summary", "") or ""),
+        "execution_mode": str(payload.get("execution_mode", "") or "").strip(),
+        "writable_repo_id": str(payload.get("writable_repo_id", "") or "").strip(),
+        "writable_files": list(payload.get("writable_files", []) or []),
+        "readonly_repo_ids": list(payload.get("readonly_repo_ids", []) or []),
+        "readonly_files_by_repo": dict(payload.get("readonly_files_by_repo", {}) or {}),
+        "implementation_scope_summary": _clean_user_text(payload.get("implementation_scope_summary", "") or ""),
+        "scope_enforcement_reason": _clean_user_text(payload.get("scope_enforcement_reason", "") or ""),
+        "scope_blocked": bool(payload.get("scope_blocked", False)),
+        "scope_execution_ready": bool(payload.get("scope_execution_ready", False)),
+        "writable_file_count": int(payload.get("writable_file_count", 0) or 0),
+        "readonly_repo_count": int(payload.get("readonly_repo_count", 0) or 0),
+        "readonly_file_count": int(payload.get("readonly_file_count", 0) or 0),
+        "attempted_out_of_scope_files": list(payload.get("attempted_out_of_scope_files", []) or []),
+        "blocked_out_of_scope_files": list(payload.get("blocked_out_of_scope_files", []) or []),
+        "writable_file_plan": list(payload.get("writable_file_plan", []) or []),
+        "readonly_plan_by_repo": dict(payload.get("readonly_plan_by_repo", {}) or {}),
+        "implementation_file_plan": list(payload.get("implementation_file_plan", []) or []),
         "dropped_candidates_reasons": list(dropped_candidates_reasons or []),
         "final_merge_strategy": final_merge_strategy,
         "repo_routing_audit": list(payload.get("repo_routing_audit", []) or []),
@@ -1106,6 +1185,21 @@ def _attach_workflow_technical_details(detail: RunDetail, technical_details: dic
     spec_payload = dict(detail.spec_result or {})
     spec_payload["workflow_debug"] = cleaned
     detail.spec_result = spec_payload
+
+
+def _scope_result_fields(payload: dict[str, Any] | None) -> dict[str, Any]:
+    source = dict(payload or {})
+    return {
+        "execution_mode": str(source.get("execution_mode", "") or "").strip(),
+        "selected_repos": list(source.get("selected_repos", []) or []),
+        "selected_files_by_repo": dict(source.get("selected_files_by_repo", {}) or {}),
+        "writable_repo_id": str(source.get("writable_repo_id", "") or "").strip(),
+        "writable_files": list(source.get("writable_files", []) or []),
+        "readonly_repo_ids": list(source.get("readonly_repo_ids", []) or []),
+        "readonly_files_by_repo": dict(source.get("readonly_files_by_repo", {}) or {}),
+        "implementation_scope_summary": str(source.get("implementation_scope_summary", "") or "").strip(),
+        "scope_enforcement_reason": str(source.get("scope_enforcement_reason", "") or "").strip(),
+    }
 
 
 def _selection_confidence(
@@ -1343,6 +1437,7 @@ def _gitnexus_workflow_result(
     *,
     changed_files: list[str] | None = None,
     jira_key: str = "",
+    execution_mode: str = "",
 ) -> dict[str, Any]:
     normalized_repo_id = str(repo_id or "").strip()
     if not normalized_repo_id:
@@ -1354,6 +1449,7 @@ def _gitnexus_workflow_result(
             task_text,
             changed_files=list(changed_files or []),
             jira_key=str(jira_key or "").strip(),
+            execution_mode=str(execution_mode or "").strip(),
         )
     except Exception:
         return {}
@@ -1948,6 +2044,28 @@ def _build_fix_and_retry_actionability(
             "query_input": "",
         }
 
+    writable_repo_id = str(pre_review_result.writable_repo_id or "").strip()
+    writable_files = [str(item or "").strip() for item in list(pre_review_result.writable_files or []) if str(item or "").strip()]
+    has_explicit_scope = bool(
+        writable_repo_id
+        or writable_files
+        or list(pre_review_result.selected_repos or [])
+        or str(pre_review_result.scope_enforcement_reason or "").strip()
+        or str(pre_review_result.implementation_scope_summary or "").strip()
+    )
+    if has_explicit_scope and (not writable_repo_id or not writable_files):
+        return {
+            "actionable": False,
+            "status": "retry_scope_blocked",
+            "reason": str(pre_review_result.scope_enforcement_reason or "Automatic fix is unavailable because the bounded writable scope is empty.").strip(),
+            "fix_files": [],
+            "fix_symbols": [],
+            "fix_actions": [],
+            "query_input": "",
+            "attempted_out_of_scope_files": [],
+            "blocked_out_of_scope_files": [],
+        }
+
     repo_context = dict(detail.repo_context_summary or {})
     resolved_target_files = {
         str(item).strip()
@@ -1992,6 +2110,26 @@ def _build_fix_and_retry_actionability(
             "fix_actions": [],
             "query_input": "",
         }
+    scope_validation = {"allowed": True, "attempted_out_of_scope_files": [], "blocked_out_of_scope_files": []}
+    if has_explicit_scope:
+        scope_validation = _repo_intelligence_service._bounded_implementation_service.validate_file_scope(
+            attempted_repo_id=str(run_record.repo_id or "").strip(),
+            attempted_files=[path for path, _confidence in fix_candidates],
+            writable_repo_id=writable_repo_id,
+            writable_files=writable_files,
+        )
+    if has_explicit_scope and not bool(scope_validation.get("allowed", False)):
+        return {
+            "actionable": False,
+            "status": "retry_scope_blocked",
+            "reason": str(pre_review_result.scope_enforcement_reason or "Automatic fix is unavailable because the suggested fixes fall outside the approved writable scope.").strip(),
+            "fix_files": [],
+            "fix_symbols": [],
+            "fix_actions": [],
+            "query_input": "",
+            "attempted_out_of_scope_files": list(scope_validation.get("attempted_out_of_scope_files", []) or []),
+            "blocked_out_of_scope_files": list(scope_validation.get("blocked_out_of_scope_files", []) or []),
+        }
 
     fix_actions: list[str] = []
     for item in list(pre_review_result.required_fixes or []):
@@ -2024,6 +2162,8 @@ def _build_fix_and_retry_actionability(
         "fix_symbols": fix_symbols,
         "fix_actions": fix_actions[:8],
         "query_input": "\n".join(query_lines).strip(),
+        "attempted_out_of_scope_files": list(scope_validation.get("attempted_out_of_scope_files", []) or []),
+        "blocked_out_of_scope_files": list(scope_validation.get("blocked_out_of_scope_files", []) or []),
     }
 
 
@@ -2217,6 +2357,7 @@ def _is_repo_mismatch(detail: RunDetail) -> bool:
 
 def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> AnalyzeTaskWorkflowResult:
     spec = dict(detail.spec_result or {})
+    requested_execution_mode = str(spec.get("execution_mode_requested", "") or "").strip()
     likely_files = _likely_files_from_detail(detail, locale=locale)
     input_debug = _workflow_input_debug(detail, workflow_name="analyze_task")
     task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
@@ -2225,6 +2366,7 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
         "analyze_task",
         task_text,
         jira_key=str(detail.jira_ticket or "").strip(),
+        execution_mode=requested_execution_mode,
     )
     _apply_provider_metadata(detail, "analyze_task", provider_payload)
     baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="analyze_task", locale=locale)
@@ -2354,6 +2496,7 @@ def _build_structure_task_result(run_record: RunRecord, detail: RunDetail, sourc
 
 def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> ImplementationPlanWorkflowResult:
     spec = dict(detail.spec_result or {})
+    requested_execution_mode = str(spec.get("execution_mode_requested", "") or "").strip()
     input_debug = _workflow_input_debug(detail, workflow_name="implementation_plan")
     task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
     baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="implementation_plan", locale=locale)
@@ -2397,6 +2540,7 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
         "implementation_plan",
         str(run_record.goal or detail.goal or "").strip(),
         jira_key=str(detail.jira_ticket or "").strip(),
+        execution_mode=requested_execution_mode,
     )
     _apply_provider_metadata(detail, "implementation_plan", provider_payload)
     provider_file_details = _selection_candidates_from_provider(provider_payload.get("likely_file_details"))
@@ -2421,6 +2565,8 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
     selection_decision = str(provider_payload.get("selection_decision", "") or "").strip()
     candidate_files_count = int(provider_payload.get("candidate_files_count", 0) or 0)
     selected_files_count = int(provider_payload.get("selected_files_count", 0) or 0)
+    scope_fields = _scope_result_fields(provider_payload)
+    scope_blocked = bool(provider_payload.get("scope_blocked", False))
     provider_repo_match = str(provider_payload.get("repo_match", "") or "").strip().lower()
     if provider_file_details or provider_module_details or provider_closest_areas:
         likely_file_details = provider_file_details or likely_file_details
@@ -2589,6 +2735,15 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             )
         )
 
+    if str(scope_fields.get("implementation_scope_summary", "") or "").strip():
+        recommendation = _clean_user_text(
+            f"{recommendation} {str(scope_fields.get('implementation_scope_summary', '') or '').strip()}".strip()
+        )
+    if scope_blocked and str(scope_fields.get("scope_enforcement_reason", "") or "").strip():
+        recommendation = _clean_user_text(
+            f"{recommendation} {str(scope_fields.get('scope_enforcement_reason', '') or '').strip()}".strip()
+        )
+
     technical_details = _workflow_technical_details(
         workflow_name="implementation_plan",
         task_text=task_text,
@@ -2626,11 +2781,21 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
         top_candidate_files=top_candidate_files,
         top_candidate_symbols=top_candidate_symbols,
         top_closest_areas=top_closest_areas,
+        execution_mode=str(scope_fields.get("execution_mode", "") or ""),
+        selected_repos=list(scope_fields.get("selected_repos", []) or []),
+        selected_files_by_repo=dict(scope_fields.get("selected_files_by_repo", {}) or {}),
+        writable_repo_id=str(scope_fields.get("writable_repo_id", "") or ""),
+        writable_files=list(scope_fields.get("writable_files", []) or []),
+        readonly_repo_ids=list(scope_fields.get("readonly_repo_ids", []) or []),
+        readonly_files_by_repo=dict(scope_fields.get("readonly_files_by_repo", {}) or {}),
+        implementation_scope_summary=str(scope_fields.get("implementation_scope_summary", "") or ""),
+        scope_enforcement_reason=str(scope_fields.get("scope_enforcement_reason", "") or ""),
         technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
     )
 def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> PreReviewWorkflowResult:
     review = dict(detail.review_result or {})
+    requested_execution_mode = str(review.get("execution_mode_requested", "") or "").strip()
     input_debug = _workflow_input_debug(detail, workflow_name="pre_review")
     task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
     baseline_summary = _baseline_task_summary(task_text, review, workflow_name="analyze_task", locale=locale)
@@ -2724,8 +2889,11 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         str(run_record.goal or detail.goal or "").strip(),
         changed_files=_pre_review_changed_file_universe(detail),
         jira_key=str(detail.jira_ticket or "").strip(),
+        execution_mode=requested_execution_mode,
     )
     _apply_provider_metadata(detail, "pre_review", provider_payload)
+    scope_fields = _scope_result_fields(provider_payload)
+    scope_blocked = bool(provider_payload.get("scope_blocked", False))
     provider_issue_details = _provider_review_issues(provider_payload.get("review_issues"))
     if provider_issue_details:
         files_to_check = _limit_items(
@@ -2750,6 +2918,10 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         if issue_details or global_blockers
         else _t(locale, "review.recommendation.ready")
     )
+    if scope_blocked and str(scope_fields.get("scope_enforcement_reason", "") or "").strip():
+        recommendation = _clean_user_text(
+            f"{recommendation} {str(scope_fields.get('scope_enforcement_reason', '') or '').strip()}".strip()
+        )
     review_summary = ReviewSummaryBlock(
         attempted=str(review.get("summary", "") or detail.final_result_summary or _t(locale, "review.attempted.default")).strip(),
         what_is_wrong=(
@@ -2780,6 +2952,15 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
             blocking_explanation=blocking_explanation,
             required_fixes=required_fixes,
             ready_for_crucible=ready_for_human_review,
+            execution_mode=str(scope_fields.get("execution_mode", "") or ""),
+            selected_repos=list(scope_fields.get("selected_repos", []) or []),
+            selected_files_by_repo=dict(scope_fields.get("selected_files_by_repo", {}) or {}),
+            writable_repo_id=str(scope_fields.get("writable_repo_id", "") or ""),
+            writable_files=list(scope_fields.get("writable_files", []) or []),
+            readonly_repo_ids=list(scope_fields.get("readonly_repo_ids", []) or []),
+            readonly_files_by_repo=dict(scope_fields.get("readonly_files_by_repo", {}) or {}),
+            implementation_scope_summary=str(scope_fields.get("implementation_scope_summary", "") or ""),
+            scope_enforcement_reason=str(scope_fields.get("scope_enforcement_reason", "") or ""),
             recommendation=recommendation,
             technical_run=_technical_run_link(run_record, detail),
         ),
@@ -2812,6 +2993,15 @@ def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale
         ready_for_crucible=ready_for_human_review,
         fix_and_retry_actionable=bool(fix_retry.get("actionable", False)),
         fix_and_retry_block_reason=str(fix_retry.get("reason", "") or "").strip(),
+        execution_mode=str(scope_fields.get("execution_mode", "") or ""),
+        selected_repos=list(scope_fields.get("selected_repos", []) or []),
+        selected_files_by_repo=dict(scope_fields.get("selected_files_by_repo", {}) or {}),
+        writable_repo_id=str(scope_fields.get("writable_repo_id", "") or ""),
+        writable_files=list(scope_fields.get("writable_files", []) or []),
+        readonly_repo_ids=list(scope_fields.get("readonly_repo_ids", []) or []),
+        readonly_files_by_repo=dict(scope_fields.get("readonly_files_by_repo", {}) or {}),
+        implementation_scope_summary=str(scope_fields.get("implementation_scope_summary", "") or ""),
+        scope_enforcement_reason=str(scope_fields.get("scope_enforcement_reason", "") or ""),
         recommendation=recommendation,
         technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
@@ -2859,6 +3049,17 @@ def _build_fix_and_retry_prompt(
         "",
         "Exact Files To Modify:",
     ]
+    writable_repo_id = str(pre_review_result.writable_repo_id or "").strip()
+    writable_files = [str(item or "").strip() for item in list(pre_review_result.writable_files or []) if str(item or "").strip()]
+    readonly_repo_ids = [str(item or "").strip() for item in list(pre_review_result.readonly_repo_ids or []) if str(item or "").strip()]
+    if writable_repo_id:
+        lines.insert(5, f"- Writable repo is restricted to: {writable_repo_id}.")
+    if writable_files:
+        lines.insert(6, f"- Writable files are restricted to: {', '.join(writable_files[:8])}.")
+    if readonly_repo_ids:
+        lines.insert(7, f"- Other selected repos remain read-only context: {', '.join(readonly_repo_ids[:8])}.")
+    if str(pre_review_result.scope_enforcement_reason or "").strip():
+        lines.insert(8, f"- Scope note: {str(pre_review_result.scope_enforcement_reason or '').strip()}")
     if exact_files:
         for file_path in exact_files[:8]:
             lines.append(f"- {file_path}")
@@ -3151,6 +3352,7 @@ def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
         workspace=parse_bitbucket_remote(repo.remote_url).get("workspace", ""),
         credential_alias=str(repo.credential_alias or "").strip(),
     ).safe_metadata()
+    health_payload = _repo_fleet_service.repo_health(repo)
     return {
         "repo_id": repo.repo_id,
         "display_name": repo.display_name,
@@ -3186,6 +3388,26 @@ def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
         "recovered_by_reclone": bool(repo.recovered_by_reclone),
         "onboarding_last_error": str(repo.onboarding_last_error or "").strip(),
         "clone_timeout_seconds": int(getattr(settings.runtime, "repo_clone_timeout_seconds", 300) or 300),
+        "onboarding_clone_status": str(health_payload.get("onboarding_clone_status", "") or "").strip(),
+        "onboarding_git_history_available": bool(health_payload.get("onboarding_git_history_available", False)),
+        "onboarding_historical_commit_count": int(health_payload.get("onboarding_historical_commit_count", 0) or 0),
+        "last_error": str(health_payload.get("last_error", "") or "").strip(),
+        "last_completed_at": str(health_payload.get("last_completed_at", "") or "").strip(),
+        "learning_last_date_from": str(health_payload.get("learning_last_date_from", "") or "").strip(),
+        "learning_last_date_to": str(health_payload.get("learning_last_date_to", "") or "").strip(),
+        "learning_last_build_mode": str(health_payload.get("learning_last_build_mode", "") or "").strip(),
+        "learning_last_commit_count": int(health_payload.get("learning_last_commit_count", 0) or 0),
+        "learning_last_jira_count": int(health_payload.get("learning_last_jira_count", 0) or 0),
+        "learning_last_surviving_snippet_count": int(health_payload.get("learning_last_surviving_snippet_count", 0) or 0),
+        "raw_extracted_key_candidate_count": int(health_payload.get("raw_extracted_key_candidate_count", 0) or 0),
+        "canonical_jira_key_count": int(health_payload.get("canonical_jira_key_count", 0) or 0),
+        "salvaged_jira_key_count": int(health_payload.get("salvaged_jira_key_count", 0) or 0),
+        "skipped_invalid_key_candidate_count": int(health_payload.get("skipped_invalid_key_candidate_count", 0) or 0),
+        "sample_canonical_jira_keys": list(health_payload.get("sample_canonical_jira_keys", []) or []),
+        "learning_last_completed_at": str(health_payload.get("learning_last_completed_at", "") or "").strip(),
+        "learning_last_error": str(health_payload.get("learning_last_error", "") or "").strip(),
+        "learning_ready": bool(health_payload.get("learning_ready", False)),
+        "surviving_ready": bool(health_payload.get("surviving_ready", False)),
         "gitnexus_backend_available": bool(provider_status.get("gitnexus_backend_available", False)),
         "gitnexus_ui_url": str(provider_status.get("gitnexus_ui_url", "") or "").strip(),
         "gitnexus_open_url": (
@@ -3625,6 +3847,280 @@ def list_repos(request: Request, include_deleted: bool = False) -> dict[str, Any
     }
 
 
+@app.get("/repos/knowledge/latest-summary")
+def get_repo_knowledge_summary(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_knowledge_pack_service.latest_summary()
+
+
+@app.get("/repos/{repo_id}/knowledge")
+def get_repo_knowledge(repo_id: str, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(repo_id=str(repo_id or "").strip(), source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    payload = _repo_knowledge_pack_service.load_repo_knowledge_pack(repo_id)
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "repo_knowledge_not_found",
+                "message": "Repo knowledge pack has not been generated yet.",
+            },
+        )
+    return payload
+
+
+@app.get("/repos/fleet-health")
+def repo_fleet_health(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.fleet_health()
+
+
+@app.get("/repos/learning-health")
+def repo_learning_health(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.learning_health()
+
+
+@app.get("/repos/comment-learning-health")
+def repo_comment_learning_health(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.comment_learning_health()
+
+
+@app.post("/repos/bulk/sync")
+def bulk_sync_repos(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.bulk_sync_active_repos()
+
+
+@app.post("/repos/bulk/reindex")
+def bulk_reindex_repos(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.bulk_reindex_active_repos()
+
+
+@app.post("/repos/bulk/backfill")
+def bulk_backfill_repos(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.bulk_backfill_active_repos()
+
+
+@app.post("/repos/bulk/hydrate-jira-snapshots")
+def hydrate_jira_snapshots_for_active_repos(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _benchmark_case_generation_service._historical_change_memory_service.hydrate_jira_snapshots_for_active_repos()
+
+
+@app.post("/repos/bulk/hydrate-comments")
+def hydrate_historical_comments(payload: RepoCommentHydrationRequest, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.bulk_hydrate_comments(
+        repo_ids=list(payload.repo_ids or []),
+        force_refresh=bool(payload.force_refresh),
+    )
+
+
+@app.post("/repos/bulk/recompute-learning")
+def bulk_recompute_learning(payload: RepoLearningRecomputeRequest, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.bulk_recompute_learning(
+        date_from=str(payload.date_from or "").strip(),
+        date_to=str(payload.date_to or "").strip(),
+        repo_ids=list(payload.repo_ids or []),
+        include_merge_commits=bool(payload.include_merge_commits),
+        full_recompute=bool(payload.full_recompute),
+        build_mode=str(payload.build_mode or "all").strip(),
+        max_commits_per_repo=int(payload.max_commits_per_repo or 0) or None,
+    )
+
+
+@app.post("/repos/bulk/recompute-comment-learning")
+def bulk_recompute_comment_learning(payload: RepoCommentLearningRequest, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _repo_fleet_service.bulk_recompute_comment_learning(
+        repo_ids=list(payload.repo_ids or []),
+        force_refresh=bool(payload.force_refresh),
+        rebuild_repo_knowledge=bool(payload.rebuild_repo_knowledge),
+    )
+
+
+@app.post("/routing-benchmark/run")
+def run_routing_benchmark(payload: RoutingBenchmarkRequest, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _routing_benchmark_service.run([item.model_dump() for item in payload.cases])
+
+
+@app.get("/routing-benchmark/latest")
+def latest_routing_benchmark(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    latest = _routing_benchmark_service.latest_result()
+    if latest is None:
+        return {"available": False, "result": None}
+    return {"available": True, "result": latest}
+
+
+@app.get("/routing-benchmark/worst-files")
+def latest_routing_benchmark_worst_files(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _benchmark_file_diagnostics_service.compute_worst_file_cases()
+
+
+@app.get("/routing-benchmark/confusions")
+def latest_routing_benchmark_confusions(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    return _benchmark_file_diagnostics_service.compute_confusions()
+
+
+@app.post("/routing-benchmark/generate-cases")
+def generate_routing_benchmark_cases(
+    payload: RoutingBenchmarkCaseGenerationRequest | None,
+    request: Request,
+) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    resolved = payload or RoutingBenchmarkCaseGenerationRequest()
+    return _benchmark_case_generation_service.generate_cases(
+        include_deleted=bool(resolved.include_deleted),
+        include_weak=bool(resolved.include_weak),
+        include_empty_context=bool(resolved.include_empty_context),
+        hydrate_jira_snapshots=bool(resolved.hydrate_jira_snapshots),
+        max_expected_files=max(1, int(resolved.max_expected_files or 5)),
+    )
+
+
+@app.get("/routing-benchmark/cases/latest")
+def latest_generated_routing_benchmark_cases(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    latest = _benchmark_case_generation_service.latest_generated_cases_summary()
+    if latest is None:
+        return {"available": False, "result": None}
+    return {"available": True, "result": latest}
+
+
 @app.post("/repos/onboard")
 def onboard_repo(payload: RepoOnboardRequest, request: Request) -> dict[str, Any]:
     actor_context = _build_actor_context(request)
@@ -4058,6 +4554,9 @@ def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any
         workflow_name="analyze_task",
     )
     detail = _load_run_detail_for_record(run_record)
+    spec_payload = dict(detail.spec_result or {})
+    spec_payload["execution_mode_requested"] = str(payload.execution_mode or "").strip() or "plan_only"
+    detail.spec_result = spec_payload
     _attach_workflow_input_debug(detail, input_debug, workflow_name="analyze_task")
     result = _build_analyze_task_result(run_record, detail, locale=locale)
     _persist_workflow_detail(run_record, detail)
@@ -4108,6 +4607,9 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
         workflow_name="implementation_plan",
     )
     detail = _load_run_detail_for_record(run_record)
+    spec_payload = dict(detail.spec_result or {})
+    spec_payload["execution_mode_requested"] = str(payload.execution_mode or "").strip() or "safe_top1_write"
+    detail.spec_result = spec_payload
     _attach_workflow_input_debug(detail, input_debug, workflow_name="implementation_plan")
     result = _build_implementation_plan_result(run_record, detail, locale=locale)
     _persist_workflow_detail(run_record, detail)
@@ -4147,6 +4649,9 @@ def pre_review(payload: PreReviewRequest, request: Request) -> dict[str, Any]:
             workflow_name="pre_review",
         )
     detail = _load_run_detail_for_record(run_record)
+    review_payload = dict(detail.review_result or {})
+    review_payload["execution_mode_requested"] = str(payload.execution_mode or "").strip() or "safe_top1_write"
+    detail.review_result = review_payload
     _attach_workflow_input_debug(detail, input_debug, workflow_name="pre_review")
     result = _build_pre_review_result(run_record, detail, locale=locale)
     _persist_workflow_detail(run_record, detail)
@@ -4212,6 +4717,10 @@ def fix_and_retry(payload: FixAndRetryRequest, request: Request) -> dict[str, An
             "fix_symbols": list(fix_retry.get("fix_symbols", []) or []),
             "fix_actions": list(fix_retry.get("fix_actions", []) or []),
             "repo_query_input": str(fix_retry.get("query_input", "") or "").strip(),
+            "writable_repo_id": str(pre_review_result.writable_repo_id or "").strip(),
+            "writable_files": list(pre_review_result.writable_files or []),
+            "readonly_repo_ids": list(pre_review_result.readonly_repo_ids or []),
+            "readonly_files_by_repo": dict(pre_review_result.readonly_files_by_repo or {}),
         },
         locale=locale,
     )

@@ -1,0 +1,713 @@
+{
+  "benchmark_feedback": {
+    "common_missing_expected_files": [],
+    "common_unexpected_selected_files": [],
+    "confusing_generic_files": [],
+    "recommended_penalty_tokens": [],
+    "recommended_positive_path_boosts": []
+  },
+  "capability_tags": [],
+  "code_generation_playbook": {
+    "common_patterns": [],
+    "likely_neighbor_files": [
+      "agents/change_agent.py",
+      "contracts/agent_result.py",
+      "contracts/change_set.py",
+      "contracts/file_change_plan.py",
+      "contracts/patch_plan.py",
+      "contracts/proposed_file_change.py",
+      "loops/react_loop.py",
+      "tools/repo_tools.py"
+    ],
+    "risky_generic_files": [],
+    "where_to_start": [
+      "agents",
+      "ai_gateway",
+      "artifacts",
+      "contracts",
+      "formatters",
+      "intent",
+      "jira_mcp_server",
+      "loops"
+    ]
+  },
+  "common_false_positive_paths": [],
+  "common_multi_repo_partners": [],
+  "common_true_positive_paths": [
+    {
+      "count": 1,
+      "value": ".gitignore"
+    },
+    {
+      "count": 1,
+      "value": "agent.py"
+    },
+    {
+      "count": 1,
+      "value": "config.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/audit.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/auth.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/config.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/jira_client.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/server.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/test_jira.py"
+    },
+    {
+      "count": 1,
+      "value": "jira-mcp-server/validators.py"
+    },
+    {
+      "count": 1,
+      "value": "jira_mcp_agent.py"
+    },
+    {
+      "count": 1,
+      "value": "llm_factory.py"
+    }
+  ],
+  "display_name": "research-agent",
+  "entity_vocabulary": [
+    "repo",
+    "run",
+    "context",
+    "review",
+    "dict",
+    "agent",
+    "get",
+    "from",
+    "and",
+    "result",
+    "request",
+    "implementation",
+    "file",
+    "apply",
+    "extract",
+    "path",
+    "create",
+    "change",
+    "retry",
+    "text",
+    "root",
+    "admin",
+    "validation",
+    "spec",
+    "mode",
+    "set",
+    "normalize",
+    "policy",
+    "command",
+    "list"
+  ],
+  "entrypoints": [],
+  "feature_areas": [
+    {
+      "area": "static/admin",
+      "count": 4,
+      "examples": [
+        "static/admin/index.html",
+        "static/admin/policies.html",
+        "static/admin/roles.html"
+      ]
+    },
+    {
+      "area": "artifacts/test-temp",
+      "count": 3,
+      "examples": [
+        "artifacts/test-temp/publication-service-3502affbd9a54f92a7e2fcc057d2fc14/sample-repo/src/app.py",
+        "artifacts/test-temp/publication-service-7eebcc09f1624109b677c9356f051fc1/sample-repo/src/app.py",
+        "artifacts/test-temp/publication-service-acededeafb714fcc86f9cfcdd7b9df73/sample-repo/src/app.py"
+      ]
+    },
+    {
+      "area": "__init__.py",
+      "count": 1,
+      "examples": [
+        "contracts/__init__.py"
+      ]
+    },
+    {
+      "area": "actor_contract.py",
+      "count": 1,
+      "examples": [
+        "contracts/actor_contract.py"
+      ]
+    },
+    {
+      "area": "agent_result.py",
+      "count": 1,
+      "examples": [
+        "contracts/agent_result.py"
+      ]
+    },
+    {
+      "area": "agents/__init__.py",
+      "count": 1,
+      "examples": [
+        "agents/__init__.py"
+      ]
+    },
+    {
+      "area": "agents/change_agent.py",
+      "count": 1,
+      "examples": [
+        "agents/change_agent.py"
+      ]
+    },
+    {
+      "area": "agents/code_agent.py",
+      "count": 1,
+      "examples": [
+        "agents/code_agent.py"
+      ]
+    },
+    {
+      "area": "agents/deterministic_repair.py",
+      "count": 1,
+      "examples": [
+        "agents/deterministic_repair.py"
+      ]
+    },
+    {
+      "area": "agents/draft_agent.py",
+      "count": 1,
+      "examples": [
+        "agents/draft_agent.py"
+      ]
+    },
+    {
+      "area": "agents/jira_agent.py",
+      "count": 1,
+      "examples": [
+        "agents/jira_agent.py"
+      ]
+    },
+    {
+      "area": "agents/rag_research_agent.py",
+      "count": 1,
+      "examples": [
+        "agents/rag_research_agent.py"
+      ]
+    }
+  ],
+  "file_role_patterns": [],
+  "generated_at": "2026-03-27T09:08:07.653628+00:00",
+  "glossary_terms_top": [
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "agent.py",
+        "agents/change_agent.py",
+        "agents/code_agent.py"
+      ],
+      "term": "agent"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "agents/__init__.py",
+        "agents/change_agent.py",
+        "agents/code_agent.py"
+      ],
+      "term": "agents"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "agents/root_agent.py",
+        "docs/sdd_implementation_gap_analysis.md",
+        "output_formatters.py"
+      ],
+      "term": "and"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/draft_agent.py",
+        "agents/rag_research_agent.py",
+        "agents/review_agent.py",
+        "agents/root_agent.py"
+      ],
+      "term": "answer"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "agents/root_agent.py",
+        "contracts/apply_contract.py",
+        "contracts/apply_preparation.py"
+      ],
+      "term": "apply"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/root_agent.py",
+        "contracts/implementation_result.py",
+        "docs/sdd_implementation_gap_analysis.md",
+        "services/repo_context_rules.py"
+      ],
+      "term": "artifact"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "artifacts/test-temp/publication-service-3502affbd9a54f92a7e2fcc057d2fc14/sample-repo/src/app.py",
+        "artifacts/test-temp/publication-service-7eebcc09f1624109b677c9356f051fc1/sample-repo/src/app.py",
+        "artifacts/test-temp/publication-service-acededeafb714fcc86f9cfcdd7b9df73/sample-repo/src/app.py"
+      ],
+      "term": "artifacts"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/root_agent.py",
+        "services/publication_service.py",
+        "services/repo_registry.py",
+        "services/scm_service.py"
+      ],
+      "term": "branch"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "agents/change_agent.py",
+        "agents/code_agent.py",
+        "agents/deterministic_repair.py"
+      ],
+      "term": "build"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/rag_research_agent.py",
+        "docs/sdd_implementation_gap_analysis.md",
+        "formatters/capabilities.py",
+        "formatters/common.py"
+      ],
+      "term": "capability"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "README.md",
+        "agents/change_agent.py",
+        "agents/draft_agent.py",
+        "agents/review_agent.py"
+      ],
+      "term": "change"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/code_agent.py",
+        "agents/root_agent.py",
+        "data/README.md",
+        "docs/TEST_WORKFLOW.md"
+      ],
+      "term": "changes"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/code_agent.py",
+        "agents/review_agent.py",
+        "agents/root_agent.py",
+        "contracts/spec_to_code_input.py"
+      ],
+      "term": "code"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/deterministic_repair.py",
+        "agents/draft_agent.py",
+        "agents/rag_research_agent.py",
+        "agents/review_agent.py"
+      ],
+      "term": "command"
+    },
+    {
+      "confidence": 1.0,
+      "sources": [
+        "agents/change_agent.py",
+        "agents/code_agent.py",
+        "agents/draft_agent.py",
+        "agents/repair_agent.py"
+      ],
+      "term": "context"
+    }
+  ],
+  "historical_commit_count": 1,
+  "historical_jira_count": 1,
+  "historical_task_families": [
+    {
+      "count": 1,
+      "family": "repository_query"
+    }
+  ],
+  "path_families": [
+    {
+      "count": 26,
+      "examples": [
+        "services/apply_adapter.py",
+        "services/apply_service.py",
+        "services/auth_service.py"
+      ],
+      "family": "services"
+    }
+  ],
+  "repo_group": "",
+  "repo_id": "self",
+  "review_checklist": [
+    "Validate changes stay inside the repo's common feature paths before widening into generic services.",
+    "Check neighboring request/response, handler/controller, or repository files when touching live feature logic.",
+    "Confirm tests or validations cover the dominant framework markers for this repo."
+  ],
+  "source_roots": [
+    "agents",
+    "ai_gateway",
+    "artifacts",
+    "contracts",
+    "formatters",
+    "intent",
+    "jira_mcp_server",
+    "loops",
+    "prompts",
+    "scripts",
+    "services",
+    "static"
+  ],
+  "stack_framework_hints": {
+    "detected_stacks": [
+      "python",
+      "node"
+    ],
+    "framework_markers": [],
+    "package_manager_markers": [
+      "pip",
+      "npm"
+    ],
+    "primary_stack": "python",
+    "runtime_markers": [
+      "Python",
+      "Node.js"
+    ]
+  },
+  "surviving_code_entities": [
+    "repo",
+    "run",
+    "context",
+    "dict",
+    "review",
+    "get",
+    "from",
+    "and",
+    "result",
+    "extract",
+    "path",
+    "implementation",
+    "create",
+    "file",
+    "retry",
+    "change",
+    "agent",
+    "apply",
+    "text",
+    "normalize",
+    "set",
+    "spec",
+    "request",
+    "mode",
+    "list"
+  ],
+  "surviving_code_feature_areas": [
+    {
+      "count": 156,
+      "value": "web_app.py"
+    },
+    {
+      "count": 133,
+      "value": "agents/root_agent.py"
+    },
+    {
+      "count": 93,
+      "value": "test_implementation_mode.py"
+    },
+    {
+      "count": 81,
+      "value": "test_web_app.py"
+    },
+    {
+      "count": 69,
+      "value": "tools/repo_tools.py"
+    },
+    {
+      "count": 62,
+      "value": "run_service.py"
+    },
+    {
+      "count": 61,
+      "value": "agents/draft_agent.py"
+    },
+    {
+      "count": 60,
+      "value": "repo_index_service.py"
+    },
+    {
+      "count": 51,
+      "value": "db_service.py"
+    },
+    {
+      "count": 47,
+      "value": "repo_context_rules.py"
+    }
+  ],
+  "task_to_path_hints": {
+    "api_endpoint": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "*.csproj",
+        "appsettings*"
+      ],
+      "preferred_path_families": [
+        "Controllers",
+        "Requests",
+        "Responses",
+        "Handlers",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py",
+        "actor_contract.py"
+      ],
+      "preferred_suffixes": [
+        "Controller",
+        "Request",
+        "Response",
+        "Handler",
+        "Service",
+        "Profile"
+      ]
+    },
+    "background_job": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "*.csproj",
+        "appsettings*"
+      ],
+      "preferred_path_families": [
+        "Jobs",
+        "Workers",
+        "Queue",
+        "Scheduler",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py",
+        "actor_contract.py"
+      ],
+      "preferred_suffixes": [
+        "Job",
+        "Worker",
+        "Consumer",
+        "Service",
+        "Request",
+        "Profile",
+        "Response"
+      ]
+    },
+    "command_handler": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "Startup.cs",
+        "*Service.cs"
+      ],
+      "preferred_path_families": [
+        "Application/Commands",
+        "Handlers",
+        "Notifications",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py",
+        "actor_contract.py",
+        "agent_result.py"
+      ],
+      "preferred_suffixes": [
+        "Handler",
+        "Command",
+        "Processor",
+        "Builder",
+        "Service",
+        "Request",
+        "Profile",
+        "Response"
+      ]
+    },
+    "dto_contract": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "Startup.cs",
+        "*Service.cs"
+      ],
+      "preferred_path_families": [
+        "DataTransferObjects",
+        "Responses",
+        "Requests",
+        "TransferObjects",
+        "Profiles",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py"
+      ],
+      "preferred_suffixes": [
+        "Dto",
+        "Response",
+        "Request",
+        "TransferObject",
+        "Profile",
+        "Service"
+      ]
+    },
+    "notification_workflow": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "Startup.cs",
+        "*.csproj"
+      ],
+      "preferred_path_families": [
+        "Notifications",
+        "Workflow",
+        "Statuses",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py",
+        "actor_contract.py",
+        "agent_result.py"
+      ],
+      "preferred_suffixes": [
+        "Handler",
+        "Notification",
+        "Workflow",
+        "Service",
+        "Request",
+        "Profile",
+        "Response"
+      ]
+    },
+    "report_generation": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "Startup.cs",
+        "*Service.cs"
+      ],
+      "preferred_path_families": [
+        "Reports",
+        "Print",
+        "Documents",
+        "Commands",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py",
+        "actor_contract.py"
+      ],
+      "preferred_suffixes": [
+        "Report",
+        "Handler",
+        "Document",
+        "Service",
+        "Request",
+        "Profile",
+        "Response"
+      ]
+    },
+    "repository_query": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "Startup.cs",
+        "*.csproj"
+      ],
+      "preferred_path_families": [
+        "Repositories",
+        "Queries",
+        "Source",
+        "Filters",
+        "Search",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py"
+      ],
+      "preferred_suffixes": [
+        "Repository",
+        "Query",
+        "Source",
+        "Filter",
+        "Service",
+        "Request",
+        "Profile",
+        "Response"
+      ]
+    },
+    "ui_client": {
+      "discouraged_generic_files": [
+        "Program.cs",
+        "*.csproj",
+        "*Service.cs"
+      ],
+      "preferred_path_families": [
+        "ViewModels",
+        "Views",
+        "TransferObjects",
+        "Xaml",
+        "static/admin",
+        "artifacts/test-temp",
+        "__init__.py",
+        "actor_contract.py"
+      ],
+      "preferred_suffixes": [
+        "ViewModel",
+        "View",
+        "TransferObject",
+        "Service",
+        "Request",
+        "Profile",
+        "Response"
+      ]
+    }
+  },
+  "test_roots": [
+    "agents",
+    "ai_gateway",
+    "artifacts",
+    "contracts",
+    "data",
+    "docs",
+    "example_output",
+    "formatters",
+    "index",
+    "intent",
+    "jira_mcp_server",
+    "loops"
+  ]
+}
