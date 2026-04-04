@@ -129,6 +129,74 @@ class ValidationRunnerServerTests(unittest.TestCase):
         self.assertNotIn("abc123", redacted)
         self.assertIn("[REDACTED]", redacted)
 
+    def test_plan_restore_step_marks_telemart_soft_desktop_family_and_windows_targeting(self) -> None:
+        client_dir = self.repo_root / "src" / "client" / "Telemart.Client"
+        client_dir.mkdir(parents=True, exist_ok=True)
+        (client_dir / "Telemart.Client.csproj").write_text(
+            "<Project><PropertyGroup><TargetFramework>net9.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>",
+            encoding="utf-8",
+        )
+        build_command = f'dotnet build "{(self.repo_root / "Sample.sln").as_posix()}" --nologo'
+
+        restore_step, metadata = validation_runner_server._plan_restore_step(
+            [{"name": "build", "command": build_command}],
+            self.repo_root.as_posix(),
+        )
+
+        self.assertIsNotNone(restore_step)
+        self.assertEqual(metadata["validation_repo_family"], "telemart_soft_desktop_client")
+        self.assertIn("/p:EnableWindowsTargeting=true", str(restore_step["command"]))
+
+    def test_classify_stage_failure_marks_sdk_too_old_for_net9(self) -> None:
+        metadata = {
+            "private_feed_detected": False,
+            "auth_env_available": False,
+            "repo_targeting_signals": {"has_net9": True, "has_windows_targeting": True, "has_wpf": True},
+            "runner_environment_summary": "os=posix; platform=Linux; dotnet_sdks=8.0.419",
+        }
+
+        reason, auth_missing = validation_runner_server._classify_stage_failure(
+            steps=[
+                {
+                    "name": "restore",
+                    "status": "failed",
+                    "stdout": "error NETSDK1045: The current .NET SDK does not support targeting .NET 9.0.",
+                    "stderr": "",
+                }
+            ],
+            metadata=metadata,
+            timed_out=False,
+        )
+
+        unsupported_reason = validation_runner_server._unsupported_environment_reason(
+            metadata,
+            "error NETSDK1045: The current .NET SDK does not support targeting .NET 9.0.",
+        )
+        required = validation_runner_server._required_sdk_or_runtime(
+            metadata,
+            "error NETSDK1045: The current .NET SDK does not support targeting .NET 9.0.",
+        )
+
+        self.assertEqual(reason, "unsupported_environment")
+        self.assertFalse(auth_missing)
+        self.assertEqual(unsupported_reason, "runner_sdk_too_old_for_net9_target")
+        self.assertEqual(required, ".NET SDK 9.0+")
+
+    def test_unsupported_environment_reason_clears_when_runner_has_net9(self) -> None:
+        metadata = {
+            "private_feed_detected": False,
+            "auth_env_available": False,
+            "repo_targeting_signals": {"has_net9": True, "has_windows_targeting": True, "has_wpf": True},
+            "runner_environment_summary": "os=posix; platform=Linux; dotnet_sdks=9.0.100",
+        }
+
+        unsupported_reason = validation_runner_server._unsupported_environment_reason(
+            metadata,
+            "error NETSDK1045: The current .NET SDK does not support targeting .NET 9.0.",
+        )
+
+        self.assertNotEqual(unsupported_reason, "runner_sdk_too_old_for_net9_target")
+
 
 if __name__ == "__main__":
     unittest.main()

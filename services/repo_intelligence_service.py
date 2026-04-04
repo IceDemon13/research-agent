@@ -1090,8 +1090,6 @@ class RepoIntelligenceService:
             return repo
         if not bool(self._repo_settings.gitnexus_enabled):
             return repo
-        if not _allowlist_match(self._repo_settings, repo.repo_id):
-            return repo
         visibility_debug = self._gitnexus_index_service.repo_visibility_debug(repo)
         if not bool(visibility_debug.get("visible", False)):
             return repo
@@ -1110,10 +1108,12 @@ class RepoIntelligenceService:
         configured_provider = _safe_text(self._repo_settings.provider).lower() or "native"
         repo_metadata_provider = _safe_text(getattr(repo, "intelligence_provider", "") if repo is not None else "").lower() or "native"
         enabled = bool(self._repo_settings.gitnexus_enabled)
-        allowlist_match = _allowlist_match(self._repo_settings, getattr(repo, "repo_id", ""))
+        configured_allowlist_match = _allowlist_match(self._repo_settings, getattr(repo, "repo_id", ""))
         gitnexus_index_status = _safe_text(getattr(repo, "gitnexus_index_status", "") if repo is not None else "")
-        gitnexus_index_ready = bool(getattr(repo, "gitnexus_indexed", False)) or gitnexus_index_status == "ready"
-        visibility_debug = self._gitnexus_index_service.repo_visibility_debug(repo) if repo is not None and enabled and allowlist_match else {}
+        visibility_debug = self._gitnexus_index_service.repo_visibility_debug(repo) if repo is not None and enabled else {}
+        backend_visible = bool(visibility_debug.get("visible", False))
+        gitnexus_index_ready = bool(getattr(repo, "gitnexus_indexed", False)) or gitnexus_index_status == "ready" or backend_visible
+        allowlist_match = configured_allowlist_match or backend_visible or gitnexus_index_ready
         runtime_debug = self._gitnexus_index_service.backend_runtime_status() if enabled else {}
         if configured_provider != "gitnexus_http":
             selection_decision = "configured_native_provider"
@@ -1137,11 +1137,14 @@ class RepoIntelligenceService:
             "configured_provider": configured_provider,
             "repo_metadata_provider": repo_metadata_provider,
             "allowlist_match": allowlist_match,
+            "configured_allowlist_match": configured_allowlist_match,
             "gitnexus_enabled": enabled,
             "gitnexus_index_status": gitnexus_index_status,
+            "gitnexus_index_ready": gitnexus_index_ready,
+            "gitnexus_visible": backend_visible,
             "selection_decision": selection_decision,
             "selected_provider": selected_provider,
-            "backend_repo_visible_after_analyze": bool(visibility_debug.get("visible", False)),
+            "backend_repo_visible_after_analyze": backend_visible,
             "backend_visible_repo_count": int(visibility_debug.get("visible_repo_count", 0) or 0),
             "backend_visible_repo_ids_or_paths": list(visibility_debug.get("visible_repo_ids_or_paths", []) or []),
             "gitnexus_home_used_for_analyze": _safe_text(dict(runtime_debug.get("analyze_runtime", {}) or {}).get("gitnexusHome", "")),

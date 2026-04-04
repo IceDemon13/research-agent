@@ -46,6 +46,7 @@ SECRET_ENV_PATTERNS = (
     "NUGET_API_KEY",
 )
 REDACATED = "[REDACTED]"
+WINDOWS_TARGETING_PROPS = ["/p:EnableWindowsTargeting=true"]
 
 
 def _iter_sensitive_values() -> list[str]:
@@ -84,6 +85,113 @@ DEFAULT_EXTRA_NUGET_SOURCES = [
     for item in os.environ.get("VALIDATION_RUNNER_EXTRA_NUGET_SOURCES", "https://nuget.telemart.ua/v3/index.json").split(",")
     if _normalize_path(item)
 ]
+
+
+def _runner_environment_summary() -> str:
+    try:
+        sdks = subprocess.run(["dotnet", "--list-sdks"], capture_output=True, text=True, timeout=15, shell=False)
+        runtimes = subprocess.run(["dotnet", "--list-runtimes"], capture_output=True, text=True, timeout=15, shell=False)
+        sdk_text = "; ".join(line.strip() for line in str(sdks.stdout or "").splitlines() if line.strip()) or "unknown"
+        runtime_text = "; ".join(line.strip() for line in str(runtimes.stdout or "").splitlines() if line.strip()) or "unknown"
+    except Exception as exc:
+        return f"os={os.name}; platform={os.uname().sysname if hasattr(os, 'uname') else 'unknown'}; dotnet_probe_error={exc}"
+    platform = os.uname().sysname if hasattr(os, "uname") else "unknown"
+    return f"os={os.name}; platform={platform}; dotnet_sdks={sdk_text}; dotnet_runtimes={runtime_text}"
+
+
+def _collect_repo_targeting_signals(repo_path: str) -> dict[str, object]:
+    root = Path(repo_path)
+    if not root.exists():
+        return {
+            "has_net9": False,
+            "has_windows_targeting": False,
+            "has_wpf": False,
+        }
+    has_net9 = False
+    has_windows_targeting = False
+    has_wpf = False
+    scanned = 0
+    for project in root.rglob("*.csproj"):
+        try:
+            text = project.read_text(encoding="utf-8", errors="replace").lower()
+        except OSError:
+            continue
+        scanned += 1
+        has_net9 = has_net9 or "net9.0" in text
+        has_windows_targeting = has_windows_targeting or "net9.0-windows" in text or "net8.0-windows" in text
+        has_wpf = has_wpf or "<usewpf>true</usewpf>" in text or "<usewindowsforms>true</usewindowsforms>" in text
+        if has_net9 and has_windows_targeting and has_wpf:
+            break
+        if scanned >= 50:
+            break
+    return {
+        "has_net9": has_net9,
+        "has_windows_targeting": has_windows_targeting,
+        "has_wpf": has_wpf,
+    }
+
+
+def _detect_validation_repo_family(repo_path: str, metadata: dict[str, object]) -> str:
+    normalized = _normalize_path(repo_path).lower()
+    targeting = dict(metadata.get("repo_targeting_signals", {}) or {})
+    if "telemart_soft_test" in normalized or (
+        bool(targeting.get("has_windows_targeting", False))
+        and (
+            "src/client" in normalized
+            or (Path(repo_path) / "src" / "client").exists()
+        )
+    ):
+        return "telemart_soft_desktop_client"
+    return "generic_dotnet"
+
+
+def _requires_windows_targeting_support(metadata: dict[str, object]) -> bool:
+    targeting = dict(metadata.get("repo_targeting_signals", {}) or {})
+    return bool(targeting.get("has_windows_targeting", False) or targeting.get("has_wpf", False))
+
+
+def _supports_net9(metadata: dict[str, object]) -> bool:
+    summary = str(metadata.get("runner_environment_summary", "") or "").lower()
+    return "9.0." in summary
+
+
+def _required_sdk_or_runtime(metadata: dict[str, object], combined_text: str) -> str:
+    targeting = dict(metadata.get("repo_targeting_signals", {}) or {})
+    lowered = str(combined_text or "").lower()
+    if "netsdk1045" in lowered and bool(targeting.get("has_net9", False)):
+        return ".NET SDK 9.0+"
+    if _requires_windows_targeting_support(metadata):
+        return ".NET Windows desktop targeting support"
+    return ""
+
+
+def _unsupported_environment_reason(metadata: dict[str, object], combined_text: str) -> str:
+    targeting = dict(metadata.get("repo_targeting_signals", {}) or {})
+    lowered = str(combined_text or "").lower()
+    if "netsdk1045" in lowered and bool(targeting.get("has_net9", False)) and not _supports_net9(metadata):
+        return "runner_sdk_too_old_for_net9_target"
+    if "netsdk1100" in lowered or "enablewindowstargeting" in lowered:
+        return "windows_targeting_not_enabled_on_linux_runner"
+    if _requires_windows_targeting_support(metadata) and "linux" in str(metadata.get("runner_environment_summary", "") or "").lower():
+        return "desktop_windows_targeting_on_linux_runner"
+    return "unsupported_dotnet_environment"
+
+
+def _augment_command_for_repo_family(command: str, *, metadata: dict[str, object]) -> str:
+    text = str(command or "").strip()
+    if not text:
+        return text
+    validation_repo_family = str(metadata.get("validation_repo_family", "") or "")
+    if validation_repo_family != "telemart_soft_desktop_client":
+        return text
+    if not _requires_windows_targeting_support(metadata):
+        return text
+    tokens = shlex.split(text, posix=True)
+    if len(tokens) < 2 or tokens[0] != "dotnet" or tokens[1] not in {"restore", "build", "test"}:
+        return text
+    if any(token.lower() == "/p:enablewindowstargeting=true" for token in tokens):
+        return text
+    return shlex.join([*tokens, *WINDOWS_TARGETING_PROPS])
 
 
 def _validate_repo_path(repo_path: str, allowed_roots: list[str]) -> bool:
@@ -425,6 +533,7 @@ def _plan_restore_step(commands: list[dict[str, object]], repo_path: str) -> tup
     credential_provider_detected = _credential_provider_detected()
     auth_env_available = _auth_env_available()
     restore_supported = dotnet_present
+    repo_targeting_signals = _collect_repo_targeting_signals(repo_path)
     metadata = {
         "restore_supported": restore_supported,
         "nuget_config_detected": bool(nuget_config_path or effective_nuget_config_paths),
@@ -445,16 +554,23 @@ def _plan_restore_step(commands: list[dict[str, object]], repo_path: str) -> tup
         "restore_inserted": False,
         "restore_used_configfile": effective_restore_config or nuget_config_path,
         "restore_used_sources_safe": list(effective_restore_metadata.get("restore_used_sources_safe", []) or []),
+        "repo_targeting_signals": repo_targeting_signals,
+        "validation_repo_family": "",
+        "runner_environment_summary": _runner_environment_summary(),
+        "required_sdk_or_runtime": "",
     }
+    metadata["validation_repo_family"] = _detect_validation_repo_family(repo_path, metadata)
+    metadata["required_sdk_or_runtime"] = _required_sdk_or_runtime(metadata, "")
     if not restore_supported or restore_present:
         return None, metadata
     restore_tokens = ["dotnet", "restore", first_target, "--nologo", "--verbosity", "minimal"]
     if effective_restore_config:
         restore_tokens.extend(["--configfile", effective_restore_config])
+    restore_command = _augment_command_for_repo_family(shlex.join(restore_tokens), metadata=metadata)
     metadata["restore_inserted"] = True
     return {
         "name": "restore",
-        "command": shlex.join(restore_tokens),
+        "command": restore_command,
     }, metadata
 
 
@@ -486,7 +602,7 @@ def _classify_stage_failure(*, steps: list[dict[str, object]], metadata: dict[st
             return "package_not_found_public", restore_auth_missing
         if any(marker in combined_text for marker in ("timed out", "timeout")):
             return "infra_timeout", restore_auth_missing
-        if any(marker in combined_text for marker in ("msb4236", "sdk", "workload")):
+        if any(marker in combined_text for marker in ("netsdk1045", "msb4236", "sdk", "workload", "netsdk1100", "enablewindowstargeting")):
             return "unsupported_environment", restore_auth_missing
         return "unsupported_environment", restore_auth_missing
     if build_failed:
@@ -548,7 +664,13 @@ class _Handler(BaseHTTPRequestHandler):
         commands = []
         if restore_step is not None:
             commands.append(restore_step)
-        commands.extend([item for item in list(payload.get("commands", []) or []) if isinstance(item, dict)])
+        for item in [entry for entry in list(payload.get("commands", []) or []) if isinstance(entry, dict)]:
+            augmented = dict(item)
+            augmented["command"] = _augment_command_for_repo_family(
+                str(item.get("command", "") or ""),
+                metadata=metadata,
+            )
+            commands.append(augmented)
         steps: list[dict[str, object]] = []
         timed_out = False
         for item in commands:
@@ -608,6 +730,11 @@ class _Handler(BaseHTTPRequestHandler):
         restore_failed_commands = [str(item.get("command", "") or "") for item in restore_steps if str(item.get("status", "")) == "failed"]
         restore_stdout_excerpt = "\n\n".join(_redact_sensitive_text(str(item.get("stdout", "") or "")) for item in restore_steps if str(item.get("stdout", "") or "").strip())[:4000]
         restore_stderr_excerpt = "\n\n".join(_redact_sensitive_text(str(item.get("stderr", "") or "")) for item in restore_steps if str(item.get("stderr", "") or "").strip())[:4000]
+        metadata["required_sdk_or_runtime"] = _required_sdk_or_runtime(metadata, "\n".join([restore_stdout_excerpt, restore_stderr_excerpt]))
+        unsupported_environment_reason = _unsupported_environment_reason(
+            metadata,
+            "\n".join([restore_stdout_excerpt, restore_stderr_excerpt]),
+        ) if failure_reason_guess == "unsupported_environment" else ""
         self._write_json(
             HTTPStatus.OK,
             {
@@ -634,6 +761,13 @@ class _Handler(BaseHTTPRequestHandler):
                 "restore_auth_mode_guess": str(metadata.get("restore_auth_mode_guess", "") or ""),
                 "restore_secret_redaction_applied": bool(metadata.get("restore_secret_redaction_applied", False)),
                 "failure_reason_guess": failure_reason_guess,
+                "restore_attempted": bool(restore_steps),
+                "restore_command": str(restore_steps[0].get("command", "") or "") if restore_steps else "",
+                "restore_exit_code": restore_steps[0].get("exit_code") if restore_steps else None,
+                "unsupported_environment_reason": unsupported_environment_reason,
+                "validation_repo_family": str(metadata.get("validation_repo_family", "") or ""),
+                "required_sdk_or_runtime": str(metadata.get("required_sdk_or_runtime", "") or ""),
+                "runner_environment_summary": str(metadata.get("runner_environment_summary", "") or ""),
             },
         )
 

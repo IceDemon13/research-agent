@@ -35,6 +35,7 @@ def main() -> int:
         evaluation_dataset=dataset,
         execution_mode=str(args.execution_mode or "safe_top1_write"),
         output_path=str(args.output_path or "").strip() or None,
+        input_cases_artifact_path=str(args.cases_path or "").strip() or None,
     )
     print(
         json.dumps(

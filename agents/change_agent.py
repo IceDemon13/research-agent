@@ -1184,7 +1184,7 @@ def run_change_agent(
         debug_context_summary=received_debug_summary,
     )
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=composed_input,
         memory=memory,
         agent_name="change_agent",
@@ -1258,6 +1258,7 @@ def run_change_agent(
         metadata={
             "artifact_type": "change_set",
             "change_set": change_set,
+            **dict(llm_metadata or {}),
             **dict(routing_metadata or {}),
         },
     )

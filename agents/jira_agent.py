@@ -12,7 +12,7 @@ def run_jira_agent(user_input: str) -> AgentResult:
         }
     ]
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=user_input,
         memory=memory,
         agent_name="jira_agent",
@@ -22,5 +22,5 @@ def run_jira_agent(user_input: str) -> AgentResult:
         agent_name="jira",
         output_text=answer,
         success=True,
-        metadata={},
+        metadata=dict(llm_metadata or {}),
     )

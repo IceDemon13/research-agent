@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from config import settings
 from services.historical_change_memory_service import HistoricalChangeMemoryService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
 from services.surviving_code_memory_service import SurvivingCodeMemoryService
@@ -41,6 +42,12 @@ def _normalize_file_path(path: object) -> str:
     normalized = _safe_text(path).replace("\\", "/")
     normalized = re.sub(r"/{2,}", "/", normalized)
     return normalized.strip()
+
+
+def _slugify_label(value: object) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", _safe_text(value).strip().lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized or "default"
 
 
 def _dedupe_preserve(values: list[str]) -> list[str]:
@@ -115,6 +122,7 @@ class BenchmarkCaseGenerationService:
         artifacts_root: str | Path | None = None,
     ) -> None:
         self._registry_service = registry_service or RepositoryRegistryService()
+        self._runtime_settings = settings.runtime
         self._historical_change_memory_service = historical_change_memory_service or HistoricalChangeMemoryService(
             registry_service=self._registry_service,
             db_service=getattr(self._registry_service, "_db_service", None),
@@ -126,6 +134,240 @@ class BenchmarkCaseGenerationService:
         )
         self._artifacts_root = Path(artifacts_root or Path("artifacts") / "routing_benchmarks")
 
+    def _historical_selection_config(
+        self,
+        *,
+        max_task_count: int | None = None,
+        newest_first: bool | None = None,
+        allowed_creators: list[str] | None = None,
+        curated_allowlist: list[str] | None = None,
+        single_repo_only: bool | None = None,
+        ) -> dict[str, Any]:
+        return {
+            "max_task_count": max(1, int(
+                max_task_count
+                if max_task_count is not None
+                else getattr(self._runtime_settings, "benchmark_historical_max_task_count", 300)
+            )),
+            "newest_first": bool(
+                getattr(self._runtime_settings, "benchmark_historical_newest_first", True)
+                if newest_first is None else newest_first
+            ),
+            "allowed_creators": [
+                _safe_text(item).lower()
+                for item in (
+                    allowed_creators
+                    if allowed_creators is not None
+                    else list(getattr(self._runtime_settings, "benchmark_historical_allowed_creators", []) or [])
+                )
+                if _safe_text(item)
+            ],
+            "curated_allowlist": [
+                _safe_text(item).upper()
+                for item in (
+                    curated_allowlist
+                    if curated_allowlist is not None
+                    else list(getattr(self._runtime_settings, "benchmark_historical_curated_allowlist", []) or [])
+                )
+                if _safe_text(item)
+            ],
+            "single_repo_only": bool(
+                getattr(self._runtime_settings, "benchmark_historical_single_repo_only", True)
+                if single_repo_only is None else single_repo_only
+            ),
+            "closed_status_strategy": _safe_text(
+                getattr(self._runtime_settings, "benchmark_historical_closed_status_strategy", "status_category_or_resolution_or_name")
+            ).lower() or "status_category_or_resolution_or_name",
+            "closed_status_names": {
+                _safe_text(item).lower()
+                for item in list(getattr(self._runtime_settings, "benchmark_historical_closed_status_names", []) or [])
+                if _safe_text(item)
+            },
+        }
+
+    def _default_baseline_name(self, selection_config: dict[str, Any]) -> str:
+        if bool(selection_config.get("single_repo_only")) and bool(selection_config.get("newest_first")):
+            return "single_repo_creator_filtered_baseline"
+        return "legacy_mixed_baseline"
+
+    @staticmethod
+    def _normalize_creator_value(value: object) -> str:
+        return re.sub(r"\s+", " ", _safe_text(value).strip().lower()).strip()
+
+    @classmethod
+    def _creator_signatures(cls, value: object) -> set[str]:
+        normalized = cls._normalize_creator_value(value)
+        if not normalized:
+            return set()
+        signatures: set[str] = {normalized}
+
+        def _add_token_signatures(tokens: list[str]) -> None:
+            filtered = [token for token in list(tokens or []) if token]
+            if not filtered:
+                return
+            compact = "".join(filtered)
+            if compact:
+                signatures.add(compact)
+            if len(filtered) >= 2:
+                first_initial = filtered[0][0]
+                last_token = filtered[-1]
+                signatures.add(f"{first_initial}{last_token}")
+                if len(last_token) >= 3:
+                    signatures.add(f"{first_initial}{last_token[:3]}")
+                signatures.add(last_token)
+                signatures.add(f"{filtered[0]} {last_token}")
+            else:
+                signatures.add(filtered[0])
+
+        if "@" in normalized:
+            local_part, _, domain = normalized.partition("@")
+            local_part = local_part.strip()
+            if local_part:
+                signatures.add(local_part)
+                _add_token_signatures([token for token in re.split(r"[^a-z0-9]+", local_part) if token])
+                if domain in {"telemart.ua", "telemart.com.ua"}:
+                    signatures.add(f"{local_part}@telemart.ua")
+                    signatures.add(f"{local_part}@telemart.com.ua")
+
+        text_form = re.sub(r"[_\-.]+", " ", normalized)
+        text_form = re.sub(r"\s+", " ", text_form).strip()
+        if text_form:
+            signatures.add(text_form)
+            _add_token_signatures([token for token in re.split(r"[^a-z0-9]+", text_form) if token])
+
+        return {
+            signature
+            for signature in signatures
+            if signature and len(signature) >= 3
+        }
+
+    @classmethod
+    def _allowed_creator_bundles(cls, allowed_creators: list[str]) -> list[dict[str, Any]]:
+        bundles: list[dict[str, Any]] = []
+        for raw_value in list(allowed_creators or []):
+            normalized = cls._normalize_creator_value(raw_value)
+            if not normalized:
+                continue
+            bundles.append(
+                {
+                    "configured": raw_value,
+                    "normalized": normalized,
+                    "signatures": cls._creator_signatures(normalized),
+                }
+            )
+        return bundles
+
+    @classmethod
+    def _snapshot_creator_info(cls, snapshot: dict[str, Any]) -> dict[str, Any]:
+        field_order = (
+            "jira_creator_email",
+            "jira_creator_display_name",
+            "jira_creator_identifier",
+        )
+        raw_by_field = {
+            field_name: _safe_text(snapshot.get(field_name, ""))
+            for field_name in field_order
+        }
+        detected_fields = [field_name for field_name, raw_value in raw_by_field.items() if raw_value]
+        raw_values = _dedupe_preserve([raw_by_field[field_name] for field_name in field_order if raw_by_field[field_name]])
+        signatures: set[str] = set()
+        normalization_preview: dict[str, list[str]] = {}
+        for raw_value in raw_values:
+            value_signatures = sorted(cls._creator_signatures(raw_value))
+            normalization_preview[raw_value] = value_signatures[:10]
+            signatures.update(value_signatures)
+        primary_value = (
+            raw_by_field.get("jira_creator_email", "")
+            or raw_by_field.get("jira_creator_display_name", "")
+            or raw_by_field.get("jira_creator_identifier", "")
+        )
+        return {
+            "detected_fields": detected_fields,
+            "raw_values": raw_values,
+            "signatures": signatures,
+            "normalization_preview": normalization_preview,
+            "primary_value": primary_value,
+            "has_metadata": bool(raw_values),
+        }
+
+    def _creator_matches(self, snapshot: dict[str, Any], allowed_creator_bundles: list[dict[str, Any]]) -> dict[str, Any]:
+        creator_info = self._snapshot_creator_info(snapshot)
+        if not allowed_creator_bundles:
+            return {
+                **creator_info,
+                "matched": True,
+                "matched_allowed_creators": [],
+            }
+        matched_allowed_creators = [
+            bundle["configured"]
+            for bundle in list(allowed_creator_bundles or [])
+            if creator_info["signatures"] & set(bundle["signatures"])
+        ]
+        return {
+            **creator_info,
+            "matched": bool(matched_allowed_creators),
+            "matched_allowed_creators": matched_allowed_creators,
+        }
+
+    def _snapshot_is_closed(self, snapshot: dict[str, Any], *, strategy: str, closed_status_names: set[str]) -> bool:
+        payload = dict(snapshot or {})
+        status_category_key = _safe_text(
+            payload.get("jira_status_category_key", "")
+            or payload.get("status_category_key", "")
+        ).lower()
+        status_category_name = _safe_text(
+            payload.get("jira_status_category_name", "")
+            or payload.get("status_category_name", "")
+        ).lower()
+        status_name = _safe_text(
+            payload.get("jira_status", "")
+            or payload.get("status", "")
+        ).lower()
+        resolution_date = _safe_text(
+            payload.get("jira_resolution_date", "")
+            or payload.get("resolution_date", "")
+        )
+        if strategy in {"status_category_or_resolution_or_name", "status_category"}:
+            if status_category_key in {"done", "complete", "completed"}:
+                return True
+            if status_category_name in {"done", "complete", "completed"}:
+                return True
+        if strategy in {"status_category_or_resolution_or_name", "resolution"} and resolution_date:
+            return True
+        return bool(status_name and status_name in closed_status_names)
+
+    def _selection_timestamp(self, snapshot: dict[str, Any] | None, changes: list[dict[str, Any]]) -> str:
+        payload = dict(snapshot or {})
+        for value in (
+            payload.get("jira_created_at", ""),
+            payload.get("created_at", ""),
+            payload.get("jira_updated_at", ""),
+            payload.get("updated_at", ""),
+        ):
+            normalized = _safe_text(value)
+            if normalized:
+                return normalized
+        commit_times = sorted(
+            _safe_text(change.get("committed_at", ""))
+            for change in list(changes or [])
+            if _safe_text(change.get("committed_at", ""))
+        )
+        return commit_times[-1] if commit_times else ""
+
+    def _estimated_truth_strength(self, snapshot: dict[str, Any] | None, changes: list[dict[str, Any]]) -> int:
+        payload = dict(snapshot or {})
+        changed_file_count = len({
+            _normalize_file_path(file_path)
+            for change in list(changes or [])
+            for file_path in list(dict(change or {}).get("changed_files", []) or [])
+            if _normalize_file_path(file_path)
+        })
+        commit_count = len({str(dict(change or {}).get("commit_hash", "") or "").strip() for change in list(changes or []) if str(dict(change or {}).get("commit_hash", "") or "").strip()})
+        snapshot_quality = int(bool(_safe_text(payload.get("jira_snapshot_text", "") or payload.get("task_snapshot_text", ""))))
+        snapshot_quality += int(bool(_safe_text(payload.get("jira_snapshot_title", "") or payload.get("title", ""))))
+        snapshot_quality += int(bool(_normalize_acceptance_criteria(payload.get("jira_snapshot_acceptance_criteria", payload.get("acceptance_criteria", [])))))
+        return (snapshot_quality * 100) + (commit_count * 10) + changed_file_count
+
     def generate_cases(
         self,
         *,
@@ -134,7 +376,26 @@ class BenchmarkCaseGenerationService:
         include_empty_context: bool = False,
         hydrate_jira_snapshots: bool = False,
         max_expected_files: int = 5,
+        max_task_count: int | None = None,
+        newest_first: bool | None = None,
+        allowed_creators: list[str] | None = None,
+        curated_allowlist: list[str] | None = None,
+        single_repo_only: bool | None = None,
+        baseline_name: str | None = None,
     ) -> dict[str, Any]:
+        selection_config = self._historical_selection_config(
+            max_task_count=max_task_count,
+            newest_first=newest_first,
+            allowed_creators=allowed_creators,
+            curated_allowlist=curated_allowlist,
+            single_repo_only=single_repo_only,
+        )
+        resolved_baseline_name = _safe_text(baseline_name) or self._default_baseline_name(selection_config)
+        allowed_creator_bundles = self._allowed_creator_bundles(selection_config["allowed_creators"])
+        curated_allowlist_order = {
+            jira_key: index
+            for index, jira_key in enumerate(selection_config["curated_allowlist"])
+        }
         repo_rows = list(self._registry_service.list_repos(include_deleted=include_deleted) or [])
         allowed_repo_ids = {
             normalize_repo_id(repo.repo_id)
@@ -173,13 +434,40 @@ class BenchmarkCaseGenerationService:
             "weak_case_count": 0,
             "duplicate_case_id_count": 0,
             "duplicate_jira_repo_combination_count": 0,
+            "selection_max_task_count": int(selection_config["max_task_count"]),
+            "selection_newest_first": bool(selection_config["newest_first"]),
+            "selection_allowed_creators": list(selection_config["allowed_creators"]),
+            "selection_curated_allowlist": list(selection_config["curated_allowlist"]),
+            "selection_single_repo_only": bool(selection_config["single_repo_only"]),
+            "selection_closed_status_strategy": str(selection_config["closed_status_strategy"]),
+            "selection_closed_status_names": sorted(selection_config["closed_status_names"]),
+            "baseline_name": resolved_baseline_name,
+            "baseline_lineage": self._default_baseline_name(selection_config),
+            "total_tasks_matched_creator_filter": 0,
+            "total_tasks_matched_closed_status_filter": 0,
+            "total_single_repo_candidates": 0,
+            "selected_from_curated_allowlist_count": 0,
+            "selected_from_newest_matching_pool_count": 0,
+            "skipped_non_closed_count": 0,
+            "skipped_wrong_creator_count": 0,
+            "skipped_multi_repo_count": 0,
+            "selected_jira_keys_preview": [],
+            "creator_fields_detected_in_snapshot": [],
+            "creator_normalization_preview": [],
+            "matched_creator_values_preview": [],
+            "unmatched_creator_values_preview": [],
+            "tasks_with_creator_metadata_count": 0,
+            "tasks_missing_creator_metadata_count": 0,
+            "creator_filter_mode_used": "normalized_email_display_identifier_alias",
+            "creator_contribution_breakdown": {},
         }
         if not allowed_repo_ids:
-            artifact_path, latest_path = self._write_artifacts([], base_summary)
+            artifact_path, latest_path, baseline_latest_path = self._write_artifacts([], base_summary, baseline_name=resolved_baseline_name)
             return {
                 **base_summary,
                 "artifact_path": artifact_path.as_posix(),
                 "latest_artifact_path": latest_path.as_posix(),
+                "baseline_latest_artifact_path": baseline_latest_path.as_posix(),
                 "cases_preview": [],
             }
 
@@ -237,7 +525,7 @@ class BenchmarkCaseGenerationService:
             normalized_snippet["repo_id"] = repo_id
             surviving_by_jira[canonical].append(normalized_snippet)
 
-        cases: list[dict[str, Any]] = []
+        selected_cases: list[dict[str, Any]] = []
         counters = Counter()
         counters["invalid_jira_keys_skipped"] = int(normalization_stats["invalid"])
         counters["polluted_jira_keys_salvaged"] = int(normalization_stats["salvaged"])
@@ -256,35 +544,136 @@ class BenchmarkCaseGenerationService:
                 }
             ) > 1
         )
-        for jira_key in sorted(grouped_changes.keys()):
+        candidate_rows: list[dict[str, Any]] = []
+        creator_fields_detected: set[str] = set()
+        matched_creator_values: Counter[str] = Counter()
+        unmatched_creator_values: Counter[str] = Counter()
+        creator_normalization_preview: dict[str, list[str]] = {}
+        selected_creator_values: Counter[str] = Counter()
+        selected_configured_creator_hits: Counter[str] = Counter()
+        for jira_key, change_items in grouped_changes.items():
+            snapshot = snapshot_map.get(jira_key) or {}
+            repo_ids = {
+                normalize_repo_id(item.get("repo_id", ""))
+                for item in list(change_items or [])
+                if normalize_repo_id(item.get("repo_id", ""))
+            }
+            is_curated = jira_key in curated_allowlist_order
+            is_closed = self._snapshot_is_closed(
+                snapshot,
+                strategy=str(selection_config["closed_status_strategy"]),
+                closed_status_names=set(selection_config["closed_status_names"]),
+            )
+            if is_closed:
+                counters["total_tasks_matched_closed_status_filter"] += 1
+            creator_match = self._creator_matches(snapshot, allowed_creator_bundles)
+            creator_fields_detected.update(list(creator_match.get("detected_fields", []) or []))
+            if creator_match.get("has_metadata"):
+                counters["tasks_with_creator_metadata_count"] += 1
+            else:
+                counters["tasks_missing_creator_metadata_count"] += 1
+            for raw_value, preview in dict(creator_match.get("normalization_preview", {}) or {}).items():
+                if raw_value and raw_value not in creator_normalization_preview:
+                    creator_normalization_preview[raw_value] = list(preview or [])[:10]
+            primary_creator_value = _safe_text(creator_match.get("primary_value", ""))
+            if bool(creator_match.get("matched")):
+                counters["total_tasks_matched_creator_filter"] += 1
+                if primary_creator_value:
+                    matched_creator_values[primary_creator_value] += 1
+            elif primary_creator_value:
+                unmatched_creator_values[primary_creator_value] += 1
+            if not is_closed:
+                counters["skipped_non_closed_count"] += 1
+                continue
+            if not bool(creator_match.get("matched")) and not is_curated:
+                counters["skipped_wrong_creator_count"] += 1
+                continue
+            if selection_config["single_repo_only"] and len(repo_ids) != 1:
+                counters["skipped_multi_repo_count"] += 1
+                continue
+            counters["total_single_repo_candidates"] += int(len(repo_ids) == 1)
+            candidate_rows.append(
+                {
+                    "jira_key": jira_key,
+                    "snapshot": snapshot,
+                    "changes": list(change_items or []),
+                    "surviving_snippets": list(surviving_by_jira.get(jira_key, []) or []),
+                    "creator_match": dict(creator_match),
+                    "is_curated": is_curated,
+                    "selection_timestamp": self._selection_timestamp(snapshot, list(change_items or [])),
+                    "truth_strength": self._estimated_truth_strength(snapshot, list(change_items or [])),
+                }
+            )
+
+        curated_rows = [
+            item
+            for item in candidate_rows
+            if bool(item.get("is_curated"))
+        ]
+        curated_rows.sort(key=lambda item: curated_allowlist_order.get(_safe_text(item.get("jira_key", "")).upper(), 10_000))
+        non_curated_rows = [
+            item
+            for item in candidate_rows
+            if not bool(item.get("is_curated"))
+        ]
+        non_curated_rows.sort(
+            key=lambda item: (
+                _safe_text(item.get("selection_timestamp", "")),
+                int(item.get("truth_strength", 0) or 0),
+                _safe_text(item.get("jira_key", "")),
+            ),
+            reverse=bool(selection_config["newest_first"]),
+        )
+        prioritized_rows = list(curated_rows) + list(non_curated_rows)
+        selected_limit = max(1, int(selection_config["max_task_count"]))
+        for row in prioritized_rows:
+            if len(selected_cases) >= selected_limit:
+                break
+            jira_key = _safe_text(row.get("jira_key", ""))
             build_result = self._build_case(
                 jira_key=jira_key,
-                changes=grouped_changes.get(jira_key, []),
-                snapshot=snapshot_map.get(jira_key),
-                surviving_snippets=surviving_by_jira.get(jira_key, []),
+                changes=list(row.get("changes", []) or []),
+                snapshot=dict(row.get("snapshot", {}) or {}),
+                surviving_snippets=list(row.get("surviving_snippets", []) or []),
                 include_empty_context=include_empty_context,
                 max_expected_files=max_expected_files,
+                selection_timestamp=_safe_text(row.get("selection_timestamp", "")),
             )
             counters.update(build_result.get("counters", {}))
             case = build_result.get("case")
             if case is None:
                 continue
+            if selection_config["single_repo_only"] and len(list(case.get("expected_repo_ids", []) or [])) != 1:
+                counters["skipped_multi_repo_count"] += 1
+                continue
             if case["quality_tier"] == "weak" and not include_weak:
                 counters["skipped_weak_cases"] += 1
                 continue
-            cases.append(case)
+            selected_cases.append(case)
             counters["quality_tier_counts_recorded"] += 1
             if len(list(case.get("expected_repo_ids", []) or [])) > 1:
                 counters["multi_repo_cases"] += 1
             else:
                 counters["single_repo_cases"] += 1
             counters[f"{case['quality_tier']}_count"] += 1
+            if bool(row.get("is_curated")):
+                counters["selected_from_curated_allowlist_count"] += 1
+            else:
+                counters["selected_from_newest_matching_pool_count"] += 1
+            creator_match = dict(row.get("creator_match", {}) or {})
+            selected_creator_value = _safe_text(creator_match.get("primary_value", ""))
+            if selected_creator_value:
+                selected_creator_values[selected_creator_value] += 1
+            for configured_value in list(creator_match.get("matched_allowed_creators", []) or []):
+                normalized_configured = _safe_text(configured_value)
+                if normalized_configured:
+                    selected_configured_creator_hits[normalized_configured] += 1
 
-        validation = self.validate_generated_cases(cases)
+        validation = self.validate_generated_cases(selected_cases)
         summary = {
             **base_summary,
             "total_historical_jira_keys_scanned": len(grouped_changes),
-            "total_cases_generated": len(cases),
+            "total_cases_generated": len(selected_cases),
             "skipped_weak_cases": int(counters.get("skipped_weak_cases", 0)),
             "single_repo_cases": int(counters.get("single_repo_cases", 0)),
             "multi_repo_cases": int(counters.get("multi_repo_cases", 0)),
@@ -313,13 +702,75 @@ class BenchmarkCaseGenerationService:
             "weak_case_count": int(counters.get("weak_count", 0)),
             "duplicate_case_id_count": int(validation.get("duplicate_case_id_count", 0)),
             "duplicate_jira_repo_combination_count": int(validation.get("duplicate_jira_repo_combination_count", 0)),
+            "selection_max_task_count": int(selection_config["max_task_count"]),
+            "selection_newest_first": bool(selection_config["newest_first"]),
+            "selection_allowed_creators": list(selection_config["allowed_creators"]),
+            "selection_curated_allowlist": list(selection_config["curated_allowlist"]),
+            "selection_single_repo_only": bool(selection_config["single_repo_only"]),
+            "selection_closed_status_strategy": str(selection_config["closed_status_strategy"]),
+            "selection_closed_status_names": sorted(selection_config["closed_status_names"]),
+            "baseline_name": resolved_baseline_name,
+            "baseline_lineage": self._default_baseline_name(selection_config),
+            "total_tasks_matched_creator_filter": int(counters.get("total_tasks_matched_creator_filter", 0)),
+            "total_tasks_matched_closed_status_filter": int(counters.get("total_tasks_matched_closed_status_filter", 0)),
+            "total_single_repo_candidates": int(counters.get("total_single_repo_candidates", 0)),
+            "selected_from_curated_allowlist_count": int(counters.get("selected_from_curated_allowlist_count", 0)),
+            "selected_from_newest_matching_pool_count": int(counters.get("selected_from_newest_matching_pool_count", 0)),
+            "skipped_non_closed_count": int(counters.get("skipped_non_closed_count", 0)),
+            "skipped_wrong_creator_count": int(counters.get("skipped_wrong_creator_count", 0)),
+            "skipped_multi_repo_count": int(counters.get("skipped_multi_repo_count", 0)),
+            "selected_jira_keys_preview": [_safe_text(case.get("jira_key", "")) for case in selected_cases[:20] if _safe_text(case.get("jira_key", ""))],
+            "creator_fields_detected_in_snapshot": sorted(creator_fields_detected),
+            "creator_normalization_preview": {
+                "configured_allowed_creators": [
+                    {
+                        "configured": bundle["configured"],
+                        "normalized": bundle["normalized"],
+                        "signatures_preview": sorted(list(bundle["signatures"]))[:10],
+                    }
+                    for bundle in allowed_creator_bundles[:10]
+                ],
+                "snapshot_values": [
+                    {
+                        "raw_value": raw_value,
+                        "signatures_preview": list(signatures or [])[:10],
+                    }
+                    for raw_value, signatures in list(creator_normalization_preview.items())[:10]
+                ],
+            },
+            "matched_creator_values_preview": [
+                {"value": value, "count": count}
+                for value, count in matched_creator_values.most_common(10)
+            ],
+            "unmatched_creator_values_preview": [
+                {"value": value, "count": count}
+                for value, count in unmatched_creator_values.most_common(10)
+            ],
+            "tasks_with_creator_metadata_count": int(counters.get("tasks_with_creator_metadata_count", 0)),
+            "tasks_missing_creator_metadata_count": int(counters.get("tasks_missing_creator_metadata_count", 0)),
+            "creator_filter_mode_used": "normalized_email_display_identifier_alias",
+            "creator_contribution_breakdown": {
+                "selected_configured_allowed_creators": [
+                    {"creator": creator, "count": count}
+                    for creator, count in selected_configured_creator_hits.most_common()
+                ],
+                "selected_snapshot_creator_values": [
+                    {"creator": creator, "count": count}
+                    for creator, count in selected_creator_values.most_common(20)
+                ],
+            },
         }
-        artifact_path, latest_path = self._write_artifacts(cases, summary)
+        artifact_path, latest_path, baseline_latest_path = self._write_artifacts(
+            selected_cases,
+            summary,
+            baseline_name=resolved_baseline_name,
+        )
         return {
             **summary,
             "artifact_path": artifact_path.as_posix(),
             "latest_artifact_path": latest_path.as_posix(),
-            "cases_preview": cases[:5],
+            "baseline_latest_artifact_path": baseline_latest_path.as_posix(),
+            "cases_preview": selected_cases[:5],
             "validation": validation,
         }
 
@@ -388,6 +839,7 @@ class BenchmarkCaseGenerationService:
         surviving_snippets: list[dict[str, Any]],
         include_empty_context: bool,
         max_expected_files: int,
+        selection_timestamp: str = "",
     ) -> dict[str, Any]:
         counters = Counter()
         normalized_changes = [dict(item or {}) for item in list(changes or [])]
@@ -491,6 +943,7 @@ class BenchmarkCaseGenerationService:
             "jira_snapshot_text": context["snapshot_text"],
             "jira_snapshot_acceptance_criteria": context["acceptance_criteria"],
             "quality_tier": quality_tier,
+            "historical_selection_timestamp": _safe_text(selection_timestamp),
             "notes": notes,
         }
         return {"case": case, "counters": counters}
@@ -699,10 +1152,17 @@ class BenchmarkCaseGenerationService:
                 return True
         return False
 
-    def _write_artifacts(self, cases: list[dict[str, Any]], summary: dict[str, Any]) -> tuple[Path, Path]:
+    def _write_artifacts(
+        self,
+        cases: list[dict[str, Any]],
+        summary: dict[str, Any],
+        *,
+        baseline_name: str,
+    ) -> tuple[Path, Path, Path]:
         self._artifacts_root.mkdir(parents=True, exist_ok=True)
         artifact_path = self._artifacts_root / f"generated_cases_{_now_stamp()}.json"
         latest_path = self._artifacts_root / "generated_cases_latest.json"
+        baseline_latest_path = self._artifacts_root / f"generated_cases_{_slugify_label(baseline_name)}_latest.json"
         payload = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "summary": dict(summary),
@@ -710,4 +1170,114 @@ class BenchmarkCaseGenerationService:
         }
         artifact_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         latest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return artifact_path, latest_path
+        baseline_latest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return artifact_path, latest_path, baseline_latest_path
+
+    def prepare_leakage_free_split(
+        self,
+        *,
+        include_deleted: bool = False,
+        include_weak: bool = False,
+        include_empty_context: bool = False,
+        hydrate_jira_snapshots: bool = False,
+        max_expected_files: int = 5,
+        max_task_count: int | None = None,
+        newest_first: bool | None = None,
+        allowed_creators: list[str] | None = None,
+        curated_allowlist: list[str] | None = None,
+        single_repo_only: bool | None = None,
+        eval_holdout_count: int = 20,
+        baseline_name: str | None = None,
+    ) -> dict[str, Any]:
+        selection_config = self._historical_selection_config(
+            max_task_count=max_task_count,
+            newest_first=newest_first,
+            allowed_creators=allowed_creators,
+            curated_allowlist=curated_allowlist,
+            single_repo_only=single_repo_only,
+        )
+        resolved_baseline_name = _safe_text(baseline_name) or f"{self._default_baseline_name(selection_config)}_leakage_free_baseline"
+        candidate_result = self.generate_cases(
+            include_deleted=include_deleted,
+            include_weak=include_weak,
+            include_empty_context=include_empty_context,
+            hydrate_jira_snapshots=hydrate_jira_snapshots,
+            max_expected_files=max_expected_files,
+            max_task_count=max_task_count,
+            newest_first=newest_first,
+            allowed_creators=allowed_creators,
+            curated_allowlist=curated_allowlist,
+            single_repo_only=single_repo_only,
+            baseline_name=f"{resolved_baseline_name}_candidate_universe",
+        )
+        candidate_artifact_path = Path(_safe_text(candidate_result.get("artifact_path", "")))
+        candidate_payload = json.loads(candidate_artifact_path.read_text(encoding="utf-8"))
+        candidate_cases = [
+            dict(item or {})
+            for item in list(candidate_payload.get("cases", []) or [])
+            if isinstance(item, dict)
+        ]
+        candidate_cases.sort(
+            key=lambda item: (
+                _safe_text(item.get("historical_selection_timestamp", "")),
+                _safe_text(item.get("jira_key", "")),
+                _safe_text(item.get("case_id", "")),
+            )
+        )
+        input_count = len(candidate_cases)
+        requested_eval_count = max(1, int(eval_holdout_count or 1))
+        actual_eval_count = input_count if input_count <= 1 else min(requested_eval_count, input_count - 1)
+        source_cases = list(candidate_cases[: max(0, input_count - actual_eval_count)])
+        eval_cases = list(candidate_cases[max(0, input_count - actual_eval_count) :])
+        split_boundary_timestamp = _safe_text(eval_cases[0].get("historical_selection_timestamp", "")) if eval_cases else ""
+        source_jira_keys = [_safe_text(case.get("jira_key", "")).upper() for case in source_cases if _safe_text(case.get("jira_key", ""))]
+        eval_jira_keys = [_safe_text(case.get("jira_key", "")).upper() for case in eval_cases if _safe_text(case.get("jira_key", ""))]
+        shared_summary = {
+            "baseline_name": resolved_baseline_name,
+            "baseline_lineage": self._default_baseline_name(selection_config),
+            "split_strategy": "chronological_oldest_source_newest_eval_by_historical_selection_timestamp",
+            "split_boundary": {
+                "earliest_eval_historical_selection_timestamp": split_boundary_timestamp,
+                "requested_eval_holdout_count": requested_eval_count,
+                "actual_eval_holdout_count": len(eval_cases),
+            },
+            "input_candidate_universe_count": input_count,
+            "source_pool_count": len(source_cases),
+            "eval_holdout_count": len(eval_cases),
+            "input_cases_artifact_path": candidate_artifact_path.as_posix(),
+            "selected_historical_source_jira_keys": source_jira_keys,
+            "eval_case_jira_keys": eval_jira_keys,
+            "selection_allowed_creators": list(selection_config["allowed_creators"]),
+            "selection_curated_allowlist": list(selection_config["curated_allowlist"]),
+            "selection_single_repo_only": bool(selection_config["single_repo_only"]),
+            "selection_newest_first": bool(selection_config["newest_first"]),
+        }
+
+        def _write_split_artifact(kind: str, cases: list[dict[str, Any]]) -> tuple[Path, Path]:
+            artifact_path = self._artifacts_root / f"generated_cases_{_slugify_label(resolved_baseline_name)}_{kind}_{_now_stamp()}.json"
+            latest_path = self._artifacts_root / f"generated_cases_{_slugify_label(resolved_baseline_name)}_{kind}_latest.json"
+            payload = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "summary": {
+                    **shared_summary,
+                    "artifact_role": kind,
+                    "total_cases_generated": len(cases),
+                },
+                "cases": list(cases),
+            }
+            serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+            artifact_path.write_text(serialized, encoding="utf-8")
+            latest_path.write_text(serialized, encoding="utf-8")
+            return artifact_path, latest_path
+
+        self._artifacts_root.mkdir(parents=True, exist_ok=True)
+        source_artifact_path, source_latest_path = _write_split_artifact("source_pool", source_cases)
+        eval_artifact_path, eval_latest_path = _write_split_artifact("eval_holdout", eval_cases)
+        return {
+            **shared_summary,
+            "candidate_universe_artifact_path": candidate_artifact_path.as_posix(),
+            "source_pool_artifact_path": source_artifact_path.as_posix(),
+            "source_pool_latest_artifact_path": source_latest_path.as_posix(),
+            "eval_holdout_artifact_path": eval_artifact_path.as_posix(),
+            "eval_holdout_latest_artifact_path": eval_latest_path.as_posix(),
+        }

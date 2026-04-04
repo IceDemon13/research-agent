@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
+import requests
+
+from jira_mcp_server.config import settings as jira_settings
 from jira_mcp_server.jira_client import get_issue
 
 
@@ -24,6 +28,22 @@ SECTION_LABELS = (
 
 BITRIX_LINK_FIELD_ID = "customfield_11131"
 ACCEPTANCE_CRITERIA_FIELD_ID = "customfield_11145"
+
+
+class JiraConfigurationError(RuntimeError):
+    def __init__(self, message: str, *, failure_reason: str = "jira_auth_missing") -> None:
+        super().__init__(message)
+        self.failure_reason = str(failure_reason or "jira_auth_missing").strip() or "jira_auth_missing"
+
+
+def jira_auth_present() -> bool:
+    return bool(str(jira_settings.jira_email or "").strip() and str(jira_settings.jira_api_token or "").strip())
+
+
+def jira_auth_diagnostics() -> dict[str, Any]:
+    return {
+        "jira_auth_present": jira_auth_present(),
+    }
 
 
 def _normalize_inline_text(text: str) -> str:
@@ -330,8 +350,90 @@ def _extract_acceptance_criteria_from_custom_field(value: Any) -> list[str]:
     return deduped
 
 
+def _attachment_extension(file_name: str) -> str:
+    suffix = Path(str(file_name or "").strip()).suffix.lower()
+    return suffix[1:] if suffix.startswith(".") else suffix
+
+
+def _normalize_attachment_metadata(raw_attachment: Any) -> dict[str, Any]:
+    attachment = dict(raw_attachment or {})
+    file_name = (attachment.get("filename") or "").strip()
+    mime_type = (attachment.get("mimeType") or attachment.get("mime_type") or "").strip().lower()
+    extension = _attachment_extension(file_name)
+    media_type = "binary"
+    if mime_type.startswith("image/") or extension in {"png", "jpg", "jpeg", "gif", "bmp", "webp"}:
+        media_type = "image"
+    elif mime_type == "application/pdf" or extension == "pdf":
+        media_type = "pdf"
+    elif extension in {"txt", "log", "json", "xml", "md", "csv", "yml", "yaml", "sql"}:
+        media_type = "text"
+    elif extension in {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "rtf"}:
+        media_type = "office"
+    return {
+        "id": str(attachment.get("id") or "").strip(),
+        "name": file_name,
+        "url": (attachment.get("content") or "").strip(),
+        "mime_type": mime_type,
+        "media_type": media_type,
+        "extension": extension,
+        "size_bytes": int(attachment.get("size", 0) or 0),
+    }
+
+
+def _normalize_issue_comments(fields: dict[str, Any]) -> list[dict[str, Any]]:
+    comment_payload = fields.get("comment", {})
+    raw_comments: list[Any] = []
+    if isinstance(comment_payload, dict):
+        raw_comments = list(comment_payload.get("comments", []) or [])
+    elif isinstance(comment_payload, list):
+        raw_comments = list(comment_payload or [])
+    normalized: list[dict[str, Any]] = []
+    for index, raw_comment in enumerate(raw_comments, start=1):
+        item = dict(raw_comment or {})
+        body = _extract_text(item.get("body"))
+        body = _final_format_description(body)
+        if not body:
+            continue
+        author = dict(item.get("author", {}) or {})
+        normalized.append(
+            {
+                "comment_id": str(item.get("id") or f"comment-{index}").strip(),
+                "author_name": str(
+                    author.get("displayName")
+                    or author.get("name")
+                    or author.get("emailAddress")
+                    or ""
+                ).strip(),
+                "created_at": str(item.get("created") or "").strip(),
+                "updated_at": str(item.get("updated") or "").strip(),
+                "body": body,
+            }
+        )
+    return normalized
+
+
 def load_jira_task(issue_key: str) -> dict:
-    issue = get_issue(issue_key)
+    if not jira_auth_present():
+        raise JiraConfigurationError(
+            "Jira auth is missing. Configure JIRA_EMAIL and JIRA_API_TOKEN before fetching live Jira content.",
+            failure_reason="jira_auth_missing",
+        )
+    try:
+        issue = get_issue(issue_key)
+    except requests.HTTPError as exc:
+        status_code = 0
+        response = getattr(exc, "response", None)
+        if response is not None:
+            try:
+                status_code = int(getattr(response, "status_code", 0) or 0)
+            except Exception:  # noqa: BLE001
+                status_code = 0
+        if status_code in {401, 403}:
+            raise JiraConfigurationError(
+                f"Jira authentication failed with status {status_code}.",
+                failure_reason="jira_auth_invalid",
+            ) from exc
+        raise
     fields = issue.get("fields", {})
 
     summary = (fields.get("summary") or "").strip()
@@ -342,6 +444,46 @@ def load_jira_task(issue_key: str) -> dict:
 
     status_obj = fields.get("status") or {}
     status = (status_obj.get("name") or "").strip()
+    status_category_obj = status_obj.get("statusCategory") or {}
+    status_category_name = (status_category_obj.get("name") or "").strip()
+    status_category_key = (
+        status_category_obj.get("key")
+        or status_category_obj.get("id")
+        or status_category_name
+        or ""
+    )
+    status_category_key = str(status_category_key or "").strip()
+    resolution_obj = fields.get("resolution") or {}
+    resolution_name = (resolution_obj.get("name") or "").strip()
+    resolution_date = (fields.get("resolutiondate") or "").strip()
+    created_at = (fields.get("created") or "").strip()
+    updated_at = (fields.get("updated") or "").strip()
+
+    creator_obj = fields.get("creator") or {}
+    reporter_obj = fields.get("reporter") or {}
+    creator_email = (
+        creator_obj.get("emailAddress")
+        or reporter_obj.get("emailAddress")
+        or ""
+    )
+    creator_display_name = (
+        creator_obj.get("displayName")
+        or reporter_obj.get("displayName")
+        or creator_obj.get("name")
+        or reporter_obj.get("name")
+        or ""
+    )
+    creator_account_id = (
+        creator_obj.get("accountId")
+        or reporter_obj.get("accountId")
+        or ""
+    )
+    creator_identifier = (
+        creator_email
+        or creator_display_name
+        or creator_account_id
+        or ""
+    ).strip()
 
     assignee_obj = fields.get("assignee") or {}
     assignee = (assignee_obj.get("displayName") or "").strip()
@@ -356,14 +498,11 @@ def load_jira_task(issue_key: str) -> dict:
     project_name = (project_obj.get("name") or "").strip()
     project_key = (project_obj.get("key") or "").strip()
 
-    attachments: list[dict[str, str]] = []
+    attachments: list[dict[str, Any]] = []
     for attachment in fields.get("attachment", []) or []:
-        attachments.append(
-            {
-                "name": (attachment.get("filename") or "").strip(),
-                "url": (attachment.get("content") or "").strip(),
-            }
-        )
+        attachments.append(_normalize_attachment_metadata(attachment))
+
+    comments = _normalize_issue_comments(fields)
 
     acceptance_criteria_raw = fields.get(ACCEPTANCE_CRITERIA_FIELD_ID)
     if acceptance_criteria_raw:
@@ -383,11 +522,21 @@ def load_jira_task(issue_key: str) -> dict:
         "description": description,
         "acceptance_criteria": acceptance_criteria,
         "status": status,
+        "status_category_name": status_category_name,
+        "status_category_key": status_category_key,
+        "resolution_name": resolution_name,
+        "resolution_date": resolution_date,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "creator_email": creator_email.strip(),
+        "creator_display_name": creator_display_name.strip(),
+        "creator_identifier": creator_identifier,
         "assignee": assignee,
         "priority": priority,
         "issue_type": issue_type,
         "project_name": project_name,
         "project_key": project_key,
+        "comments": comments,
         "attachments": attachments,
         "bitrix_link": bitrix_link,
         "raw": issue,

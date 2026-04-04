@@ -102,11 +102,41 @@ class _LoadedSettings(BaseSettings):
     jira_api_token: str = ""
     jira_allowed_projects: str = "TEL"
     jira_default_limit: int = 10
+    benchmark_historical_max_task_count: int = 300
+    benchmark_historical_newest_first: bool = True
+    benchmark_historical_allowed_creators: str = (
+        "i.svarytsevych@telemart.com.ua,"
+        "a.kliuieva@telemart.ua"
+    )
+    benchmark_historical_curated_allowlist: str = (
+        "TEL-13488,TEL-13403,TEL-12020,TEL-11752,TEL-12113,"
+        "TEL-12218,TEL-12949,TEL-13036,TEL-13030,TEL-13239,TEL-13219"
+    )
+    benchmark_historical_single_repo_only: bool = True
+    benchmark_historical_closed_status_strategy: str = "status_category_or_resolution_or_name"
+    benchmark_historical_closed_status_names: str = "closed,resolved,done,completed,complete"
     repo_intelligence_provider: str = "native"
+    repo_intelligence_targeting_experimental_enabled: bool = False
+    repo_intelligence_targeting_adjacent_false_positive_suppressor_enabled: bool = False
+    repo_intelligence_targeting_recall_diversification_enabled: bool = False
+    repo_intelligence_targeting_support_family_recall_enabled: bool = False
+    repo_intelligence_targeting_worker_family_target_arbitration_enabled: bool = False
+    repo_intelligence_targeting_force_non_empty_patch_enabled: bool = False
+    repo_intelligence_targeting_narrow_companion_patch_expansion_enabled: bool = False
+    repo_intelligence_planning_grounding_enabled: bool = True
+    repo_intelligence_jira_evidence_layer_enabled: bool = False
+    repo_intelligence_jira_evidence_max_comments: int = 3
+    repo_intelligence_jira_evidence_max_attachments: int = 3
+    repo_intelligence_jira_evidence_max_attachment_text_chars: int = 1200
+    repo_intelligence_jira_evidence_max_attachment_download_bytes: int = 200000
+    repo_intelligence_targeting_candidate_pool_size: int = 12
+    repo_intelligence_targeting_selected_file_limit: int = 5
+    repo_intelligence_targeting_structural_expansion_limit: int = 0
+    repo_intelligence_targeting_diagnostic_frontier_depth: int = 0
     gitnexus_enabled: bool = True
     gitnexus_use_skills: bool = True
     gitnexus_use_embeddings: bool = False
-    gitnexus_repo_allowlist: str = "catalog_service"
+    gitnexus_repo_allowlist: str = ""
     gitnexus_timeout_seconds: int = 120
     gitnexus_version: str = "0.0.0"
     gitnexus_port: int = 3010
@@ -234,6 +264,13 @@ class RuntimeSettings:
     jira_allowed_projects: str
     jira_default_limit: int
     allowed_projects: list[str]
+    benchmark_historical_max_task_count: int
+    benchmark_historical_newest_first: bool
+    benchmark_historical_allowed_creators: list[str]
+    benchmark_historical_curated_allowlist: list[str]
+    benchmark_historical_single_repo_only: bool
+    benchmark_historical_closed_status_strategy: str
+    benchmark_historical_closed_status_names: list[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,6 +292,23 @@ class RepoIntelligenceSettings:
     gitnexus_repo_root: str
     gitnexus_internal_base_url: str
     gitnexus_external_ui_url: str
+    targeting_experimental_enabled: bool = False
+    targeting_adjacent_false_positive_suppressor_enabled: bool = False
+    targeting_recall_diversification_enabled: bool = False
+    targeting_support_family_recall_enabled: bool = False
+    targeting_worker_family_target_arbitration_enabled: bool = False
+    targeting_force_non_empty_patch_enabled: bool = False
+    targeting_narrow_companion_patch_expansion_enabled: bool = False
+    planning_grounding_enabled: bool = True
+    jira_evidence_layer_enabled: bool = False
+    jira_evidence_max_comments: int = 3
+    jira_evidence_max_attachments: int = 3
+    jira_evidence_max_attachment_text_chars: int = 1200
+    jira_evidence_max_attachment_download_bytes: int = 200000
+    targeting_candidate_pool_size: int = 12
+    targeting_selected_file_limit: int = 5
+    targeting_structural_expansion_limit: int = 0
+    targeting_diagnostic_frontier_depth: int = 0
 
 
 class Settings:
@@ -310,6 +364,13 @@ class Settings:
 
     @cached_property
     def runtime(self) -> RuntimeSettings:
+        def _parse_csv(raw: str) -> list[str]:
+            return [
+                item.strip()
+                for item in str(raw or "").split(",")
+                if item.strip()
+            ]
+
         return RuntimeSettings(
             max_url_chars=self._loaded.max_url_chars,
             max_search_results=self._loaded.max_search_results,
@@ -373,6 +434,13 @@ class Settings:
             jira_allowed_projects=self._loaded.jira_allowed_projects,
             jira_default_limit=self._loaded.jira_default_limit,
             allowed_projects=list(self._loaded.allowed_projects),
+            benchmark_historical_max_task_count=max(1, int(self._loaded.benchmark_historical_max_task_count or 300)),
+            benchmark_historical_newest_first=bool(self._loaded.benchmark_historical_newest_first),
+            benchmark_historical_allowed_creators=[item.lower() for item in _parse_csv(self._loaded.benchmark_historical_allowed_creators)],
+            benchmark_historical_curated_allowlist=[item.upper() for item in _parse_csv(self._loaded.benchmark_historical_curated_allowlist)],
+            benchmark_historical_single_repo_only=bool(self._loaded.benchmark_historical_single_repo_only),
+            benchmark_historical_closed_status_strategy=str(self._loaded.benchmark_historical_closed_status_strategy or "status_category_or_resolution_or_name").strip().lower() or "status_category_or_resolution_or_name",
+            benchmark_historical_closed_status_names=[item.lower() for item in _parse_csv(self._loaded.benchmark_historical_closed_status_names)],
         )
 
     @cached_property
@@ -401,6 +469,23 @@ class Settings:
         )
         return RepoIntelligenceSettings(
             provider=provider,
+            targeting_experimental_enabled=bool(self._loaded.repo_intelligence_targeting_experimental_enabled),
+            targeting_adjacent_false_positive_suppressor_enabled=bool(self._loaded.repo_intelligence_targeting_adjacent_false_positive_suppressor_enabled),
+            targeting_recall_diversification_enabled=bool(self._loaded.repo_intelligence_targeting_recall_diversification_enabled),
+            targeting_support_family_recall_enabled=bool(self._loaded.repo_intelligence_targeting_support_family_recall_enabled),
+            targeting_worker_family_target_arbitration_enabled=bool(self._loaded.repo_intelligence_targeting_worker_family_target_arbitration_enabled),
+            targeting_force_non_empty_patch_enabled=bool(self._loaded.repo_intelligence_targeting_force_non_empty_patch_enabled),
+            targeting_narrow_companion_patch_expansion_enabled=bool(self._loaded.repo_intelligence_targeting_narrow_companion_patch_expansion_enabled),
+            planning_grounding_enabled=bool(self._loaded.repo_intelligence_planning_grounding_enabled),
+            jira_evidence_layer_enabled=bool(self._loaded.repo_intelligence_jira_evidence_layer_enabled),
+            jira_evidence_max_comments=max(0, int(self._loaded.repo_intelligence_jira_evidence_max_comments or 3)),
+            jira_evidence_max_attachments=max(0, int(self._loaded.repo_intelligence_jira_evidence_max_attachments or 3)),
+            jira_evidence_max_attachment_text_chars=max(0, int(self._loaded.repo_intelligence_jira_evidence_max_attachment_text_chars or 1200)),
+            jira_evidence_max_attachment_download_bytes=max(0, int(self._loaded.repo_intelligence_jira_evidence_max_attachment_download_bytes or 200000)),
+            targeting_candidate_pool_size=max(5, int(self._loaded.repo_intelligence_targeting_candidate_pool_size or 12)),
+            targeting_selected_file_limit=max(3, int(self._loaded.repo_intelligence_targeting_selected_file_limit or 5)),
+            targeting_structural_expansion_limit=max(0, int(self._loaded.repo_intelligence_targeting_structural_expansion_limit or 0)),
+            targeting_diagnostic_frontier_depth=max(0, int(self._loaded.repo_intelligence_targeting_diagnostic_frontier_depth or 0)),
             gitnexus_enabled=bool(self._loaded.gitnexus_enabled),
             gitnexus_use_skills=bool(self._loaded.gitnexus_use_skills),
             gitnexus_use_embeddings=bool(self._loaded.gitnexus_use_embeddings),

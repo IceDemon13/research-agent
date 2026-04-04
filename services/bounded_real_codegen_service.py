@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import shutil
@@ -8,10 +9,14 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable
 
-from config import settings
+from config import RepoIntelligenceSettings, settings
 from contracts.apply_contract import ApplyInput, ApplyOperation, normalize_relative_repo_path
 from contracts.validation_contract import ValidationCommand
-from llm_factory import build_openai_client
+from llm_factory import (
+    build_openai_client_with_runtime,
+    classify_llm_exception,
+    llm_idle_telemetry,
+)
 from services.apply_service import ApplyService
 from services.bounded_implementation_service import BoundedImplementationService
 from services.diff_service import DiffService
@@ -52,8 +57,66 @@ def _extract_json_payload(text: str) -> dict[str, Any]:
     return dict(payload or {}) if isinstance(payload, dict) else {}
 
 
+def _analyze_bounded_raw_output(text: str) -> dict[str, Any]:
+    raw = _safe_text(text)
+    stripped = raw.strip()
+    begin_patch_count = raw.count("*** Begin Patch")
+    sentinel_patch_count = raw.count("<<<BEGIN_PATCH>>>")
+    duplicate_patch_blocks = begin_patch_count > 1 or sentinel_patch_count > 1
+    recoverable_patch_fragment_exists = (
+        "*** Begin Patch" in raw
+        or "*** Update File:" in raw
+        or "*** Add File:" in raw
+        or "*** Delete File:" in raw
+        or "<<<BEGIN_PATCH>>>" in raw
+    )
+    output_empty = not bool(stripped)
+    output_truncated = False
+    parse_status = "failed"
+    parse_failure_reason = "empty_output" if output_empty else "json_parse_failed"
+    prose_context_without_diff = bool(stripped) and not recoverable_patch_fragment_exists and (
+        "summary" in stripped.lower()
+        or "implementation" in stripped.lower()
+        or "context" in stripped.lower()
+        or "explanation" in stripped.lower()
+    )
+    if not output_empty:
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start == -1 or end == -1 or end < start:
+            parse_failure_reason = "no_json_object_detected"
+        else:
+            candidate = stripped[start : end + 1]
+            likely_truncated = candidate.count("{") != candidate.count("}") or stripped.endswith(("{", ",", "[", "\""))
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                output_truncated = likely_truncated
+                parse_failure_reason = "json_truncated" if likely_truncated else "json_decode_error"
+            else:
+                if isinstance(payload, dict):
+                    parse_status = "parsed_dict"
+                    parse_failure_reason = ""
+                else:
+                    parse_status = "parsed_non_dict"
+                    parse_failure_reason = "json_not_object"
+    return {
+        "bounded_patch_parse_status": parse_status,
+        "bounded_patch_parse_failure_reason": parse_failure_reason,
+        "bounded_recoverable_patch_fragment_exists": recoverable_patch_fragment_exists,
+        "bounded_duplicate_patch_blocks": duplicate_patch_blocks,
+        "bounded_output_contains_prose_without_diff": prose_context_without_diff,
+        "bounded_output_empty": output_empty,
+        "bounded_output_truncated": output_truncated,
+    }
+
+
 def _hash_bytes(value: bytes) -> str:
     return sha256(value).hexdigest()
+
+
+def _hash_text(value: str) -> str:
+    return _hash_bytes(str(value or "").encode("utf-8"))
 
 
 def _replace_first(value: str, search: str, replace: str) -> tuple[str, bool]:
@@ -122,6 +185,7 @@ class BoundedRealCodegenService:
         self,
         *,
         storage_path: str | Path | None = None,
+        repo_settings: RepoIntelligenceSettings | None = None,
         repo_registry_service: RepositoryRegistryService | None = None,
         temp_workspace_service: TempWorkspaceService | None = None,
         bounded_implementation_service: BoundedImplementationService | None = None,
@@ -141,6 +205,7 @@ class BoundedRealCodegenService:
         self._temp_workspace_service = temp_workspace_service or TempWorkspaceService(storage_path=storage_path)
         self._bounded_service = bounded_implementation_service or BoundedImplementationService()
         self._lightweight_draft_service = lightweight_draft_service or LightweightImplementationDraftService()
+        self._repo_settings = repo_settings or settings.repo_intelligence
         self._apply_service_factory = apply_service_factory or (lambda **kwargs: ApplyService(**kwargs))
         self._diff_service_factory = diff_service_factory or (lambda **kwargs: DiffService(**kwargs))
         self._validation_service_factory = validation_service_factory or (lambda **kwargs: ValidationService(**kwargs))
@@ -150,6 +215,1239 @@ class BoundedRealCodegenService:
         self._max_codegen_files = max(1, int(max_codegen_files or 1))
         self._max_file_chars = max(1000, int(max_file_chars or 12000))
         self._enable_repair_pass = bool(enable_repair_pass)
+
+    @staticmethod
+    def _llm_payload(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        return dict(payload or llm_idle_telemetry())
+
+    def _activation_rule_payload(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        defaults = {
+            "activation_rule_enabled": bool(self._repo_settings.targeting_force_non_empty_patch_enabled),
+            "activation_rule_fired": False,
+            "first_attempt_patch_line_count": 0,
+            "second_attempt_patch_line_count": 0,
+            "first_attempt_changed_files_count": 0,
+            "second_attempt_changed_files_count": 0,
+            "activation_retry_reason": "",
+            "activation_retry_improved_to_real_patch": False,
+            "activation_retry_changed_files": [],
+            "activation_retry_target_unchanged": True,
+        }
+        for key, value in dict(payload or {}).items():
+            if key in defaults:
+                defaults[key] = value
+        defaults["activation_retry_changed_files"] = _normalize_file_list(defaults.get("activation_retry_changed_files", []))
+        return defaults
+
+    @staticmethod
+    def _no_patch_hardening_payload(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        defaults = {
+            "no_patch_hardening_eligible": False,
+            "no_patch_hardening_activated": False,
+            "structured_empty_result_returned": False,
+            "model_claimed_no_safe_change": False,
+            "same_file_edit_required": False,
+            "no_patch_hardening_changed_result": False,
+        }
+        for key, value in dict(payload or {}).items():
+            if key in defaults:
+                defaults[key] = value
+        return defaults
+
+    @staticmethod
+    def _same_method_quality_payload(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        defaults = {
+            "same_method_quality_hardening_eligible": False,
+            "same_method_quality_hardening_activated": False,
+            "ranked_same_file_behavior_methods": [],
+            "chosen_behavior_method_reason": "",
+            "constructor_wiring_edit_detected": False,
+            "preferred_behavior_method_missed": False,
+            "same_method_quality_hardening_changed_result": False,
+            "behavior_path_hardening_eligible": False,
+            "behavior_path_hardening_activated": False,
+            "chosen_primary_behavior_method": "",
+            "patch_touched_primary_behavior_method": False,
+            "constructor_only_edit_detected": False,
+            "deeper_behavior_method_required": False,
+            "behavior_path_hardening_changed_result": False,
+            "getter_only_property_name": "",
+            "writable_backing_candidate_detected": "",
+            "computed_validation_property_name": "",
+            "writable_validation_source_name": "",
+            "nonexistent_member_name": "",
+            "resolved_event_args_type": "",
+            "known_event_args_members_excerpt": [],
+            "invalid_usage_expression": "",
+            "bool_compatible_members_excerpt": [],
+        }
+        for key, value in dict(payload or {}).items():
+            if key in defaults:
+                defaults[key] = value
+        defaults["ranked_same_file_behavior_methods"] = list(defaults.get("ranked_same_file_behavior_methods", []) or [])
+        return defaults
+
+    @staticmethod
+    def _no_op_full_file_retry_payload(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        defaults = {
+            "full_file_new_content_present": False,
+            "new_content_equal_to_original": False,
+            "claimed_behavior_change_text": "",
+            "claimed_change_found_in_new_content": False,
+            "no_op_full_file_rewrite_detected": False,
+            "no_op_full_file_retry_eligible": False,
+            "no_op_full_file_retry_activated": False,
+            "no_op_full_file_retry_changed_result": False,
+        }
+        for key, value in dict(payload or {}).items():
+            if key in defaults:
+                defaults[key] = value
+        return defaults
+
+    @staticmethod
+    def _compile_hardening_payload(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        defaults = {
+            "compile_hardening_eligible": False,
+            "detector_input_source": "",
+            "detector_input_line_count": 0,
+            "detector_input_excerpt": "",
+            "detector_matches_materialized_patch": False,
+            "getter_only_assignment_detected": False,
+            "getter_only_property_name": "",
+            "writable_backing_candidate_detected": "",
+            "computed_validation_property_assignment_detected": False,
+            "computed_validation_property_name": "",
+            "computed_validation_property_declaring_type": "",
+            "writable_validation_source_detected": False,
+            "writable_validation_source_name": "",
+            "writable_validation_source_declaring_type": "",
+            "nonexistent_member_assignment_detected": False,
+            "invalid_event_args_usage_shape_detected": False,
+            "nonexistent_member_name": "",
+            "resolved_event_args_type": "",
+            "resolved_event_args_base_types": [],
+            "invalid_usage_expression": "",
+            "known_event_args_members_excerpt": [],
+            "bool_compatible_members_excerpt": [],
+            "compile_hardening_retry_activated": False,
+            "compile_hardening_changed_result": False,
+        }
+        for key, value in dict(payload or {}).items():
+            if key in defaults:
+                defaults[key] = value
+        return defaults
+
+    @staticmethod
+    def _changed_lines_from_materialized_files(
+        *,
+        source_files: list[dict[str, Any]],
+        materialized_files: list[dict[str, Any]],
+    ) -> list[str]:
+        source_lookup = {
+            _normalize_path(dict(item or {}).get("file", "")): (
+                _safe_text(dict(item or {}).get("full_content", "")) or _safe_text(dict(item or {}).get("content", ""))
+            )
+            for item in list(source_files or [])
+            if _normalize_path(dict(item or {}).get("file", ""))
+        }
+        changed_lines: list[str] = []
+        for item in list(materialized_files or []):
+            file_path = _normalize_path(dict(item or {}).get("file", ""))
+            if not file_path:
+                continue
+            before = source_lookup.get(file_path, "")
+            after = _safe_text(dict(item or {}).get("new_content", ""))
+            if not after:
+                continue
+            if before:
+                diff_lines = difflib.unified_diff(
+                    before.splitlines(),
+                    after.splitlines(),
+                    fromfile="before",
+                    tofile="after",
+                    lineterm="",
+                )
+                changed_lines.extend(
+                    line[1:]
+                    for line in diff_lines
+                    if line.startswith("+") and not line.startswith("+++")
+                )
+            else:
+                changed_lines.extend(after.splitlines())
+        return changed_lines
+
+    def _detector_input_text(
+        self,
+        *,
+        repo_root: Path,
+        generation_payload: dict[str, Any],
+        source_files: list[dict[str, Any]],
+        materialized_files: list[dict[str, Any]] | None = None,
+    ) -> tuple[str, str, int, str, bool]:
+        materialized_lines = self._changed_lines_from_materialized_files(
+            source_files=source_files,
+            materialized_files=list(materialized_files or []),
+        )
+        if materialized_lines:
+            text = "\n".join(line for line in materialized_lines if line)
+            excerpt = "\n".join(materialized_lines[:12])[:1200]
+            return "materialized_changed_lines", text, len(materialized_lines), excerpt, True
+
+        files = list(generation_payload.get("files", []) or [])
+        fallback_lines: list[str] = []
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            raw_edits = list(item.get("edits", []) or [])
+            for edit in raw_edits:
+                if not isinstance(edit, dict):
+                    continue
+                replace_text = _safe_text(edit.get("replace", ""))
+                if replace_text:
+                    fallback_lines.extend(replace_text.splitlines())
+            if fallback_lines:
+                break
+            file_path = _normalize_path(item.get("file", ""))
+            candidate_file = repo_root / file_path
+            try:
+                current_content = candidate_file.read_text(encoding="utf-8")
+            except Exception:
+                current_content = ""
+            new_content = _safe_text(item.get("new_content", ""))
+            if current_content and new_content:
+                diff_lines = difflib.unified_diff(
+                    current_content.splitlines(),
+                    new_content.splitlines(),
+                    fromfile="before",
+                    tofile="after",
+                    lineterm="",
+                )
+                fallback_lines.extend(
+                    line[1:]
+                    for line in diff_lines
+                    if line.startswith("+") and not line.startswith("+++")
+                )
+            elif new_content:
+                fallback_lines.extend(new_content.splitlines())
+            if fallback_lines:
+                break
+        text = "\n".join(line for line in fallback_lines if line)
+        excerpt = "\n".join(fallback_lines[:12])[:1200]
+        return "generation_payload_edits", text, len(fallback_lines), excerpt, False
+
+    @staticmethod
+    def _is_structured_empty_result(payload: dict[str, Any] | None, raw_model_output: str) -> bool:
+        candidate = dict(payload or {})
+        if list(candidate.get("files", []) or []):
+            return False
+        parsed = _analyze_bounded_raw_output(raw_model_output)
+        return _safe_text(parsed.get("bounded_patch_parse_status", "")) == "parsed_dict"
+
+    @staticmethod
+    def _model_claimed_no_safe_change(payload: dict[str, Any] | None, raw_model_output: str) -> bool:
+        summary = _safe_text(dict(payload or {}).get("summary", ""))
+        text = "\n".join(part for part in [summary, _safe_text(raw_model_output)] if part)
+        lowered = text.lower()
+        return "no safe" in lowered or "no safe bounded change" in lowered or "cannot" in lowered and "change" in lowered
+
+    @staticmethod
+    def _claimed_behavior_change_text(payload: dict[str, Any] | None) -> str:
+        candidate = dict(payload or {})
+        return _safe_text(candidate.get("chosen_behavior_method_reason", "")) or _safe_text(candidate.get("summary", ""))
+
+    @classmethod
+    def _claimed_change_found_in_new_content(
+        cls,
+        *,
+        payload: dict[str, Any] | None,
+        rewritten_content: str,
+    ) -> bool:
+        text = _safe_text(rewritten_content)
+        if not text:
+            return False
+        candidate = dict(payload or {})
+        chosen_method = _safe_text(candidate.get("chosen_behavior_method", ""))
+        if chosen_method and chosen_method in text:
+            return True
+        claim = cls._claimed_behavior_change_text(candidate).lower()
+        if not claim:
+            return False
+        claim_tokens = [
+            token.lower()
+            for token in re.findall(r"[A-Za-z0-9_]{4,}", claim)
+            if len(token) >= 4 and token.lower() not in _GENERIC_TASK_SYMBOL_TERMS
+        ]
+        if not claim_tokens:
+            return False
+        lowered_text = text.lower()
+        hits = sum(1 for token in claim_tokens if token in lowered_text)
+        return hits >= min(2, len(claim_tokens))
+
+    def _estimate_materialized_patch_metrics(
+        self,
+        *,
+        source_files: list[dict[str, Any]],
+        materialized_files: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        source_lookup = {
+            _normalize_path(dict(item or {}).get("file", "")): (
+                _safe_text(dict(item or {}).get("full_content", "")) or _safe_text(dict(item or {}).get("content", ""))
+            )
+            for item in list(source_files or [])
+            if _normalize_path(dict(item or {}).get("file", ""))
+        }
+        changed_files: list[str] = []
+        patch_line_count = 0
+        for item in list(materialized_files or []):
+            file_path = _normalize_path(dict(item or {}).get("file", ""))
+            if not file_path:
+                continue
+            before = source_lookup.get(file_path, "")
+            after = _safe_text(dict(item or {}).get("new_content", ""))
+            if before == after:
+                continue
+            changed_files.append(file_path)
+            diff_lines = difflib.unified_diff(
+                before.splitlines(),
+                after.splitlines(),
+                fromfile="before",
+                tofile="after",
+                lineterm="",
+            )
+            for line in diff_lines:
+                if line.startswith(("---", "+++")):
+                    continue
+                if line.startswith("+") or line.startswith("-"):
+                    patch_line_count += 1
+        normalized_changed_files = _normalize_file_list(changed_files)
+        return {
+            "changed_files": normalized_changed_files,
+            "changed_files_count": len(normalized_changed_files),
+            "patch_line_count": patch_line_count,
+        }
+
+    def _analyze_rewrite_materialization(
+        self,
+        *,
+        source_files: list[dict[str, Any]],
+        generated_files: list[dict[str, Any]],
+        materialized_files: list[dict[str, Any]],
+        selected_targets: list[str],
+    ) -> dict[str, Any]:
+        source_lookup = {
+            _normalize_path(dict(item or {}).get("file", "")): (
+                _safe_text(dict(item or {}).get("full_content", "")) or _safe_text(dict(item or {}).get("content", ""))
+            )
+            for item in list(source_files or [])
+            if _normalize_path(dict(item or {}).get("file", ""))
+        }
+        raw_lookup = {
+            _normalize_path(dict(item or {}).get("file", "")): dict(item or {})
+            for item in list(generated_files or [])
+            if _normalize_path(dict(item or {}).get("file", ""))
+        }
+        materialized_lookup = {
+            _normalize_path(dict(item or {}).get("file", "")): dict(item or {})
+            for item in list(materialized_files or [])
+            if _normalize_path(dict(item or {}).get("file", ""))
+        }
+        primary_target = _normalize_path((list(selected_targets or []) or [""])[0])
+        if not primary_target:
+            primary_target = next(iter(materialized_lookup.keys()), "")
+        raw_item = raw_lookup.get(primary_target, {})
+        materialized_item = materialized_lookup.get(primary_target, {})
+        original_content = source_lookup.get(primary_target, "")
+        rewritten_content = _safe_text(materialized_item.get("new_content", ""))
+        full_file_rewrite_detected = bool(
+            _safe_text(raw_item.get("new_content", "")) and not list(raw_item.get("edits", []) or [])
+        )
+        rewritten_file_equal_to_original = bool(primary_target and original_content == rewritten_content)
+        materialized_diff_present = bool(primary_target and original_content != rewritten_content)
+        rewrite_materialization_reason = ""
+        if full_file_rewrite_detected and rewritten_file_equal_to_original:
+            rewrite_materialization_reason = "full_file_rewrite_identical_to_original"
+        elif full_file_rewrite_detected:
+            rewrite_materialization_reason = "full_file_rewrite_materialized_with_delta"
+        elif primary_target and rewritten_content:
+            rewrite_materialization_reason = "localized_edit_materialized"
+        noop_materialized_files = [
+            path
+            for path, item in materialized_lookup.items()
+            if source_lookup.get(path, "") == _safe_text(dict(item or {}).get("new_content", ""))
+        ]
+        return {
+            "original_file_hash": _hash_text(original_content) if primary_target else "",
+            "rewritten_file_hash": _hash_text(rewritten_content) if primary_target and rewritten_content else "",
+            "rewritten_file_equal_to_original": rewritten_file_equal_to_original,
+            "full_file_rewrite_detected": full_file_rewrite_detected,
+            "materialized_diff_present": materialized_diff_present,
+            "apply_meaningful_change_detected": materialized_diff_present,
+            "rewrite_canonicalization_applied": False,
+            "rewrite_materialization_reason": rewrite_materialization_reason,
+            "noop_materialized_files": _normalize_file_list(noop_materialized_files),
+        }
+
+    def _drop_noop_materialized_files(
+        self,
+        *,
+        source_files: list[dict[str, Any]],
+        materialized_files: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        source_lookup = {
+            _normalize_path(dict(item or {}).get("file", "")): (
+                _safe_text(dict(item or {}).get("full_content", "")) or _safe_text(dict(item or {}).get("content", ""))
+            )
+            for item in list(source_files or [])
+            if _normalize_path(dict(item or {}).get("file", ""))
+        }
+        filtered: list[dict[str, Any]] = []
+        for item in list(materialized_files or []):
+            file_path = _normalize_path(dict(item or {}).get("file", ""))
+            if not file_path:
+                continue
+            new_content = _safe_text(dict(item or {}).get("new_content", ""))
+            if source_lookup.get(file_path, "") == new_content:
+                continue
+            filtered.append(dict(item or {}))
+        return filtered
+
+    @staticmethod
+    def _has_real_patch_attempt(
+        *,
+        patch_metrics: dict[str, Any],
+        codegen_safety: dict[str, Any],
+    ) -> bool:
+        return bool(
+            int(patch_metrics.get("changed_files_count", 0) or 0) > 0
+            and int(patch_metrics.get("patch_line_count", 0) or 0) > 0
+            and not _safe_text(codegen_safety.get("downgraded_to_draft_reason", ""))
+        )
+
+    def _task_describes_user_visible_behavior(self, task_text: str) -> bool:
+        lowered_tokens = {token.lower() for token in self._tokenize_code_terms(task_text)}
+        if not lowered_tokens:
+            return False
+        behavior_markers = {
+            "scan",
+            "barcode",
+            "cell",
+            "window",
+            "dialog",
+            "close",
+            "open",
+            "button",
+            "confirm",
+            "status",
+            "display",
+            "show",
+            "add",
+            "remove",
+            "pack",
+            "issue",
+            "finish",
+            "ok",
+        }
+        return bool(lowered_tokens & behavior_markers)
+
+    def _rank_same_file_behavior_methods(
+        self,
+        *,
+        task_text: str,
+        source_files: list[dict[str, Any]],
+        selected_class: str,
+        selected_method: str,
+    ) -> list[dict[str, Any]]:
+        if len(list(source_files or [])) != 1:
+            return []
+        source = dict(source_files[0] or {})
+        content = _safe_text(source.get("full_content", "")) or _safe_text(source.get("content", ""))
+        if not content:
+            return []
+        task_tokens = {token.lower() for token in self._tokenize_code_terms(task_text)}
+        behavior_tokens = {
+            "handle",
+            "finish",
+            "finished",
+            "confirm",
+            "close",
+            "ok",
+            "scan",
+            "barcode",
+            "process",
+            "execute",
+            "add",
+            "remove",
+            "update",
+            "complete",
+            "recognize",
+            "cell",
+        }
+        methods = self._extract_declared_method_symbols(content)
+        ranked: list[dict[str, Any]] = []
+        for method_name in list(methods or []):
+            normalized_method = _safe_text(method_name)
+            if not normalized_method:
+                continue
+            method_tokens = {token.lower() for token in self._tokenize_code_terms(normalized_method)}
+            overlap = sorted(method_tokens & task_tokens)
+            behavior_overlap = sorted(method_tokens & behavior_tokens)
+            score = float(len(overlap) * 3.0 + len(behavior_overlap) * 2.0)
+            lowered_method = normalized_method.lower()
+            if lowered_method == _safe_text(selected_class).lower():
+                score -= 6.0
+            if lowered_method in {"__init__", "ctor"}:
+                score -= 6.0
+            if lowered_method.startswith("handle"):
+                score += 1.5
+            if "finished" in lowered_method or "finish" in lowered_method:
+                score += 2.5
+            if lowered_method.endswith("okasync") or lowered_method.endswith("ok") or "ok" in behavior_overlap:
+                score += 2.5
+            if "close" in lowered_method:
+                score += 2.0
+            if "recognize" in lowered_method or "barcode" in lowered_method:
+                score += 2.0
+            if "loaded" in lowered_method:
+                score -= 1.0
+            if score <= 0:
+                continue
+            reasons: list[str] = []
+            if overlap:
+                reasons.append(f"task token overlap: {', '.join(overlap[:4])}")
+            if behavior_overlap:
+                reasons.append(f"behavior token overlap: {', '.join(behavior_overlap[:4])}")
+            if lowered_method == _safe_text(selected_class).lower():
+                reasons.append("constructor penalty")
+            ranked.append(
+                {
+                    "method": normalized_method,
+                    "score": round(score, 4),
+                    "reason": "; ".join(reasons) or "behavior-method ranking",
+                }
+            )
+        ranked.sort(key=lambda item: (-float(item.get("score", 0.0) or 0.0), _safe_text(item.get("method", "")).lower()))
+        return ranked[:3]
+
+    def _same_method_quality_context(
+        self,
+        *,
+        task_text: str,
+        target_gate: dict[str, Any],
+        source_files: list[dict[str, Any]],
+        selected_class: str,
+        selected_method: str,
+    ) -> dict[str, Any]:
+        ranked_methods = self._rank_same_file_behavior_methods(
+            task_text=task_text,
+            source_files=source_files,
+            selected_class=selected_class,
+            selected_method=selected_method,
+        )
+        eligible = bool(
+            len(list(source_files or [])) == 1
+            and _safe_text(target_gate.get("target_gate_status", "")).lower() == "passed"
+            and _safe_text(selected_class)
+            and _safe_text(selected_method)
+            and self._task_describes_user_visible_behavior(task_text)
+            and len(ranked_methods) >= 2
+        )
+        return self._same_method_quality_payload(
+            {
+                "same_method_quality_hardening_eligible": eligible,
+                "same_method_quality_hardening_activated": eligible,
+                "ranked_same_file_behavior_methods": ranked_methods,
+            }
+        )
+
+    def _detect_getter_only_assignment_retry_candidate(
+        self,
+        *,
+        repo_root: Path,
+        generation_payload: dict[str, Any],
+        same_method_quality: dict[str, Any],
+        allowed_targets: list[str],
+        source_files: list[dict[str, Any]] | None = None,
+        materialized_files: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        diagnostics = self._compile_hardening_payload()
+        if len(list(allowed_targets or [])) != 1:
+            return diagnostics
+        if not _safe_text(self._same_method_quality_payload(same_method_quality).get("chosen_primary_behavior_method", "")):
+            return diagnostics
+
+        detector_input_source, detector_text, detector_line_count, detector_input_excerpt, matches_materialized = self._detector_input_text(
+            repo_root=repo_root,
+            generation_payload=generation_payload,
+            source_files=list(source_files or []),
+            materialized_files=list(materialized_files or []),
+        )
+
+        property_name = ""
+        writable_backing_candidate = ""
+        property_is_getter_only = False
+        property_declaring_type = ""
+        writable_source_declaring_type = ""
+        resolved_event_args_type = ""
+        resolved_event_args_base_types: list[str] = []
+        param_types = {}
+        if list(source_files or []):
+            source_content = _safe_text(dict(source_files[0] or {}).get("full_content", "")) or _safe_text(
+                dict(source_files[0] or {}).get("content", "")
+            )
+            chosen_method = _safe_text(self._same_method_quality_payload(same_method_quality).get("chosen_primary_behavior_method", ""))
+            if source_content and chosen_method:
+                param_types = self._extract_method_parameter_types(source_content, chosen_method)
+        for assignment_match in re.finditer(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s*=\s*[^=]", detector_text):
+            receiver_name = _safe_text(assignment_match.group(1))
+            candidate_property_name = _safe_text(assignment_match.group(2))
+            if not candidate_property_name:
+                continue
+            receiver_type = _safe_text(param_types.get(receiver_name, ""))
+            if receiver_type and "EventArgs" in receiver_type:
+                member_meta, resolved_name, base_types = self._resolved_type_member_metadata(
+                    repo_root=repo_root,
+                    type_name=receiver_type,
+                )
+                resolved_event_args_type = resolved_name
+                resolved_event_args_base_types = list(base_types or [])
+                metadata = dict(member_meta.get(candidate_property_name, {}) or {})
+                if bool(metadata.get("getter_only", False)):
+                    property_name = candidate_property_name
+                    property_is_getter_only = True
+                    property_declaring_type = _safe_text(metadata.get("declaring_type", ""))
+                    writable_candidates = ["ErrorText", "Value", "State", "Result", "Message"]
+                    for candidate in writable_candidates:
+                        candidate_meta = dict(member_meta.get(candidate, {}) or {})
+                        if candidate == candidate_property_name:
+                            continue
+                        if bool(candidate_meta.get("writable", False)):
+                            writable_backing_candidate = candidate
+                            writable_source_declaring_type = _safe_text(candidate_meta.get("declaring_type", ""))
+                            break
+            else:
+                getter_only_patterns = [
+                    re.compile(rf"\b{re.escape(candidate_property_name)}\b\s*=>\s*(.+?);"),
+                    re.compile(rf"\b{re.escape(candidate_property_name)}\b\s*\{{\s*get\s*;\s*\}}"),
+                ]
+                for path in repo_root.rglob("*.cs"):
+                    try:
+                        content = path.read_text(encoding="utf-8")
+                    except Exception:
+                        continue
+                    local_writable_candidate = ""
+                    local_getter_only = False
+                    for pattern in getter_only_patterns:
+                        match = pattern.search(content)
+                        if not match:
+                            continue
+                        local_getter_only = True
+                        if match.lastindex:
+                            expr = _safe_text(match.group(1))
+                            candidate_match = re.search(r"\b([A-Za-z_]\w*)\b", expr)
+                            if candidate_match:
+                                candidate = _safe_text(candidate_match.group(1))
+                                if candidate and candidate != candidate_property_name and re.search(
+                                    rf"\b{re.escape(candidate)}\b\s*\{{[^{{}}]*get\s*;[^{{}}]*set\s*;",
+                                    content,
+                                    re.DOTALL,
+                                ):
+                                    local_writable_candidate = candidate
+                        if not local_writable_candidate:
+                            for candidate in ("ErrorText", "Value", "State", "Result", "Message"):
+                                if candidate == candidate_property_name:
+                                    continue
+                                if re.search(
+                                    rf"\b{re.escape(candidate)}\b\s*\{{[^{{}}]*get\s*;[^{{}}]*set\s*;",
+                                    content,
+                                    re.DOTALL,
+                                ):
+                                    local_writable_candidate = candidate
+                                    break
+                        break
+                    if local_getter_only:
+                        property_name = candidate_property_name
+                        writable_backing_candidate = local_writable_candidate
+                        property_is_getter_only = True
+                        break
+            if property_is_getter_only:
+                break
+
+        return self._compile_hardening_payload(
+            {
+                "compile_hardening_eligible": bool(property_is_getter_only and writable_backing_candidate),
+                "detector_input_source": detector_input_source,
+                "detector_input_line_count": detector_line_count,
+                "detector_input_excerpt": detector_input_excerpt,
+                "detector_matches_materialized_patch": matches_materialized,
+                "getter_only_assignment_detected": property_is_getter_only,
+                "getter_only_property_name": property_name if property_is_getter_only else "",
+                "writable_backing_candidate_detected": writable_backing_candidate,
+                "computed_validation_property_assignment_detected": bool(property_is_getter_only and writable_backing_candidate),
+                "computed_validation_property_name": property_name if property_is_getter_only else "",
+                "computed_validation_property_declaring_type": property_declaring_type,
+                "writable_validation_source_detected": bool(writable_backing_candidate),
+                "writable_validation_source_name": writable_backing_candidate,
+                "writable_validation_source_declaring_type": writable_source_declaring_type,
+                "resolved_event_args_type": resolved_event_args_type,
+                "resolved_event_args_base_types": list(resolved_event_args_base_types),
+            }
+        )
+
+    @staticmethod
+    def _extract_declared_members_from_content(content: str, *, type_name: str = "") -> set[str]:
+        members: set[str] = set()
+        for pattern in (
+            r"\b(?:public|protected|internal|private)\s+(?:override\s+|virtual\s+|abstract\s+|static\s+|async\s+)*[\w<>\[\]\.,\?]+\s+([A-Za-z_]\w*)\s*\{",
+            r"\b(?:public|protected|internal|private)\s+(?:override\s+|virtual\s+|abstract\s+|static\s+|async\s+)*[\w<>\[\]\.,\?]+\s+([A-Za-z_]\w*)\s*\(",
+        ):
+            for match in re.finditer(pattern, content):
+                name = _safe_text(match.group(1))
+                if name:
+                    members.add(name)
+        if type_name:
+            members.discard(_safe_text(type_name))
+        return members
+
+    @staticmethod
+    def _is_bool_compatible_type(type_name: str) -> bool:
+        normalized = _safe_text(type_name).strip()
+        if not normalized:
+            return False
+        lowered = normalized.rstrip("?").lower()
+        return lowered in {"bool", "boolean", "system.boolean"}
+
+    @staticmethod
+    def _supports_null_check(type_name: str) -> bool:
+        normalized = _safe_text(type_name).strip()
+        if not normalized:
+            return False
+        if normalized.endswith("?"):
+            return True
+        lowered = normalized.lower()
+        if lowered in {
+            "bool",
+            "boolean",
+            "system.boolean",
+            "int",
+            "long",
+            "short",
+            "byte",
+            "uint",
+            "ulong",
+            "ushort",
+            "sbyte",
+            "float",
+            "double",
+            "decimal",
+            "char",
+            "datetime",
+            "guid",
+            "system.int32",
+            "system.int64",
+            "system.int16",
+            "system.byte",
+            "system.uint32",
+            "system.uint64",
+            "system.uint16",
+            "system.sbyte",
+            "system.single",
+            "system.double",
+            "system.decimal",
+            "system.char",
+            "system.datetime",
+            "system.guid",
+        }:
+            return False
+        return True
+
+    @classmethod
+    def _member_metadata(
+        cls,
+        *,
+        kind: str,
+        type_name: str,
+        is_static: bool,
+    ) -> dict[str, Any]:
+        return {
+            "kind": kind,
+            "type_name": _safe_text(type_name).strip(),
+            "is_static": bool(is_static),
+            "bool_compatible": cls._is_bool_compatible_type(type_name),
+            "null_check_compatible": cls._supports_null_check(type_name),
+            "declaring_type": "",
+            "getter_only": False,
+            "computed": False,
+            "writable": kind == "field",
+        }
+
+    def _extract_declared_member_metadata_from_content(self, content: str, *, type_name: str = "") -> dict[str, dict[str, Any]]:
+        members: dict[str, dict[str, Any]] = {}
+        property_pattern = re.compile(
+            r"\b(?:public|protected|internal|private)\s+"
+            r"(?P<mods>(?:(?:override|virtual|abstract|static|sealed|async|new|readonly|partial)\s+)*)"
+            r"(?P<type>[\w<>\[\]\.,\?]+)\s+"
+            r"(?P<name>[A-Za-z_]\w*)\s*\{"
+        )
+        method_pattern = re.compile(
+            r"\b(?:public|protected|internal|private)\s+"
+            r"(?P<mods>(?:(?:override|virtual|abstract|static|async|new|sealed|partial)\s+)*)"
+            r"(?P<type>[\w<>\[\]\.,\?]+)\s+"
+            r"(?P<name>[A-Za-z_]\w*)\s*\("
+        )
+        expression_property_pattern = re.compile(
+            r"\b(?:public|protected|internal|private)\s+"
+            r"(?P<mods>(?:(?:override|virtual|abstract|static|new)\s+)*)"
+            r"(?P<type>[\w<>\[\]\.,\?]+)\s+"
+            r"(?P<name>[A-Za-z_]\w*)\s*=>"
+        )
+        field_pattern = re.compile(
+            r"\b(?:public|protected|internal|private)\s+"
+            r"(?P<mods>(?:(?:static|readonly|const|volatile|new)\s+)*)"
+            r"(?P<type>[\w<>\[\]\.,\?]+)\s+"
+            r"(?P<name>[A-Za-z_]\w*)\s*(?:=|;)"
+        )
+        for pattern, kind in (
+            (property_pattern, "property"),
+            (expression_property_pattern, "property"),
+            (method_pattern, "method"),
+            (field_pattern, "field"),
+        ):
+            for match in pattern.finditer(content):
+                name = _safe_text(match.group("name"))
+                if not name or (type_name and name == _safe_text(type_name)):
+                    continue
+                if name in members:
+                    continue
+                type_text = _safe_text(match.group("type"))
+                modifiers = _safe_text(match.group("mods"))
+                metadata = self._member_metadata(
+                    kind=kind,
+                    type_name=type_text,
+                    is_static="static" in modifiers.split(),
+                )
+                metadata["declaring_type"] = _safe_text(type_name)
+                if kind == "property":
+                    property_body_match = re.search(
+                        rf"\b{re.escape(name)}\b\s*\{{(?P<body>[^{{}}]*)\}}",
+                        content,
+                        re.DOTALL,
+                    )
+                    property_body = _safe_text(property_body_match.group("body")) if property_body_match else ""
+                    has_get = bool(re.search(r"\bget\s*;", property_body))
+                    has_set = bool(re.search(r"\bset\s*;", property_body))
+                    expression_bodied = bool(
+                        re.search(rf"\b{re.escape(name)}\b\s*=>\s*.+?;", content)
+                    )
+                    metadata["getter_only"] = bool(expression_bodied or (has_get and not has_set))
+                    metadata["computed"] = bool(expression_bodied)
+                    metadata["writable"] = bool(has_set)
+                elif kind == "field":
+                    metadata["writable"] = not bool(re.search(r"\b(?:readonly|const)\b", modifiers))
+                else:
+                    metadata["writable"] = False
+                members[name] = metadata
+        return members
+
+    @staticmethod
+    def _extract_class_base_types(content: str, type_name: str) -> list[str]:
+        match = re.search(
+            rf"\bclass\s+{re.escape(type_name)}\s*(?::\s*([^\{{]+))?\s*\{{",
+            content,
+        )
+        if not match:
+            return []
+        raw = _safe_text(match.group(1))
+        if not raw:
+            return []
+        return [part.strip().split("<", 1)[0].strip() for part in raw.split(",") if part.strip()]
+
+    def _resolved_type_members(
+        self,
+        *,
+        repo_root: Path,
+        type_name: str,
+        visited: set[str] | None = None,
+    ) -> tuple[set[str], str]:
+        normalized_type = _safe_text(type_name)
+        if not normalized_type:
+            return set(), ""
+        seen = set(visited or set())
+        if normalized_type in seen:
+            return set(), normalized_type
+        seen.add(normalized_type)
+        for path in repo_root.rglob("*.cs"):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if not re.search(rf"\bclass\s+{re.escape(normalized_type)}\b", content):
+                continue
+            members = self._extract_declared_members_from_content(content, type_name=normalized_type)
+            for base_type in self._extract_class_base_types(content, normalized_type):
+                base_members, _ = self._resolved_type_members(repo_root=repo_root, type_name=base_type, visited=seen)
+                members.update(base_members)
+            return members, normalized_type
+        return set(), normalized_type
+
+    def _resolved_type_member_metadata(
+        self,
+        *,
+        repo_root: Path,
+        type_name: str,
+        visited: set[str] | None = None,
+    ) -> tuple[dict[str, dict[str, Any]], str, list[str]]:
+        normalized_type = _safe_text(type_name)
+        if not normalized_type:
+            return {}, "", []
+        seen = set(visited or set())
+        if normalized_type in seen:
+            return {}, normalized_type, []
+        seen.add(normalized_type)
+        for path in repo_root.rglob("*.cs"):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if not re.search(rf"\bclass\s+{re.escape(normalized_type)}\b", content):
+                continue
+            members = self._extract_declared_member_metadata_from_content(content, type_name=normalized_type)
+            base_types = self._extract_class_base_types(content, normalized_type)
+            for base_type in base_types:
+                base_members, _, _ = self._resolved_type_member_metadata(
+                    repo_root=repo_root,
+                    type_name=base_type,
+                    visited=seen,
+                )
+                for name, metadata in base_members.items():
+                    members.setdefault(name, dict(metadata or {}))
+            return members, normalized_type, base_types
+        return {}, normalized_type, []
+
+    @staticmethod
+    def _extract_method_parameter_types(content: str, method_name: str) -> dict[str, str]:
+        normalized_method = _safe_text(method_name)
+        if not normalized_method:
+            return {}
+        match = re.search(
+            rf"{re.escape(normalized_method)}\s*\((.*?)\)\s*\{{",
+            content,
+            re.DOTALL,
+        )
+        if not match:
+            return {}
+        params_text = _safe_text(match.group(1))
+        result: dict[str, str] = {}
+        for raw_param in [part.strip() for part in params_text.split(",") if part.strip()]:
+            pieces = raw_param.split()
+            if len(pieces) < 2:
+                continue
+            param_name = _safe_text(pieces[-1]).strip()
+            param_type = _safe_text(pieces[-2]).strip()
+            if param_name and param_type:
+                result[param_name] = param_type
+        return result
+
+    def _detect_nonexistent_event_args_member_retry_candidate(
+        self,
+        *,
+        repo_root: Path,
+        generation_payload: dict[str, Any],
+        same_method_quality: dict[str, Any],
+        allowed_targets: list[str],
+        source_files: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        diagnostics = self._compile_hardening_payload()
+        if len(list(allowed_targets or [])) != 1:
+            return diagnostics
+        chosen_method = _safe_text(self._same_method_quality_payload(same_method_quality).get("chosen_primary_behavior_method", ""))
+        if not chosen_method:
+            return diagnostics
+        if len(list(source_files or [])) != 1:
+            return diagnostics
+        source_content = _safe_text(dict(source_files[0] or {}).get("full_content", "")) or _safe_text(dict(source_files[0] or {}).get("content", ""))
+        if not source_content:
+            return diagnostics
+        param_types = self._extract_method_parameter_types(source_content, chosen_method)
+        if not param_types:
+            return diagnostics
+
+        files = list(generation_payload.get("files", []) or [])
+        nonexistent_member_name = ""
+        resolved_event_args_type = ""
+        known_members_excerpt: list[str] = []
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            edit_parts: list[str] = []
+            raw_edits = list(item.get("edits", []) or [])
+            for edit in raw_edits:
+                if not isinstance(edit, dict):
+                    continue
+                edit_parts.append(_safe_text(edit.get("replace", "")))
+            if not edit_parts:
+                file_path = _normalize_path(item.get("file", ""))
+                candidate_file = repo_root / file_path
+                try:
+                    current_content = candidate_file.read_text(encoding="utf-8")
+                except Exception:
+                    current_content = ""
+                new_content = _safe_text(item.get("new_content", ""))
+                if current_content and new_content:
+                    diff_lines = difflib.unified_diff(
+                        current_content.splitlines(),
+                        new_content.splitlines(),
+                        fromfile="before",
+                        tofile="after",
+                        lineterm="",
+                    )
+                    edit_parts = [line[1:] for line in diff_lines if line.startswith("+") and not line.startswith("+++")]
+                elif new_content:
+                    edit_parts = [new_content]
+            text = "\n".join(part for part in edit_parts if part)
+            for match in re.finditer(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s*=\s*[^=]", text):
+                object_name = _safe_text(match.group(1))
+                member_name = _safe_text(match.group(2))
+                object_type = _safe_text(param_types.get(object_name, ""))
+                if not object_type or "EventArgs" not in object_type:
+                    continue
+                known_member_meta, resolved_name, _ = self._resolved_type_member_metadata(repo_root=repo_root, type_name=object_type)
+                known_members = set(known_member_meta.keys())
+                if known_members and member_name not in known_members:
+                    nonexistent_member_name = member_name
+                    resolved_event_args_type = resolved_name
+                    known_members_excerpt = sorted(known_members)[:12]
+                    break
+            if nonexistent_member_name:
+                break
+        return self._compile_hardening_payload(
+            {
+                "compile_hardening_eligible": bool(nonexistent_member_name),
+                "nonexistent_member_assignment_detected": bool(nonexistent_member_name),
+                "nonexistent_member_name": nonexistent_member_name,
+                "resolved_event_args_type": resolved_event_args_type,
+                "known_event_args_members_excerpt": known_members_excerpt,
+            }
+        )
+
+    @staticmethod
+    def _expression_uses_member_as_boolean(expr: str, object_name: str, member_name: str) -> bool:
+        token = rf"\b{re.escape(object_name)}\.{re.escape(member_name)}\b(?!\s*\()"
+        return bool(
+            re.search(rf"^\s*{token}\s*$", expr)
+            or re.search(rf"^\s*!\s*{token}\s*$", expr)
+            or re.search(rf"{token}\s*(?:&&|\|\||\))", expr)
+            or re.search(rf"(?:&&|\|\||\()\s*{token}(?:\s*(?:&&|\|\||\)))", expr)
+        )
+
+    @staticmethod
+    def _expression_uses_member_in_null_check(expr: str, object_name: str, member_name: str) -> bool:
+        token = rf"\b{re.escape(object_name)}\.{re.escape(member_name)}\b(?!\s*\()"
+        return bool(
+            re.search(rf"{token}\s*(?:==|!=)\s*null", expr)
+            or re.search(rf"null\s*(?:==|!=)\s*{token}", expr)
+        )
+
+    def _detect_invalid_event_args_usage_shape_retry_candidate(
+        self,
+        *,
+        repo_root: Path,
+        generation_payload: dict[str, Any],
+        same_method_quality: dict[str, Any],
+        allowed_targets: list[str],
+        source_files: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        diagnostics = self._compile_hardening_payload()
+        if len(list(allowed_targets or [])) != 1:
+            return diagnostics
+        chosen_method = _safe_text(self._same_method_quality_payload(same_method_quality).get("chosen_primary_behavior_method", ""))
+        if not chosen_method:
+            return diagnostics
+        if len(list(source_files or [])) != 1:
+            return diagnostics
+        source_content = _safe_text(dict(source_files[0] or {}).get("full_content", "")) or _safe_text(dict(source_files[0] or {}).get("content", ""))
+        if not source_content:
+            return diagnostics
+        param_types = self._extract_method_parameter_types(source_content, chosen_method)
+        if not param_types:
+            return diagnostics
+
+        files = list(generation_payload.get("files", []) or [])
+        invalid_usage_expression = ""
+        resolved_event_args_type = ""
+        known_members_excerpt: list[str] = []
+        bool_members_excerpt: list[str] = []
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            edit_parts: list[str] = []
+            raw_edits = list(item.get("edits", []) or [])
+            for edit in raw_edits:
+                if not isinstance(edit, dict):
+                    continue
+                edit_parts.append(_safe_text(edit.get("replace", "")))
+            if not edit_parts:
+                file_path = _normalize_path(item.get("file", ""))
+                candidate_file = repo_root / file_path
+                try:
+                    current_content = candidate_file.read_text(encoding="utf-8")
+                except Exception:
+                    current_content = ""
+                new_content = _safe_text(item.get("new_content", ""))
+                if current_content and new_content:
+                    diff_lines = difflib.unified_diff(
+                        current_content.splitlines(),
+                        new_content.splitlines(),
+                        fromfile="before",
+                        tofile="after",
+                        lineterm="",
+                    )
+                    edit_parts = [line[1:] for line in diff_lines if line.startswith("+") and not line.startswith("+++")]
+                elif new_content:
+                    edit_parts = [new_content]
+            text = "\n".join(part for part in edit_parts if part)
+            expressions = re.findall(r"\b(?:if|while)\s*\(([^)]*)\)", text)
+            for expr in expressions:
+                normalized_expr = _safe_text(expr).strip()
+                if not normalized_expr:
+                    continue
+                for match in re.finditer(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b(?!\s*\()", normalized_expr):
+                    object_name = _safe_text(match.group(1))
+                    member_name = _safe_text(match.group(2))
+                    object_type = _safe_text(param_types.get(object_name, ""))
+                    if not object_type or "EventArgs" not in object_type:
+                        continue
+                    member_meta, resolved_name, _ = self._resolved_type_member_metadata(
+                        repo_root=repo_root,
+                        type_name=object_type,
+                    )
+                    if not member_meta:
+                        continue
+                    metadata = dict(member_meta.get(member_name, {}) or {})
+                    if not metadata:
+                        continue
+                    known_members_excerpt = sorted(member_meta.keys())[:12]
+                    bool_members_excerpt = sorted(
+                        name
+                        for name, info in member_meta.items()
+                        if bool(dict(info or {}).get("bool_compatible", False))
+                        and not bool(dict(info or {}).get("is_static", False))
+                    )[:12]
+                    invalid_bool_usage = self._expression_uses_member_as_boolean(normalized_expr, object_name, member_name) and (
+                        metadata.get("kind") == "method"
+                        or bool(metadata.get("is_static", False))
+                        or not bool(metadata.get("bool_compatible", False))
+                    )
+                    invalid_null_usage = self._expression_uses_member_in_null_check(normalized_expr, object_name, member_name) and (
+                        metadata.get("kind") == "method"
+                        or bool(metadata.get("is_static", False))
+                        or not bool(metadata.get("null_check_compatible", False))
+                    )
+                    if invalid_bool_usage or invalid_null_usage:
+                        invalid_usage_expression = normalized_expr
+                        resolved_event_args_type = resolved_name
+                        break
+                if invalid_usage_expression:
+                    break
+            if invalid_usage_expression:
+                break
+        return self._compile_hardening_payload(
+            {
+                "compile_hardening_eligible": bool(invalid_usage_expression),
+                "invalid_event_args_usage_shape_detected": bool(invalid_usage_expression),
+                "resolved_event_args_type": resolved_event_args_type,
+                "invalid_usage_expression": invalid_usage_expression,
+                "known_event_args_members_excerpt": known_members_excerpt,
+                "bool_compatible_members_excerpt": bool_members_excerpt,
+            }
+        )
+
+    def _analyze_same_method_quality_result(
+        self,
+        *,
+        generation_payload: dict[str, Any],
+        raw_model_output: str,
+        same_method_quality: dict[str, Any],
+    ) -> dict[str, Any]:
+        diagnostics = self._same_method_quality_payload(same_method_quality)
+        ranked_methods = list(diagnostics.get("ranked_same_file_behavior_methods", []) or [])
+        top_methods = [_safe_text(dict(item or {}).get("method", "")) for item in ranked_methods if _safe_text(dict(item or {}).get("method", ""))]
+        chosen_behavior_method = _safe_text(generation_payload.get("chosen_behavior_method", ""))
+        chosen_behavior_method_reason = _safe_text(generation_payload.get("chosen_behavior_method_reason", ""))
+        files = list(generation_payload.get("files", []) or [])
+        edit_text_parts: list[str] = []
+        edit_only_text_parts: list[str] = []
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            edit_text_parts.append(_safe_text(item.get("new_content", "")))
+            edit_only_text_parts.append(_safe_text(item.get("new_content", "")))
+            for edit in list(item.get("edits", []) or []):
+                if not isinstance(edit, dict):
+                    continue
+                edit_text_parts.append(_safe_text(edit.get("search", "")))
+                edit_text_parts.append(_safe_text(edit.get("replace", "")))
+                edit_only_text_parts.append(_safe_text(edit.get("search", "")))
+                edit_only_text_parts.append(_safe_text(edit.get("replace", "")))
+        edit_text = "\n".join(part for part in edit_text_parts + [_safe_text(raw_model_output)] if part)
+        edit_only_text = "\n".join(part for part in edit_only_text_parts if part)
+        lowered_edit_text = edit_text.lower()
+        lowered_edit_only_text = edit_only_text.lower()
+        constructor_wiring_edit_detected = bool(
+            ("+=" in edit_text and ("onfinished" in lowered_edit_text or "onfinishcommand" in lowered_edit_text or "onstarted" in lowered_edit_text))
+            or ("delegatecommand" in lowered_edit_text and "+=" in edit_text)
+        )
+        patch_touched_primary_behavior_method = bool(
+            chosen_behavior_method and chosen_behavior_method.lower() in lowered_edit_only_text
+        )
+        preferred_behavior_method_missed = False
+        if top_methods:
+            preferred_method_names = {item.lower() for item in top_methods[:2] if item}
+            chosen_lower = chosen_behavior_method.lower()
+            referenced_top_method = any(method.lower() in lowered_edit_text for method in top_methods[:2] if method)
+            preferred_behavior_method_missed = bool(
+                preferred_method_names and not referenced_top_method and chosen_lower not in preferred_method_names
+            )
+        deeper_behavior_method_required = bool(
+            diagnostics.get("same_method_quality_hardening_activated", False)
+            and chosen_behavior_method
+            and chosen_behavior_method.lower() not in {
+                _safe_text(generation_payload.get("chosen_class", "")).lower(),
+                "__init__",
+                "ctor",
+            }
+            and any(token in chosen_behavior_method.lower() for token in ("handle", "finished", "finish", "ok", "confirm", "execute", "process", "recognize"))
+        )
+        diagnostics.update(
+            {
+                "chosen_behavior_method_reason": chosen_behavior_method_reason,
+                "constructor_wiring_edit_detected": constructor_wiring_edit_detected,
+                "preferred_behavior_method_missed": preferred_behavior_method_missed,
+                "chosen_primary_behavior_method": chosen_behavior_method,
+                "patch_touched_primary_behavior_method": patch_touched_primary_behavior_method,
+                "constructor_only_edit_detected": bool(constructor_wiring_edit_detected and not patch_touched_primary_behavior_method),
+                "deeper_behavior_method_required": deeper_behavior_method_required,
+                "behavior_path_hardening_eligible": bool(
+                    diagnostics.get("behavior_path_hardening_eligible", False)
+                    or (
+                        diagnostics.get("same_method_quality_hardening_activated", False)
+                        and deeper_behavior_method_required
+                        and constructor_wiring_edit_detected
+                        and not patch_touched_primary_behavior_method
+                    )
+                ),
+                "same_method_quality_hardening_changed_result": bool(
+                    diagnostics.get("same_method_quality_hardening_activated", False)
+                    and not constructor_wiring_edit_detected
+                    and not preferred_behavior_method_missed
+                ),
+                "behavior_path_hardening_changed_result": bool(
+                    diagnostics.get("behavior_path_hardening_activated", False)
+                    and patch_touched_primary_behavior_method
+                    and not constructor_wiring_edit_detected
+                ),
+            }
+        )
+        return diagnostics
 
     def generate(
         self,
@@ -163,6 +1461,9 @@ class BoundedRealCodegenService:
         primary_family: str = "",
         execution_submode: str = "dry_run_codegen",
         max_retry_attempts: int = 1,
+        selected_class: str = "",
+        selected_method: str = "",
+        long_tail_exception: bool = False,
     ) -> dict[str, Any]:
         normalized_repo_id = normalize_repo_id(writable_repo_id)
         normalized_writable_files = _normalize_file_list(writable_files)
@@ -202,6 +1503,15 @@ class BoundedRealCodegenService:
         try:
             repo_root = Path(workspace.workspace_repo_root).resolve()
             symbol_local_gate = self._symbol_local_gate_payload()
+            activation_details = self._activation_rule_payload()
+            no_patch_details = self._no_patch_hardening_payload(
+                {
+                    "same_file_edit_required": bool(_safe_text(selected_class) and _safe_text(selected_method) and len(normalized_writable_files) == 1),
+                }
+            )
+            same_method_quality = self._same_method_quality_payload()
+            no_op_full_file_details = self._no_op_full_file_retry_payload()
+            compile_hardening = self._compile_hardening_payload()
             candidate_source_files = self._load_source_files(
                 repo_root,
                 normalized_writable_files,
@@ -227,12 +1537,35 @@ class BoundedRealCodegenService:
                     execution_submode=execution_submode,
                     lightweight_draft=draft,
                 )
-            if _safe_text(target_gate.get("target_gate_status", "")).lower() != "passed":
-                weak_anchor_gate = "strong exact anchor" in _safe_text(target_gate.get("target_gate_reason", "")).lower()
+            same_method_quality = self._same_method_quality_context(
+                task_text=task_text,
+                target_gate=target_gate,
+                source_files=source_files,
+                selected_class=selected_class,
+                selected_method=selected_method,
+            )
+            def _build_empty_result(
+                *,
+                generation_status: str,
+                codegen_summary: str,
+                downgraded_to_draft_reason: str = "",
+                ambiguity_gate_status: str | None = None,
+                ambiguity_gate_reason: str | None = None,
+                llm_payload: dict[str, Any] | None = None,
+            ) -> dict[str, Any]:
                 return {
                     "execution_mode": "bounded_real_codegen",
                     "execution_submode": execution_submode,
-                    "generation_status": "downgraded_to_draft" if weak_anchor_gate else "blocked_target_gate",
+                    "generation_status": generation_status,
+                    "bounded_selected_targets": list(target_gate.get("selected_codegen_targets", []) or []),
+                    "bounded_writable_files": list(normalized_writable_files or []),
+                    "bounded_primary_target": _safe_text((list(target_gate.get("selected_codegen_targets", []) or []) or [""])[0]),
+                    "bounded_target_gate_status": _safe_text(target_gate.get("target_gate_status", "")),
+                    "bounded_target_gate_reason": _safe_text(target_gate.get("target_gate_reason", "")),
+                    "bounded_scope_gate_status": "passed",
+                    "bounded_scope_gate_reason": "",
+                    "bounded_generation_stop_reason": generation_status,
+                    "bounded_downgraded_to_draft_reason": downgraded_to_draft_reason,
                     "scope_validation_status": "passed",
                     "scope_compliant": True,
                     "attempted_out_of_scope_files": [],
@@ -243,13 +1576,15 @@ class BoundedRealCodegenService:
                     "patch_line_count": 0,
                     "combined_patch": "",
                     "patch_proposals": [],
-                    "codegen_summary": _safe_text(target_gate.get("target_gate_reason", "")) or "Semantic target gate blocked bounded code generation.",
+                    "codegen_summary": codegen_summary,
                     "lightweight_draft": draft,
                     "generation_latency_ms": 0,
                     "compile_supported": False,
                     "compile_pass": False,
                     "test_supported": False,
                     "test_pass": False,
+                    "restore_supported": False,
+                    "restore_pass": False,
                     "failing_commands": [],
                     "readonly_files_referenced": _normalize_file_list(
                         dict(draft.get("scope_safety_status", {}) or {}).get("readonly_files_referenced", [])
@@ -263,6 +1598,7 @@ class BoundedRealCodegenService:
                     "compile_commands_detected": [],
                     "test_commands_detected": [],
                     "targeted_test_commands_detected": [],
+                    "restore_commands_detected": [],
                     "validation_runner_available": False,
                     "validation_runner_type": "none",
                     "validation_timeout_seconds": int(settings.runtime.validation_timeout_seconds or 120),
@@ -272,6 +1608,23 @@ class BoundedRealCodegenService:
                     "validation_failed_commands": [],
                     "validation_stdout_excerpt": "",
                     "validation_stderr_excerpt": "",
+                    "restore_commands_run": [],
+                    "restore_failed_commands": [],
+                    "restore_stdout_excerpt": "",
+                    "restore_stderr_excerpt": "",
+                    "restore_auth_missing_guess": False,
+                    "nuget_config_detected": False,
+                    "private_feed_detected": False,
+                    "effective_nuget_config_paths": [],
+                    "effective_package_sources": [],
+                    "effective_package_source_names": [],
+                    "source_mapping_detected": False,
+                    "credential_provider_detected": False,
+                    "restore_used_configfile": "",
+                    "restore_used_sources_safe": [],
+                    "restore_auth_mode_guess": "",
+                    "restore_secret_redaction_applied": False,
+                    "failure_reason_guess": "",
                     "codegen_style_used": "empty",
                     "anchor_type": _safe_text(target_gate.get("anchor_type", "")),
                     "anchor_strength": float(target_gate.get("anchor_strength", 0.0) or 0.0),
@@ -279,74 +1632,7 @@ class BoundedRealCodegenService:
                     "full_rewrite_used": False,
                     "structural_file_touched": False,
                     "risky_structural_edit_blocked": False,
-                    "downgraded_to_draft_reason": "weak_top1_anchor" if weak_anchor_gate else "",
-                    **self._symbol_local_gate_payload(),
-            "repair_triggered": False,
-            "repair_reason": "",
-            "repair_failure_class": "",
-            "repair_changed_files": [],
-            "repair_patch_line_count": 0,
-            "repair_success": False,
-            "top1_vs_top2_margin": 0.0,
-            "ambiguity_gate_status": "blocked",
-            "ambiguity_gate_reason": "blocked_preconditions",
-            "ambiguity_signal_breakdown": {},
-            "runner_up_file": "",
-            "runner_up_anchor_strength": 0.0,
-            "runner_up_overlap_summary": {},
-        }
-            if _safe_text(target_gate.get("ambiguity_gate_status", "")).lower() != "passed":
-                return {
-                    "execution_mode": "bounded_real_codegen",
-                    "execution_submode": execution_submode,
-                    "generation_status": "downgraded_to_draft",
-                    "scope_validation_status": "passed",
-                    "scope_compliant": True,
-                    "attempted_out_of_scope_files": [],
-                    "blocked_out_of_scope_files": [],
-                    "writable_repo_id": normalized_repo_id,
-                    "writable_files": normalized_writable_files,
-                    "changed_files": [],
-                    "patch_line_count": 0,
-                    "combined_patch": "",
-                    "patch_proposals": [],
-                    "codegen_summary": _safe_text(target_gate.get("ambiguity_gate_reason", "")) or "Ambiguity gate downgraded bounded code generation to draft-only.",
-                    "lightweight_draft": draft,
-                    "generation_latency_ms": 0,
-                    "compile_supported": False,
-                    "compile_pass": False,
-                    "test_supported": False,
-                    "test_pass": False,
-                    "failing_commands": [],
-                    "readonly_files_referenced": _normalize_file_list(
-                        dict(draft.get("scope_safety_status", {}) or {}).get("readonly_files_referenced", [])
-                    ),
-                    "writable_files_referenced": _normalize_file_list(
-                        dict(draft.get("scope_safety_status", {}) or {}).get("writable_files_referenced", [])
-                    ),
-                    "apply_success": False,
-                    "empty_patch": True,
-                    **self._target_gate_payload(target_gate),
-                    "compile_commands_detected": [],
-                    "test_commands_detected": [],
-                    "targeted_test_commands_detected": [],
-                    "validation_runner_available": False,
-                    "validation_runner_type": "none",
-                    "validation_timeout_seconds": int(settings.runtime.validation_timeout_seconds or 120),
-                    "validation_command_source": "none",
-                    "validation_supported": False,
-                    "validation_commands_run": [],
-                    "validation_failed_commands": [],
-                    "validation_stdout_excerpt": "",
-                    "validation_stderr_excerpt": "",
-                    "codegen_style_used": "empty",
-                    "anchor_type": _safe_text(target_gate.get("anchor_type", "")),
-                    "anchor_strength": float(target_gate.get("anchor_strength", 0.0) or 0.0),
-                    "localized_edit_count": 0,
-                    "full_rewrite_used": False,
-                    "structural_file_touched": False,
-                    "risky_structural_edit_blocked": False,
-                    "downgraded_to_draft_reason": "ambiguity_top1_vs_top2",
+                    "downgraded_to_draft_reason": downgraded_to_draft_reason,
                     **self._symbol_local_gate_payload(),
                     "repair_triggered": False,
                     "repair_reason": "",
@@ -354,7 +1640,107 @@ class BoundedRealCodegenService:
                     "repair_changed_files": [],
                     "repair_patch_line_count": 0,
                     "repair_success": False,
+                    "top1_vs_top2_margin": float(target_gate.get("top1_vs_top2_margin", 0.0) or 0.0),
+                    "ambiguity_gate_status": ambiguity_gate_status if ambiguity_gate_status is not None else _safe_text(target_gate.get("ambiguity_gate_status", "")),
+                    "ambiguity_gate_reason": ambiguity_gate_reason if ambiguity_gate_reason is not None else _safe_text(target_gate.get("ambiguity_gate_reason", "")),
+                    "ambiguity_signal_breakdown": dict(target_gate.get("ambiguity_signal_breakdown", {}) or {}),
+                    "runner_up_file": _safe_text(target_gate.get("runner_up_file", "")),
+                    "runner_up_anchor_strength": float(target_gate.get("runner_up_anchor_strength", 0.0) or 0.0),
+                    "runner_up_overlap_summary": dict(target_gate.get("runner_up_overlap_summary", {}) or {}),
+                    **no_patch_details,
+                    **no_op_full_file_details,
+                    **same_method_quality,
+                    **compile_hardening,
+                    **activation_details,
+                    **self._llm_payload(llm_payload),
                 }
+
+            generation_payload: dict[str, Any] | None = None
+            materialized_files: list[dict[str, Any]] = []
+            codegen_safety: dict[str, Any] = {}
+            rewrite_diagnostics: dict[str, Any] = {}
+            llm_metadata = self._llm_payload()
+            raw_model_output = ""
+            latency_ms = 0
+            if _safe_text(target_gate.get("target_gate_status", "")).lower() != "passed":
+                weak_anchor_gate = "strong exact anchor" in _safe_text(target_gate.get("target_gate_reason", "")).lower()
+                activation_details = self._activation_rule_payload(
+                    {
+                        **activation_details,
+                        "first_attempt_changed_files_count": 0,
+                        "first_attempt_patch_line_count": 0,
+                    }
+                )
+                baseline_empty_result = _build_empty_result(
+                    generation_status="downgraded_to_draft" if weak_anchor_gate else "blocked_target_gate",
+                    codegen_summary=_safe_text(target_gate.get("target_gate_reason", "")) or "Semantic target gate blocked bounded code generation.",
+                    downgraded_to_draft_reason="weak_top1_anchor" if weak_anchor_gate else "",
+                    ambiguity_gate_status="blocked",
+                    ambiguity_gate_reason="blocked_preconditions",
+                )
+                if not bool(self._repo_settings.targeting_force_non_empty_patch_enabled):
+                    return baseline_empty_result
+                activation_retry = self._attempt_force_non_empty_patch_retry(
+                    task_text=task_text,
+                    jira_key=jira_key,
+                    primary_family=primary_family,
+                    writable_repo_id=normalized_repo_id,
+                    allowed_targets=allowed_targets,
+                    readonly_files_by_repo=normalized_readonly,
+                    lightweight_draft=draft,
+                    source_files=source_files,
+                    target_gate=target_gate,
+                    reason="empty_patch_after_target_gate",
+                    same_method_quality=same_method_quality,
+                )
+                activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                if not bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                    return {**baseline_empty_result, **activation_details}
+                generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                latency_ms = int(activation_retry.get("_latency_ms", 0) or 0)
+            if generation_payload is None and _safe_text(target_gate.get("ambiguity_gate_status", "")).lower() != "passed":
+                activation_details = self._activation_rule_payload(
+                    {
+                        **activation_details,
+                        "first_attempt_changed_files_count": 0,
+                        "first_attempt_patch_line_count": 0,
+                    }
+                )
+                baseline_empty_result = _build_empty_result(
+                    generation_status="downgraded_to_draft",
+                    codegen_summary=_safe_text(target_gate.get("ambiguity_gate_reason", "")) or "Ambiguity gate downgraded bounded code generation to draft-only.",
+                    downgraded_to_draft_reason="ambiguity_top1_vs_top2",
+                )
+                if not bool(self._repo_settings.targeting_force_non_empty_patch_enabled):
+                    return baseline_empty_result
+                activation_retry = self._attempt_force_non_empty_patch_retry(
+                    task_text=task_text,
+                    jira_key=jira_key,
+                    primary_family=primary_family,
+                    writable_repo_id=normalized_repo_id,
+                    allowed_targets=allowed_targets,
+                    readonly_files_by_repo=normalized_readonly,
+                    lightweight_draft=draft,
+                    source_files=source_files,
+                    target_gate=target_gate,
+                    reason="empty_patch_after_ambiguity_gate",
+                    same_method_quality=same_method_quality,
+                )
+                activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                if not bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                    return {**baseline_empty_result, **activation_details}
+                generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                latency_ms = int(activation_retry.get("_latency_ms", 0) or 0)
             symbol_local_gate = self._assess_symbol_local_gate(
                 task_text=task_text,
                 primary_family=primary_family,
@@ -363,31 +1749,527 @@ class BoundedRealCodegenService:
                 writable_file_plan=writable_file_plan,
                 target_gate=target_gate,
             )
-            started = perf_counter()
-            generation_payload = self._generate_with_retry(
-                task_text=task_text,
-                jira_key=jira_key,
-                primary_family=primary_family,
-                writable_repo_id=normalized_repo_id,
-                writable_files=allowed_targets,
-                readonly_files_by_repo=normalized_readonly,
-                lightweight_draft=draft,
-                source_files=source_files,
-                max_retry_attempts=max_retry_attempts,
-            )
-            latency_ms = int((perf_counter() - started) * 1000)
-            raw_model_output = _safe_text(generation_payload.get("_raw_model_output", ""))
-            materialized_files = self._materialize_generated_files(
-                source_files=source_files,
-                generated_files=list(generation_payload.get("files", []) or []),
-            )
-            codegen_safety = self._assess_codegen_safety(
-                task_text=task_text,
-                selected_targets=list(target_gate.get("selected_codegen_targets", []) or []),
-                materialized_files=materialized_files,
-                raw_generated_files=list(generation_payload.get("files", []) or []),
-                apply_eligibility_by_file=list(target_gate.get("apply_eligibility_by_file", []) or []),
-            )
+            if generation_payload is None:
+                started = perf_counter()
+                generation_payload = self._generate_with_retry(
+                    task_text=task_text,
+                    jira_key=jira_key,
+                    primary_family=primary_family,
+                    writable_repo_id=normalized_repo_id,
+                    writable_files=allowed_targets,
+                    readonly_files_by_repo=normalized_readonly,
+                    lightweight_draft=draft,
+                    source_files=source_files,
+                    max_retry_attempts=max_retry_attempts,
+                    same_method_quality=same_method_quality,
+                )
+                latency_ms = int((perf_counter() - started) * 1000)
+                llm_metadata = self._llm_payload(generation_payload.get("_llm_call_metadata"))
+                raw_model_output = _safe_text(generation_payload.get("_raw_model_output", ""))
+                materialized_files = self._materialize_generated_files(
+                    source_files=source_files,
+                    generated_files=list(generation_payload.get("files", []) or []),
+                )
+                rewrite_diagnostics = self._analyze_rewrite_materialization(
+                    source_files=source_files,
+                    generated_files=list(generation_payload.get("files", []) or []),
+                    materialized_files=materialized_files,
+                    selected_targets=list(target_gate.get("selected_codegen_targets", []) or []),
+                )
+                claimed_behavior_change_text = self._claimed_behavior_change_text(generation_payload)
+                claimed_change_found_in_new_content = self._claimed_change_found_in_new_content(
+                    payload=generation_payload,
+                    rewritten_content=_safe_text(
+                        next(
+                            (
+                                dict(item or {}).get("new_content", "")
+                                for item in list(materialized_files or [])
+                                if _normalize_path(dict(item or {}).get("file", ""))
+                                == _normalize_path((list(target_gate.get("selected_codegen_targets", []) or []) or [""])[0])
+                            ),
+                            "",
+                        )
+                    ),
+                )
+                if bool(rewrite_diagnostics.get("rewritten_file_equal_to_original", False)):
+                    claimed_change_found_in_new_content = False
+                no_op_full_file_rewrite_detected = bool(
+                    rewrite_diagnostics.get("full_file_rewrite_detected", False)
+                    and rewrite_diagnostics.get("rewritten_file_equal_to_original", False)
+                )
+                no_op_full_file_retry_eligible = bool(
+                    no_op_full_file_rewrite_detected
+                    and bool(_safe_text(selected_class) and _safe_text(selected_method))
+                    and len(allowed_targets) == 1
+                    and not bool(long_tail_exception)
+                    and bool(claimed_behavior_change_text)
+                )
+                no_op_full_file_details = self._no_op_full_file_retry_payload(
+                    {
+                        **no_op_full_file_details,
+                        "full_file_new_content_present": bool(
+                            rewrite_diagnostics.get("full_file_rewrite_detected", False)
+                        ),
+                        "new_content_equal_to_original": bool(
+                            rewrite_diagnostics.get("rewritten_file_equal_to_original", False)
+                        ),
+                        "claimed_behavior_change_text": claimed_behavior_change_text,
+                        "claimed_change_found_in_new_content": claimed_change_found_in_new_content,
+                        "no_op_full_file_rewrite_detected": no_op_full_file_rewrite_detected,
+                        "no_op_full_file_retry_eligible": no_op_full_file_retry_eligible,
+                    }
+                )
+                materialized_files = self._drop_noop_materialized_files(
+                    source_files=source_files,
+                    materialized_files=materialized_files,
+                )
+                codegen_safety = self._assess_codegen_safety(
+                    task_text=task_text,
+                    selected_targets=list(target_gate.get("selected_codegen_targets", []) or []),
+                    materialized_files=materialized_files,
+                    raw_generated_files=list(generation_payload.get("files", []) or []),
+                    apply_eligibility_by_file=list(target_gate.get("apply_eligibility_by_file", []) or []),
+                )
+                first_attempt_metrics = self._estimate_materialized_patch_metrics(
+                    source_files=source_files,
+                    materialized_files=materialized_files,
+                )
+                structured_empty_result_returned = self._is_structured_empty_result(generation_payload, raw_model_output)
+                model_claimed_no_safe_change = self._model_claimed_no_safe_change(generation_payload, raw_model_output)
+                same_file_edit_required = bool(_safe_text(selected_class) and _safe_text(selected_method) and len(allowed_targets) == 1)
+                no_patch_hardening_eligible = bool(
+                    same_file_edit_required
+                    and not bool(long_tail_exception)
+                    and _safe_text(target_gate.get("target_gate_status", "")).lower() == "passed"
+                    and structured_empty_result_returned
+                    and not list(generation_payload.get("files", []) or [])
+                )
+                no_patch_details = self._no_patch_hardening_payload(
+                    {
+                        **no_patch_details,
+                        "structured_empty_result_returned": structured_empty_result_returned,
+                        "model_claimed_no_safe_change": model_claimed_no_safe_change,
+                        "same_file_edit_required": same_file_edit_required,
+                        "no_patch_hardening_eligible": no_patch_hardening_eligible,
+                    }
+                )
+                activation_details = self._activation_rule_payload(
+                    {
+                        **activation_details,
+                        "first_attempt_changed_files_count": int(first_attempt_metrics.get("changed_files_count", 0) or 0),
+                        "first_attempt_patch_line_count": int(first_attempt_metrics.get("patch_line_count", 0) or 0),
+                    }
+                )
+                if no_patch_hardening_eligible:
+                    activation_retry = self._attempt_force_non_empty_patch_retry(
+                        task_text=task_text,
+                        jira_key=jira_key,
+                        primary_family=primary_family,
+                        writable_repo_id=normalized_repo_id,
+                        allowed_targets=allowed_targets,
+                        readonly_files_by_repo=normalized_readonly,
+                        lightweight_draft=draft,
+                        source_files=source_files,
+                        target_gate=target_gate,
+                        reason="structured_empty_same_file_no_patch",
+                        same_method_quality=same_method_quality,
+                    )
+                    activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                    no_patch_details = self._no_patch_hardening_payload(
+                        {
+                            **no_patch_details,
+                            "no_patch_hardening_activated": True,
+                            "no_patch_hardening_changed_result": bool(
+                                activation_retry.get("activation_retry_improved_to_real_patch", False)
+                            ),
+                        }
+                    )
+                    if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                        generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                        materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                        rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                        codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                        raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                        llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                        latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
+                        first_attempt_metrics = self._estimate_materialized_patch_metrics(
+                            source_files=source_files,
+                            materialized_files=materialized_files,
+                        )
+                if bool(no_op_full_file_details.get("no_op_full_file_retry_eligible", False)):
+                    activation_retry = self._attempt_force_non_empty_patch_retry(
+                        task_text=task_text,
+                        jira_key=jira_key,
+                        primary_family=primary_family,
+                        writable_repo_id=normalized_repo_id,
+                        allowed_targets=allowed_targets,
+                        readonly_files_by_repo=normalized_readonly,
+                        lightweight_draft=draft,
+                        source_files=source_files,
+                        target_gate=target_gate,
+                        reason="no_op_full_file_rewrite_same_method",
+                        same_method_quality=same_method_quality,
+                    )
+                    activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                    no_op_full_file_details = self._no_op_full_file_retry_payload(
+                        {
+                            **no_op_full_file_details,
+                            "no_op_full_file_retry_activated": True,
+                            "no_op_full_file_retry_changed_result": bool(
+                                activation_retry.get("activation_retry_improved_to_real_patch", False)
+                            ),
+                        }
+                    )
+                    if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                        generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                        materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                        rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                        codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                        raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                        llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                        latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
+                same_method_quality = self._analyze_same_method_quality_result(
+                    generation_payload=dict(generation_payload or {}),
+                    raw_model_output=raw_model_output,
+                    same_method_quality=same_method_quality,
+                )
+                compile_hardening = self._detect_getter_only_assignment_retry_candidate(
+                    repo_root=repo_root,
+                    generation_payload=dict(generation_payload or {}),
+                    same_method_quality=same_method_quality,
+                    allowed_targets=allowed_targets,
+                    source_files=source_files,
+                    materialized_files=materialized_files,
+                )
+                nonexistent_member_hardening = self._detect_nonexistent_event_args_member_retry_candidate(
+                    repo_root=repo_root,
+                    generation_payload=dict(generation_payload or {}),
+                    same_method_quality=same_method_quality,
+                    allowed_targets=allowed_targets,
+                    source_files=source_files,
+                )
+                if bool(nonexistent_member_hardening.get("nonexistent_member_assignment_detected", False)):
+                    compile_hardening = self._compile_hardening_payload(
+                        {
+                            **compile_hardening,
+                            "compile_hardening_eligible": True,
+                            "nonexistent_member_assignment_detected": True,
+                            "nonexistent_member_name": _safe_text(nonexistent_member_hardening.get("nonexistent_member_name", "")),
+                            "resolved_event_args_type": _safe_text(nonexistent_member_hardening.get("resolved_event_args_type", "")),
+                            "known_event_args_members_excerpt": list(
+                                nonexistent_member_hardening.get("known_event_args_members_excerpt", []) or []
+                            ),
+                        }
+                    )
+                invalid_usage_hardening = self._detect_invalid_event_args_usage_shape_retry_candidate(
+                    repo_root=repo_root,
+                    generation_payload=dict(generation_payload or {}),
+                    same_method_quality=same_method_quality,
+                    allowed_targets=allowed_targets,
+                    source_files=source_files,
+                )
+                if bool(invalid_usage_hardening.get("invalid_event_args_usage_shape_detected", False)):
+                    compile_hardening = self._compile_hardening_payload(
+                        {
+                            **compile_hardening,
+                            "compile_hardening_eligible": True,
+                            "invalid_event_args_usage_shape_detected": True,
+                            "resolved_event_args_type": _safe_text(invalid_usage_hardening.get("resolved_event_args_type", "")),
+                            "invalid_usage_expression": _safe_text(invalid_usage_hardening.get("invalid_usage_expression", "")),
+                            "known_event_args_members_excerpt": list(
+                                invalid_usage_hardening.get("known_event_args_members_excerpt", []) or []
+                            ),
+                            "bool_compatible_members_excerpt": list(
+                                invalid_usage_hardening.get("bool_compatible_members_excerpt", []) or []
+                            ),
+                        }
+                    )
+                if bool(same_method_quality.get("behavior_path_hardening_eligible", False)):
+                    activation_retry = self._attempt_force_non_empty_patch_retry(
+                        task_text=task_text,
+                        jira_key=jira_key,
+                        primary_family=primary_family,
+                        writable_repo_id=normalized_repo_id,
+                        allowed_targets=allowed_targets,
+                        readonly_files_by_repo=normalized_readonly,
+                        lightweight_draft=draft,
+                        source_files=source_files,
+                        target_gate=target_gate,
+                        reason="behavior_path_constructor_only_same_file",
+                        same_method_quality=same_method_quality,
+                    )
+                    same_method_quality = self._same_method_quality_payload(
+                        {
+                            **same_method_quality,
+                            "behavior_path_hardening_activated": True,
+                            "behavior_path_hardening_changed_result": bool(
+                                activation_retry.get("activation_retry_improved_to_real_patch", False)
+                            ),
+                        }
+                    )
+                    activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                    if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                        generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                        materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                        rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                        codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                        raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                        llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                        latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
+                        same_method_quality = self._analyze_same_method_quality_result(
+                            generation_payload=dict(generation_payload or {}),
+                            raw_model_output=raw_model_output,
+                            same_method_quality=same_method_quality,
+                        )
+                        compile_hardening = self._detect_getter_only_assignment_retry_candidate(
+                            repo_root=repo_root,
+                            generation_payload=dict(generation_payload or {}),
+                            same_method_quality=same_method_quality,
+                            allowed_targets=allowed_targets,
+                            source_files=source_files,
+                            materialized_files=materialized_files,
+                        )
+                        nonexistent_member_hardening = self._detect_nonexistent_event_args_member_retry_candidate(
+                            repo_root=repo_root,
+                            generation_payload=dict(generation_payload or {}),
+                            same_method_quality=same_method_quality,
+                            allowed_targets=allowed_targets,
+                            source_files=source_files,
+                        )
+                        if bool(nonexistent_member_hardening.get("nonexistent_member_assignment_detected", False)):
+                            compile_hardening = self._compile_hardening_payload(
+                                {
+                                    **compile_hardening,
+                                    "compile_hardening_eligible": True,
+                                    "nonexistent_member_assignment_detected": True,
+                                    "nonexistent_member_name": _safe_text(nonexistent_member_hardening.get("nonexistent_member_name", "")),
+                                    "resolved_event_args_type": _safe_text(nonexistent_member_hardening.get("resolved_event_args_type", "")),
+                                    "known_event_args_members_excerpt": list(
+                                        nonexistent_member_hardening.get("known_event_args_members_excerpt", []) or []
+                                    ),
+                                }
+                            )
+                        invalid_usage_hardening = self._detect_invalid_event_args_usage_shape_retry_candidate(
+                            repo_root=repo_root,
+                            generation_payload=dict(generation_payload or {}),
+                            same_method_quality=same_method_quality,
+                            allowed_targets=allowed_targets,
+                            source_files=source_files,
+                        )
+                        if bool(invalid_usage_hardening.get("invalid_event_args_usage_shape_detected", False)):
+                            compile_hardening = self._compile_hardening_payload(
+                                {
+                                    **compile_hardening,
+                                    "compile_hardening_eligible": True,
+                                    "invalid_event_args_usage_shape_detected": True,
+                                    "resolved_event_args_type": _safe_text(invalid_usage_hardening.get("resolved_event_args_type", "")),
+                                    "invalid_usage_expression": _safe_text(invalid_usage_hardening.get("invalid_usage_expression", "")),
+                                    "known_event_args_members_excerpt": list(
+                                        invalid_usage_hardening.get("known_event_args_members_excerpt", []) or []
+                                    ),
+                                    "bool_compatible_members_excerpt": list(
+                                        invalid_usage_hardening.get("bool_compatible_members_excerpt", []) or []
+                                    ),
+                                }
+                            )
+                if bool(compile_hardening.get("compile_hardening_eligible", False)):
+                    getter_only_property_name = _safe_text(compile_hardening.get("getter_only_property_name", ""))
+                    writable_backing_candidate = _safe_text(
+                        compile_hardening.get("writable_backing_candidate_detected", "")
+                    )
+                    computed_validation_property_name = _safe_text(
+                        compile_hardening.get("computed_validation_property_name", "")
+                    )
+                    writable_validation_source_name = _safe_text(
+                        compile_hardening.get("writable_validation_source_name", "")
+                    )
+                    retry_reason = "getter_only_computed_property_same_method"
+                    if bool(compile_hardening.get("computed_validation_property_assignment_detected", False)):
+                        retry_reason = "computed_validation_property_same_method"
+                    if bool(compile_hardening.get("nonexistent_member_assignment_detected", False)):
+                        retry_reason = "nonexistent_event_args_member_same_method"
+                    if bool(compile_hardening.get("invalid_event_args_usage_shape_detected", False)):
+                        retry_reason = "invalid_event_args_usage_shape_same_method"
+                    same_method_quality_for_compile = {
+                        **same_method_quality,
+                        "getter_only_property_name": getter_only_property_name,
+                        "writable_backing_candidate_detected": writable_backing_candidate,
+                        "computed_validation_property_name": computed_validation_property_name,
+                        "writable_validation_source_name": writable_validation_source_name,
+                        "nonexistent_member_name": _safe_text(compile_hardening.get("nonexistent_member_name", "")),
+                        "resolved_event_args_type": _safe_text(compile_hardening.get("resolved_event_args_type", "")),
+                        "invalid_usage_expression": _safe_text(compile_hardening.get("invalid_usage_expression", "")),
+                        "known_event_args_members_excerpt": list(compile_hardening.get("known_event_args_members_excerpt", []) or []),
+                        "bool_compatible_members_excerpt": list(compile_hardening.get("bool_compatible_members_excerpt", []) or []),
+                    }
+                    activation_retry = self._attempt_force_non_empty_patch_retry(
+                        task_text=task_text,
+                        jira_key=jira_key,
+                        primary_family=primary_family,
+                        writable_repo_id=normalized_repo_id,
+                        allowed_targets=allowed_targets,
+                        readonly_files_by_repo=normalized_readonly,
+                        lightweight_draft=draft,
+                        source_files=source_files,
+                        target_gate=target_gate,
+                        reason=retry_reason,
+                        same_method_quality=same_method_quality_for_compile,
+                    )
+                    compile_hardening = self._compile_hardening_payload(
+                        {
+                            **compile_hardening,
+                            "getter_only_property_name": getter_only_property_name,
+                            "writable_backing_candidate_detected": writable_backing_candidate,
+                            "computed_validation_property_assignment_detected": bool(
+                                compile_hardening.get("computed_validation_property_assignment_detected", False)
+                            ),
+                            "computed_validation_property_name": computed_validation_property_name,
+                            "writable_validation_source_detected": bool(
+                                compile_hardening.get("writable_validation_source_detected", False)
+                            ),
+                            "writable_validation_source_name": writable_validation_source_name,
+                            "nonexistent_member_name": _safe_text(compile_hardening.get("nonexistent_member_name", "")),
+                            "resolved_event_args_type": _safe_text(compile_hardening.get("resolved_event_args_type", "")),
+                            "invalid_event_args_usage_shape_detected": bool(
+                                compile_hardening.get("invalid_event_args_usage_shape_detected", False)
+                            ),
+                            "invalid_usage_expression": _safe_text(compile_hardening.get("invalid_usage_expression", "")),
+                            "known_event_args_members_excerpt": list(compile_hardening.get("known_event_args_members_excerpt", []) or []),
+                            "bool_compatible_members_excerpt": list(compile_hardening.get("bool_compatible_members_excerpt", []) or []),
+                            "compile_hardening_retry_activated": True,
+                            "compile_hardening_changed_result": bool(
+                                activation_retry.get("activation_retry_improved_to_real_patch", False)
+                            ),
+                        }
+                    )
+                    activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                    if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                        generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                        materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                        rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                        codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                        raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                        llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                        latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
+                        same_method_quality = self._analyze_same_method_quality_result(
+                            generation_payload=dict(generation_payload or {}),
+                            raw_model_output=raw_model_output,
+                            same_method_quality=same_method_quality,
+                        )
+                        recomputed_compile_hardening = self._detect_getter_only_assignment_retry_candidate(
+                            repo_root=repo_root,
+                            generation_payload=dict(generation_payload or {}),
+                            same_method_quality=same_method_quality,
+                            allowed_targets=allowed_targets,
+                            source_files=source_files,
+                            materialized_files=materialized_files,
+                        )
+                        compile_hardening = self._compile_hardening_payload(
+                            {
+                                **compile_hardening,
+                                "compile_hardening_eligible": bool(
+                                    compile_hardening.get("compile_hardening_eligible", False)
+                                )
+                                or bool(recomputed_compile_hardening.get("compile_hardening_eligible", False)),
+                                "detector_input_source": _safe_text(recomputed_compile_hardening.get("detector_input_source", "")),
+                                "detector_input_line_count": int(recomputed_compile_hardening.get("detector_input_line_count", 0) or 0),
+                                "detector_input_excerpt": _safe_text(recomputed_compile_hardening.get("detector_input_excerpt", "")),
+                                "detector_matches_materialized_patch": bool(
+                                    recomputed_compile_hardening.get("detector_matches_materialized_patch", False)
+                                ),
+                                "getter_only_assignment_detected": bool(
+                                    compile_hardening.get("getter_only_assignment_detected", False)
+                                )
+                                or bool(recomputed_compile_hardening.get("getter_only_assignment_detected", False)),
+                                "getter_only_property_name": _safe_text(recomputed_compile_hardening.get("getter_only_property_name", ""))
+                                or _safe_text(compile_hardening.get("getter_only_property_name", "")),
+                                "writable_backing_candidate_detected": _safe_text(
+                                    recomputed_compile_hardening.get("writable_backing_candidate_detected", "")
+                                )
+                                or _safe_text(compile_hardening.get("writable_backing_candidate_detected", "")),
+                                "computed_validation_property_assignment_detected": bool(
+                                    compile_hardening.get("computed_validation_property_assignment_detected", False)
+                                )
+                                or bool(recomputed_compile_hardening.get("computed_validation_property_assignment_detected", False)),
+                                "computed_validation_property_name": _safe_text(
+                                    recomputed_compile_hardening.get("computed_validation_property_name", "")
+                                )
+                                or _safe_text(compile_hardening.get("computed_validation_property_name", "")),
+                                "writable_validation_source_detected": bool(
+                                    compile_hardening.get("writable_validation_source_detected", False)
+                                )
+                                or bool(recomputed_compile_hardening.get("writable_validation_source_detected", False)),
+                                "writable_validation_source_name": _safe_text(
+                                    recomputed_compile_hardening.get("writable_validation_source_name", "")
+                                )
+                                or _safe_text(compile_hardening.get("writable_validation_source_name", "")),
+                            }
+                        )
+                        if bool(nonexistent_member_hardening.get("nonexistent_member_assignment_detected", False)):
+                            compile_hardening = self._compile_hardening_payload(
+                                {
+                                    **compile_hardening,
+                                    "compile_hardening_eligible": True,
+                                    "nonexistent_member_assignment_detected": True,
+                                    "nonexistent_member_name": _safe_text(nonexistent_member_hardening.get("nonexistent_member_name", "")),
+                                    "resolved_event_args_type": _safe_text(nonexistent_member_hardening.get("resolved_event_args_type", "")),
+                                    "known_event_args_members_excerpt": list(
+                                        nonexistent_member_hardening.get("known_event_args_members_excerpt", []) or []
+                                    ),
+                                }
+                            )
+                        invalid_usage_hardening = self._detect_invalid_event_args_usage_shape_retry_candidate(
+                            repo_root=repo_root,
+                            generation_payload=dict(generation_payload or {}),
+                            same_method_quality=same_method_quality,
+                            allowed_targets=allowed_targets,
+                            source_files=source_files,
+                        )
+                        if bool(invalid_usage_hardening.get("invalid_event_args_usage_shape_detected", False)):
+                            compile_hardening = self._compile_hardening_payload(
+                                {
+                                    **compile_hardening,
+                                    "compile_hardening_eligible": True,
+                                    "invalid_event_args_usage_shape_detected": True,
+                                    "resolved_event_args_type": _safe_text(invalid_usage_hardening.get("resolved_event_args_type", "")),
+                                    "invalid_usage_expression": _safe_text(invalid_usage_hardening.get("invalid_usage_expression", "")),
+                                    "known_event_args_members_excerpt": list(
+                                        invalid_usage_hardening.get("known_event_args_members_excerpt", []) or []
+                                    ),
+                                    "bool_compatible_members_excerpt": list(
+                                        invalid_usage_hardening.get("bool_compatible_members_excerpt", []) or []
+                                    ),
+                                }
+                            )
+                if (
+                    bool(self._repo_settings.targeting_force_non_empty_patch_enabled)
+                    and not self._has_real_patch_attempt(
+                        patch_metrics=first_attempt_metrics,
+                        codegen_safety=codegen_safety,
+                    )
+                ):
+                    activation_retry = self._attempt_force_non_empty_patch_retry(
+                        task_text=task_text,
+                        jira_key=jira_key,
+                        primary_family=primary_family,
+                        writable_repo_id=normalized_repo_id,
+                        allowed_targets=allowed_targets,
+                        readonly_files_by_repo=normalized_readonly,
+                        lightweight_draft=draft,
+                        source_files=source_files,
+                        target_gate=target_gate,
+                        reason="empty_patch_after_first_codegen_attempt",
+                        same_method_quality=same_method_quality,
+                    )
+                    activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                    if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                        generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                        materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                        rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                        codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                        raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                        llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                        latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
             proposed_files = _normalize_file_list(
                 [dict(item or {}).get("file", "") for item in list(materialized_files or []) if isinstance(item, dict)]
             )
@@ -467,6 +2349,10 @@ class BoundedRealCodegenService:
                     "repair_changed_files": [],
                     "repair_patch_line_count": 0,
                     "repair_success": False,
+                    **activation_details,
+                    **no_patch_details,
+                    **llm_metadata,
+                    **compile_hardening,
                 }
             if _safe_text(target_gate_validation.get("status", "")).lower() != "passed":
                 return {
@@ -517,7 +2403,11 @@ class BoundedRealCodegenService:
                     "validation_failed_commands": [],
                     "validation_stdout_excerpt": "",
                     "validation_stderr_excerpt": "",
+                    **activation_details,
+                    **no_patch_details,
                     **codegen_safety,
+                    **llm_metadata,
+                    **compile_hardening,
                 }
             if _safe_text(codegen_safety.get("downgraded_to_draft_reason", "")):
                 return {
@@ -587,8 +2477,12 @@ class BoundedRealCodegenService:
                     "restore_auth_mode_guess": "",
                     "restore_secret_redaction_applied": False,
                     "failure_reason_guess": "",
+                    **activation_details,
+                    **no_patch_details,
                     **self._symbol_local_gate_payload(symbol_local_gate),
                     **codegen_safety,
+                    **llm_metadata,
+                    **compile_hardening,
                 }
 
             apply_input = self._build_apply_input(
@@ -645,6 +2539,24 @@ class BoundedRealCodegenService:
             restore_auth_mode_guess = ""
             restore_secret_redaction_applied = False
             failure_reason_guess = ""
+            validation_workspace_path = repo_root.as_posix()
+            validation_workspace_exists = bool(repo_root.exists() and repo_root.is_dir())
+            validation_input_repo_id = normalized_repo_id
+            validation_input_repo_root = repo_root.as_posix()
+            compile_commands_detected: list[str] = []
+            test_commands_detected: list[str] = []
+            targeted_test_commands_detected: list[str] = []
+            restore_commands_detected: list[str] = []
+            compile_discovery_attempted = False
+            compile_discovery_result = "no_compile_command_detected"
+            targeted_test_discovery_attempted = False
+            targeted_test_discovery_result = "no_test_command_detected"
+            validation_handoff_status = "not_attempted"
+            validation_handoff_reason = ""
+            compile_start_reason = ""
+            compile_skip_reason = ""
+            targeted_test_start_reason = ""
+            targeted_test_skip_reason = ""
             repair_triggered = False
             repair_reason = ""
             repair_failure_class = ""
@@ -667,12 +2579,28 @@ class BoundedRealCodegenService:
             restore_used_sources_safe = list(validation_plan.get("restore_used_sources_safe", []) or [])
             restore_auth_mode_guess = _safe_text(validation_plan.get("restore_auth_mode_guess", ""))
             restore_secret_redaction_applied = bool(validation_plan.get("restore_secret_redaction_applied", False))
+            compile_commands_detected = list(validation_plan.get("compile_commands_detected", []) or [])
+            test_commands_detected = list(validation_plan.get("test_commands_detected", []) or [])
+            targeted_test_commands_detected = list(validation_plan.get("targeted_test_commands_detected", []) or [])
+            restore_commands_detected = list(validation_plan.get("restore_commands_detected", []) or [])
+            compile_discovery_attempted = bool(compile_commands_detected)
+            compile_discovery_result = compile_commands_detected[0] if compile_commands_detected else "no_compile_command_detected"
+            targeted_test_discovery_attempted = bool(targeted_test_commands_detected or test_commands_detected)
+            targeted_test_discovery_result = (
+                targeted_test_commands_detected[0]
+                if targeted_test_commands_detected
+                else (test_commands_detected[0] if test_commands_detected else "no_test_command_detected")
+            )
             if execution_submode == "apply_codegen" and not post_scope.get("blocked_out_of_scope_files"):
                 validation_service = self._validation_service_factory(storage_path=workspace.registry_path)
                 commands = list(validation_plan.get("commands_to_run", []) or [])
                 restore_supported = bool(validation_plan.get("restore_supported", False))
                 compile_supported = bool(validation_plan.get("compile_supported", False))
                 test_supported = bool(validation_plan.get("test_supported", False))
+                validation_handoff_status = "launch_attempted"
+                if not commands:
+                    validation_handoff_status = "no_commands_detected"
+                    validation_handoff_reason = "Validation plan produced no commands to run."
                 validation_commands_run = [
                     _safe_text(getattr(command, "command", ""))
                     for command in commands
@@ -685,6 +2613,17 @@ class BoundedRealCodegenService:
                     timeout_seconds=min(120, max(30, int(settings.runtime.validation_timeout_seconds or 120))),
                 )
                 validation_payload = validation_result.to_dict()
+                validation_errors = list(validation_payload.get("errors", []) or [])
+                validation_steps = list(validation_payload.get("steps", []) or [])
+                if validation_steps:
+                    validation_handoff_status = "steps_returned"
+                    validation_handoff_reason = ""
+                elif validation_errors:
+                    validation_handoff_status = "runner_or_validation_error_without_steps"
+                    validation_handoff_reason = _safe_text(validation_errors[0])
+                elif validation_commands_run:
+                    validation_handoff_status = "completed_without_steps"
+                    validation_handoff_reason = _safe_text(validation_payload.get("outcome_type", "")) or "Validation completed without recorded steps."
                 restore_supported = bool(validation_result.restore_supported or restore_supported)
                 restore_pass = bool(validation_result.restore_pass)
                 compile_pass = compile_supported and any(
@@ -719,6 +2658,24 @@ class BoundedRealCodegenService:
                     for step in list(validation_result.steps or [])
                     if _safe_text(step.status).lower() == "failed"
                 ]
+                compile_started = any(_safe_text(step.name).lower() == "build" for step in list(validation_result.steps or []))
+                test_started = any(_safe_text(step.name).lower() == "test" for step in list(validation_result.steps or []))
+                if compile_started:
+                    compile_start_reason = "Validation recorded a build step."
+                else:
+                    compile_skip_reason = validation_handoff_reason or (
+                        "Compile command was detected but no build step was recorded."
+                        if compile_supported
+                        else "No compile command was detected."
+                    )
+                if test_started:
+                    targeted_test_start_reason = "Validation recorded a test step."
+                else:
+                    targeted_test_skip_reason = validation_handoff_reason or (
+                        "Test command was detected but no test step was recorded."
+                        if test_supported
+                        else "No test command was detected."
+                    )
                 validation_failed_commands = list(failing_commands)
                 pre_repair_apply_success = bool(
                     apply_result.applied and not apply_result.errors
@@ -850,10 +2807,74 @@ class BoundedRealCodegenService:
                 (execution_submode != "apply_codegen" and not apply_result.errors)
                 or (execution_submode == "apply_codegen" and apply_result.applied and not apply_result.errors)
             )
+            raw_output_diagnostics = _analyze_bounded_raw_output(raw_model_output)
+            same_method_quality = self._analyze_same_method_quality_result(
+                generation_payload=dict(generation_payload or {}),
+                raw_model_output=raw_model_output,
+                same_method_quality=same_method_quality,
+            )
+            final_compile_hardening = self._detect_getter_only_assignment_retry_candidate(
+                repo_root=repo_root,
+                generation_payload=dict(generation_payload or {}),
+                same_method_quality=same_method_quality,
+                allowed_targets=allowed_targets,
+                source_files=source_files,
+                materialized_files=materialized_files,
+            )
+            compile_hardening = self._compile_hardening_payload(
+                {
+                    **compile_hardening,
+                    "detector_input_source": _safe_text(final_compile_hardening.get("detector_input_source", "")),
+                    "detector_input_line_count": int(final_compile_hardening.get("detector_input_line_count", 0) or 0),
+                    "detector_input_excerpt": _safe_text(final_compile_hardening.get("detector_input_excerpt", "")),
+                    "detector_matches_materialized_patch": bool(
+                        final_compile_hardening.get("detector_matches_materialized_patch", False)
+                    ),
+                    "getter_only_assignment_detected": bool(
+                        final_compile_hardening.get("getter_only_assignment_detected", False)
+                    )
+                    or bool(compile_hardening.get("getter_only_assignment_detected", False)),
+                    "getter_only_property_name": _safe_text(final_compile_hardening.get("getter_only_property_name", ""))
+                    or _safe_text(compile_hardening.get("getter_only_property_name", "")),
+                    "writable_backing_candidate_detected": _safe_text(
+                        final_compile_hardening.get("writable_backing_candidate_detected", "")
+                    )
+                    or _safe_text(compile_hardening.get("writable_backing_candidate_detected", "")),
+                    "computed_validation_property_assignment_detected": bool(
+                        final_compile_hardening.get("computed_validation_property_assignment_detected", False)
+                    )
+                    or bool(compile_hardening.get("computed_validation_property_assignment_detected", False)),
+                    "computed_validation_property_name": _safe_text(
+                        final_compile_hardening.get("computed_validation_property_name", "")
+                    )
+                    or _safe_text(compile_hardening.get("computed_validation_property_name", "")),
+                    "writable_validation_source_detected": bool(
+                        final_compile_hardening.get("writable_validation_source_detected", False)
+                    )
+                    or bool(compile_hardening.get("writable_validation_source_detected", False)),
+                    "writable_validation_source_name": _safe_text(
+                        final_compile_hardening.get("writable_validation_source_name", "")
+                    )
+                    or _safe_text(compile_hardening.get("writable_validation_source_name", "")),
+                    "compile_hardening_eligible": bool(
+                        final_compile_hardening.get("compile_hardening_eligible", False)
+                    )
+                    or bool(compile_hardening.get("compile_hardening_eligible", False)),
+                }
+            )
             return {
                 "execution_mode": "bounded_real_codegen",
                 "execution_submode": execution_submode,
                 "generation_status": "success" if apply_success and not post_scope.get("blocked_out_of_scope_files") else "failed",
+                "bounded_selected_targets": list(target_gate.get("selected_codegen_targets", []) or []),
+                "bounded_writable_files": list(normalized_writable_files or []),
+                "bounded_primary_target": _safe_text((list(target_gate.get("selected_codegen_targets", []) or []) or [""])[0]),
+                "bounded_target_gate_status": _safe_text(target_gate.get("target_gate_status", "")),
+                "bounded_target_gate_reason": _safe_text(target_gate.get("target_gate_reason", "")),
+                "bounded_scope_gate_status": "passed" if not post_scope.get("blocked_out_of_scope_files") else "blocked",
+                "bounded_scope_gate_reason": "" if not post_scope.get("blocked_out_of_scope_files") else "Generated output referenced files outside the writable scope.",
+                "bounded_generation_stop_reason": "success" if apply_success and not post_scope.get("blocked_out_of_scope_files") else "failed",
+                "bounded_downgraded_to_draft_reason": _safe_text(codegen_safety.get("downgraded_to_draft_reason", "")),
                 "scope_validation_status": "passed" if not post_scope.get("blocked_out_of_scope_files") else "blocked",
                 "scope_compliant": not post_scope.get("blocked_out_of_scope_files"),
                 "attempted_out_of_scope_files": list(post_scope.get("attempted_out_of_scope_files", []) or []),
@@ -867,6 +2888,8 @@ class BoundedRealCodegenService:
                 "codegen_summary": _safe_text(generation_payload.get("summary", "")) or "Bounded code generation completed.",
                 "lightweight_draft": draft,
                 "generation_latency_ms": latency_ms,
+                "raw_model_output": raw_model_output,
+                "raw_model_output_length": len(raw_model_output),
                 "raw_model_output_excerpt": raw_model_output[:1000],
                 "compile_supported": compile_supported,
                 "compile_pass": compile_pass,
@@ -879,6 +2902,20 @@ class BoundedRealCodegenService:
                 "real_apply_result": apply_result.to_dict() if execution_submode == "apply_codegen" else {},
                 "diff_result": diff_result.to_dict(),
                 "validation_result": validation_payload,
+                "validation_workspace_path": validation_workspace_path,
+                "validation_workspace_exists": validation_workspace_exists,
+                "validation_input_repo_id": validation_input_repo_id,
+                "validation_input_repo_root": validation_input_repo_root,
+                "compile_discovery_attempted": compile_discovery_attempted,
+                "compile_discovery_result": compile_discovery_result,
+                "targeted_test_discovery_attempted": targeted_test_discovery_attempted,
+                "targeted_test_discovery_result": targeted_test_discovery_result,
+                "validation_handoff_status": validation_handoff_status,
+                "validation_handoff_reason": validation_handoff_reason,
+                "compile_start_reason": compile_start_reason,
+                "compile_skip_reason": compile_skip_reason,
+                "targeted_test_start_reason": targeted_test_start_reason,
+                "targeted_test_skip_reason": targeted_test_skip_reason,
                 "readonly_files_referenced": _normalize_file_list(
                     dict(draft.get("scope_safety_status", {}) or {}).get("readonly_files_referenced", [])
                 ),
@@ -889,10 +2926,10 @@ class BoundedRealCodegenService:
                 "empty_patch": patch_line_count == 0 or not changed_files,
                 **self._target_gate_payload(target_gate),
                 **self._symbol_local_gate_payload(symbol_local_gate),
-                "compile_commands_detected": list(validation_plan.get("compile_commands_detected", []) or []),
-                "test_commands_detected": list(validation_plan.get("test_commands_detected", []) or []),
-                "targeted_test_commands_detected": list(validation_plan.get("targeted_test_commands_detected", []) or []),
-                "restore_commands_detected": list(validation_plan.get("restore_commands_detected", []) or []),
+                "compile_commands_detected": compile_commands_detected,
+                "test_commands_detected": test_commands_detected,
+                "targeted_test_commands_detected": targeted_test_commands_detected,
+                "restore_commands_detected": restore_commands_detected,
                 "validation_runner_available": bool(validation_plan.get("validation_runner_available", False)),
                 "validation_runner_type": _safe_text(validation_plan.get("validation_runner_type", "")) or "none",
                 "validation_timeout_seconds": int(validation_plan.get("validation_timeout_seconds", settings.runtime.validation_timeout_seconds or 120) or settings.runtime.validation_timeout_seconds or 120),
@@ -906,6 +2943,9 @@ class BoundedRealCodegenService:
                 "restore_failed_commands": restore_failed_commands,
                 "restore_stdout_excerpt": restore_stdout_excerpt,
                 "restore_stderr_excerpt": restore_stderr_excerpt,
+                "restore_attempted": bool(validation_payload.get("restore_attempted", False)),
+                "restore_command": _safe_text(validation_payload.get("restore_command", "")),
+                "restore_exit_code": validation_payload.get("restore_exit_code"),
                 "restore_auth_missing_guess": restore_auth_missing_guess,
                 "nuget_config_detected": nuget_config_detected,
                 "private_feed_detected": private_feed_detected,
@@ -919,13 +2959,32 @@ class BoundedRealCodegenService:
                 "restore_auth_mode_guess": restore_auth_mode_guess,
                 "restore_secret_redaction_applied": restore_secret_redaction_applied,
                 "failure_reason_guess": failure_reason_guess,
+                "unsupported_environment_reason": _safe_text(validation_payload.get("unsupported_environment_reason", "")),
+                "validation_repo_family": _safe_text(validation_payload.get("validation_repo_family", "")),
+                "required_sdk_or_runtime": _safe_text(validation_payload.get("required_sdk_or_runtime", "")),
+                "runner_environment_summary": _safe_text(validation_payload.get("runner_environment_summary", "")),
                 "repair_triggered": repair_triggered,
                 "repair_reason": repair_reason,
                 "repair_failure_class": repair_failure_class,
                 "repair_changed_files": repair_changed_files,
                 "repair_patch_line_count": repair_patch_line_count,
                 "repair_success": repair_success,
+                "original_file_hash": _safe_text(rewrite_diagnostics.get("original_file_hash", "")),
+                "rewritten_file_hash": _safe_text(rewrite_diagnostics.get("rewritten_file_hash", "")),
+                "rewritten_file_equal_to_original": bool(rewrite_diagnostics.get("rewritten_file_equal_to_original", False)),
+                "full_file_rewrite_detected": bool(rewrite_diagnostics.get("full_file_rewrite_detected", False)),
+                "materialized_diff_present": bool(rewrite_diagnostics.get("materialized_diff_present", False)),
+                "apply_meaningful_change_detected": bool(rewrite_diagnostics.get("apply_meaningful_change_detected", False)),
+                "rewrite_canonicalization_applied": bool(rewrite_diagnostics.get("rewrite_canonicalization_applied", False)),
+                "rewrite_materialization_reason": _safe_text(rewrite_diagnostics.get("rewrite_materialization_reason", "")),
+                **no_patch_details,
+                **no_op_full_file_details,
+                **same_method_quality,
+                **raw_output_diagnostics,
+                **activation_details,
                 **codegen_safety,
+                **llm_metadata,
+                **compile_hardening,
             }
         finally:
             self._temp_workspace_service.cleanup_workspace(workspace)
@@ -944,6 +3003,15 @@ class BoundedRealCodegenService:
             "execution_mode": "bounded_real_codegen",
             "execution_submode": execution_submode,
             "generation_status": "blocked",
+            "bounded_selected_targets": [],
+            "bounded_writable_files": list(writable_files or []),
+            "bounded_primary_target": "",
+            "bounded_target_gate_status": "blocked",
+            "bounded_target_gate_reason": reason,
+            "bounded_scope_gate_status": "blocked",
+            "bounded_scope_gate_reason": reason,
+            "bounded_generation_stop_reason": "blocked",
+            "bounded_downgraded_to_draft_reason": "",
             "scope_validation_status": "blocked",
             "scope_compliant": False,
             "attempted_out_of_scope_files": [],
@@ -1016,22 +3084,27 @@ class BoundedRealCodegenService:
             "anchor_type": "none",
             "anchor_strength": 0.0,
             "localized_edit_count": 0,
-                    "full_rewrite_used": False,
-                    "structural_file_touched": False,
-                    "risky_structural_edit_blocked": False,
-                    "downgraded_to_draft_reason": "",
-                    "repair_triggered": False,
-                    "repair_reason": "",
-                    "repair_failure_class": "",
-                    "repair_changed_files": [],
-                    "repair_patch_line_count": 0,
-                    "repair_success": False,
-                }
+            "full_rewrite_used": False,
+            "structural_file_touched": False,
+            "risky_structural_edit_blocked": False,
+            "downgraded_to_draft_reason": "",
+            "repair_triggered": False,
+            "repair_reason": "",
+            "repair_failure_class": "",
+            "repair_changed_files": [],
+            "repair_patch_line_count": 0,
+            "repair_success": False,
+            **self._activation_rule_payload(),
+            **self._llm_payload(),
+        }
 
     def _target_gate_payload(self, payload: dict[str, Any] | None) -> dict[str, Any]:
         gate = dict(payload or {})
         return {
             "selected_codegen_targets": list(gate.get("selected_codegen_targets", []) or []),
+            "shortlisted_writable_files": list(gate.get("shortlisted_writable_files", []) or []),
+            "original_selected_codegen_targets": list(gate.get("original_selected_codegen_targets", []) or []),
+            "arbitrated_selected_codegen_targets": list(gate.get("arbitrated_selected_codegen_targets", []) or []),
             "rejected_writable_targets": list(gate.get("rejected_writable_targets", []) or []),
             "target_gate_status": _safe_text(gate.get("target_gate_status", "")),
             "target_gate_reason": _safe_text(gate.get("target_gate_reason", "")),
@@ -1043,6 +3116,12 @@ class BoundedRealCodegenService:
             "top2_margin": float(gate.get("top2_margin", 0.0) or 0.0),
             "wrong_in_scope_target_reason_guess": _safe_text(gate.get("wrong_in_scope_target_reason_guess", "")),
             "rejected_adjacent_in_scope_files": list(gate.get("rejected_adjacent_in_scope_files", []) or []),
+            "target_arbitration_rule_fired": bool(gate.get("target_arbitration_rule_fired", False)),
+            "target_arbitration_family_type": _safe_text(gate.get("target_arbitration_family_type", "")),
+            "target_arbitration_worker_anchor": _safe_text(gate.get("target_arbitration_worker_anchor", "")),
+            "target_arbitration_companion_candidates_demoted": list(gate.get("target_arbitration_companion_candidates_demoted", []) or []),
+            "target_arbitration_reason": _safe_text(gate.get("target_arbitration_reason", "")),
+            "target_arbitration_changed_target": bool(gate.get("target_arbitration_changed_target", False)),
             "apply_eligibility_by_file": list(gate.get("apply_eligibility_by_file", []) or []),
             "anchor_type": _safe_text(gate.get("anchor_type", "")),
             "anchor_strength": float(gate.get("anchor_strength", 0.0) or 0.0),
@@ -1743,6 +3822,84 @@ class BoundedRealCodegenService:
             "downgraded_to_draft_reason": downgraded_to_draft_reason,
         }
 
+    def _attempt_force_non_empty_patch_retry(
+        self,
+        *,
+        task_text: str,
+        jira_key: str,
+        primary_family: str,
+        writable_repo_id: str,
+        allowed_targets: list[str],
+        readonly_files_by_repo: dict[str, list[str]],
+        lightweight_draft: dict[str, Any],
+        source_files: list[dict[str, Any]],
+        target_gate: dict[str, Any],
+        reason: str,
+        same_method_quality: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        started = perf_counter()
+        retry_payload = self._generate_with_retry(
+            task_text=task_text,
+            jira_key=jira_key,
+            primary_family=primary_family,
+            writable_repo_id=writable_repo_id,
+            writable_files=allowed_targets,
+            readonly_files_by_repo=readonly_files_by_repo,
+            lightweight_draft=lightweight_draft,
+            source_files=source_files,
+            max_retry_attempts=0,
+            force_non_empty_patch=True,
+            force_non_empty_patch_reason=reason,
+            same_method_quality=same_method_quality,
+        )
+        latency_ms = int((perf_counter() - started) * 1000)
+        llm_metadata = self._llm_payload(retry_payload.get("_llm_call_metadata"))
+        raw_model_output = _safe_text(retry_payload.get("_raw_model_output", ""))
+        materialized_files = self._materialize_generated_files(
+            source_files=source_files,
+            generated_files=list(retry_payload.get("files", []) or []),
+        )
+        rewrite_diagnostics = self._analyze_rewrite_materialization(
+            source_files=source_files,
+            generated_files=list(retry_payload.get("files", []) or []),
+            materialized_files=materialized_files,
+            selected_targets=list(target_gate.get("selected_codegen_targets", []) or []),
+        )
+        materialized_files = self._drop_noop_materialized_files(
+            source_files=source_files,
+            materialized_files=materialized_files,
+        )
+        codegen_safety = self._assess_codegen_safety(
+            task_text=task_text,
+            selected_targets=list(target_gate.get("selected_codegen_targets", []) or []),
+            materialized_files=materialized_files,
+            raw_generated_files=list(retry_payload.get("files", []) or []),
+            apply_eligibility_by_file=list(target_gate.get("apply_eligibility_by_file", []) or []),
+        )
+        patch_metrics = self._estimate_materialized_patch_metrics(
+            source_files=source_files,
+            materialized_files=materialized_files,
+        )
+        return {
+            "activation_rule_fired": True,
+            "second_attempt_patch_line_count": int(patch_metrics.get("patch_line_count", 0) or 0),
+            "second_attempt_changed_files_count": int(patch_metrics.get("changed_files_count", 0) or 0),
+            "activation_retry_reason": _safe_text(reason),
+            "activation_retry_improved_to_real_patch": self._has_real_patch_attempt(
+                patch_metrics=patch_metrics,
+                codegen_safety=codegen_safety,
+            ),
+            "activation_retry_changed_files": list(patch_metrics.get("changed_files", []) or []),
+            "activation_retry_target_unchanged": True,
+            "_generation_payload": retry_payload,
+            "_materialized_files": materialized_files,
+            "_rewrite_diagnostics": rewrite_diagnostics,
+            "_codegen_safety": codegen_safety,
+            "_raw_model_output": raw_model_output,
+            "_llm_metadata": llm_metadata,
+            "_latency_ms": latency_ms,
+        }
+
     def _generate_with_retry(
         self,
         *,
@@ -1755,10 +3912,14 @@ class BoundedRealCodegenService:
         lightweight_draft: dict[str, Any],
         source_files: list[dict[str, Any]],
         max_retry_attempts: int,
+        force_non_empty_patch: bool = False,
+        force_non_empty_patch_reason: str = "",
+        same_method_quality: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         attempts = max(1, int(max_retry_attempts or 1))
         last_payload: dict[str, Any] = {}
         last_raw = ""
+        last_llm_metadata = self._llm_payload()
         for index in range(attempts + 1):
             prompt = self._build_prompt(
                 task_text=task_text,
@@ -1770,8 +3931,11 @@ class BoundedRealCodegenService:
                 lightweight_draft=lightweight_draft,
                 source_files=source_files,
                 retry=index > 0,
+                force_non_empty_patch=force_non_empty_patch,
+                force_non_empty_patch_reason=force_non_empty_patch_reason,
+                same_method_quality=same_method_quality,
             )
-            raw_text = self._complete(prompt)
+            raw_text, last_llm_metadata = self._complete(prompt)
             last_raw = raw_text
             payload = _extract_json_payload(raw_text)
             if payload.get("files"):
@@ -1779,9 +3943,11 @@ class BoundedRealCodegenService:
                 proposed = _normalize_file_list([dict(item or {}).get("file", "") for item in list(payload.get("files", []) or []) if isinstance(item, dict)])
                 if proposed and all(path in set(writable_files) for path in proposed):
                     payload["_raw_model_output"] = raw_text
+                    payload["_llm_call_metadata"] = dict(last_llm_metadata or {})
                     return payload
         fallback = last_payload or {"summary": "Model did not produce a valid bounded patch proposal.", "files": []}
         fallback["_raw_model_output"] = last_raw
+        fallback["_llm_call_metadata"] = dict(last_llm_metadata or {})
         return fallback
 
     def _materialize_generated_files(
@@ -1910,8 +4076,9 @@ class BoundedRealCodegenService:
             validation_stderr_excerpt=validation_stderr_excerpt,
             failing_commands=failing_commands,
         )
-        raw_text = self._complete(prompt)
+        raw_text, llm_metadata = self._complete(prompt)
         payload = _extract_json_payload(raw_text)
+        payload["_llm_call_metadata"] = dict(llm_metadata or {})
         generated_files = list(payload.get("files", []) or [])
         materialized_files = self._materialize_generated_files(
             source_files=source_files,
@@ -2069,6 +4236,142 @@ class BoundedRealCodegenService:
             "helper.cs",
         )
         return any(marker in lowered for marker in generic_markers)
+
+    def _worker_family_signature(self, normalized_path: str) -> dict[str, Any]:
+        normalized = _normalize_path(normalized_path)
+        lowered = normalized.lower()
+        if not lowered.endswith("worker.cs"):
+            return {}
+        stem_tokens = self._tokenize_code_terms(Path(normalized).stem)
+        if not stem_tokens or stem_tokens[-1] != "worker":
+            return {}
+        family_tokens = stem_tokens[:-1]
+        if not family_tokens:
+            return {}
+        return {
+            "file": normalized,
+            "directory": _normalize_path(str(Path(normalized).parent)),
+            "family_tokens": family_tokens,
+            "family_key": " ".join(family_tokens),
+        }
+
+    @staticmethod
+    def _contains_token_sequence(tokens: list[str], sequence: list[str]) -> bool:
+        if not sequence or len(tokens) < len(sequence):
+            return False
+        for index in range(0, len(tokens) - len(sequence) + 1):
+            if tokens[index : index + len(sequence)] == sequence:
+                return True
+        return False
+
+    def _classify_worker_family_companion(self, normalized_path: str, *, worker_signature: dict[str, Any]) -> str:
+        normalized = _normalize_path(normalized_path)
+        lowered = normalized.lower()
+        if not normalized or normalized == _safe_text(worker_signature.get("file", "")):
+            return ""
+        if _normalize_path(str(Path(normalized).parent)) != _safe_text(worker_signature.get("directory", "")):
+            return ""
+        family_tokens = list(worker_signature.get("family_tokens", []) or [])
+        if not family_tokens:
+            return ""
+        stem_tokens = self._tokenize_code_terms(Path(normalized).stem)
+        if lowered.endswith("options.cs") and stem_tokens[:-1] == family_tokens and stem_tokens[-1:] == ["options"]:
+            return "worker_options_companion"
+        if lowered.endswith(".csproj"):
+            project_tokens = [token for token in stem_tokens if token not in {"telemart", "worker", "jobs"}]
+            if self._contains_token_sequence(project_tokens, family_tokens):
+                return "worker_project_companion"
+        return ""
+
+    def _is_same_worker_family(self, normalized_path: str, *, worker_signature: dict[str, Any]) -> bool:
+        candidate_signature = self._worker_family_signature(normalized_path)
+        if not candidate_signature:
+            return False
+        return (
+            _safe_text(candidate_signature.get("directory", "")) == _safe_text(worker_signature.get("directory", ""))
+            and _safe_text(candidate_signature.get("family_key", "")) == _safe_text(worker_signature.get("family_key", ""))
+        )
+
+    def _apply_worker_family_target_arbitration(
+        self,
+        ranked: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        diagnostics = {
+            "enabled": bool(self._repo_settings.targeting_worker_family_target_arbitration_enabled),
+            "fired": False,
+            "family_type": "",
+            "worker_anchor": "",
+            "companion_candidates_demoted": [],
+            "reason": "",
+            "changed_target": False,
+            "original_selected_target": _normalize_path(dict(ranked[0] or {}).get("file", "")) if ranked else "",
+            "arbitrated_selected_target": _normalize_path(dict(ranked[0] or {}).get("file", "")) if ranked else "",
+            "shortlisted_files": [_normalize_path(dict(item or {}).get("file", "")) for item in list(ranked or []) if _normalize_path(dict(item or {}).get("file", ""))],
+        }
+        if not bool(self._repo_settings.targeting_worker_family_target_arbitration_enabled) or len(ranked) < 2:
+            return ranked, diagnostics
+        families: list[dict[str, Any]] = []
+        for item in list(ranked or []):
+            worker_path = _normalize_path(dict(item or {}).get("file", ""))
+            worker_signature = self._worker_family_signature(worker_path)
+            if not worker_signature:
+                continue
+            companions: list[dict[str, Any]] = []
+            for candidate in list(ranked or []):
+                companion_path = _normalize_path(dict(candidate or {}).get("file", ""))
+                companion_type = self._classify_worker_family_companion(companion_path, worker_signature=worker_signature)
+                if companion_type:
+                    companions.append({"item": candidate, "type": companion_type})
+            if not companions:
+                continue
+            competing_workers = [
+                candidate
+                for candidate in list(ranked or [])
+                if _normalize_path(dict(candidate or {}).get("file", "")) != worker_path
+                and self._is_same_worker_family(_normalize_path(dict(candidate or {}).get("file", "")), worker_signature=worker_signature)
+            ]
+            if competing_workers:
+                continue
+            families.append({"worker": item, "signature": worker_signature, "companions": companions})
+        if len(families) != 1:
+            return ranked, diagnostics
+        selected_family = families[0]
+        original_top_path = _normalize_path(dict(ranked[0] or {}).get("file", ""))
+        companion_lookup = {
+            _normalize_path(dict(entry.get("item", {}) or {}).get("file", "")): _safe_text(entry.get("type", ""))
+            for entry in list(selected_family.get("companions", []) or [])
+            if _normalize_path(dict(entry.get("item", {}) or {}).get("file", ""))
+        }
+        if original_top_path not in companion_lookup:
+            return ranked, diagnostics
+        worker_path = _normalize_path(dict(selected_family.get("worker", {}) or {}).get("file", ""))
+        if not worker_path:
+            return ranked, diagnostics
+        reordered = [dict(selected_family.get("worker", {}) or {})]
+        reordered.extend(
+            dict(item or {})
+            for item in list(ranked or [])
+            if _normalize_path(dict(item or {}).get("file", "")) != worker_path
+        )
+        demoted = [
+            {
+                "file": path,
+                "companion_type": companion_lookup[path],
+            }
+            for path in companion_lookup
+        ]
+        diagnostics.update(
+            {
+                "fired": True,
+                "family_type": "worker_support_project_companion",
+                "worker_anchor": worker_path,
+                "companion_candidates_demoted": demoted,
+                "reason": "Preferred the same-family concrete worker implementation over same-family Options.cs/.csproj companions already present in the shortlist.",
+                "changed_target": original_top_path != worker_path,
+                "arbitrated_selected_target": worker_path,
+            }
+        )
+        return reordered, diagnostics
 
     def _select_codegen_targets(
         self,
@@ -2490,6 +4793,7 @@ class BoundedRealCodegenService:
                 }
             )
         ranked = sorted(scored, key=lambda item: (-float(item.get("score", 0.0) or 0.0), _safe_text(item.get("file", ""))))
+        ranked, arbitration_details = self._apply_worker_family_target_arbitration(ranked)
         top_score = float(ranked[0].get("score", 0.0) or 0.0) if ranked else 0.0
         second_score = float(ranked[1].get("score", 0.0) or 0.0) if len(ranked) > 1 else 0.0
         top1_margin = round(top_score - second_score, 4) if len(ranked) > 1 else round(top_score, 4)
@@ -2677,6 +4981,15 @@ class BoundedRealCodegenService:
                 "fallback_reason": fallback_reason or "no_viable_target",
                 "target_selection_reason": "no_viable_target",
                 "symbol_anchor_source": "none",
+                "shortlisted_writable_files": list(arbitration_details.get("shortlisted_files", []) or []),
+                "original_selected_codegen_targets": [],
+                "arbitrated_selected_codegen_targets": [],
+                "target_arbitration_rule_fired": bool(arbitration_details.get("fired", False)),
+                "target_arbitration_family_type": _safe_text(arbitration_details.get("family_type", "")),
+                "target_arbitration_worker_anchor": _safe_text(arbitration_details.get("worker_anchor", "")),
+                "target_arbitration_companion_candidates_demoted": list(arbitration_details.get("companion_candidates_demoted", []) or []),
+                "target_arbitration_reason": _safe_text(arbitration_details.get("reason", "")),
+                "target_arbitration_changed_target": bool(arbitration_details.get("changed_target", False)),
             }
         top_symbol_anchor_matches = list(ranked[0].get("symbol_anchor_matches", []) or [])
         top_symbol_anchor_strength = float(ranked[0].get("symbol_anchor_strength", 0.0) or 0.0) if ranked else 0.0
@@ -2769,11 +5082,24 @@ class BoundedRealCodegenService:
             "symbol_boost_skipped_reason": symbol_boost_skipped_reason,
             "fallback_reason": fallback_reason,
             "target_selection_reason": (
-                "symbol_anchor_boosted_top1"
-                if symbol_anchor_used
-                else ("path_or_basename_alignment" if top_direct_alignment_hits > 0 else "family_alignment_only")
+                "worker_family_target_arbitration"
+                if bool(arbitration_details.get("fired", False))
+                else (
+                    "symbol_anchor_boosted_top1"
+                    if symbol_anchor_used
+                    else ("path_or_basename_alignment" if top_direct_alignment_hits > 0 else "family_alignment_only")
+                )
             ),
             "symbol_anchor_source": symbol_anchor_source,
+            "shortlisted_writable_files": list(arbitration_details.get("shortlisted_files", []) or []),
+            "original_selected_codegen_targets": [_safe_text(arbitration_details.get("original_selected_target", ""))] if _safe_text(arbitration_details.get("original_selected_target", "")) else [],
+            "arbitrated_selected_codegen_targets": [str(path) for path in selected],
+            "target_arbitration_rule_fired": bool(arbitration_details.get("fired", False)),
+            "target_arbitration_family_type": _safe_text(arbitration_details.get("family_type", "")),
+            "target_arbitration_worker_anchor": _safe_text(arbitration_details.get("worker_anchor", "")),
+            "target_arbitration_companion_candidates_demoted": list(arbitration_details.get("companion_candidates_demoted", []) or []),
+            "target_arbitration_reason": _safe_text(arbitration_details.get("reason", "")),
+            "target_arbitration_changed_target": bool(arbitration_details.get("changed_target", False)),
         }
 
     def _validate_generated_targets(
@@ -2811,6 +5137,9 @@ class BoundedRealCodegenService:
         lightweight_draft: dict[str, Any],
         source_files: list[dict[str, Any]],
         retry: bool,
+        force_non_empty_patch: bool = False,
+        force_non_empty_patch_reason: str = "",
+        same_method_quality: dict[str, Any] | None = None,
     ) -> list[dict[str, str]]:
         readonly_preview = []
         for repo_id, paths in dict(readonly_files_by_repo or {}).items():
@@ -2834,6 +5163,128 @@ class BoundedRealCodegenService:
             if retry
             else ""
         )
+        activation_note = ""
+        same_method_note = ""
+        same_method_payload = self._same_method_quality_payload(same_method_quality)
+        if bool(same_method_payload.get("same_method_quality_hardening_activated", False)):
+            ranked_methods = list(same_method_payload.get("ranked_same_file_behavior_methods", []) or [])
+            ranked_preview = "\n".join(
+                f"- {dict(item or {}).get('method', '')}: {dict(item or {}).get('reason', '')}"
+                for item in ranked_methods[:3]
+                if _safe_text(dict(item or {}).get("method", ""))
+            )
+            same_method_note = (
+                "This is a same-file behavior-quality retry lane. "
+                "Identify the top 2-3 methods in the allowed file that most directly implement the requested behavior, "
+                "then choose the primary behavior path before proposing edits. "
+                "Do not default to constructor or event-subscription wiring if the actual behavior is implemented deeper in finish handlers, command handlers, or explicit OK/confirm methods.\n"
+                f"Ranked same-file behavior methods:\n{ranked_preview or '- none'}\n"
+                "Return these extra JSON fields when you propose a patch:\n"
+                '- "behavior_methods_considered": [{"method": "Name", "why": "reason"}],\n'
+                '- "chosen_behavior_method": "Name",\n'
+                '- "chosen_behavior_method_reason": "why this is the primary behavior path".'
+            )
+        if force_non_empty_patch:
+            if _safe_text(force_non_empty_patch_reason) == "structured_empty_same_file_no_patch":
+                activation_note = (
+                    "Previous attempt returned a structured empty result with files:[]. "
+                    "This retry is a same-file bounded implementation attempt. "
+                    "A real edit proposal is required if the behavior change is implementable inside the single allowed file. "
+                    "Do not return files:[] unless you cite a concrete impossibility inside that exact file. "
+                    "If you return files:[], the summary must name the exact missing dependency or exact missing symbol outside the allowed file."
+                )
+            elif _safe_text(force_non_empty_patch_reason) == "no_op_full_file_rewrite_same_method":
+                activation_note = (
+                    "Previous attempt returned full-file new_content that was byte-identical to the original file even though it claimed a behavior change. "
+                    "This retry must not restate the file unchanged. "
+                    "Keep the same single allowed file. "
+                    "Do not return a full-file rewrite unless at least one line in the claimed behavior path actually changes. "
+                    "Prefer exact edits inside the chosen behavior method or the explicit OK/confirm path. "
+                    "If no safe edit exists, explain the exact impossibility inside the allowed file instead of returning unchanged file content."
+                )
+            elif _safe_text(force_non_empty_patch_reason) == "behavior_path_constructor_only_same_file":
+                chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
+                activation_note = (
+                    "Previous attempt edited only constructor wiring or event subscription setup, but the primary behavior method is deeper in the same file. "
+                    f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
+                    "This retry must edit the chosen primary behavior method body, or explicitly justify another deeper same-file behavior method. "
+                    "Do not return constructor-only or event-subscription-only edits. "
+                    "Include at least one concrete changed line inside the chosen behavior method body unless you explicitly justify another same-file handler/finish/confirm method."
+                )
+            elif _safe_text(force_non_empty_patch_reason) == "getter_only_computed_property_same_method":
+                chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
+                getter_only_property_name = _safe_text(same_method_payload.get("getter_only_property_name", ""))
+                writable_backing_candidate = _safe_text(same_method_payload.get("writable_backing_candidate_detected", ""))
+                activation_note = (
+                    "Previous attempt assigned to a getter-only or computed property inside the chosen same-file behavior method. "
+                    f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
+                    f"Do not assign to the getter-only property `{getter_only_property_name or 'unknown'}`. "
+                    f"Use the writable state that actually controls it, such as `{writable_backing_candidate or 'the writable backing property'}`, while staying in the same method and same file. "
+                    "Do not widen scope. Do not move the change back to constructor wiring. "
+                    "Return at least one concrete changed line inside the chosen behavior method body."
+                )
+            elif _safe_text(force_non_empty_patch_reason) == "computed_validation_property_same_method":
+                chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
+                computed_validation_property_name = _safe_text(same_method_payload.get("computed_validation_property_name", ""))
+                writable_validation_source_name = _safe_text(same_method_payload.get("writable_validation_source_name", ""))
+                activation_note = (
+                    "Previous attempt assigned to a computed or read-only validation property inside the chosen same-file behavior method. "
+                    f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
+                    f"Do not assign to the computed validation property `{computed_validation_property_name or 'unknown'}`. "
+                    f"Use the writable source-of-truth state that actually controls validation, such as `{writable_validation_source_name or 'the writable validation source'}`, while staying in the same method and same file. "
+                    "Do not widen scope. Do not move the change back to constructor wiring. "
+                    "Return at least one concrete changed line inside the chosen behavior method body."
+                )
+            elif _safe_text(force_non_empty_patch_reason) == "nonexistent_event_args_member_same_method":
+                chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
+                nonexistent_member_name = _safe_text(same_method_payload.get("nonexistent_member_name", ""))
+                resolved_event_args_type = _safe_text(same_method_payload.get("resolved_event_args_type", ""))
+                members_excerpt = ", ".join(
+                    _safe_text(item)
+                    for item in list(same_method_payload.get("known_event_args_members_excerpt", []) or [])[:8]
+                    if _safe_text(item)
+                )
+                activation_note = (
+                    "Previous attempt assigned to a non-existent event-args member inside the chosen same-file behavior method. "
+                    f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
+                    f"The resolved event-args type is: {resolved_event_args_type or 'unknown'}. "
+                    f"Do not invent or assign the non-existent member `{nonexistent_member_name or 'unknown'}`. "
+                    f"Use only members that actually exist on that event-args type. Known members include: {members_excerpt or 'none listed'}. "
+                    "If no event-args member is appropriate, keep the edit in the same method and use same-method logic that does not require fake members. "
+                    "Do not widen scope. Do not move the change back to constructor wiring."
+                )
+            elif _safe_text(force_non_empty_patch_reason) == "invalid_event_args_usage_shape_same_method":
+                chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
+                resolved_event_args_type = _safe_text(same_method_payload.get("resolved_event_args_type", ""))
+                invalid_usage_expression = _safe_text(same_method_payload.get("invalid_usage_expression", ""))
+                members_excerpt = ", ".join(
+                    _safe_text(item)
+                    for item in list(same_method_payload.get("known_event_args_members_excerpt", []) or [])[:8]
+                    if _safe_text(item)
+                )
+                bool_members_excerpt = ", ".join(
+                    _safe_text(item)
+                    for item in list(same_method_payload.get("bool_compatible_members_excerpt", []) or [])[:8]
+                    if _safe_text(item)
+                )
+                activation_note = (
+                    "Previous attempt used an invalid event-args member condition shape inside the chosen same-file behavior method. "
+                    f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
+                    f"The resolved event-args type is: {resolved_event_args_type or 'unknown'}. "
+                    f"Do not reuse the invalid condition shape `{invalid_usage_expression or 'unknown'}`. "
+                    f"Use only real instance members with a valid usage shape. Known members include: {members_excerpt or 'none listed'}. "
+                    f"Bool-compatible instance members include: {bool_members_excerpt or 'none listed'}. "
+                    "If no valid event-args condition exists, keep the edit in the same method and same file, but use same-method logic that does not rely on a fake or unusable event-args condition. "
+                    "Do not widen scope. Do not move the change back to constructor wiring."
+                )
+            else:
+                activation_note = (
+                    "Previous attempt returned no concrete code patch. "
+                    "You must make at least one concrete edit to one allowed file. "
+                    "Do not return explanation-only output. Do not return draft-only output. "
+                    "Do not return an empty files list unless every allowed file would remain byte-identical. "
+                    f"Retry trigger: {_safe_text(force_non_empty_patch_reason) or 'empty_patch_collapse'}."
+                )
         user_prompt = (
             f"Jira: {jira_key}\n"
             f"Task family: {primary_family or 'unknown'}\n"
@@ -2843,7 +5294,9 @@ class BoundedRealCodegenService:
             f"Lightweight draft summary:\n{_safe_text(lightweight_draft.get('draft_summary', ''))}\n\n"
             f"Per-file intent for the selected source files:\n{json.dumps(filtered_intents, ensure_ascii=False, indent=2)}\n\n"
             f"Readonly context (reference only):\n{'; '.join(readonly_preview) or 'none'}\n\n"
-            f"{repair_note}\n\n"
+            f"{repair_note}\n"
+            f"{activation_note}\n\n"
+            f"{same_method_note}\n\n"
             "Return JSON only with shape:\n"
             "{\n"
             '  "summary": "short summary",\n'
@@ -2863,6 +5316,7 @@ class BoundedRealCodegenService:
             "- Return at most the provided source files.\n"
             "- Prefer minimal exact search/replace edits in the most task-aligned file instead of rewriting whole files.\n"
             "- Reuse existing classes, methods, and symbols already visible in the file. Do not invent new structural rewrites when a localized edit is possible.\n"
+            "- When a task describes user-visible behavior in a single allowed file, prefer edits in the primary behavior method over nearby constructor wiring or event subscription setup.\n"
             "- Prefer one primary target file. Only touch a second file when the same task family clearly requires it.\n"
             "- Do not rewrite a whole file unless an exact anchored edit is impossible and the task explicitly requires a structural change.\n"
             "- Avoid csproj, Startup, Program, appsettings, and config edits unless the task text explicitly points there.\n"
@@ -2884,10 +5338,22 @@ class BoundedRealCodegenService:
             {"role": "user", "content": _json_safe_string(user_prompt)},
         ]
 
-    def _complete(self, messages: list[dict[str, str]]) -> str:
+    def _complete(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
         if self._completion_callable is not None:
-            return _safe_text(self._completion_callable(messages))
-        client = build_openai_client()
+            return _safe_text(self._completion_callable(messages)), self._llm_payload(
+                {
+                    "llm_provider": "callable_override",
+                    "llm_model": "",
+                    "llm_runtime_available": True,
+                    "llm_auth_present": True,
+                    "llm_request_attempted": True,
+                    "llm_request_succeeded": True,
+                    "llm_failure_reason": "",
+                    "provider_quota_exhausted": False,
+                    "run_invalid_due_to_provider": False,
+                    "provider_status_code": 0,
+                }
+            )
         candidate_models: list[str] = []
         for model_name in (
             settings.llm.default_heavy_model,
@@ -2899,7 +5365,10 @@ class BoundedRealCodegenService:
             if normalized and normalized not in candidate_models:
                 candidate_models.append(normalized)
         last_error: Exception | None = None
+        last_metadata = self._llm_payload()
         for model_name in candidate_models:
+            client, runtime_metadata = build_openai_client_with_runtime(model_name=model_name)
+            last_metadata = dict(runtime_metadata or {})
             try:
                 response = client.chat.completions.create(
                     model=model_name,
@@ -2917,13 +5386,24 @@ class BoundedRealCodegenService:
                     if content:
                         break
                 if content:
-                    return content
+                    return content, self._llm_payload(
+                        {
+                            **last_metadata,
+                            "llm_request_attempted": True,
+                            "llm_request_succeeded": True,
+                            "run_invalid_due_to_provider": False,
+                        }
+                    )
             except Exception as exc:  # noqa: BLE001
-                last_error = exc
+                last_error = classify_llm_exception(
+                    exc,
+                    provider=str(last_metadata.get("llm_provider", "") or ""),
+                    model=model_name,
+                )
                 continue
         if last_error is not None:
             raise last_error
-        return ""
+        return "", self._llm_payload(last_metadata)
 
     def _build_apply_input(
         self,

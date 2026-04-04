@@ -805,7 +805,7 @@ def run_review_agent(
         )
         composed_input = f"{format_repo_context(resolved_repo_context)}\n\n{composed_input}"
 
-        answer, _messages = run_react_loop(
+        answer, _messages, llm_metadata = run_react_loop(
             user_input=composed_input,
             memory=memory,
             agent_name="review_agent",
@@ -827,6 +827,7 @@ def run_review_agent(
             metadata={
                 "artifact_type": "review_result",
                 "review_result": review_result,
+                **dict(llm_metadata or {}),
                 **dict(routing_metadata or {}),
             },
         )
@@ -909,7 +910,7 @@ def run_review_agent(
     )
     composed_input = f"{format_repo_context(resolved_repo_context)}\n\n{composed_input}"
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=composed_input,
         memory=memory,
         agent_name="review_agent",
@@ -961,6 +962,7 @@ def run_review_agent(
         metadata={
             "artifact_type": "review_result",
             "review_result": review_result,
+            **dict(llm_metadata or {}),
             **dict(routing_metadata or {}),
         },
     )

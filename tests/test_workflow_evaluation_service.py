@@ -104,7 +104,52 @@ class WorkflowEvaluationServiceTests(unittest.TestCase):
                             {"file": "src/client/ViewModels/ProductViewModel.cs", "confidence": 0.88}
                         ],
                     },
-                    "candidate_diagnostics_by_repo": {},
+                    "candidate_diagnostics_by_repo": {
+                        "service_repo": {
+                            "blended_top_candidates_before_diversification": [
+                                {"file": "src/Services/OrderService.cs", "ranking_position": 1},
+                                {"file": "src/Repositories/ProductRepository.cs", "ranking_position": 6},
+                            ],
+                            "lexical_lane_candidates": [
+                                {
+                                    "file": "src/Repositories/ProductRepository.cs",
+                                    "ranking_position": 6,
+                                    "blended_ranking_position": 6,
+                                    "entered_via_recall_diversification": True,
+                                }
+                            ],
+                            "final_candidate_pool_after_diversification": [
+                                {"file": "src/Services/OrderService.cs", "ranking_position": 1},
+                                {
+                                    "file": "src/Repositories/ProductRepository.cs",
+                                    "ranking_position": 5,
+                                    "blended_ranking_position": 6,
+                                    "entered_via_recall_diversification": True,
+                                },
+                            ],
+                            "support_family_lane_candidates": [
+                                {
+                                    "file": "src/Repositories/ProductRepository.cs",
+                                    "ranking_position": 6,
+                                    "blended_ranking_position": 6,
+                                    "entered_via_support_family_recall": True,
+                                    "support_family_type": "designer",
+                                    "support_family_trigger_anchor": "src/Services/OrderService.cs",
+                                }
+                            ],
+                            "final_candidate_pool_after_support_lane": [
+                                {"file": "src/Services/OrderService.cs", "ranking_position": 1},
+                                {
+                                    "file": "src/Repositories/ProductRepository.cs",
+                                    "ranking_position": 5,
+                                    "blended_ranking_position": 6,
+                                    "entered_via_support_family_recall": True,
+                                    "support_family_type": "designer",
+                                    "support_family_trigger_anchor": "src/Services/OrderService.cs",
+                                },
+                            ],
+                        }
+                    },
                     "scope_blocked": False,
                 },
             }
@@ -133,6 +178,15 @@ class WorkflowEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(result["writable_files_hit_rate"], 1.0)
         self.assertTrue(result["multi_repo_scope_accuracy"])
         self.assertFalse(result["false_block"])
+        diagnostics = result["candidate_diagnostics_by_repo"]["service_repo"]
+        self.assertTrue(diagnostics["expected_file_entered_via_diversification"])
+        self.assertEqual(diagnostics["best_expected_file_rank_in_blended_lane"], 6)
+        self.assertEqual(diagnostics["best_expected_file_rank_in_lexical_lane"], 6)
+        self.assertTrue(diagnostics["expected_file_reached_final_shortlist_after_diversification"])
+        self.assertTrue(diagnostics["expected_file_entered_via_support_lane"])
+        self.assertEqual(diagnostics["best_expected_file_rank_in_support_lane"], 6)
+        self.assertTrue(diagnostics["expected_file_present_in_final_pool_after_support_lane"])
+        self.assertTrue(diagnostics["expected_file_reached_final_shortlist_after_support_lane"])
 
     def test_build_summary_aggregates_scope_and_file_metrics(self) -> None:
         summary = self.service.build_summary(

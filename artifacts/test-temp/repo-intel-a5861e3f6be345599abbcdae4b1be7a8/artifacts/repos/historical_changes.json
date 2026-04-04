@@ -1,0 +1,424 @@
+{
+  "tasks": [],
+  "changes": [
+    {
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "repo_id": "catalog_service",
+      "commit_hash": "4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "branch_name": "",
+      "committed_at": "2026-03-14T09:49:08+02:00",
+      "changed_files": [
+        ".gitignore",
+        "agent.py",
+        "config.py",
+        "jira-mcp-server/audit.py",
+        "jira-mcp-server/auth.py",
+        "jira-mcp-server/config.py",
+        "jira-mcp-server/jira_client.py",
+        "jira-mcp-server/server.py",
+        "jira-mcp-server/test_jira.py",
+        "jira-mcp-server/validators.py",
+        "jira_mcp_agent.py",
+        "llm_factory.py",
+        "main.py",
+        "mcp_client.py",
+        "mcp_jira_tools.py",
+        "research_agent.py",
+        "root_agent.py",
+        "simple_chat_agent.py",
+        "telegram_bot.py",
+        "test_jira_tool.py"
+      ],
+      "subject": "Add Jira MCP server and agent files",
+      "raw_refs": "github/root-agent-2, github/jira_mvp, root-agent-2, jira_mvp",
+      "hunks": [
+        {
+          "file_path": ".gitignore",
+          "hunk_index": 0,
+          "added_line_count": 3,
+          "removed_line_count": 0,
+          "hunk_header": ".gitignore:3/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "agent.py",
+          "hunk_index": 1,
+          "added_line_count": 3,
+          "removed_line_count": 6,
+          "hunk_header": "agent.py:3/6",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "config.py",
+          "hunk_index": 2,
+          "added_line_count": 1,
+          "removed_line_count": 0,
+          "hunk_header": "config.py:1/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/audit.py",
+          "hunk_index": 3,
+          "added_line_count": 12,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/audit.py:12/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/auth.py",
+          "hunk_index": 4,
+          "added_line_count": 14,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/auth.py:14/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/config.py",
+          "hunk_index": 5,
+          "added_line_count": 28,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/config.py:28/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/jira_client.py",
+          "hunk_index": 6,
+          "added_line_count": 102,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/jira_client.py:102/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/server.py",
+          "hunk_index": 7,
+          "added_line_count": 78,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/server.py:78/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/test_jira.py",
+          "hunk_index": 8,
+          "added_line_count": 8,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/test_jira.py:8/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira-mcp-server/validators.py",
+          "hunk_index": 9,
+          "added_line_count": 23,
+          "removed_line_count": 0,
+          "hunk_header": "jira-mcp-server/validators.py:23/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "jira_mcp_agent.py",
+          "hunk_index": 10,
+          "added_line_count": 45,
+          "removed_line_count": 0,
+          "hunk_header": "jira_mcp_agent.py:45/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "llm_factory.py",
+          "hunk_index": 11,
+          "added_line_count": 21,
+          "removed_line_count": 0,
+          "hunk_header": "llm_factory.py:21/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "main.py",
+          "hunk_index": 12,
+          "added_line_count": 5,
+          "removed_line_count": 26,
+          "hunk_header": "main.py:5/26",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "mcp_client.py",
+          "hunk_index": 13,
+          "added_line_count": 41,
+          "removed_line_count": 0,
+          "hunk_header": "mcp_client.py:41/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "mcp_jira_tools.py",
+          "hunk_index": 14,
+          "added_line_count": 50,
+          "removed_line_count": 0,
+          "hunk_header": "mcp_jira_tools.py:50/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "research_agent.py",
+          "hunk_index": 15,
+          "added_line_count": 17,
+          "removed_line_count": 0,
+          "hunk_header": "research_agent.py:17/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "root_agent.py",
+          "hunk_index": 16,
+          "added_line_count": 62,
+          "removed_line_count": 0,
+          "hunk_header": "root_agent.py:62/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "simple_chat_agent.py",
+          "hunk_index": 17,
+          "added_line_count": 26,
+          "removed_line_count": 0,
+          "hunk_header": "simple_chat_agent.py:26/0",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "telegram_bot.py",
+          "hunk_index": 18,
+          "added_line_count": 21,
+          "removed_line_count": 26,
+          "hunk_header": "telegram_bot.py:21/26",
+          "snippet_excerpt": ""
+        },
+        {
+          "file_path": "test_jira_tool.py",
+          "hunk_index": 19,
+          "added_line_count": 7,
+          "removed_line_count": 0,
+          "hunk_header": "test_jira_tool.py:7/0",
+          "snippet_excerpt": ""
+        }
+      ],
+      "added_line_count": 567,
+      "removed_line_count": 58
+    }
+  ],
+  "hunks": [
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": ".gitignore",
+      "hunk_index": 0,
+      "added_line_count": 3,
+      "removed_line_count": 0,
+      "hunk_header": ".gitignore:3/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "agent.py",
+      "hunk_index": 1,
+      "added_line_count": 3,
+      "removed_line_count": 6,
+      "hunk_header": "agent.py:3/6",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "config.py",
+      "hunk_index": 2,
+      "added_line_count": 1,
+      "removed_line_count": 0,
+      "hunk_header": "config.py:1/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/audit.py",
+      "hunk_index": 3,
+      "added_line_count": 12,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/audit.py:12/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/auth.py",
+      "hunk_index": 4,
+      "added_line_count": 14,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/auth.py:14/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/config.py",
+      "hunk_index": 5,
+      "added_line_count": 28,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/config.py:28/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/jira_client.py",
+      "hunk_index": 6,
+      "added_line_count": 102,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/jira_client.py:102/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/server.py",
+      "hunk_index": 7,
+      "added_line_count": 78,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/server.py:78/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/test_jira.py",
+      "hunk_index": 8,
+      "added_line_count": 8,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/test_jira.py:8/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira-mcp-server/validators.py",
+      "hunk_index": 9,
+      "added_line_count": 23,
+      "removed_line_count": 0,
+      "hunk_header": "jira-mcp-server/validators.py:23/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "jira_mcp_agent.py",
+      "hunk_index": 10,
+      "added_line_count": 45,
+      "removed_line_count": 0,
+      "hunk_header": "jira_mcp_agent.py:45/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "llm_factory.py",
+      "hunk_index": 11,
+      "added_line_count": 21,
+      "removed_line_count": 0,
+      "hunk_header": "llm_factory.py:21/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "main.py",
+      "hunk_index": 12,
+      "added_line_count": 5,
+      "removed_line_count": 26,
+      "hunk_header": "main.py:5/26",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "mcp_client.py",
+      "hunk_index": 13,
+      "added_line_count": 41,
+      "removed_line_count": 0,
+      "hunk_header": "mcp_client.py:41/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "mcp_jira_tools.py",
+      "hunk_index": 14,
+      "added_line_count": 50,
+      "removed_line_count": 0,
+      "hunk_header": "mcp_jira_tools.py:50/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "research_agent.py",
+      "hunk_index": 15,
+      "added_line_count": 17,
+      "removed_line_count": 0,
+      "hunk_header": "research_agent.py:17/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "root_agent.py",
+      "hunk_index": 16,
+      "added_line_count": 62,
+      "removed_line_count": 0,
+      "hunk_header": "root_agent.py:62/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "simple_chat_agent.py",
+      "hunk_index": 17,
+      "added_line_count": 26,
+      "removed_line_count": 0,
+      "hunk_header": "simple_chat_agent.py:26/0",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "telegram_bot.py",
+      "hunk_index": 18,
+      "added_line_count": 21,
+      "removed_line_count": 26,
+      "hunk_header": "telegram_bot.py:21/26",
+      "snippet_excerpt": ""
+    },
+    {
+      "repo_id": "catalog_service",
+      "change_id": "catalog_service:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
+      "jira_key": "AGENT-2",
+      "file_path": "test_jira_tool.py",
+      "hunk_index": 19,
+      "added_line_count": 7,
+      "removed_line_count": 0,
+      "hunk_header": "test_jira_tool.py:7/0",
+      "snippet_excerpt": ""
+    }
+  ],
+  "comments": []
+}

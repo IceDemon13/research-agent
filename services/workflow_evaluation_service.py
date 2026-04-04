@@ -91,6 +91,89 @@ def _safe_case_task_text(case: dict[str, Any]) -> str:
     return "\n\n".join([item for item in parts if item]).strip()
 
 
+def _best_expected_rank(entries: list[dict[str, Any]], expected_lookup: set[str]) -> int | None:
+    best: int | None = None
+    for entry in list(entries or []):
+        file_path = _normalize_path(dict(entry or {}).get("file", ""))
+        if not file_path or file_path.lower() not in expected_lookup:
+            continue
+        candidate_rank = int(
+            dict(entry or {}).get(
+                "blended_ranking_position",
+                dict(entry or {}).get("ranking_position", 0),
+            ) or 0
+        )
+        if candidate_rank <= 0:
+            continue
+        if best is None or candidate_rank < best:
+            best = candidate_rank
+    return best
+
+
+def _augment_candidate_diagnostics_for_eval(
+    *,
+    expected_files_by_repo: dict[str, list[str]],
+    candidate_diagnostics_by_repo: dict[str, dict[str, Any]],
+    candidate_file_details_by_repo: dict[str, list[dict[str, Any]]],
+    selected_file_details_by_repo: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    augmented: dict[str, dict[str, Any]] = {}
+    repo_ids = (
+        set(expected_files_by_repo)
+        | set(candidate_diagnostics_by_repo)
+        | set(candidate_file_details_by_repo)
+        | set(selected_file_details_by_repo)
+    )
+    for repo_id in repo_ids:
+        diagnostics = dict(candidate_diagnostics_by_repo.get(repo_id, {}) or {})
+        expected_lookup = {
+            _normalize_path(item).lower()
+            for item in list(expected_files_by_repo.get(repo_id, []) or [])
+            if _normalize_path(item)
+        }
+        blended_entries = list(diagnostics.get("blended_top_candidates_before_diversification", []) or [])
+        lexical_entries = list(diagnostics.get("lexical_lane_candidates", []) or [])
+        final_entries = list(diagnostics.get("final_candidate_pool_after_diversification", []) or [])
+        support_entries = list(diagnostics.get("support_family_lane_candidates", []) or [])
+        final_support_entries = list(diagnostics.get("final_candidate_pool_after_support_lane", []) or [])
+        if not final_entries:
+            final_entries = list(candidate_file_details_by_repo.get(repo_id, []) or [])
+        if not final_support_entries:
+            final_support_entries = list(candidate_file_details_by_repo.get(repo_id, []) or [])
+        selected_entries = list(selected_file_details_by_repo.get(repo_id, []) or [])
+        expected_entered_via_diversification = any(
+            _normalize_path(dict(entry or {}).get("file", "")).lower() in expected_lookup
+            and bool(dict(entry or {}).get("entered_via_recall_diversification", False))
+            for entry in final_entries
+        )
+        expected_entered_via_support_lane = any(
+            _normalize_path(dict(entry or {}).get("file", "")).lower() in expected_lookup
+            and bool(dict(entry or {}).get("entered_via_support_family_recall", False))
+            for entry in final_support_entries
+        )
+        expected_reached_final_shortlist = any(
+            _normalize_path(dict(entry or {}).get("file", "")).lower() in expected_lookup
+            for entry in selected_entries
+        )
+        diagnostics["expected_file_entered_via_diversification"] = bool(expected_entered_via_diversification)
+        diagnostics["best_expected_file_rank_in_blended_lane"] = _best_expected_rank(blended_entries, expected_lookup)
+        diagnostics["best_expected_file_rank_in_lexical_lane"] = _best_expected_rank(lexical_entries, expected_lookup)
+        diagnostics["expected_file_present_in_final_candidate_pool_after_diversification"] = any(
+            _normalize_path(dict(entry or {}).get("file", "")).lower() in expected_lookup
+            for entry in final_entries
+        )
+        diagnostics["expected_file_reached_final_shortlist_after_diversification"] = bool(expected_reached_final_shortlist)
+        diagnostics["expected_file_entered_via_support_lane"] = bool(expected_entered_via_support_lane)
+        diagnostics["best_expected_file_rank_in_support_lane"] = _best_expected_rank(support_entries, expected_lookup)
+        diagnostics["expected_file_present_in_final_pool_after_support_lane"] = any(
+            _normalize_path(dict(entry or {}).get("file", "")).lower() in expected_lookup
+            for entry in final_support_entries
+        )
+        diagnostics["expected_file_reached_final_shortlist_after_support_lane"] = bool(expected_reached_final_shortlist)
+        augmented[repo_id] = diagnostics
+    return augmented
+
+
 def _family_name(understanding: dict[str, Any]) -> str:
     families = list(understanding.get("inferred_task_families", []) or [])
     if not families:
@@ -175,6 +258,7 @@ class WorkflowEvaluationService:
         evaluation_dataset: dict[str, Any] | None = None,
         execution_mode: str = "safe_top1_write",
         output_path: str | Path | None = None,
+        input_cases_artifact_path: str | Path | None = None,
     ) -> dict[str, Any]:
         started_at = self._now_provider()
         case_results = [self.run_case(case, execution_mode=execution_mode) for case in list(cases or [])]
@@ -183,6 +267,7 @@ class WorkflowEvaluationService:
             dataset_composition=dict((evaluation_dataset or {}).get("composition", {}) or {}),
             started_at=started_at,
             finished_at=self._now_provider(),
+            input_cases_artifact_path=input_cases_artifact_path,
         )
         written_path = self._save(summary, output_path=output_path)
         summary["artifact_path"] = written_path.as_posix()
@@ -230,6 +315,13 @@ class WorkflowEvaluationService:
             for repo_id, value in dict(implementation_technical.get("candidate_diagnostics_by_repo", {}) or {}).items()
             if _safe_text(repo_id)
         }
+        candidate_diagnostics_by_repo = _augment_candidate_diagnostics_for_eval(
+            expected_files_by_repo=expected_files_by_repo,
+            candidate_diagnostics_by_repo=candidate_diagnostics_by_repo,
+            candidate_file_details_by_repo=candidate_file_details_by_repo,
+            selected_file_details_by_repo=selected_file_details_by_repo,
+        )
+        implementation_technical["candidate_diagnostics_by_repo"] = candidate_diagnostics_by_repo
         grouped_metrics = _grouped_file_metrics(
             expected_files_by_repo=expected_files_by_repo,
             predicted_files_by_repo=selected_files_by_repo,
@@ -320,6 +412,7 @@ class WorkflowEvaluationService:
         dataset_composition: dict[str, Any] | None = None,
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
+        input_cases_artifact_path: str | Path | None = None,
     ) -> dict[str, Any]:
         successful = [item for item in case_results if _safe_text(item.get("status", "")).lower() == "success"]
         total_cases = len(case_results)
@@ -396,6 +489,7 @@ class WorkflowEvaluationService:
                 for item in worst_failing_cases
             ],
             "dataset_composition": dict(dataset_composition or {}),
+            "input_cases_artifact_path": _safe_text(input_cases_artifact_path),
             "started_at": started_at.isoformat() if started_at is not None else "",
             "finished_at": finished_at.isoformat() if finished_at is not None else "",
             "generated_at": self._now_provider().isoformat(),

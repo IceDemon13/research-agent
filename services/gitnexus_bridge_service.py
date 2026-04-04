@@ -329,6 +329,19 @@ def _merge_query_hits(primary: list[GitNexusQueryHit], secondary: list[GitNexusQ
     return merged
 
 
+def _repo_argument_values(repo_meta: RepoMetadata) -> dict[str, str]:
+    repo_path = _repo_path(repo_meta)
+    repo_name = _safe_text(getattr(repo_meta, "repo_id", "")) or Path(repo_path).name
+    return {
+        "repo_path": repo_path,
+        "repoPath": repo_path,
+        "path": repo_path,
+        "repo": repo_name,
+        "repo_id": repo_name,
+        "repoId": repo_name,
+    }
+
+
 class GitNexusBridgeService:
     def __init__(
         self,
@@ -475,21 +488,21 @@ class GitNexusBridgeService:
         return {str(key or "").strip() for key in properties.keys() if str(key or "").strip()}
 
     def _query_argument_variants(self, repo_meta: RepoMetadata, focused_query: str) -> list[dict[str, Any]]:
-        repo_path = _repo_path(repo_meta)
+        repo_values = _repo_argument_values(repo_meta)
         schema_properties = self._tool_schema_properties("query")
         preferred_query_keys = [key for key in ("query", "task_text", "taskText") if key in schema_properties]
         preferred_repo_keys = [key for key in ("repo_path", "repoPath", "path", "repo", "repo_id", "repoId") if key in schema_properties]
         if not preferred_query_keys:
             preferred_query_keys = ["query", "task_text", "taskText"]
         if not preferred_repo_keys:
-            preferred_repo_keys = ["repo_path", "repoPath"]
+            preferred_repo_keys = ["repo", "repo_path", "repoPath"]
         variants: list[dict[str, Any]] = []
         seen: set[str] = set()
         for query_key in preferred_query_keys:
             if query_key != "query":
                 continue
             for repo_key in preferred_repo_keys:
-                candidate = {query_key: focused_query, repo_key: repo_path}
+                candidate = {query_key: focused_query, repo_key: repo_values.get(repo_key, repo_values["repo_path"])}
                 marker = json.dumps(candidate, sort_keys=True)
                 if marker in seen:
                     continue
@@ -499,7 +512,7 @@ class GitNexusBridgeService:
             if query_key == "query":
                 continue
             for repo_key in preferred_repo_keys:
-                candidate = {query_key: focused_query, repo_key: repo_path}
+                candidate = {query_key: focused_query, repo_key: repo_values.get(repo_key, repo_values["repo_path"])}
                 marker = json.dumps(candidate, sort_keys=True)
                 if marker in seen:
                     continue
@@ -508,10 +521,11 @@ class GitNexusBridgeService:
         if not variants:
             variants.extend(
                 [
-                    {"query": focused_query, "repo_path": repo_path},
-                    {"query": focused_query, "repoPath": repo_path},
-                    {"task_text": focused_query, "repo_path": repo_path},
-                    {"taskText": focused_query, "repoPath": repo_path},
+                    {"query": focused_query, "repo": repo_values["repo"]},
+                    {"query": focused_query, "repo_path": repo_values["repo_path"]},
+                    {"query": focused_query, "repoPath": repo_values["repoPath"]},
+                    {"task_text": focused_query, "repo": repo_values["repo"]},
+                    {"taskText": focused_query, "repoPath": repo_values["repoPath"]},
                 ]
             )
         return variants

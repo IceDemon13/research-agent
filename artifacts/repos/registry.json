@@ -15,7 +15,7 @@
       "index_error": "",
       "reindex_required": false,
       "sync_status": "sync_unavailable",
-      "last_sync_at": "2026-03-28T22:16:59.749465+00:00",
+      "last_sync_at": "2026-04-02T16:06:17.576911+00:00",
       "sync_error": "remote: The requested repository either does not exist or you do not have access. If you believe this repository exists and you have access, make sure you're authenticated.\nfatal: unable to access 'https://bitbucket.org/telemartsoft/telemart.ai_sdlc.git/': The requested URL returned error: 403",
       "intelligence_provider": "native",
       "gitnexus_indexed": false,

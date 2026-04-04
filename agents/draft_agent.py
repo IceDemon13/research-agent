@@ -952,7 +952,7 @@ def _generate_symbol_only_rewrite(
             "content": "You are a senior developer. Surgically edit only the requested symbol from the provided repository context. Preserve behavior and structure exactly unless the request explicitly changes them. For logging-only requests, inject only minimal log_line statements into the existing implementation.",
         }
     ]
-    answer, _messages = run_react_loop(
+    answer, _messages, _llm_metadata = run_react_loop(
         user_input=symbol_prompt,
         memory=memory,
         agent_name="draft_symbol_rewrite",
@@ -2067,7 +2067,7 @@ def run_draft_agent(
     )
     composed_input = f"{format_repo_context(resolved_repo_context)}\n\n{composed_input}"
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=composed_input,
         memory=memory,
         agent_name="draft_agent",
@@ -2156,6 +2156,7 @@ def run_draft_agent(
         metadata={
             "artifact_type": "draft_set",
             "draft_set": draft_set,
+            **dict(llm_metadata or {}),
             "draft_debug": {
                 "short_circuit_used": short_circuit_used,
                 "short_circuit_reason": short_circuit_reason,

@@ -101,6 +101,23 @@ class FakeMcpClient:
         raise AssertionError(f"Unexpected tool: {tool_name}")
 
 
+class RepoNamedQueryMcpClient(FakeMcpClient):
+    def list_tools(self) -> list[dict]:
+        return [
+            {
+                "name": "query",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "repo": {"type": "string"},
+                    },
+                },
+            },
+            {"name": "context"},
+        ]
+
+
 class WrappedResultMcpClient(FakeMcpClient):
     def __init__(self, payload: dict | list) -> None:
         super().__init__()
@@ -170,6 +187,18 @@ class GitNexusBridgeServiceTests(unittest.TestCase):
         self.assertEqual(self.mcp_client.calls[0][1]["repo_path"], "/repos/catalog_service")
         self.assertIn("Update bonus info endpoint", self.mcp_client.calls[0][1]["query"])
         self.assertEqual(len(self.mcp_client.calls), 1)
+
+    def test_query_prefers_repo_name_argument_when_tool_schema_requests_repo(self) -> None:
+        bridge = GitNexusBridgeService(
+            repo_settings=self.settings,
+            mcp_client=RepoNamedQueryMcpClient(),
+        )
+
+        payload = bridge.query(self.repo, "Update bonus info endpoint")
+        debug = bridge.last_query_debug_snapshot()
+
+        self.assertIsNone(payload.fallback_reason)
+        self.assertEqual(debug["gitnexus_tool_arguments_sent"]["repo"], "catalog_service")
 
     def test_query_shapes_focused_payload_and_keeps_process_evidence(self) -> None:
         long_task = (

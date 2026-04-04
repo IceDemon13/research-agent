@@ -53,7 +53,7 @@ Bitrix link:
 {spec_text or "-"}
 """
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=review_input,
         memory=memory,
         agent_name="spec_review_agent",
@@ -65,5 +65,6 @@ Bitrix link:
         success=True,
         metadata={
             "artifact_type": "spec_review",
+            **dict(llm_metadata or {}),
         },
     )

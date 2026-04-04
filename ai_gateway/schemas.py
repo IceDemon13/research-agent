@@ -28,3 +28,4 @@ class GatewayPreparedRequest:
 class GatewayResponse:
     raw_response: Any
     prepared_request: GatewayPreparedRequest
+    provider_metadata: dict[str, Any] = field(default_factory=dict)

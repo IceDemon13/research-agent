@@ -569,6 +569,16 @@ class HistoricalChangeMemoryService:
                 title=title,
                 description=description,
                 acceptance_criteria=acceptance_criteria,
+                jira_status=_safe_text(payload.get("status", "")),
+                jira_status_category_name=_safe_text(payload.get("status_category_name", "")),
+                jira_status_category_key=_safe_text(payload.get("status_category_key", "")),
+                jira_resolution_name=_safe_text(payload.get("resolution_name", "")),
+                jira_resolution_date=_safe_text(payload.get("resolution_date", "")),
+                jira_created_at=_safe_text(payload.get("created_at", "")),
+                jira_updated_at=_safe_text(payload.get("updated_at", "")),
+                jira_creator_email=_safe_text(payload.get("creator_email", "")),
+                jira_creator_display_name=_safe_text(payload.get("creator_display_name", "")),
+                jira_creator_identifier=_safe_text(payload.get("creator_identifier", "")),
             )
             succeeded += 1
         return {
@@ -655,6 +665,16 @@ class HistoricalChangeMemoryService:
         title: str = "",
         description: str = "",
         acceptance_criteria: list[str] | None = None,
+        jira_status: str = "",
+        jira_status_category_name: str = "",
+        jira_status_category_key: str = "",
+        jira_resolution_name: str = "",
+        jira_resolution_date: str = "",
+        jira_created_at: str = "",
+        jira_updated_at: str = "",
+        jira_creator_email: str = "",
+        jira_creator_display_name: str = "",
+        jira_creator_identifier: str = "",
     ) -> None:
         normalized_key = self.normalize_jira_key(jira_key)
         if not normalized_key:
@@ -669,6 +689,16 @@ class HistoricalChangeMemoryService:
                 jira_snapshot_title=_safe_text(title),
                 jira_snapshot_text=_safe_text(description),
                 jira_snapshot_acceptance_criteria_json=json.dumps(normalized_acceptance, ensure_ascii=False),
+                jira_status=_safe_text(jira_status),
+                jira_status_category_name=_safe_text(jira_status_category_name),
+                jira_status_category_key=_safe_text(jira_status_category_key),
+                jira_resolution_name=_safe_text(jira_resolution_name),
+                jira_resolution_date=_safe_text(jira_resolution_date),
+                jira_created_at=_safe_text(jira_created_at),
+                jira_updated_at=_safe_text(jira_updated_at),
+                jira_creator_email=_safe_text(jira_creator_email),
+                jira_creator_display_name=_safe_text(jira_creator_display_name),
+                jira_creator_identifier=_safe_text(jira_creator_identifier),
             )
         state = self._load_json_state()
         task_map = {
@@ -684,6 +714,16 @@ class HistoricalChangeMemoryService:
             "jira_snapshot_title": _safe_text(title),
             "jira_snapshot_text": _safe_text(description),
             "jira_snapshot_acceptance_criteria": normalized_acceptance,
+            "jira_status": _safe_text(jira_status),
+            "jira_status_category_name": _safe_text(jira_status_category_name),
+            "jira_status_category_key": _safe_text(jira_status_category_key),
+            "jira_resolution_name": _safe_text(jira_resolution_name),
+            "jira_resolution_date": _safe_text(jira_resolution_date),
+            "jira_created_at": _safe_text(jira_created_at),
+            "jira_updated_at": _safe_text(jira_updated_at),
+            "jira_creator_email": _safe_text(jira_creator_email),
+            "jira_creator_display_name": _safe_text(jira_creator_display_name),
+            "jira_creator_identifier": _safe_text(jira_creator_identifier),
             "updated_at": _now_iso(),
         }
         state["tasks"] = list(task_map.values())

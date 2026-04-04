@@ -14,6 +14,7 @@ from services.validated_codegen_failure_mining_service import (
     ValidatedCodegenFailureMiningService,
     classify_validation_failure_case,
 )
+from llm_factory import LLMProviderError
 
 
 def _now_stamp() -> str:
@@ -49,26 +50,62 @@ class BoundedCodegenEvaluationService:
         evaluation_dataset: dict[str, Any] | None = None,
         execution_submode: str = "apply_codegen",
         output_path: str | Path | None = None,
+        input_cases_artifact_path: str | Path | None = None,
+        workflow_replay_artifact_path: str | Path | None = None,
     ) -> dict[str, Any]:
         started_at = self._now_provider()
-        case_results = [self.run_case(case, execution_submode=execution_submode) for case in list(cases or [])]
+        workflow_replay_index = self._load_workflow_replay_index(workflow_replay_artifact_path) if workflow_replay_artifact_path else {}
+        case_results = [
+            self.run_case(
+                case,
+                execution_submode=execution_submode,
+                workflow_replay_index=workflow_replay_index,
+                workflow_replay_artifact_path=workflow_replay_artifact_path,
+            )
+            for case in list(cases or [])
+        ]
         summary = self.build_summary(
             case_results,
             dataset_composition=dict((evaluation_dataset or {}).get("composition", {}) or {}),
             started_at=started_at,
             finished_at=self._now_provider(),
             execution_submode=execution_submode,
+            input_cases_artifact_path=input_cases_artifact_path,
+            workflow_replay_artifact_path=workflow_replay_artifact_path,
         )
         saved_path = self._save(summary, output_path=output_path)
         summary["artifact_path"] = saved_path.as_posix()
         self._save_latest(summary)
-        failure_artifact = self._failure_mining_service.save_from_evaluation(summary)
-        summary["validated_failure_mining_artifact_path"] = failure_artifact.as_posix()
+        if bool(summary.get("run_invalid_due_to_provider", False)):
+            summary["validated_failure_mining_artifact_path"] = ""
+        else:
+            failure_artifact = self._failure_mining_service.save_from_evaluation(summary)
+            summary["validated_failure_mining_artifact_path"] = failure_artifact.as_posix()
         self._save_latest(summary)
         return summary
 
-    def run_case(self, case: dict[str, Any], *, execution_submode: str = "apply_codegen") -> dict[str, Any]:
-        plan_case = self._dry_run_eval.run_case(case, execution_mode="lightweight_draft")
+    def run_case(
+        self,
+        case: dict[str, Any],
+        *,
+        execution_submode: str = "apply_codegen",
+        workflow_replay_index: dict[str, dict[str, Any]] | None = None,
+        workflow_replay_artifact_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        replay_case = self._resolve_workflow_replay_case(
+            case,
+            workflow_replay_index=workflow_replay_index,
+            workflow_replay_artifact_path=workflow_replay_artifact_path,
+        )
+        plan_case = (
+            self._build_plan_case_from_workflow_replay(
+                case,
+                workflow_case=replay_case,
+                workflow_replay_artifact_path=workflow_replay_artifact_path,
+            )
+            if replay_case is not None
+            else self._dry_run_eval.run_case(case, execution_mode="lightweight_draft")
+        )
         jira_key = _safe_text(case.get("jira_key", "")).upper()
         expected_files_by_repo = _normalize_files_by_repo(case.get("expected_files_by_repo", {}))
         writable_repo_id = _safe_text(plan_case.get("writable_repo_id", "")).lower()
@@ -78,16 +115,24 @@ class BoundedCodegenEvaluationService:
             for repo_id, paths in dict(plan_case.get("readonly_files_by_repo", {}) or {}).items()
             if _safe_text(repo_id)
         }
-        result = self._codegen_service.generate(
-            task_text=self._dry_run_eval._case_task_text(case),  # reuses existing case text composition
-            jira_key=jira_key,
-            writable_repo_id=writable_repo_id,
-            writable_files=writable_files,
-            writable_file_plan=list(plan_case.get("writable_file_plan", []) or []) or list(dict(case).get("writable_file_plan", []) or []),
-            readonly_files_by_repo=readonly_files_by_repo,
-            primary_family=_safe_text(case.get("primary_family", "")),
-            execution_submode=execution_submode,
-        )
+        try:
+            result = self._codegen_service.generate(
+                task_text=self._dry_run_eval._case_task_text(case),  # reuses existing case text composition
+                jira_key=jira_key,
+                writable_repo_id=writable_repo_id,
+                writable_files=writable_files,
+                writable_file_plan=list(plan_case.get("writable_file_plan", []) or []) or list(dict(case).get("writable_file_plan", []) or []),
+                readonly_files_by_repo=readonly_files_by_repo,
+                primary_family=_safe_text(case.get("primary_family", "")),
+                execution_submode=execution_submode,
+            )
+        except LLMProviderError as exc:
+            return self._provider_invalid_case_result(
+                case=case,
+                plan_case=plan_case,
+                exc=exc,
+                execution_submode=execution_submode,
+            )
         changed_files = _normalize_file_list(result.get("changed_files", []))
         expected_for_repo = expected_files_by_repo.get(writable_repo_id, [])
         expected_lookup = {item.lower() for item in list(expected_for_repo or [])}
@@ -145,8 +190,11 @@ class BoundedCodegenEvaluationService:
             "empty_patch": bool(result.get("empty_patch", True)),
             "validated_success": validated_success,
             "selected_codegen_targets": selected_targets,
+            "original_selected_codegen_targets": _normalize_file_list(result.get("original_selected_codegen_targets", [])),
+            "arbitrated_selected_codegen_targets": _normalize_file_list(result.get("arbitrated_selected_codegen_targets", [])),
             "selected_codegen_target_count": int(result.get("selected_codegen_target_count", 0) or 0),
             "rejected_writable_targets": _normalize_file_list(result.get("rejected_writable_targets", [])),
+            "shortlisted_writable_files": _normalize_file_list(result.get("shortlisted_writable_files", [])),
             "target_gate_status": _safe_text(result.get("target_gate_status", "")),
             "target_gate_reason": _safe_text(result.get("target_gate_reason", "")),
             "target_gate_confidence": float(result.get("target_gate_confidence", 0.0) or 0.0),
@@ -161,6 +209,22 @@ class BoundedCodegenEvaluationService:
             "wrong_in_scope_target": wrong_in_scope_target,
             "wrong_in_scope_target_reason_guess": _safe_text(result.get("wrong_in_scope_target_reason_guess", "")),
             "rejected_adjacent_in_scope_files": _normalize_file_list(result.get("rejected_adjacent_in_scope_files", [])),
+            "target_arbitration_rule_fired": bool(result.get("target_arbitration_rule_fired", False)),
+            "target_arbitration_family_type": _safe_text(result.get("target_arbitration_family_type", "")),
+            "target_arbitration_worker_anchor": _safe_text(result.get("target_arbitration_worker_anchor", "")),
+            "target_arbitration_companion_candidates_demoted": list(result.get("target_arbitration_companion_candidates_demoted", []) or []),
+            "target_arbitration_reason": _safe_text(result.get("target_arbitration_reason", "")),
+            "target_arbitration_changed_target": bool(result.get("target_arbitration_changed_target", False)),
+            "activation_rule_enabled": bool(result.get("activation_rule_enabled", False)),
+            "activation_rule_fired": bool(result.get("activation_rule_fired", False)),
+            "first_attempt_patch_line_count": int(result.get("first_attempt_patch_line_count", 0) or 0),
+            "second_attempt_patch_line_count": int(result.get("second_attempt_patch_line_count", 0) or 0),
+            "first_attempt_changed_files_count": int(result.get("first_attempt_changed_files_count", 0) or 0),
+            "second_attempt_changed_files_count": int(result.get("second_attempt_changed_files_count", 0) or 0),
+            "activation_retry_reason": _safe_text(result.get("activation_retry_reason", "")),
+            "activation_retry_improved_to_real_patch": bool(result.get("activation_retry_improved_to_real_patch", False)),
+            "activation_retry_changed_files": _normalize_file_list(result.get("activation_retry_changed_files", [])),
+            "activation_retry_target_unchanged": bool(result.get("activation_retry_target_unchanged", True)),
             "ambiguity_gate_status": _safe_text(result.get("ambiguity_gate_status", "")),
             "ambiguity_gate_reason": _safe_text(result.get("ambiguity_gate_reason", "")),
             "ambiguity_signal_breakdown": dict(result.get("ambiguity_signal_breakdown", {}) or {}),
@@ -213,6 +277,15 @@ class BoundedCodegenEvaluationService:
             "restore_auth_mode_guess": _safe_text(result.get("restore_auth_mode_guess", "")),
             "restore_secret_redaction_applied": bool(result.get("restore_secret_redaction_applied", False)),
             "failure_reason_guess": _safe_text(result.get("failure_reason_guess", "")),
+            "llm_provider": _safe_text(result.get("llm_provider", "")),
+            "llm_model": _safe_text(result.get("llm_model", "")),
+            "llm_runtime_available": bool(result.get("llm_runtime_available", False)),
+            "llm_auth_present": bool(result.get("llm_auth_present", False)),
+            "llm_request_attempted": bool(result.get("llm_request_attempted", False)),
+            "llm_request_succeeded": bool(result.get("llm_request_succeeded", False)),
+            "llm_failure_reason": _safe_text(result.get("llm_failure_reason", "")),
+            "provider_quota_exhausted": bool(result.get("provider_quota_exhausted", False)),
+            "run_invalid_due_to_provider": bool(result.get("run_invalid_due_to_provider", False)),
             "codegen_style_used": _safe_text(result.get("codegen_style_used", "")),
             "anchor_type": _safe_text(result.get("anchor_type", "")),
             "anchor_strength": float(result.get("anchor_strength", 0.0) or 0.0),
@@ -234,6 +307,11 @@ class BoundedCodegenEvaluationService:
             "result": result,
             "end_to_end_success": end_to_end_success,
             "status": "success",
+            "replay_mode_enabled": bool(plan_case.get("replay_mode_enabled", False)),
+            "workflow_artifact_path": _safe_text(plan_case.get("workflow_artifact_path", "")),
+            "replayed_shortlisted_writable_files": _normalize_file_list(plan_case.get("replayed_shortlisted_writable_files", [])),
+            "replay_match_status": _safe_text(plan_case.get("replay_match_status", "")),
+            "replay_mismatch_count": int(plan_case.get("replay_mismatch_count", 0) or 0),
         }
         case_result["validation_failure_class"] = classify_validation_failure_case(case_result)
         case_result["excluded_from_actionable_metrics_reason"] = (
@@ -243,6 +321,54 @@ class BoundedCodegenEvaluationService:
         )
         return case_result
 
+    def _provider_invalid_case_result(
+        self,
+        *,
+        case: dict[str, Any],
+        plan_case: dict[str, Any],
+        exc: LLMProviderError,
+        execution_submode: str,
+    ) -> dict[str, Any]:
+        expected_files_by_repo = _normalize_files_by_repo(case.get("expected_files_by_repo", {}))
+        return {
+            "case_id": _safe_text(case.get("case_id", "")),
+            "jira_key": _safe_text(case.get("jira_key", "")).upper(),
+            "primary_family": _safe_text(case.get("primary_family", "")),
+            "expected_repo_ids": list(case.get("expected_repo_ids", []) or []),
+            "expected_files_by_repo": expected_files_by_repo,
+            "writable_repo_id": _safe_text(plan_case.get("writable_repo_id", "")).lower(),
+            "writable_files": _normalize_file_list(plan_case.get("writable_files", [])),
+            "readonly_files_by_repo": {
+                _safe_text(repo_id).lower(): _normalize_file_list(paths)
+                for repo_id, paths in dict(plan_case.get("readonly_files_by_repo", {}) or {}).items()
+                if _safe_text(repo_id)
+            },
+            "writable_repo_hit": bool(plan_case.get("writable_repo_hit", False)),
+            "writable_files_hit_rate": float(plan_case.get("writable_files_hit_rate", 0.0) or 0.0),
+            "generation_status": "invalid_provider_failure",
+            "status": "invalid_provider",
+            "execution_submode": execution_submode,
+            "apply_success": False,
+            "compile_supported": False,
+            "compile_pass": False,
+            "test_supported": False,
+            "test_pass": False,
+            "restore_supported": False,
+            "restore_pass": False,
+            "validation_supported": False,
+            "validated_success": False,
+            "end_to_end_success": False,
+            "wrong_in_scope_target": False,
+            "failure_reason_guess": _safe_text(exc.llm_failure_reason),
+            "excluded_from_actionable_metrics_reason": "provider_failure",
+            "workflow_artifact_path": _safe_text(plan_case.get("workflow_artifact_path", "")),
+            "replay_mode_enabled": bool(plan_case.get("replay_mode_enabled", False)),
+            "replayed_shortlisted_writable_files": _normalize_file_list(plan_case.get("replayed_shortlisted_writable_files", [])),
+            "replay_match_status": _safe_text(plan_case.get("replay_match_status", "")),
+            "replay_mismatch_count": int(plan_case.get("replay_mismatch_count", 0) or 0),
+            **exc.telemetry(),
+        }
+
     def build_summary(
         self,
         case_results: list[dict[str, Any]],
@@ -251,8 +377,11 @@ class BoundedCodegenEvaluationService:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
         execution_submode: str = "apply_codegen",
+        input_cases_artifact_path: str | Path | None = None,
+        workflow_replay_artifact_path: str | Path | None = None,
     ) -> dict[str, Any]:
         successful = [item for item in case_results if _safe_text(item.get("status", "")).lower() == "success"]
+        invalid_provider_cases = [item for item in case_results if bool(item.get("run_invalid_due_to_provider", False))]
         writable_repo_hits = sum(1 for item in successful if bool(item.get("writable_repo_hit", False)))
         writable_file_rates = [float(item.get("writable_files_hit_rate", 0.0) or 0.0) for item in successful]
         scope_hits = sum(1 for item in successful if bool(item.get("scope_compliant", False)))
@@ -260,6 +389,20 @@ class BoundedCodegenEvaluationService:
         apply_successes = sum(1 for item in successful if bool(item.get("apply_success", False)))
         target_gate_accepted = sum(1 for item in successful if bool(item.get("target_gate_accepted", False)))
         wrong_in_scope_targets = sum(1 for item in successful if bool(item.get("wrong_in_scope_target", False)))
+        target_arbitration_rule_fired_count = sum(1 for item in successful if bool(item.get("target_arbitration_rule_fired", False)))
+        target_arbitration_changed_target_count = sum(1 for item in successful if bool(item.get("target_arbitration_changed_target", False)))
+        target_arbitration_changed_to_worker_count = sum(
+            1
+            for item in successful
+            if bool(item.get("target_arbitration_changed_target", False))
+            and _safe_text(item.get("target_arbitration_worker_anchor", ""))
+            and _safe_text(item.get("selected_codegen_targets", [""])[0] if list(item.get("selected_codegen_targets", []) or []) else "")
+            == _safe_text(item.get("target_arbitration_worker_anchor", ""))
+        )
+        activation_rule_fired_count = sum(1 for item in successful if bool(item.get("activation_rule_fired", False)))
+        activation_retry_improved_to_real_patch_count = sum(
+            1 for item in successful if bool(item.get("activation_retry_improved_to_real_patch", False))
+        )
         downgraded_due_to_weak_anchor = sum(
             1
             for item in successful
@@ -344,6 +487,13 @@ class BoundedCodegenEvaluationService:
             for item in successful
             if _safe_text(item.get("validation_failure_class", ""))
         )
+        replay_case_count = sum(1 for item in successful if bool(item.get("replay_mode_enabled", False)))
+        replay_mismatch_count = sum(int(item.get("replay_mismatch_count", 0) or 0) for item in successful)
+        llm_failure_reasons = Counter(
+            _safe_text(item.get("llm_failure_reason", "")) or "unknown"
+            for item in invalid_provider_cases
+            if _safe_text(item.get("llm_failure_reason", ""))
+        )
         failure_patterns = Counter(
             _safe_text(item.get("primary_family", "")) or "unknown"
             for item in successful
@@ -368,6 +518,11 @@ class BoundedCodegenEvaluationService:
             "target_gate_accept_rate": round(target_gate_accepted / max(1, len(successful)), 4) if successful else 0.0,
             "wrong_in_scope_target_rate": round(wrong_in_scope_targets / max(1, len(successful)), 4) if successful else 0.0,
             "wrong_in_scope_target_count": wrong_in_scope_targets,
+            "target_arbitration_rule_fired_count": target_arbitration_rule_fired_count,
+            "target_arbitration_changed_target_count": target_arbitration_changed_target_count,
+            "target_arbitration_changed_to_worker_anchor_count": target_arbitration_changed_to_worker_count,
+            "activation_rule_fired_count": activation_rule_fired_count,
+            "activation_retry_improved_to_real_patch_count": activation_retry_improved_to_real_patch_count,
             "collapsed_to_top1_rate": round(collapsed_to_top1 / max(1, len(successful)), 4) if successful else 0.0,
             "downgraded_to_draft_due_to_weak_anchor_count": downgraded_due_to_weak_anchor,
             "downgraded_to_draft_due_to_missing_symbol_anchor_count": downgraded_due_to_missing_symbol_anchor,
@@ -409,6 +564,18 @@ class BoundedCodegenEvaluationService:
             "restore_secret_redaction_applied_case_count": secret_redaction_applied,
             "failure_reason_counts": dict(failure_reasons),
             "validation_failure_class_counts": dict(validation_failure_classes),
+            "replay_mode_enabled": bool(workflow_replay_artifact_path),
+            "workflow_artifact_path": _safe_text(workflow_replay_artifact_path),
+            "replay_case_count": replay_case_count,
+            "replay_mismatch_count": replay_mismatch_count,
+            "invalid_provider_case_count": len(invalid_provider_cases),
+            "run_invalid_due_to_provider": bool(invalid_provider_cases),
+            "llm_failure_reason_counts": dict(llm_failure_reasons),
+            "replay_match_status": (
+                "disabled"
+                if not workflow_replay_artifact_path
+                else "passed" if replay_case_count == len(successful) and replay_mismatch_count == 0 else "mismatch"
+            ),
             "out_of_scope_attempt_rate": round(out_of_scope_attempts / max(1, len(successful)), 4) if successful else 0.0,
             "median_codegen_latency_ms": round(float(median(latencies)), 3) if latencies else 0.0,
             "avg_changed_file_count": round(sum(changed_counts) / len(changed_counts), 3) if changed_counts else 0.0,
@@ -430,6 +597,7 @@ class BoundedCodegenEvaluationService:
                 for item in worst_cases
             ],
             "dataset_composition": dict(dataset_composition or {}),
+            "input_cases_artifact_path": _safe_text(input_cases_artifact_path),
             "started_at": started_at.isoformat() if started_at is not None else "",
             "finished_at": finished_at.isoformat() if finished_at is not None else "",
             "generated_at": self._now_provider().isoformat(),
@@ -449,3 +617,116 @@ class BoundedCodegenEvaluationService:
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _case_lookup_keys(case: dict[str, Any]) -> list[str]:
+        keys: list[str] = []
+        case_id = _safe_text(case.get("case_id", ""))
+        jira_key = _safe_text(case.get("jira_key", "")).upper()
+        if case_id:
+            keys.append(f"case:{case_id}")
+        if jira_key:
+            keys.append(f"jira:{jira_key}")
+        return keys
+
+    def _load_workflow_replay_index(self, artifact_path: str | Path | None) -> dict[str, dict[str, Any]]:
+        if not artifact_path:
+            return {}
+        path = Path(artifact_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        values = list(payload.get("cases", []) or []) if isinstance(payload, dict) else list(payload or [])
+        index: dict[str, dict[str, Any]] = {}
+        for raw in values:
+            if not isinstance(raw, dict):
+                continue
+            workflow_case = dict(raw)
+            for key in self._case_lookup_keys(workflow_case):
+                if key in index:
+                    raise ValueError(f"Workflow replay artifact {path.as_posix()} contains duplicate case key {key}.")
+                index[key] = workflow_case
+        return index
+
+    def _resolve_workflow_replay_case(
+        self,
+        case: dict[str, Any],
+        *,
+        workflow_replay_index: dict[str, dict[str, Any]] | None,
+        workflow_replay_artifact_path: str | Path | None,
+    ) -> dict[str, Any] | None:
+        if not workflow_replay_artifact_path:
+            return None
+        lookup = dict(workflow_replay_index or {})
+        for key in self._case_lookup_keys(case):
+            if key in lookup:
+                return dict(lookup[key] or {})
+        case_id = _safe_text(case.get("case_id", ""))
+        jira_key = _safe_text(case.get("jira_key", "")).upper()
+        raise ValueError(
+            f"Workflow replay artifact {Path(workflow_replay_artifact_path).as_posix()} did not contain "
+            f"the requested case (case_id={case_id or '<missing>'}, jira_key={jira_key or '<missing>'})."
+        )
+
+    def _build_plan_case_from_workflow_replay(
+        self,
+        case: dict[str, Any],
+        *,
+        workflow_case: dict[str, Any],
+        workflow_replay_artifact_path: str | Path | None,
+    ) -> dict[str, Any]:
+        replay_path = Path(workflow_replay_artifact_path).as_posix() if workflow_replay_artifact_path else ""
+        writable_repo_id = _safe_text(workflow_case.get("writable_repo_id", "")).lower()
+        writable_files = _normalize_file_list(workflow_case.get("writable_files", []))
+        readonly_files_by_repo = {
+            _safe_text(repo_id).lower(): _normalize_file_list(paths)
+            for repo_id, paths in dict(workflow_case.get("readonly_files_by_repo", {}) or {}).items()
+            if _safe_text(repo_id)
+        }
+        selected_files_by_repo = _normalize_files_by_repo(workflow_case.get("selected_files_by_repo", {}))
+        selected_for_repo = selected_files_by_repo.get(writable_repo_id, [])
+        technical_details = dict(workflow_case.get("technical_details", {}) or {})
+        implementation_plan_result = dict(workflow_case.get("implementation_plan_result", {}) or {})
+        implementation_technical_details = dict(implementation_plan_result.get("technical_details", {}) or {})
+        writable_file_plan = list(
+            technical_details.get("writable_file_plan", [])
+            or implementation_technical_details.get("writable_file_plan", [])
+            or technical_details.get("implementation_file_plan", [])
+            or implementation_technical_details.get("implementation_file_plan", [])
+            or []
+        )
+        plan_files = _normalize_file_list(
+            [dict(item or {}).get("file", "") for item in writable_file_plan if isinstance(item, dict)]
+        )
+        blockers: list[str] = []
+        if not writable_repo_id:
+            blockers.append("missing writable_repo_id")
+        if not writable_files:
+            blockers.append("missing writable_files")
+        if not selected_for_repo:
+            blockers.append(f"selected_files_by_repo[{writable_repo_id or '<missing>'}] missing")
+        if selected_for_repo and selected_for_repo != writable_files:
+            blockers.append("selected_files_by_repo does not exactly match writable_files")
+        if not writable_file_plan:
+            blockers.append("missing technical_details.writable_file_plan")
+        if writable_file_plan and plan_files != writable_files:
+            blockers.append("writable_file_plan files do not exactly match writable_files")
+        if blockers:
+            jira_key = _safe_text(case.get("jira_key", "")).upper()
+            case_id = _safe_text(case.get("case_id", ""))
+            raise ValueError(
+                f"Workflow replay for case_id={case_id or '<missing>'} jira_key={jira_key or '<missing>'} "
+                f"could not be used faithfully from {replay_path}: {', '.join(blockers)}."
+            )
+        return {
+            "writable_repo_id": writable_repo_id,
+            "writable_files": writable_files,
+            "readonly_files_by_repo": readonly_files_by_repo,
+            "writable_file_plan": writable_file_plan,
+            "selected_files_by_repo": selected_files_by_repo,
+            "writable_repo_hit": bool(workflow_case.get("writable_repo_hit", False)),
+            "writable_files_hit_rate": float(workflow_case.get("writable_files_hit_rate", 0.0) or 0.0),
+            "replay_mode_enabled": True,
+            "workflow_artifact_path": replay_path,
+            "replayed_shortlisted_writable_files": writable_files,
+            "replay_match_status": "exact_replay",
+            "replay_mismatch_count": 0,
+        }

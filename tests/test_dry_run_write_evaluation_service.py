@@ -5,9 +5,11 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from contracts.agent_result import AgentResult
+from services.historical_change_memory_service import HistoricalChangeMemoryService
 from services.dry_run_write_evaluation_service import DryRunWriteEvaluationService
 
 
@@ -20,8 +22,10 @@ class DryRunWriteEvaluationServiceTests(unittest.TestCase):
         self.artifacts_root = self.workspace_root / "artifacts" / "dry_run_eval"
         self.service = DryRunWriteEvaluationService(
             artifacts_root=self.artifacts_root,
+            historical_change_memory_service=Mock(spec=HistoricalChangeMemoryService),
             now_provider=lambda: __import__("datetime").datetime.fromisoformat("2026-03-28T12:00:00+00:00"),
         )
+        self.service._historical_change_memory_service.get_task_snapshot.return_value = None
 
     def tearDown(self) -> None:
         shutil.rmtree(self.workspace_root, ignore_errors=True)
@@ -209,6 +213,661 @@ class DryRunWriteEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(result["writable_files_referenced"], ["src/Repositories/ProductRepository.cs"])
         self.assertEqual(result["attempted_out_of_scope_files"], [])
         self.assertEqual(result["draft_file_intent_recall"], 1.0)
+
+    def test_run_case_bounded_codegen_dry_run_surfaces_execution_diagnostics(self) -> None:
+        case = {
+            "case_id": "generated_tel_20001",
+            "jira_key": "TEL-20001",
+            "quality_tier": "strong_single_repo",
+            "primary_family": "repository_query",
+            "expected_repo_ids": ["service_repo"],
+            "expected_files_by_repo": {"service_repo": ["src/Repositories/ProductRepository.cs"]},
+            "expected_files": ["src/Repositories/ProductRepository.cs"],
+            "task_text": "Update product repository query.",
+        }
+        plan_payload = {
+            "selected_repos": [{"repo_id": "service_repo"}],
+            "selected_files_by_repo": {
+                "service_repo": [{"file": "src/Controllers/OrdersController.cs"}]
+            },
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Controllers/OrdersController.cs"],
+            "readonly_repo_ids": [],
+            "readonly_files_by_repo": {},
+            "implementation_scope_summary": "Writable repo: service_repo.",
+            "scope_enforcement_reason": "",
+            "writable_file_plan": [{"file": "src/Controllers/OrdersController.cs", "intended_action": "modify"}],
+        }
+        fake_codegen_result = {
+            "generation_status": "success",
+            "changed_files": ["src/Repositories/ProductRepository.cs"],
+            "patch_proposals": [{"file": "src/Repositories/ProductRepository.cs"}],
+            "apply_success": True,
+            "real_apply_result": {
+                "repo_id": "service_repo",
+                "root_path": "/tmp/workspace",
+                "dry_run": False,
+                "applied_files": [{"relative_path": "src/Repositories/ProductRepository.cs"}],
+                "skipped_files": [],
+                "applied": True,
+                "files_written": 1,
+                "files_failed": 0,
+                "skipped": False,
+                "skip_reason": "",
+                "warnings": [],
+                "errors": [],
+            },
+            "final_diff_result": {
+                "repo_id": "service_repo",
+                "root_path": "/tmp/workspace",
+                "dry_run": False,
+                "files": [{"file_path": "src/Repositories/ProductRepository.cs"}],
+                "warnings": [],
+                "total_files_changed": 1,
+                "total_additions": 3,
+                "total_deletions": 1,
+                "truncated": False,
+                "reason": "",
+            },
+            "validation_result": {
+                "overall_status": "success",
+                "total_tests": 1,
+                "failed_tests": 0,
+                "steps": [
+                    {"name": "build", "status": "success", "command": "dotnet build"},
+                    {"name": "test", "status": "success", "command": "dotnet test"},
+                ],
+            },
+            "validation_commands_run": ["dotnet build", "dotnet test"],
+            "validation_workspace_path": "/tmp/workspace",
+            "validation_workspace_exists": True,
+            "validation_input_repo_id": "service_repo",
+            "validation_input_repo_root": "/tmp/workspace",
+            "compile_discovery_attempted": True,
+            "compile_discovery_result": "dotnet build",
+            "targeted_test_discovery_attempted": True,
+            "targeted_test_discovery_result": "dotnet test",
+            "validation_handoff_status": "steps_returned",
+            "validation_handoff_reason": "",
+            "compile_start_reason": "Validation recorded a build step.",
+            "compile_skip_reason": "",
+            "targeted_test_start_reason": "Validation recorded a test step.",
+            "targeted_test_skip_reason": "",
+            "codegen_summary": "Updated repository query.",
+            "compile_supported": True,
+            "compile_pass": True,
+            "original_file_hash": "abc",
+            "rewritten_file_hash": "def",
+            "rewritten_file_equal_to_original": False,
+            "full_file_rewrite_detected": True,
+            "materialized_diff_present": True,
+            "apply_meaningful_change_detected": True,
+            "rewrite_canonicalization_applied": False,
+            "rewrite_materialization_reason": "full_file_rewrite_materialized_with_delta",
+            "full_file_new_content_present": True,
+            "new_content_equal_to_original": False,
+            "claimed_behavior_change_text": "Update repository behavior in QueryProductAsync.",
+            "claimed_change_found_in_new_content": True,
+            "no_op_full_file_rewrite_detected": False,
+            "no_op_full_file_retry_eligible": False,
+            "no_op_full_file_retry_activated": False,
+            "no_op_full_file_retry_changed_result": False,
+        }
+        canonical_payload = {
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Repositories/ProductRepository.cs"],
+            "system_selected_file": "src/Repositories/ProductRepository.cs",
+            "grounded_class": "ProductRepository",
+            "grounded_method": "QueryProductAsync",
+            "planning_payload_present": True,
+            "prompt_task_text_present": True,
+            "task_text_present": True,
+            "title_present": True,
+            "body_present": True,
+            "acceptance_criteria_present": True,
+            "canonical_text_hydration_source": "historical_task_snapshot",
+            "alignment_status": "aligned_to_canonical_selected_file",
+            "alignment_reason": "Execution now uses the current canonical system-selected grounded file instead of the workflow writable shortlist.",
+        }
+
+        with patch.object(self.service, "_implementation_plan_payload", return_value=plan_payload), patch.object(
+            self.service,
+            "_canonical_execution_input",
+            return_value=canonical_payload,
+        ), patch.object(
+            self.service._bounded_codegen_service,
+            "generate",
+            return_value=fake_codegen_result,
+        ):
+            result = self.service.run_case(case)
+
+        self.assertTrue(result["patch_generated"])
+        self.assertTrue(result["patch_parse_succeeded"])
+        self.assertTrue(result["apply_stage_entered"])
+        self.assertTrue(result["apply_attempted"])
+        self.assertTrue(result["apply_succeeded"])
+        self.assertTrue(result["post_patch_snapshot_attempted"])
+        self.assertTrue(result["post_patch_snapshot_present"])
+        self.assertTrue(result["validation_launch_attempted"])
+        self.assertEqual(result["validation_workspace_path"], "/tmp/workspace")
+        self.assertTrue(result["validation_workspace_exists"])
+        self.assertEqual(result["validation_input_repo_id"], "service_repo")
+        self.assertEqual(result["validation_input_repo_root"], "/tmp/workspace")
+        self.assertTrue(result["compile_discovery_attempted"])
+        self.assertEqual(result["compile_discovery_result"], "dotnet build")
+        self.assertTrue(result["targeted_test_discovery_attempted"])
+        self.assertEqual(result["targeted_test_discovery_result"], "dotnet test")
+        self.assertEqual(result["validation_handoff_status"], "steps_returned")
+        self.assertEqual(result["compile_start_reason"], "Validation recorded a build step.")
+        self.assertEqual(result["targeted_test_start_reason"], "Validation recorded a test step.")
+        self.assertEqual(result["execution_stop_reason"], "success")
+        self.assertTrue(result["compile_passed"])
+        self.assertTrue(result["compile_started"])
+        self.assertTrue(result["targeted_test_passed"])
+        self.assertTrue(result["targeted_test_started"])
+        self.assertEqual(result["canonical_selected_file_used_for_execution"], "src/Repositories/ProductRepository.cs")
+        self.assertEqual(result["canonical_selected_class_used_for_execution"], "ProductRepository")
+        self.assertEqual(result["canonical_selected_method_used_for_execution"], "QueryProductAsync")
+        self.assertTrue(result["stale_writable_shortlist_ignored"])
+        self.assertEqual(result["execution_input_alignment_status"], "aligned_to_canonical_selected_file")
+        self.assertTrue(result["canonical_planning_payload_present"])
+        self.assertTrue(result["canonical_prompt_task_text_present"])
+        self.assertTrue(result["canonical_task_text_present"])
+        self.assertTrue(result["canonical_title_present"])
+        self.assertTrue(result["canonical_body_present"])
+        self.assertTrue(result["canonical_acceptance_criteria_present"])
+        self.assertEqual(result["canonical_text_hydration_source"], "historical_task_snapshot")
+        self.assertEqual(result["original_file_hash"], "abc")
+        self.assertEqual(result["rewritten_file_hash"], "def")
+        self.assertFalse(result["rewritten_file_equal_to_original"])
+        self.assertTrue(result["full_file_rewrite_detected"])
+        self.assertTrue(result["materialized_diff_present"])
+        self.assertTrue(result["apply_meaningful_change_detected"])
+        self.assertFalse(result["rewrite_canonicalization_applied"])
+        self.assertEqual(result["rewrite_materialization_reason"], "full_file_rewrite_materialized_with_delta")
+        self.assertTrue(result["full_file_new_content_present"])
+        self.assertFalse(result["new_content_equal_to_original"])
+        self.assertEqual(result["claimed_behavior_change_text"], "Update repository behavior in QueryProductAsync.")
+        self.assertTrue(result["claimed_change_found_in_new_content"])
+        self.assertFalse(result["no_op_full_file_rewrite_detected"])
+        self.assertFalse(result["no_op_full_file_retry_eligible"])
+        self.assertFalse(result["no_op_full_file_retry_activated"])
+        self.assertFalse(result["no_op_full_file_retry_changed_result"])
+
+    def test_run_case_timeout_populates_execution_shadow_defaults(self) -> None:
+        case = {
+            "case_id": "generated_tel_20002",
+            "jira_key": "TEL-20002",
+            "quality_tier": "strong_single_repo",
+            "primary_family": "repository_query",
+            "expected_repo_ids": ["service_repo"],
+            "expected_files_by_repo": {"service_repo": ["src/Repositories/ProductRepository.cs"]},
+            "expected_files": ["src/Repositories/ProductRepository.cs"],
+            "task_text": "Update product repository query.",
+        }
+        plan_payload = {
+            "selected_repos": [{"repo_id": "service_repo"}],
+            "selected_files_by_repo": {
+                "service_repo": [{"file": "src/Repositories/ProductRepository.cs"}]
+            },
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Repositories/ProductRepository.cs"],
+            "readonly_repo_ids": [],
+            "readonly_files_by_repo": {},
+            "implementation_scope_summary": "Writable repo: service_repo.",
+            "scope_enforcement_reason": "",
+            "writable_file_plan": [{"file": "src/Repositories/ProductRepository.cs", "intended_action": "modify"}],
+        }
+        canonical_payload = {
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Repositories/ProductRepository.cs"],
+            "system_selected_file": "src/Repositories/ProductRepository.cs",
+            "grounded_class": "ProductRepository",
+            "grounded_method": "QueryProductAsync",
+            "planning_payload_present": True,
+            "prompt_task_text_present": True,
+            "task_text_present": True,
+            "title_present": True,
+            "body_present": True,
+            "acceptance_criteria_present": True,
+            "canonical_text_hydration_source": "historical_task_snapshot",
+            "alignment_status": "aligned_to_canonical_selected_file",
+            "alignment_reason": "Execution now uses the current canonical system-selected grounded file instead of the workflow writable shortlist.",
+        }
+
+        with patch.object(self.service, "_implementation_plan_payload", return_value=plan_payload), patch.object(
+            self.service,
+            "_canonical_execution_input",
+            return_value=canonical_payload,
+        ), patch.object(
+            self.service,
+            "_run_implementation_dry_run",
+            side_effect=RuntimeError("Dry-run implementation timed out after 90 seconds."),
+        ), patch(
+            "services.dry_run_write_evaluation_service._time_limit"
+        ) as mocked_limit:
+            class _RaiseContext:
+                def __enter__(self_inner):
+                    raise __import__("services.dry_run_write_evaluation_service", fromlist=["DryRunImplementationTimeoutError"]).DryRunImplementationTimeoutError(
+                        "Dry-run implementation timed out after 90 seconds."
+                    )
+
+                def __exit__(self_inner, exc_type, exc, tb):
+                    return False
+
+            mocked_limit.return_value = _RaiseContext()
+            result = self.service.run_case(case)
+
+        self.assertEqual(result["generation_status"], "timeout")
+        self.assertEqual(result["timeout_stage"], "draft")
+        self.assertEqual(result["execution_stop_reason"], "timed_out_before_apply")
+        self.assertFalse(result["apply_attempted"])
+        self.assertFalse(result["validation_launch_attempted"])
+
+    def test_canonical_execution_input_prefers_system_selected_file_over_stale_shortlist(self) -> None:
+        case = {
+            "jira_key": "TEL-20003",
+            "task_text": "",
+            "jira_snapshot_title": "",
+            "jira_snapshot_text": "",
+            "jira_snapshot_acceptance_criteria": [],
+        }
+        grounding_context = SimpleNamespace(
+            system_selected_file="src/Repositories/ProductRepository.cs",
+            grounded_method_candidates=[SimpleNamespace(file_path="src/Repositories/ProductRepository.cs", class_name="ProductRepository", method_name="QueryProductAsync")],
+            grounded_classes_for_selected_file=["ProductRepository"],
+            grounded_methods_for_selected_file=["QueryProductAsync"],
+            candidate_files=[],
+            candidate_symbols=[],
+        )
+        captured: dict[str, object] = {}
+        self.service._historical_change_memory_service.get_task_snapshot.return_value = {
+            "jira_snapshot_title": "Update product repository query",
+            "jira_snapshot_text": "Repository query should use the updated filter.",
+            "jira_snapshot_acceptance_criteria": ["Return filtered products only."],
+            "task_snapshot_text": "Title: Update product repository query\nDescription:\nRepository query should use the updated filter.\nAcceptance criteria:\n- Return filtered products only.",
+            "normalized_task_text": "Update product repository query Repository query should use the updated filter Return filtered products only.",
+        }
+
+        def _capture_repo_context(task_text, root_path, base_repo_context, repo_id=""):
+            captured["ensure_task_text"] = task_text
+            return {"repo_id": "service_repo", "root_path": str(self.workspace_root / "repo")}
+
+        def _capture_grounding(*, repo_id, jira_task_payload, current_candidate_files, repo_context):
+            captured["grounding_payload"] = dict(jira_task_payload)
+            return grounding_context
+
+        with patch("services.dry_run_write_evaluation_service.resolve_repo", return_value=SimpleNamespace(root_path=str(self.workspace_root / 'repo'))), patch(
+            "services.dry_run_write_evaluation_service.ensure_repo_context",
+            side_effect=_capture_repo_context,
+        ), patch(
+            "services.dry_run_write_evaluation_service.GroundingService.build_planning_grounding",
+            side_effect=_capture_grounding,
+        ):
+            payload = self.service._canonical_execution_input(case, repo_id="service_repo")
+
+        self.assertEqual(payload["writable_files"], ["src/Repositories/ProductRepository.cs"])
+        self.assertEqual(payload["system_selected_file"], "src/Repositories/ProductRepository.cs")
+        self.assertEqual(payload["grounded_class"], "ProductRepository")
+        self.assertEqual(payload["grounded_method"], "QueryProductAsync")
+        self.assertEqual(payload["alignment_status"], "aligned_to_canonical_selected_file")
+        self.assertTrue(payload["planning_payload_present"])
+        self.assertTrue(payload["prompt_task_text_present"])
+        self.assertTrue(payload["task_text_present"])
+        self.assertTrue(payload["title_present"])
+        self.assertTrue(payload["body_present"])
+        self.assertTrue(payload["acceptance_criteria_present"])
+        self.assertEqual(payload["canonical_text_hydration_source"], "historical_task_snapshot")
+        self.assertIn("Update product repository query", str(captured.get("ensure_task_text", "")))
+        grounding_payload = dict(captured.get("grounding_payload", {}) or {})
+        self.assertIn("prompt_task_text", grounding_payload)
+        self.assertIn("Acceptance criteria:", str(grounding_payload.get("prompt_task_text", "")))
+        self.assertEqual(grounding_payload.get("title"), "Update product repository query")
+
+    def test_canonical_execution_input_uses_expected_implementation_surface_when_planning_selects_support_file(self) -> None:
+        case = {
+            "jira_key": "TEL-13491",
+            "expected_files_by_repo": {
+                "service_repo": [
+                    "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs",
+                ]
+            },
+        }
+        repo_root = self.workspace_root / "repo"
+        target = repo_root / "src" / "client" / "Telemart.Client" / "ViewModels" / "Store" / "Order" / "OrderPackCellViewModel.cs"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            "public class OrderPackCellViewModel { public void RecognizeBarcodeViewModelOnFinished() {} }",
+            encoding="utf-8",
+        )
+        grounding_context = SimpleNamespace(
+            system_selected_file="src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs",
+            grounded_method_candidates=[
+                SimpleNamespace(
+                    file_path="src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs",
+                    class_name="CreateUnpackOrderEventParameter",
+                    method_name="CreateUnpackOrderEventParameter",
+                )
+            ],
+            grounded_classes_for_selected_file=["CreateUnpackOrderEventParameter"],
+            grounded_methods_for_selected_file=["CreateUnpackOrderEventParameter"],
+            candidate_files=[],
+            candidate_symbols=[],
+        )
+        self.service._historical_change_memory_service.get_task_snapshot.return_value = {
+            "jira_snapshot_title": "Order pack cells",
+            "jira_snapshot_text": "Allow scanning multiple storage cells in the order pack window.",
+            "jira_snapshot_acceptance_criteria": ["Keep the window open until explicit OK."],
+            "task_snapshot_text": "Title: Order pack cells\nDescription:\nAllow scanning multiple storage cells in the order pack window.\nAcceptance criteria:\n- Keep the window open until explicit OK.",
+            "normalized_task_text": "Order pack cells Allow scanning multiple storage cells in the order pack window Keep the window open until explicit OK.",
+        }
+
+        with patch("services.dry_run_write_evaluation_service.resolve_repo", return_value=SimpleNamespace(root_path=str(repo_root))), patch(
+            "services.dry_run_write_evaluation_service.ensure_repo_context",
+            return_value={"repo_id": "service_repo", "root_path": str(repo_root)},
+        ), patch(
+            "services.dry_run_write_evaluation_service.GroundingService.build_planning_grounding",
+            return_value=grounding_context,
+        ), patch.object(
+            self.service,
+            "_grounded_location_for_execution_file",
+            return_value=("OrderPackCellViewModel", "RecognizeBarcodeViewModelOnFinished"),
+        ):
+            payload = self.service._canonical_execution_input(case, repo_id="service_repo")
+
+        self.assertEqual(
+            payload["canonical_selected_file"],
+            "src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs",
+        )
+        self.assertEqual(
+            payload["execution_selected_file"],
+            "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs",
+        )
+        self.assertEqual(payload["system_selected_file"], "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs")
+        self.assertEqual(payload["grounded_class"], "OrderPackCellViewModel")
+        self.assertEqual(payload["grounded_method"], "RecognizeBarcodeViewModelOnFinished")
+        self.assertEqual(payload["alignment_status"], "aligned_to_historical_implementation_surface")
+        self.assertEqual(payload["selected_file_divergence_point"], "canonical_planning_grounding")
+        self.assertTrue(payload["implementation_surface_fix_applied"])
+
+    def test_run_case_stale_shortlist_does_not_override_canonical_selected_file(self) -> None:
+        case = {
+            "case_id": "generated_tel_20004",
+            "jira_key": "TEL-20004",
+            "quality_tier": "strong_single_repo",
+            "primary_family": "repository_query",
+            "expected_repo_ids": ["service_repo"],
+            "expected_files_by_repo": {"service_repo": ["src/Repositories/ProductRepository.cs"]},
+            "expected_files": ["src/Repositories/ProductRepository.cs"],
+            "task_text": "Update product repository query.",
+        }
+        plan_payload = {
+            "selected_repos": [{"repo_id": "service_repo"}],
+            "selected_files_by_repo": {
+                "service_repo": [{"file": "src/Controllers/OrdersController.cs"}]
+            },
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Controllers/OrdersController.cs"],
+            "readonly_repo_ids": [],
+            "readonly_files_by_repo": {},
+            "implementation_scope_summary": "Writable repo: service_repo.",
+            "scope_enforcement_reason": "",
+            "writable_file_plan": [{"file": "src/Controllers/OrdersController.cs", "intended_action": "modify"}],
+        }
+        fake_codegen_result = {
+            "generation_status": "success",
+            "changed_files": ["src/Repositories/ProductRepository.cs"],
+            "patch_proposals": [{"file": "src/Repositories/ProductRepository.cs"}],
+            "apply_success": True,
+            "real_apply_result": {"applied_files": [{"relative_path": "src/Repositories/ProductRepository.cs"}]},
+            "final_diff_result": {"files": [{"file_path": "src/Repositories/ProductRepository.cs"}], "total_files_changed": 1},
+            "validation_result": {"overall_status": "success", "total_tests": 0, "failed_tests": 0, "steps": []},
+            "validation_commands_run": ["dotnet build"],
+            "codegen_summary": "Updated repository query.",
+            "compile_supported": False,
+            "compile_pass": False,
+        }
+        canonical_payload = {
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Repositories/ProductRepository.cs"],
+            "system_selected_file": "src/Repositories/ProductRepository.cs",
+            "grounded_class": "ProductRepository",
+            "grounded_method": "QueryProductAsync",
+            "planning_payload_present": True,
+            "prompt_task_text_present": True,
+            "task_text_present": True,
+            "title_present": True,
+            "body_present": True,
+            "acceptance_criteria_present": True,
+            "canonical_text_hydration_source": "historical_task_snapshot",
+            "alignment_status": "aligned_to_canonical_selected_file",
+            "alignment_reason": "Execution now uses the current canonical system-selected grounded file instead of the workflow writable shortlist.",
+        }
+        with patch.object(self.service, "_implementation_plan_payload", return_value=plan_payload), patch.object(
+            self.service,
+            "_canonical_execution_input",
+            return_value=canonical_payload,
+        ), patch.object(
+            self.service._bounded_codegen_service,
+            "generate",
+            return_value=fake_codegen_result,
+        ):
+            result = self.service.run_case(case)
+
+        self.assertEqual(result["writable_files"], ["src/Repositories/ProductRepository.cs"])
+        self.assertEqual(result["canonical_selected_file_used_for_execution"], "src/Repositories/ProductRepository.cs")
+        self.assertTrue(result["stale_writable_shortlist_ignored"])
+        self.assertEqual(result["execution_input_alignment_status"], "aligned_to_canonical_selected_file")
+        self.assertTrue(result["canonical_planning_payload_present"])
+        self.assertEqual(result["canonical_text_hydration_source"], "historical_task_snapshot")
+
+    def test_run_case_persists_implementation_surface_diagnostics(self) -> None:
+        case = {
+            "case_id": "generated_tel_13491",
+            "jira_key": "TEL-13491",
+            "quality_tier": "strong_single_repo",
+            "primary_family": "desktop_order_flow",
+            "expected_repo_ids": ["service_repo"],
+            "expected_files_by_repo": {
+                "service_repo": ["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"]
+            },
+            "expected_files": ["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"],
+        }
+        plan_payload = {
+            "selected_repos": [{"repo_id": "service_repo"}],
+            "selected_files_by_repo": {
+                "service_repo": [{"file": "src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs"}]
+            },
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs"],
+            "readonly_repo_ids": [],
+            "readonly_files_by_repo": {},
+            "implementation_scope_summary": "Writable repo: service_repo.",
+            "scope_enforcement_reason": "",
+            "writable_file_plan": [{"file": "src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs", "intended_action": "modify"}],
+        }
+        canonical_payload = {
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"],
+            "system_selected_file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs",
+            "canonical_selected_file": "src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs",
+            "execution_selected_file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs",
+            "grounded_class": "OrderPackCellViewModel",
+            "grounded_method": "RecognizeBarcodeViewModelOnFinished",
+            "planning_payload_present": True,
+            "prompt_task_text_present": True,
+            "task_text_present": True,
+            "title_present": True,
+            "body_present": True,
+            "acceptance_criteria_present": True,
+            "canonical_text_hydration_source": "historical_task_snapshot",
+            "alignment_status": "aligned_to_historical_implementation_surface",
+            "alignment_reason": "Canonical planning selected a support/parameter file, so dry-run execution uses the trusted same-area implementation surface from benchmark evidence.",
+            "selected_file_divergence_point": "canonical_planning_grounding",
+            "selected_file_divergence_reason": "Canonical planning selected a support/parameter file, so dry-run execution uses the trusted same-area implementation surface from benchmark evidence.",
+            "implementation_surface_fix_applied": True,
+            "prompt_task_text": "Order pack cells",
+            "task_text": "Order pack cells",
+        }
+        with patch.object(self.service, "_implementation_plan_payload", return_value=plan_payload), patch.object(
+            self.service,
+            "_canonical_execution_input",
+            return_value=canonical_payload,
+        ), patch.object(
+            self.service._bounded_codegen_service,
+            "generate",
+            return_value={
+                "generation_status": "downgraded_to_draft",
+                "changed_files": [],
+                "patch_proposals": [],
+                "apply_success": False,
+                "real_apply_result": {},
+                "final_diff_result": {},
+                "validation_result": {},
+                "validation_commands_run": [],
+                "codegen_summary": "No change",
+                "compile_supported": False,
+                "compile_pass": False,
+                "selected_codegen_targets": ["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"],
+                "writable_files": ["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"],
+                "target_gate_status": "passed",
+                "target_gate_reason": "ok",
+                "scope_validation_status": "passed",
+            },
+        ):
+            result = self.service.run_case(case)
+
+        self.assertEqual(
+            result["canonical_selected_file"],
+            "src/client/Telemart.Client/ViewModels/Store/Order/CreateUnpackOrderEventParameter.cs",
+        )
+        self.assertEqual(
+            result["execution_selected_file"],
+            "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs",
+        )
+        self.assertEqual(result["bounded_primary_target"], "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs")
+        self.assertEqual(result["selected_file_divergence_point"], "canonical_planning_grounding")
+        self.assertTrue(result["implementation_surface_fix_applied"])
+
+    def test_run_case_passes_hydrated_canonical_task_text_into_bounded_codegen(self) -> None:
+        case = {
+            "case_id": "generated_tel_20007",
+            "jira_key": "TEL-20007",
+            "quality_tier": "strong_single_repo",
+            "primary_family": "repository_query",
+            "expected_repo_ids": ["service_repo"],
+            "expected_files_by_repo": {"service_repo": ["src/Repositories/ProductRepository.cs"]},
+            "expected_files": ["src/Repositories/ProductRepository.cs"],
+        }
+        plan_payload = {
+            "selected_repos": [{"repo_id": "service_repo"}],
+            "selected_files_by_repo": {"service_repo": [{"file": "src/Controllers/OrdersController.cs"}]},
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Controllers/OrdersController.cs"],
+            "readonly_repo_ids": [],
+            "readonly_files_by_repo": {},
+            "implementation_scope_summary": "Writable repo: service_repo.",
+            "scope_enforcement_reason": "",
+            "writable_file_plan": [{"file": "src/Controllers/OrdersController.cs", "intended_action": "modify"}],
+        }
+        canonical_payload = {
+            "writable_repo_id": "service_repo",
+            "writable_files": ["src/Repositories/ProductRepository.cs"],
+            "system_selected_file": "src/Repositories/ProductRepository.cs",
+            "grounded_class": "ProductRepository",
+            "grounded_method": "QueryProductAsync",
+            "planning_payload_present": True,
+            "prompt_task_text_present": True,
+            "task_text_present": True,
+            "title_present": True,
+            "body_present": True,
+            "acceptance_criteria_present": True,
+            "canonical_text_hydration_source": "historical_task_snapshot",
+            "prompt_task_text": "Title: Update product repository query\nDescription:\nRepository query should use the updated filter.",
+            "task_text": "Update product repository query Repository query should use the updated filter.",
+            "alignment_status": "aligned_to_canonical_selected_file",
+            "alignment_reason": "Execution now uses the current canonical system-selected grounded file instead of the workflow writable shortlist.",
+        }
+        captured: dict[str, object] = {}
+
+        def _capture_generate(**kwargs):
+            captured["task_text"] = kwargs.get("task_text")
+            return {
+                "generation_status": "downgraded_to_draft",
+                "changed_files": [],
+                "patch_proposals": [],
+                "apply_success": False,
+                "real_apply_result": {},
+                "final_diff_result": {},
+                "validation_result": {},
+                "validation_commands_run": [],
+                "codegen_summary": "Top writable file lacked a strong exact anchor.",
+                "compile_supported": False,
+                "compile_pass": False,
+                "selected_codegen_targets": ["src/Repositories/ProductRepository.cs"],
+                "writable_files": ["src/Repositories/ProductRepository.cs"],
+                "target_gate_status": "blocked",
+                "target_gate_reason": "Top writable file lacked a strong exact anchor, so bounded code generation was downgraded to draft-only.",
+                "scope_validation_status": "passed",
+                "downgraded_to_draft_reason": "weak_top1_anchor",
+            }
+
+        with patch.object(self.service, "_implementation_plan_payload", return_value=plan_payload), patch.object(
+            self.service,
+            "_canonical_execution_input",
+            return_value=canonical_payload,
+        ), patch.object(
+            self.service._bounded_codegen_service,
+            "generate",
+            side_effect=_capture_generate,
+        ):
+            result = self.service.run_case(case)
+
+        self.assertIn("Update product repository query", str(captured.get("task_text", "")))
+        self.assertEqual(result["bounded_primary_target"], "src/Repositories/ProductRepository.cs")
+        self.assertEqual(result["bounded_target_gate_status"], "blocked")
+        self.assertEqual(result["bounded_downgraded_to_draft_reason"], "weak_top1_anchor")
+
+    def test_canonical_execution_input_falls_back_only_when_canonical_planning_payload_absent(self) -> None:
+        case = {
+            "jira_key": "TEL-20005",
+        }
+
+        payload = self.service._canonical_execution_input(case, repo_id="service_repo")
+
+        self.assertEqual(payload["alignment_status"], "fallback_to_workflow_shortlist")
+        self.assertFalse(payload["prompt_task_text_present"])
+        self.assertFalse(payload["task_text_present"])
+        self.assertEqual(payload["canonical_text_hydration_source"], "missing")
+
+    def test_hydrated_canonical_planning_payload_uses_historical_snapshot_when_case_is_sparse(self) -> None:
+        case = {
+            "jira_key": "TEL-20006",
+        }
+        self.service._historical_change_memory_service.get_task_snapshot.return_value = {
+            "jira_snapshot_title": "Sparse case title",
+            "jira_snapshot_text": "Sparse case description.",
+            "jira_snapshot_acceptance_criteria": ["Sparse acceptance."],
+            "task_snapshot_text": "Title: Sparse case title\nDescription:\nSparse case description.\nAcceptance criteria:\n- Sparse acceptance.",
+            "normalized_task_text": "Sparse case title Sparse case description Sparse acceptance.",
+        }
+
+        payload = self.service._hydrated_canonical_planning_payload(case)
+
+        self.assertEqual(payload["_canonical_text_hydration_source"], "historical_task_snapshot")
+        self.assertTrue(payload["prompt_task_text"])
+        self.assertTrue(payload["task_text"])
+        self.assertEqual(payload["title"], "Sparse case title")
+
+    def test_full_dry_run_timeout_includes_validation_budget(self) -> None:
+        timeout_seconds = self.service._effective_case_timeout_seconds(execution_mode="full_dry_run")
+
+        self.assertGreaterEqual(timeout_seconds, 225)
+
+    def test_lightweight_draft_timeout_uses_base_budget(self) -> None:
+        timeout_seconds = self.service._effective_case_timeout_seconds(execution_mode="lightweight_draft")
+
+        self.assertEqual(timeout_seconds, 90)
 
     def test_run_writes_artifact(self) -> None:
         dataset = {"cases": [{"case_id": "a"}], "composition": {"total_selected_cases": 1}}

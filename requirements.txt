@@ -14,3 +14,5 @@ uvicorn
 httpx
 requests
 argon2-cffi
+tree-sitter
+tree-sitter-c-sharp

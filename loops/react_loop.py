@@ -4,6 +4,7 @@ from typing import Any
 from ai_gateway import LLMGateway, ToolGuardError, validate_tool_call
 from ai_gateway.response_filter import filter_response_text
 from ai_gateway.schemas import GatewayRequest
+from llm_factory import LLMProviderError, llm_idle_telemetry
 from logger_utils import log_line
 from system_prompt import SYSTEM_PROMPT
 from tools.registry import TOOLS, TOOLS_MAP
@@ -39,9 +40,10 @@ def run_react_loop(
     agent_name: str = "react_loop",
     tools: list[dict[str, Any]] | None = None,
     routing_metadata: dict[str, Any] | None = None,
-) -> tuple[str, list[dict[str, Any]]]:
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     effective_tools = tools if tools is not None else TOOLS
     tag = _agent_tag(agent_name)
+    llm_metadata = llm_idle_telemetry()
 
     messages = _trim_runtime_memory(memory)
     messages.append({"role": "user", "content": user_input})
@@ -68,9 +70,13 @@ def run_react_loop(
             )
             gateway_response = GATEWAY.create_chat_completion(gateway_request)
             response = gateway_response.raw_response
+            llm_metadata = dict(gateway_response.provider_metadata or {})
+        except LLMProviderError as e:
+            log_line(f"{tag} GATEWAY / LLM API ERROR: {e}")
+            raise
         except Exception as e:
             log_line(f"{tag} GATEWAY / LLM API ERROR: {e}")
-            return f"LLM gateway error: {e}", messages
+            raise
 
         message = response.choices[0].message
 
@@ -102,7 +108,7 @@ def run_react_loop(
             log_line(f"{tag} FINAL ANSWER READY")
             log_line(f"{tag} FINAL ANSWER: {_preview_text(final_answer, 300)}")
             log_line("=" * 60)
-            return final_answer, messages
+            return final_answer, messages, llm_metadata
 
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
@@ -156,7 +162,7 @@ def run_react_loop(
 
     log_line(f"{tag} MAX STEPS REACHED")
     log_line("=" * 60)
-    return "Reached max steps without final answer.", messages
+    return "Reached max steps without final answer.", messages, llm_metadata
 
 
 def create_initial_memory() -> list[dict[str, Any]]:

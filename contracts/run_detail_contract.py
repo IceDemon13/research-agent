@@ -79,6 +79,16 @@ class RunDetail:
     provider_used: str = ""
     provider_fallback: bool = False
     provider_reason: str = ""
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_runtime_available: bool = False
+    llm_auth_present: bool = False
+    jira_auth_present: bool = False
+    llm_request_attempted: bool = False
+    llm_request_succeeded: bool = False
+    llm_failure_reason: str = ""
+    provider_quota_exhausted: bool = False
+    run_invalid_due_to_provider: bool = False
     sync_status: str = ""
     local_head_before: str = ""
     remote_head: str = ""
@@ -148,6 +158,16 @@ class RunDetail:
             "provider_used": self.provider_used,
             "provider_fallback": bool(self.provider_fallback),
             "provider_reason": self.provider_reason,
+            "llm_provider": self.llm_provider,
+            "llm_model": self.llm_model,
+            "llm_runtime_available": bool(self.llm_runtime_available),
+            "llm_auth_present": bool(self.llm_auth_present),
+            "jira_auth_present": bool(self.jira_auth_present),
+            "llm_request_attempted": bool(self.llm_request_attempted),
+            "llm_request_succeeded": bool(self.llm_request_succeeded),
+            "llm_failure_reason": self.llm_failure_reason,
+            "provider_quota_exhausted": bool(self.provider_quota_exhausted),
+            "run_invalid_due_to_provider": bool(self.run_invalid_due_to_provider),
             "sync_status": self.sync_status,
             "local_head_before": self.local_head_before,
             "remote_head": self.remote_head,
@@ -240,6 +260,16 @@ class RunDetail:
             provider_used=str(item.get("provider_used", "") or "").strip(),
             provider_fallback=bool(item.get("provider_fallback", False)),
             provider_reason=str(item.get("provider_reason", "") or "").strip(),
+            llm_provider=str(item.get("llm_provider", "") or "").strip(),
+            llm_model=str(item.get("llm_model", "") or "").strip(),
+            llm_runtime_available=bool(item.get("llm_runtime_available", False)),
+            llm_auth_present=bool(item.get("llm_auth_present", False)),
+            jira_auth_present=bool(item.get("jira_auth_present", False)),
+            llm_request_attempted=bool(item.get("llm_request_attempted", False)),
+            llm_request_succeeded=bool(item.get("llm_request_succeeded", False)),
+            llm_failure_reason=str(item.get("llm_failure_reason", "") or "").strip(),
+            provider_quota_exhausted=bool(item.get("provider_quota_exhausted", False)),
+            run_invalid_due_to_provider=bool(item.get("run_invalid_due_to_provider", False)),
             sync_status=str(item.get("sync_status", "") or "").strip(),
             local_head_before=str(item.get("local_head_before", "") or "").strip(),
             remote_head=str(item.get("remote_head", "") or "").strip(),

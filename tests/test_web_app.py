@@ -23,6 +23,8 @@ from contracts.run_contract import RunRecord
 from services.run_service import RunService
 from services.db_service import DatabaseService
 from services.auth_service import AuthService
+from services.jira_evidence_service import JiraEvidenceBundle
+from llm_factory import LLMConfigurationError
 import web_app
 from web_app import app
 
@@ -267,6 +269,70 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["error"], "jira_fetch_failed")
         self.assertEqual(payload["workflow_type"], "analyze_task")
         self.assertEqual(payload["request_input_text"], "TEL-404")
+
+    def test_analyze_task_fails_closed_when_jira_auth_is_missing(self) -> None:
+        with patch(
+            "web_app.load_jira_task",
+            side_effect=web_app.JiraConfigurationError(
+                "Jira auth is missing; refusing to fetch live Jira content.",
+                failure_reason="jira_auth_missing",
+            ),
+        ), patch("web_app.jira_auth_present", return_value=False):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-404", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 424)
+        payload = response.json()["detail"]
+        self.assertEqual(payload["error"], "jira_auth_missing")
+        self.assertFalse(payload["jira_auth_present"])
+        self.assertEqual(payload["workflow_type"], "analyze_task")
+
+    def test_analyze_task_fails_closed_when_llm_provider_is_unavailable(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        with patch("web_app.RunService", return_value=service), patch(
+            "web_app.root_agent.run_root_agent",
+            side_effect=LLMConfigurationError(
+                "OPENROUTER_API_KEY is present but empty; refusing to fall back silently.",
+                provider="openrouter",
+                model="gpt-5.4-mini",
+                llm_runtime_available=False,
+                llm_auth_present=False,
+                llm_request_attempted=False,
+                llm_request_succeeded=False,
+                llm_failure_reason="openrouter_api_key_empty",
+            ),
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13491", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()["detail"]
+        self.assertEqual(payload["error"], "llm_provider_unavailable")
+        self.assertTrue(payload["run_invalid_due_to_provider"])
+        self.assertEqual(payload["llm_failure_reason"], "openrouter_api_key_empty")
+        runs = service.list_runs()
+        self.assertEqual(len(runs), 1)
+        detail = service.load_run_detail(runs[0].run_id, run_record=runs[0], log_path=runs[0].log_path)
+        self.assertIsNotNone(detail)
+        self.assertTrue(detail.run_invalid_due_to_provider)
+        self.assertEqual(detail.llm_provider, "openrouter")
+        self.assertEqual(detail.llm_failure_reason, "openrouter_api_key_empty")
 
     def test_implementation_plan_uses_gitnexus_payload_for_catalog_service(self) -> None:
         run_record = RunRecord(
@@ -1937,11 +2003,23 @@ class WebAppTests(unittest.TestCase):
                 "quality_tier_counts": {"strong_single_repo": 6, "strong_multi_repo": 1},
                 "artifact_path": "artifacts/routing_benchmarks/generated_cases_20260325T100000Z.json",
                 "latest_artifact_path": "artifacts/routing_benchmarks/generated_cases_latest.json",
+                "baseline_latest_artifact_path": "artifacts/routing_benchmarks/generated_cases_single_repo_creator_filtered_baseline_latest.json",
                 "cases_preview": [],
             }
             response = self.client.post(
                 "/routing-benchmark/generate-cases",
-                json={"include_deleted": False, "include_weak": False, "hydrate_jira_snapshots": True, "max_expected_files": 5},
+                json={
+                    "include_deleted": False,
+                    "include_weak": False,
+                    "hydrate_jira_snapshots": True,
+                    "max_expected_files": 5,
+                    "max_task_count": 300,
+                    "newest_first": True,
+                    "allowed_creators": ["i.svarytsevych@telemart.com.ua"],
+                    "curated_allowlist": ["TEL-13488"],
+                    "single_repo_only": True,
+                    "baseline_name": "single_repo_creator_filtered_baseline",
+                },
                 headers={
                     "X-Actor-Id": "admin-1",
                     "X-Actor-Role": "admin",
@@ -1952,6 +2030,11 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["total_cases_generated"], 7)
         self.assertTrue(mocked_generation_service.generate_cases.call_args.kwargs["hydrate_jira_snapshots"])
+        self.assertEqual(mocked_generation_service.generate_cases.call_args.kwargs["max_task_count"], 300)
+        self.assertEqual(mocked_generation_service.generate_cases.call_args.kwargs["allowed_creators"], ["i.svarytsevych@telemart.com.ua"])
+        self.assertEqual(mocked_generation_service.generate_cases.call_args.kwargs["curated_allowlist"], ["TEL-13488"])
+        self.assertTrue(mocked_generation_service.generate_cases.call_args.kwargs["single_repo_only"])
+        self.assertEqual(mocked_generation_service.generate_cases.call_args.kwargs["baseline_name"], "single_repo_creator_filtered_baseline")
 
     def test_bulk_hydrate_jira_snapshots_endpoint_returns_summary(self) -> None:
         with patch.object(
@@ -2343,6 +2426,83 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["technical_details"]["final_workflow_input"], "оновити шаблон смс")
         mocked_jira_loader.assert_not_called()
         mocked_repo_query.assert_not_called()
+
+    def test_resolve_jira_workflow_input_keeps_default_behavior_when_evidence_flag_off(self) -> None:
+        original = web_app.settings._loaded.repo_intelligence_jira_evidence_layer_enabled
+        web_app.settings._loaded.repo_intelligence_jira_evidence_layer_enabled = False
+        web_app.settings.__dict__.pop("repo_intelligence", None)
+        try:
+            payload = web_app._resolve_jira_workflow_input("TEL-123", workflow_type="implementation_plan")
+        finally:
+            web_app.settings._loaded.repo_intelligence_jira_evidence_layer_enabled = original
+            web_app.settings.__dict__.pop("repo_intelligence", None)
+
+        self.assertEqual(payload["prompt_task_text"], payload["final_workflow_input"])
+        self.assertEqual(payload["supplemental_jira_evidence_text"], "")
+        self.assertFalse(payload["comments_used_in_context"])
+        self.assertEqual(payload["attachments_used_count"], 0)
+
+    def test_resolve_jira_workflow_input_adds_gated_supplemental_evidence_without_changing_baseline_text(self) -> None:
+        original = web_app.settings._loaded.repo_intelligence_jira_evidence_layer_enabled
+        web_app.settings._loaded.repo_intelligence_jira_evidence_layer_enabled = True
+        web_app.settings.__dict__.pop("repo_intelligence", None)
+        issue_payload = {
+            "title": "Report issue",
+            "summary": "Report issue",
+            "description": "Detailed description for TEL-900.",
+            "acceptance_criteria": ["Column is visible in export."],
+            "comments": [{"author_name": "PM", "created_at": "2026-04-02", "body": "Use the grouped export layout."}],
+            "attachments": [{"name": "report-layout.md", "url": "https://jira.local/report-layout.md", "media_type": "text"}],
+        }
+        evidence_bundle = JiraEvidenceBundle(
+            supplemental_context_text="Current issue comments:\n- PM @ 2026-04-02: Use the grouped export layout.\nAttachment evidence:\n- report-layout.md [text]\n  text excerpt: export layout note",
+            jira_title_present=True,
+            jira_description_present=True,
+            acceptance_criteria_present=True,
+            comments_count=1,
+            comments_used_in_context=True,
+            attachments_count=1,
+            attachment_types=["text"],
+            attachments_used_count=1,
+            attachment_text_chars=18,
+            attachment_image_summaries_count=0,
+            attachment_signal_used_in_planning=True,
+            attachment_signal_used_in_codegen=False,
+            attachment_signal_used_in_routing=False,
+            attachment_signal_used_in_targeting=False,
+            image_attachment_runtime_available=False,
+        )
+        try:
+            with patch("web_app.load_jira_task", return_value=issue_payload), patch.object(
+                web_app._jira_evidence_service,
+                "build_runtime_evidence",
+                return_value=evidence_bundle,
+            ):
+                payload = web_app._resolve_jira_workflow_input("TEL-900", workflow_type="implementation_plan")
+                technical = web_app._workflow_technical_details(
+                    workflow_name="implementation_plan",
+                    task_text=payload["final_workflow_input"],
+                    spec={},
+                    provider_payload={},
+                    input_debug=payload,
+                    baseline_summary="",
+                    final_merge_strategy="baseline_only",
+                    dropped_candidates_reasons=[],
+                )
+        finally:
+            web_app.settings._loaded.repo_intelligence_jira_evidence_layer_enabled = original
+            web_app.settings.__dict__.pop("repo_intelligence", None)
+
+        self.assertEqual(
+            payload["final_workflow_input"],
+            "Title: Report issue\nDescription:\nDetailed description for TEL-900.\nAcceptance criteria:\n- Column is visible in export.",
+        )
+        self.assertIn("Supplemental Jira evidence:", payload["prompt_task_text"])
+        self.assertIn("grouped export layout", payload["prompt_task_text"])
+        self.assertTrue(technical["comments_used_in_context"])
+        self.assertEqual(technical["attachment_types"], ["text"])
+        self.assertTrue(technical["attachment_signal_used_in_planning"])
+        self.assertFalse(technical["attachment_signal_used_in_routing"])
 
     def test_structure_task_workflow_keeps_role_request_repo_blind(self) -> None:
         run = self._create_persisted_run(

@@ -13,6 +13,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cases", type=int, default=20)
     parser.add_argument("--execution-submode", default="apply_codegen", choices=["dry_run_codegen", "apply_codegen"])
     parser.add_argument("--output-path", default="")
+    parser.add_argument("--workflow-artifact-path", default="")
     return parser
 
 
@@ -30,6 +31,8 @@ def main() -> int:
         evaluation_dataset=dataset,
         execution_submode=str(args.execution_submode or "apply_codegen").strip() or "apply_codegen",
         output_path=str(args.output_path or "").strip() or None,
+        input_cases_artifact_path=str(args.cases_path or "").strip() or None,
+        workflow_replay_artifact_path=str(args.workflow_artifact_path or "").strip() or None,
     )
     print(
         json.dumps(
@@ -50,13 +53,20 @@ def main() -> int:
                 "patch_precision": result.get("patch_precision", 0.0),
                 "patch_recall_proxy": result.get("patch_recall_proxy", 0.0),
                 "empty_patch_rate": result.get("empty_patch_rate", 0.0),
+                "replay_mode_enabled": result.get("replay_mode_enabled", False),
+                "workflow_artifact_path": result.get("workflow_artifact_path", ""),
+                "replay_match_status": result.get("replay_match_status", ""),
+                "replay_mismatch_count": result.get("replay_mismatch_count", 0),
+                "invalid_provider_case_count": result.get("invalid_provider_case_count", 0),
+                "run_invalid_due_to_provider": result.get("run_invalid_due_to_provider", False),
+                "llm_failure_reason_counts": result.get("llm_failure_reason_counts", {}),
                 "dataset_composition": result.get("dataset_composition", {}),
             },
             ensure_ascii=False,
             indent=2,
         )
     )
-    return 0
+    return 2 if bool(result.get("run_invalid_due_to_provider", False)) else 0
 
 
 if __name__ == "__main__":

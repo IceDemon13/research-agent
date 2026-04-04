@@ -455,6 +455,167 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertFalse(result.restore_pass)
         self.assertTrue(result.restore_auth_missing_guess)
 
+    def test_validation_service_splits_build_pass_test_windowsdesktop_runtime_block(self) -> None:
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": False,
+                    "steps": [
+                        {
+                            "name": "restore",
+                            "command": 'dotnet restore "/repos/sample/Sample.sln" --nologo',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Restore succeeded.",
+                            "stderr": "",
+                            "duration": 1.0,
+                        },
+                        {
+                            "name": "build",
+                            "command": 'dotnet build "/repos/sample/Sample.sln" --nologo',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Build succeeded.",
+                            "stderr": "",
+                            "duration": 1.0,
+                        },
+                        {
+                            "name": "test",
+                            "command": 'dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build /p:EnableWindowsTargeting=true',
+                            "exit_code": 1,
+                            "status": "failed",
+                            "stdout": "A total of 1 test files matched the specified pattern.",
+                            "stderr": "Testhost process exited with error: You must install or update .NET to run this application. Framework: 'Microsoft.WindowsDesktop.App', version '9.0.0' (x64). No frameworks were found.",
+                            "duration": 1.0,
+                        },
+                    ],
+                    "restore_supported": True,
+                    "restore_pass": True,
+                    "failure_reason_guess": "test_failure",
+                    "validation_repo_family": "telemart_soft_desktop_client",
+                    "runner_environment_summary": "os=posix; platform=Linux; dotnet_sdks=9.0.100",
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[
+                ValidationCommand(name="build", command='dotnet build "/repos/sample/Sample.sln" --nologo'),
+                ValidationCommand(name="test", command='dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build /p:EnableWindowsTargeting=true'),
+            ],
+        )
+
+        self.assertEqual(result.outcome_type, "build_valid_test_env_blocked")
+        self.assertTrue(result.environment_related_failure)
+        self.assertTrue(result.restore_passed)
+        self.assertTrue(result.build_passed)
+        self.assertTrue(result.targeted_test_attempted)
+        self.assertTrue(result.targeted_test_failed_due_to_windowsdesktop_runtime)
+        self.assertEqual(result.validation_outcome_split, "build_valid_test_env_blocked")
+        self.assertTrue(result.repo_specific_test_environment_issue)
+        self.assertTrue(result.windowsdesktop_runtime_missing)
+
+    def test_validation_service_unrelated_repo_failure_classification_unchanged(self) -> None:
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": False,
+                    "steps": [
+                        {
+                            "name": "build",
+                            "command": 'dotnet build "/repos/sample/Sample.sln" --nologo',
+                            "exit_code": 1,
+                            "status": "failed",
+                            "stdout": "",
+                            "stderr": "Sample.cs(10,5): error CS1002: ; expected",
+                            "duration": 1.0,
+                        },
+                    ],
+                    "failure_reason_guess": "build_compile_error",
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[ValidationCommand(name="build", command='dotnet build "/repos/sample/Sample.sln" --nologo')],
+        )
+
+        self.assertEqual(result.outcome_type, "build_compile_error")
+        self.assertFalse(result.repo_specific_test_environment_issue)
+        self.assertFalse(result.windowsdesktop_runtime_missing)
+
+    def test_validation_service_falls_back_to_local_when_runner_returns_no_steps(self) -> None:
+        commands_seen: list[str] = []
+
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": False,
+                    "error": "runner returned no steps",
+                    "steps": [],
+                }
+
+        def _fake_run_step(*, repo_root, command, output_max_chars, timeout_seconds, env_overrides=None):
+            commands_seen.append(command.command)
+            return ValidationStepResult(
+                name=command.name,
+                command=command.command,
+                exit_code=0,
+                status="success",
+                stdout=f"ran {command.name}",
+                stderr="",
+                duration=0.1,
+            )
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+        with patch.object(self.validation_service, "_run_step", side_effect=_fake_run_step):
+            result = self.validation_service.run_validation(
+                "sample",
+                commands=[
+                    ValidationCommand(name="build", command='dotnet build "/repos/sample/Sample.sln" --nologo'),
+                    ValidationCommand(name="test", command='dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build'),
+                ],
+            )
+
+        self.assertEqual(result.overall_status, "success")
+        self.assertEqual([step.name for step in result.steps], ["build", "test"])
+        self.assertEqual(len(commands_seen), 2)
+        self.assertTrue(any("falling back to local validation" in warning.lower() for warning in result.warnings))
+        self.assertTrue(result.local_fallback_triggered)
+        self.assertEqual(result.validation_runner_steps_count, 0)
+        self.assertIn("error", result.validation_runner_result_shape)
+        self.assertEqual(result.validation_runner_no_steps_reason, "runner returned no steps")
+        self.assertEqual(len(result.validation_runner_commands_discovered), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

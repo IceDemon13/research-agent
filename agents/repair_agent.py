@@ -232,7 +232,7 @@ def run_repair_agent(
         repo_context=repo_context,
     )
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=composed_input,
         memory=memory,
         agent_name="repair_agent",
@@ -247,5 +247,6 @@ def run_repair_agent(
         metadata={
             "artifact_type": "draft_set",
             "draft_set": repaired_draft_set,
+            **dict(llm_metadata or {}),
         },
     )

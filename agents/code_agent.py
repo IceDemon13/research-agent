@@ -218,7 +218,7 @@ def run_code_agent_from_spec(data: SpecToCodeInput, routing_metadata: dict | Non
 
     composed_input = _build_code_prompt_input_from_spec(data)
 
-    answer, _messages = run_react_loop(
+    answer, _messages, llm_metadata = run_react_loop(
         user_input=composed_input,
         memory=memory,
         agent_name="code_agent",
@@ -238,6 +238,7 @@ def run_code_agent_from_spec(data: SpecToCodeInput, routing_metadata: dict | Non
             "source": "spec",
             "spec_title": data.spec.title,
             "patch_plan": patch_plan,
+            **dict(llm_metadata or {}),
             **dict(routing_metadata or {}),
         },
     )

@@ -116,7 +116,13 @@ class GitNexusIndexService:
         }
         if not allowlist:
             return True
-        return str(repo_meta.repo_id or "").strip().lower() in allowlist
+        normalized_repo_id = str(repo_meta.repo_id or "").strip().lower()
+        if normalized_repo_id in allowlist:
+            return True
+        if bool(getattr(repo_meta, "gitnexus_indexed", False)) or _safe_text(getattr(repo_meta, "gitnexus_index_status", "")) == "ready":
+            return True
+        visibility_debug = self.repo_visibility_debug(repo_meta)
+        return bool(visibility_debug.get("visible", False))
 
     def analyze_repo(self, repo_meta: RepoMetadata, force: bool = True) -> dict[str, Any]:
         if not self.is_enabled_for_repo(repo_meta):

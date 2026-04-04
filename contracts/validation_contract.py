@@ -94,9 +94,30 @@ class ValidationResult:
     restore_auth_mode_guess: str = ""
     restore_secret_redaction_applied: bool = False
     failure_reason_guess: str = ""
+    restore_attempted: bool = False
+    restore_command: str = ""
+    restore_exit_code: int | None = None
+    unsupported_environment_reason: str = ""
+    validation_repo_family: str = ""
+    required_sdk_or_runtime: str = ""
+    runner_environment_summary: str = ""
     validation_runner_available: bool = False
     validation_runner_type: str = ""
     validation_timeout_seconds: int = 0
+    validation_runner_commands_discovered: list[str] = field(default_factory=list)
+    validation_runner_steps_returned: list[dict] = field(default_factory=list)
+    validation_runner_steps_count: int = 0
+    validation_runner_result_shape: list[str] = field(default_factory=list)
+    validation_runner_no_steps_reason: str = ""
+    local_fallback_triggered: bool = False
+    local_fallback_reason: str = ""
+    restore_passed: bool = False
+    build_passed: bool = False
+    targeted_test_attempted: bool = False
+    targeted_test_failed_due_to_windowsdesktop_runtime: bool = False
+    validation_outcome_split: str = ""
+    repo_specific_test_environment_issue: bool = False
+    windowsdesktop_runtime_missing: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -139,7 +160,28 @@ class ValidationResult:
             "restore_auth_mode_guess": self.restore_auth_mode_guess,
             "restore_secret_redaction_applied": self.restore_secret_redaction_applied,
             "failure_reason_guess": self.failure_reason_guess,
+            "restore_attempted": self.restore_attempted,
+            "restore_command": self.restore_command,
+            "restore_exit_code": self.restore_exit_code,
+            "unsupported_environment_reason": self.unsupported_environment_reason,
+            "validation_repo_family": self.validation_repo_family,
+            "required_sdk_or_runtime": self.required_sdk_or_runtime,
+            "runner_environment_summary": self.runner_environment_summary,
             "validation_runner_available": self.validation_runner_available,
             "validation_runner_type": self.validation_runner_type,
             "validation_timeout_seconds": self.validation_timeout_seconds,
+            "validation_runner_commands_discovered": list(self.validation_runner_commands_discovered),
+            "validation_runner_steps_returned": list(self.validation_runner_steps_returned),
+            "validation_runner_steps_count": self.validation_runner_steps_count,
+            "validation_runner_result_shape": list(self.validation_runner_result_shape),
+            "validation_runner_no_steps_reason": self.validation_runner_no_steps_reason,
+            "local_fallback_triggered": self.local_fallback_triggered,
+            "local_fallback_reason": self.local_fallback_reason,
+            "restore_passed": self.restore_passed,
+            "build_passed": self.build_passed,
+            "targeted_test_attempted": self.targeted_test_attempted,
+            "targeted_test_failed_due_to_windowsdesktop_runtime": self.targeted_test_failed_due_to_windowsdesktop_runtime,
+            "validation_outcome_split": self.validation_outcome_split,
+            "repo_specific_test_environment_issue": self.repo_specific_test_environment_issue,
+            "windowsdesktop_runtime_missing": self.windowsdesktop_runtime_missing,
         }

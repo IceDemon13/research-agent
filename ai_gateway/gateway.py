@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from openai import OpenAI
-
 from ai_gateway.audit import audit_gateway_request
 from ai_gateway.context_builder import minimize_messages
 from ai_gateway.model_router import choose_model
@@ -9,12 +7,12 @@ from ai_gateway.policy import check_messages_for_blocking, collect_policy_hits
 from ai_gateway.redactor import redact_messages
 from ai_gateway.schemas import GatewayPreparedRequest, GatewayRequest, GatewayResponse
 from config import settings
-from llm_factory import build_openai_client
+from llm_factory import build_openai_client_with_runtime, classify_llm_exception
 
 
 class LLMGateway:
     def __init__(self) -> None:
-        self._client: OpenAI = build_openai_client()
+        pass
 
     def prepare(self, request: GatewayRequest) -> GatewayPreparedRequest:
         minimized_messages = minimize_messages(
@@ -65,16 +63,29 @@ class LLMGateway:
         if prepared.blocked:
             raise ValueError(prepared.block_reason or "Prompt blocked by gateway policy.")
 
-        response = self._client.chat.completions.create(
-            model=prepared.selected_model,
-            messages=prepared.sanitized_messages,
-            tools=request.tools,
-            tool_choice="auto",
-            max_completion_tokens=settings.llm_max_completion_tokens,
-            temperature=settings.llm_temperature,
-        )
+        client, provider_metadata = build_openai_client_with_runtime(model_name=prepared.selected_model)
+        try:
+            response = client.chat.completions.create(
+                model=prepared.selected_model,
+                messages=prepared.sanitized_messages,
+                tools=request.tools,
+                tool_choice="auto",
+                max_completion_tokens=settings.llm_max_completion_tokens,
+                temperature=settings.llm_temperature,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise classify_llm_exception(
+                exc,
+                provider=str(provider_metadata.get("llm_provider", "") or prepared.selected_provider),
+                model=prepared.selected_model,
+            ) from exc
 
         return GatewayResponse(
             raw_response=response,
             prepared_request=prepared,
+            provider_metadata={
+                **provider_metadata,
+                "llm_request_attempted": True,
+                "llm_request_succeeded": True,
+            },
         )

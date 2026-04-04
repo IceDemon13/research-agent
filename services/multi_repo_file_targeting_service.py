@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from config import RepoIntelligenceSettings, settings
 from contracts.repo_index import RepoGlossary, RepoProfile, RepoSymbolIndex
 from contracts.repo_metadata import RepoMetadata
 from services.historical_change_memory_service import HistoricalChangeMemoryService
@@ -85,6 +86,29 @@ _GENERIC_SUFFIX_PATTERNS = (
     "profile.cs",
     "mappingprofile.cs",
 )
+_ADJACENT_FALSE_POSITIVE_CONTROLLER_PROCESSOR_MARKERS = (
+    "controller.cs",
+    "processor.cs",
+)
+_SUPPORT_FAMILY_SUFFIXES = (
+    ".csproj",
+    ".designer.cs",
+    ".resx",
+)
+_SUPPORT_FAMILY_REPORT_DATA_SUFFIX = "reportdata.cs"
+_SUPPORT_FAMILY_GENERIC_TOKENS = {
+    "csproj",
+    "designer",
+    "resx",
+    "report",
+    "data",
+    "view",
+    "viewmodel",
+    "model",
+    "handler",
+    "dto",
+    "base",
+}
 _FEATURE_PATH_HINTS = (
     "/controllers/",
     "/commands/",
@@ -212,6 +236,33 @@ def _tokenize(value: object) -> list[str]:
         seen.add(token)
         tokens.append(token)
     return tokens
+
+
+def _identifier_tokens(value: object) -> list[str]:
+    text = _safe_text(value)
+    if not text:
+        return []
+    compact = re.sub(r"[^A-Za-z0-9]+", " ", text).strip()
+    tokens: list[str] = []
+    for chunk in compact.split():
+        stripped = chunk
+        if len(stripped) > 1 and stripped.startswith("I") and stripped[1:2].isupper():
+            stripped = stripped[1:]
+        for part in re.findall(r"[A-Z]+(?=[A-Z][a-z]|[0-9]|$)|[A-Z]?[a-z]+|[0-9]+", stripped):
+            normalized = part.strip().lower()
+            if len(normalized) >= 2:
+                tokens.append(normalized)
+    return tokens
+
+
+def _core_identifier_tokens(path: object) -> list[str]:
+    stem = Path(_normalize_path(path)).stem
+    noise = {"i", "tests", "test", "base", "impl", "implementation"}
+    return [
+        token
+        for token in _identifier_tokens(stem)
+        if token not in noise
+    ]
 
 
 def _task_terms(task_text: str) -> list[str]:
@@ -823,7 +874,9 @@ class MultiRepoFileTargetingService:
         surviving_code_memory_service: SurvivingCodeMemoryService | None = None,
         index_service: RepositoryIndexService | None = None,
         benchmark_confusions_path: str | Path | None = None,
+        repo_settings: RepoIntelligenceSettings | None = None,
     ) -> None:
+        self._repo_settings = repo_settings or settings.repo_intelligence
         self._registry_service = registry_service or RepositoryRegistryService()
         self._historical_change_memory_service = historical_change_memory_service or HistoricalChangeMemoryService(
             registry_service=self._registry_service,
@@ -1134,7 +1187,7 @@ class MultiRepoFileTargetingService:
         )
         suppressed_terms = _suppressed_terms(repo, list(candidate_map.keys()))
         candidate_count_after_dedupe = len(candidate_map)
-        ranked_candidates = self._finalize_file_candidates(
+        ranked_candidates_full = self._finalize_file_candidates(
             repo=repo,
             repo_profile=repo_profile,
             glossary=glossary,
@@ -1148,14 +1201,70 @@ class MultiRepoFileTargetingService:
             repo_confusion_memory=repo_confusion_memory,
             candidate_map=candidate_map,
         )
+        structural_expansion_details = {"added_files": []}
+        suppressor_details = {"family": "", "applied": []}
+        diagnostic_frontier = self._diagnostic_ranked_frontier(
+            ranked_candidates_full,
+            depth=self._repo_settings.targeting_diagnostic_frontier_depth,
+        )
+        diversification_details = {
+            "blended_top_candidates_before_diversification": [],
+            "lexical_lane_candidates": [],
+            "final_candidate_pool_after_diversification": [],
+            "pool_construction_summary": {},
+        }
+        support_lane_details = {
+            "blended_top_candidates_before_support_lane": [],
+            "support_family_lane_candidates": [],
+            "final_candidate_pool_after_support_lane": [],
+            "pool_construction_summary": {},
+        }
+        ranked_candidates = self._truncate_ranked_candidates(
+            ranked_candidates_full,
+            limit=self._repo_settings.targeting_candidate_pool_size,
+        )
+        if self._repo_settings.targeting_support_family_recall_enabled:
+            final_ranked_candidates, support_lane_details = self._apply_support_family_recall_lane(
+                ranked_candidates_full,
+                pool_size=int(self._repo_settings.targeting_candidate_pool_size or 12),
+            )
+        elif self._repo_settings.targeting_recall_diversification_enabled:
+            final_ranked_candidates, diversification_details = self._apply_recall_diversification_lane(
+                ranked_candidates_full,
+                task_text=task_text,
+                task_understanding=task_understanding,
+                pool_size=int(self._repo_settings.targeting_candidate_pool_size or 12),
+            )
+        elif self._repo_settings.targeting_experimental_enabled:
+            reranked_candidates = self._rerank_file_candidates(
+                ranked_candidates,
+                inferred_task_family=inferred_task_family,
+            )
+            expanded_candidates, structural_expansion_details = self._expand_structural_candidates(
+                reranked_candidates,
+                file_index=file_index,
+                task_text=task_text,
+            )
+            final_ranked_candidates = self._rerank_file_candidates(
+                expanded_candidates,
+                inferred_task_family=inferred_task_family,
+            )
+        elif self._repo_settings.targeting_adjacent_false_positive_suppressor_enabled:
+            final_ranked_candidates, suppressor_details = self._apply_adjacent_false_positive_suppressor(
+                ranked_candidates,
+                inferred_task_family=inferred_task_family,
+                jira_key=normalized_jira_key,
+            )
+        else:
+            final_ranked_candidates = list(ranked_candidates)
         ranked_symbols = self._finalize_symbols(
             task_text=task_text,
             task_terms=task_terms,
             symbol_map=symbol_map,
         )
-        selected_files = self._select_files(ranked_candidates)
-        match_quality = self._match_quality(selected_files, ranked_candidates)
-        match_reason = self._match_reason(selected_files, ranked_candidates, workflow_type=workflow_type)
+        selected_files = self._select_files(final_ranked_candidates)
+        match_quality = self._match_quality(selected_files, final_ranked_candidates)
+        match_reason = self._match_reason(selected_files, final_ranked_candidates, workflow_type=workflow_type)
         summary = ", ".join(item["file"] for item in selected_files[:3]) if selected_files else "no strong files"
         recall_source_summary = {
             channel: {
@@ -1165,7 +1274,7 @@ class MultiRepoFileTargetingService:
             for channel in sorted(set(dict(recall_stats.get("raw_hits_by_channel", {}) or {})) | set(dict(recall_stats.get("unique_files_by_channel", {}) or {})))
         }
         return {
-            "candidate_files": ranked_candidates[:30],
+            "candidate_files": final_ranked_candidates,
             "selected_files": selected_files,
             "candidate_symbols": ranked_symbols[:5],
             "match_quality": match_quality,
@@ -1183,7 +1292,30 @@ class MultiRepoFileTargetingService:
                     channel: int(data.get("unique_candidates", 0) or 0)
                     for channel, data in recall_source_summary.items()
                 },
-                "final_pool_size_per_repo": candidate_count_after_dedupe,
+                "final_pool_size_per_repo": len(final_ranked_candidates),
+                "targeting_experimental_enabled": bool(self._repo_settings.targeting_experimental_enabled),
+                "adjacent_false_positive_suppressor_enabled": bool(self._repo_settings.targeting_adjacent_false_positive_suppressor_enabled),
+                "candidate_pool_size_limit": int(self._repo_settings.targeting_candidate_pool_size),
+                "selected_file_limit": int(self._repo_settings.targeting_selected_file_limit),
+                "structural_expansion_limit": int(self._repo_settings.targeting_structural_expansion_limit),
+                "structural_expansion_added_count": int(len(structural_expansion_details.get("added_files", []) or [])),
+                "structural_expansion_added_files": list(structural_expansion_details.get("added_files", []) or []),
+                "adjacent_false_positive_suppressor_family": _safe_text(suppressor_details.get("family", "")),
+                "adjacent_false_positive_suppression_count": int(len(suppressor_details.get("applied", []) or [])),
+                "adjacent_false_positive_suppressions": list(suppressor_details.get("applied", []) or []),
+                "diagnostic_frontier_depth": int(self._repo_settings.targeting_diagnostic_frontier_depth),
+                "diagnostic_ranked_frontier_count": int(len(diagnostic_frontier)),
+                "diagnostic_ranked_frontier_files": diagnostic_frontier,
+                "recall_diversification_enabled": bool(self._repo_settings.targeting_recall_diversification_enabled),
+                "support_family_recall_enabled": bool(self._repo_settings.targeting_support_family_recall_enabled),
+                "blended_top_candidates_before_diversification": list(diversification_details.get("blended_top_candidates_before_diversification", []) or []),
+                "lexical_lane_candidates": list(diversification_details.get("lexical_lane_candidates", []) or []),
+                "final_candidate_pool_after_diversification": list(diversification_details.get("final_candidate_pool_after_diversification", []) or []),
+                "pool_construction_summary": dict(diversification_details.get("pool_construction_summary", {}) or {}),
+                "blended_top_candidates_before_support_lane": list(support_lane_details.get("blended_top_candidates_before_support_lane", []) or []),
+                "support_family_lane_candidates": list(support_lane_details.get("support_family_lane_candidates", []) or []),
+                "final_candidate_pool_after_support_lane": list(support_lane_details.get("final_candidate_pool_after_support_lane", []) or []),
+                "support_pool_construction_summary": dict(support_lane_details.get("pool_construction_summary", {}) or {}),
                 "dropped_candidates": {},
                 "repo_knowledge_used": bool(repo_knowledge_pack),
                 "repo_knowledge_used_for_enrichment": repo_knowledge_active_for_enrichment,
@@ -1992,11 +2124,637 @@ class MultiRepoFileTargetingService:
             ranked.append(candidate)
         ranked.sort(key=lambda item: (-float(item.get("final_score", 0.0) or 0.0), _safe_text(item.get("file", ""))))
         cleaned: list[dict[str, Any]] = []
-        for index, item in enumerate(ranked[:12], start=1):
+        for index, item in enumerate(ranked, start=1):
             clone = dict(item)
             clone["ranking_position"] = index
             cleaned.append(clone)
         return cleaned
+
+    @staticmethod
+    def _truncate_ranked_candidates(
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if limit <= 0:
+            return []
+        cleaned: list[dict[str, Any]] = []
+        for index, item in enumerate(list(ranked_candidates or [])[:limit], start=1):
+            clone = dict(item)
+            clone["ranking_position"] = index
+            cleaned.append(clone)
+        return cleaned
+
+    def _apply_recall_diversification_lane(
+        self,
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        task_text: str,
+        task_understanding: dict[str, Any],
+        pool_size: int,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        if pool_size <= 0:
+            return [], {
+                "blended_top_candidates_before_diversification": [],
+                "lexical_lane_candidates": [],
+                "final_candidate_pool_after_diversification": [],
+                "pool_construction_summary": {"pool_size": 0},
+            }
+        lexical_lane_limit = min(3, max(0, pool_size))
+        keep_count = max(1, pool_size - lexical_lane_limit)
+        base_candidates = [dict(item) for item in list(ranked_candidates or [])[:pool_size]]
+        kept = [dict(item) for item in list(ranked_candidates or [])[:keep_count]]
+        seen_files = {_normalize_path(item.get("file", "")) for item in kept if _normalize_path(item.get("file", ""))}
+        lexical_scored: list[dict[str, Any]] = []
+        for raw_candidate in list(ranked_candidates or [])[keep_count:]:
+            candidate = dict(raw_candidate)
+            normalized_file = _normalize_path(candidate.get("file", ""))
+            if not normalized_file or normalized_file in seen_files:
+                continue
+            lexical_score, filename_hits, path_hits = self._lexical_diversification_score(
+                candidate_path=normalized_file,
+                task_text=task_text,
+                task_understanding=task_understanding,
+            )
+            if lexical_score <= 0.0:
+                continue
+            candidate["lexical_lane_score"] = round(lexical_score, 3)
+            candidate["lexical_lane_filename_hits"] = filename_hits
+            candidate["lexical_lane_path_hits"] = path_hits
+            lexical_scored.append(candidate)
+        lexical_scored.sort(
+            key=lambda item: (
+                -float(item.get("lexical_lane_score", 0.0) or 0.0),
+                int(item.get("ranking_position", 10**9) or 10**9),
+                _safe_text(item.get("file", "")),
+            )
+        )
+        lexical_selected: list[dict[str, Any]] = []
+        for candidate in lexical_scored:
+            if len(lexical_selected) >= lexical_lane_limit:
+                break
+            normalized_file = _normalize_path(candidate.get("file", ""))
+            if not normalized_file or normalized_file in seen_files:
+                continue
+            lexical_selected.append(dict(candidate))
+            seen_files.add(normalized_file)
+
+        combined: list[dict[str, Any]] = [dict(item) for item in kept] + [dict(item) for item in lexical_selected]
+        for raw_candidate in list(ranked_candidates or [])[keep_count:]:
+            if len(combined) >= pool_size:
+                break
+            normalized_file = _normalize_path(raw_candidate.get("file", ""))
+            if not normalized_file or normalized_file in seen_files:
+                continue
+            combined.append(dict(raw_candidate))
+            seen_files.add(normalized_file)
+
+        combined.sort(
+            key=lambda item: (
+                int(item.get("ranking_position", 10**9) or 10**9),
+                _safe_text(item.get("file", "")),
+            )
+        )
+        final_pool: list[dict[str, Any]] = []
+        lexical_files = {_normalize_path(item.get("file", "")) for item in lexical_selected if _normalize_path(item.get("file", ""))}
+        for index, item in enumerate(combined[:pool_size], start=1):
+            clone = dict(item)
+            clone["blended_ranking_position"] = int(item.get("ranking_position", index) or index)
+            clone["entered_via_recall_diversification"] = bool(_normalize_path(item.get("file", "")) in lexical_files)
+            clone["ranking_position"] = index
+            final_pool.append(clone)
+
+        diagnostics = {
+            "blended_top_candidates_before_diversification": [
+                self._pool_diagnostic_entry(item)
+                for item in base_candidates
+            ],
+            "lexical_lane_candidates": [
+                self._pool_diagnostic_entry(item)
+                for item in lexical_selected
+            ],
+            "final_candidate_pool_after_diversification": [
+                self._pool_diagnostic_entry(item)
+                for item in final_pool
+            ],
+            "pool_construction_summary": {
+                "pool_size": int(pool_size),
+                "base_keep_count": int(keep_count),
+                "lexical_lane_limit": int(lexical_lane_limit),
+                "lexical_lane_added_count": int(len(lexical_selected)),
+                "backfill_count": int(max(0, len(final_pool) - keep_count - len(lexical_selected))),
+            },
+        }
+        return final_pool, diagnostics
+
+    def _apply_support_family_recall_lane(
+        self,
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        pool_size: int,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        if pool_size <= 0:
+            return [], {
+                "blended_top_candidates_before_support_lane": [],
+                "support_family_lane_candidates": [],
+                "final_candidate_pool_after_support_lane": [],
+                "pool_construction_summary": {"pool_size": 0},
+            }
+        support_lane_limit = min(2, max(0, pool_size))
+        keep_count = max(1, pool_size - support_lane_limit)
+        base_candidates = [dict(item) for item in list(ranked_candidates or [])[:pool_size]]
+        kept = [dict(item) for item in list(ranked_candidates or [])[:keep_count]]
+        seen_files = {_normalize_path(item.get("file", "")) for item in kept if _normalize_path(item.get("file", ""))}
+        support_selected: list[dict[str, Any]] = []
+        for raw_candidate in list(ranked_candidates or [])[keep_count:]:
+            if len(support_selected) >= support_lane_limit:
+                break
+            candidate = dict(raw_candidate)
+            normalized_file = _normalize_path(candidate.get("file", ""))
+            if not normalized_file or normalized_file in seen_files:
+                continue
+            support_family_type = self._support_family_type(normalized_file)
+            if not support_family_type:
+                continue
+            anchor_details = self._support_family_anchor_for_candidate(
+                candidate_path=normalized_file,
+                anchor_candidates=kept,
+            )
+            if not anchor_details:
+                continue
+            candidate["support_family_type"] = support_family_type
+            candidate["support_family_trigger_anchor"] = anchor_details["file"]
+            candidate["support_family_trigger_reason"] = anchor_details["reason"]
+            candidate["entered_via_support_family_recall"] = True
+            support_selected.append(candidate)
+            seen_files.add(normalized_file)
+
+        combined: list[dict[str, Any]] = [dict(item) for item in kept] + [dict(item) for item in support_selected]
+        for raw_candidate in list(ranked_candidates or [])[keep_count:]:
+            if len(combined) >= pool_size:
+                break
+            normalized_file = _normalize_path(raw_candidate.get("file", ""))
+            if not normalized_file or normalized_file in seen_files:
+                continue
+            combined.append(dict(raw_candidate))
+            seen_files.add(normalized_file)
+
+        combined.sort(
+            key=lambda item: (
+                int(item.get("ranking_position", 10**9) or 10**9),
+                _safe_text(item.get("file", "")),
+            )
+        )
+        support_files = {
+            _normalize_path(item.get("file", ""))
+            for item in support_selected
+            if _normalize_path(item.get("file", ""))
+        }
+        final_pool: list[dict[str, Any]] = []
+        for index, item in enumerate(combined[:pool_size], start=1):
+            clone = dict(item)
+            clone["blended_ranking_position"] = int(item.get("ranking_position", index) or index)
+            clone["entered_via_support_family_recall"] = bool(
+                _normalize_path(item.get("file", "")) in support_files
+            )
+            clone["ranking_position"] = index
+            final_pool.append(clone)
+
+        diagnostics = {
+            "blended_top_candidates_before_support_lane": [
+                self._pool_diagnostic_entry(item)
+                for item in base_candidates
+            ],
+            "support_family_lane_candidates": [
+                self._pool_diagnostic_entry(item)
+                for item in support_selected
+            ],
+            "final_candidate_pool_after_support_lane": [
+                self._pool_diagnostic_entry(item)
+                for item in final_pool
+            ],
+            "pool_construction_summary": {
+                "pool_size": int(pool_size),
+                "base_keep_count": int(keep_count),
+                "support_lane_limit": int(support_lane_limit),
+                "support_lane_added_count": int(len(support_selected)),
+                "backfill_count": int(max(0, len(final_pool) - keep_count - len(support_selected))),
+            },
+        }
+        return final_pool, diagnostics
+
+    @staticmethod
+    def _support_family_type(candidate_path: str) -> str:
+        normalized_path = _normalize_path(candidate_path).lower()
+        filename = Path(normalized_path).name
+        if filename.endswith(".csproj"):
+            return "csproj"
+        if filename.endswith(".designer.cs"):
+            return "designer"
+        if filename.endswith(".resx"):
+            return "resx"
+        if filename.endswith(_SUPPORT_FAMILY_REPORT_DATA_SUFFIX):
+            return "report_data"
+        return ""
+
+    @staticmethod
+    def _support_project_area(path: str) -> str:
+        normalized_parts = [part for part in Path(_normalize_path(path)).parts if part]
+        lowered = [part.lower() for part in normalized_parts]
+        if len(lowered) >= 2 and lowered[0] == "src":
+            return "/".join(lowered[:2])
+        if len(lowered) >= 3 and lowered[0] == "tests":
+            return "/".join(lowered[:3])
+        if len(lowered) >= 2:
+            return "/".join(lowered[:2])
+        return "/".join(lowered)
+
+    @staticmethod
+    def _support_family_core_tokens(path: str) -> set[str]:
+        normalized_path = _normalize_path(path)
+        lowered_name = Path(normalized_path).name.lower()
+        stem = Path(normalized_path).name
+        if lowered_name.endswith(".designer.cs"):
+            stem = stem[:-len(".Designer.cs")]
+        elif lowered_name.endswith(".resx"):
+            stem = stem[:-len(".resx")]
+        elif lowered_name.endswith(".csproj"):
+            stem = stem[:-len(".csproj")]
+        elif lowered_name.endswith(_SUPPORT_FAMILY_REPORT_DATA_SUFFIX):
+            stem = stem[:-len("ReportData.cs")]
+        elif lowered_name.endswith(".cs"):
+            stem = stem[:-len(".cs")]
+        return {
+            token
+            for token in _identifier_tokens(stem)
+            if token not in _SUPPORT_FAMILY_GENERIC_TOKENS
+        }
+
+    def _support_family_anchor_for_candidate(
+        self,
+        *,
+        candidate_path: str,
+        anchor_candidates: list[dict[str, Any]],
+    ) -> dict[str, str] | None:
+        support_family_type = self._support_family_type(candidate_path)
+        if not support_family_type:
+            return None
+        candidate_area = self._support_project_area(candidate_path)
+        candidate_tokens = self._support_family_core_tokens(candidate_path)
+        best_anchor: dict[str, str] | None = None
+        best_score = -1.0
+        for raw_anchor in list(anchor_candidates or []):
+            anchor_path = _normalize_path(dict(raw_anchor or {}).get("file", ""))
+            if not anchor_path or anchor_path == _normalize_path(candidate_path):
+                continue
+            anchor_area = self._support_project_area(anchor_path)
+            anchor_tokens = self._support_family_core_tokens(anchor_path)
+            shared_tokens = sorted(candidate_tokens & anchor_tokens)
+            if support_family_type == "csproj":
+                if candidate_area != anchor_area:
+                    continue
+                score = float(raw_anchor.get("final_score", 0.0) or 0.0)
+                reason = "shared_project_area"
+            else:
+                if not candidate_tokens or len(shared_tokens) < 2:
+                    continue
+                if candidate_area and anchor_area and candidate_area != anchor_area:
+                    continue
+                score = (len(shared_tokens) * 10.0) + float(raw_anchor.get("final_score", 0.0) or 0.0)
+                reason = "shared_family_tokens:" + ",".join(shared_tokens)
+            if score > best_score:
+                best_score = score
+                best_anchor = {
+                    "file": anchor_path,
+                    "reason": reason,
+                }
+        return best_anchor
+
+    def _lexical_diversification_score(
+        self,
+        *,
+        candidate_path: str,
+        task_text: str,
+        task_understanding: dict[str, Any],
+    ) -> tuple[float, list[str], list[str]]:
+        task_sources = [
+            _safe_text(task_text),
+            _safe_text(task_understanding.get("normalized_task_title", "")),
+            _safe_text(task_understanding.get("normalized_task_body", "")),
+            " ".join(list(task_understanding.get("extracted_entities", []) or [])),
+            " ".join(list(task_understanding.get("extracted_feature_terms", []) or [])),
+            " ".join(list(task_understanding.get("extracted_path_hints", []) or [])),
+            " ".join(list(task_understanding.get("extracted_file_hints", []) or [])),
+        ]
+        task_tokens = {
+            token
+            for source in task_sources
+            for token in _tokenize(source)
+            if token and token not in _GLOBAL_NOISE_TOKENS
+        }
+        if not task_tokens:
+            return 0.0, [], []
+        normalized_path = _normalize_path(candidate_path)
+        filename_tokens = {
+            token
+            for token in _core_identifier_tokens(normalized_path)
+            if token and token not in _GLOBAL_NOISE_TOKENS
+        }
+        path_tokens = {
+            token
+            for token in _tokenize(normalized_path)
+            if token and token not in _GLOBAL_NOISE_TOKENS
+        } - filename_tokens
+        filename_hits = sorted(filename_tokens & task_tokens)
+        path_hits = sorted(path_tokens & task_tokens)
+        if not filename_hits and not path_hits:
+            return 0.0, [], []
+        score = (len(filename_hits) * 1.6) + (len(path_hits) * 0.55)
+        basename = Path(normalized_path).stem.lower()
+        for token in sorted(task_tokens):
+            if len(token) >= 4 and token in basename and token not in filename_hits:
+                score += 0.2
+        return round(score, 3), filename_hits, path_hits
+
+    @staticmethod
+    def _pool_diagnostic_entry(candidate: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "file": _normalize_path(candidate.get("file", "")),
+            "ranking_position": int(candidate.get("ranking_position", 0) or 0),
+            "blended_ranking_position": int(candidate.get("blended_ranking_position", candidate.get("ranking_position", 0)) or 0),
+            "final_score": round(float(candidate.get("final_score", 0.0) or 0.0), 3),
+            "lexical_lane_score": round(float(candidate.get("lexical_lane_score", 0.0) or 0.0), 3),
+            "entered_via_recall_diversification": bool(candidate.get("entered_via_recall_diversification", False)),
+            "entered_via_support_family_recall": bool(candidate.get("entered_via_support_family_recall", False)),
+            "lexical_lane_filename_hits": list(candidate.get("lexical_lane_filename_hits", []) or []),
+            "lexical_lane_path_hits": list(candidate.get("lexical_lane_path_hits", []) or []),
+            "support_family_type": _safe_text(candidate.get("support_family_type", "")),
+            "support_family_trigger_anchor": _normalize_path(candidate.get("support_family_trigger_anchor", "")),
+            "support_family_trigger_reason": _safe_text(candidate.get("support_family_trigger_reason", "")),
+            "reason": _safe_text(candidate.get("reason", "")),
+        }
+
+    @staticmethod
+    def _diagnostic_ranked_frontier(
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        depth: int,
+    ) -> list[dict[str, Any]]:
+        if depth <= 0:
+            return []
+        frontier: list[dict[str, Any]] = []
+        for item in list(ranked_candidates or [])[:depth]:
+            frontier.append(
+                {
+                    "file": _normalize_path(item.get("file", "")),
+                    "ranking_position": int(item.get("ranking_position", 0) or 0),
+                    "final_score": round(float(item.get("final_score", 0.0) or 0.0), 3),
+                    "base_final_score": round(float(item.get("base_final_score", item.get("final_score", 0.0)) or 0.0), 3),
+                    "reason": _safe_text(item.get("reason", "")),
+                    "source_signals": list(item.get("source_signals", []) or []),
+                    "recall_channels": list(item.get("recall_channels", []) or []),
+                }
+            )
+        return frontier
+
+    def _rerank_file_candidates(
+        self,
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        inferred_task_family: str,
+    ) -> list[dict[str, Any]]:
+        reranked: list[dict[str, Any]] = []
+        for raw_candidate in list(ranked_candidates or []):
+            candidate = dict(raw_candidate)
+            base_score = float(candidate.get("base_final_score", candidate.get("final_score", 0.0)) or 0.0)
+            recall_channels = list(candidate.get("recall_channels", []) or [])
+            matched_task_tokens = list(candidate.get("matched_task_tokens", []) or [])
+            matched_path_segments = list(candidate.get("matched_path_segments", []) or [])
+            source_signals = set(candidate.get("source_signals", []) or [])
+            exact_signal_bonus = 0.04 if float(candidate.get("exact_domain_overlap_score", 0.0) or 0.0) >= 0.16 else 0.0
+            recall_channel_bonus = min(0.09, 0.015 * len(recall_channels))
+            token_bonus = min(0.08, (0.015 * len(matched_task_tokens)) + (0.01 * len(matched_path_segments)))
+            exact_jira_bonus = 0.06 if {"surviving_exact_jira", "historical_exact_jira"} & source_signals else 0.0
+            structural_bonus = float(candidate.get("structural_expansion_bonus", 0.0) or 0.0)
+            rerank_bonus = exact_signal_bonus + recall_channel_bonus + token_bonus + exact_jira_bonus + structural_bonus
+            rerank_score = round(base_score + rerank_bonus, 3)
+            candidate["base_final_score"] = round(base_score, 3)
+            candidate["rerank_bonus"] = round(rerank_bonus, 3)
+            candidate["final_score"] = rerank_score
+            candidate["confidence"] = _confidence_from_score(rerank_score)
+            reranked.append(candidate)
+        reranked.sort(key=lambda item: (-float(item.get("final_score", 0.0) or 0.0), _safe_text(item.get("file", ""))))
+        cleaned: list[dict[str, Any]] = []
+        for index, item in enumerate(reranked[:self._repo_settings.targeting_candidate_pool_size], start=1):
+            clone = dict(item)
+            clone["ranking_position"] = index
+            cleaned.append(clone)
+        return cleaned
+
+    def _apply_adjacent_false_positive_suppressor(
+        self,
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        inferred_task_family: str,
+        jira_key: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        family = "controller_processor_confusion"
+        if inferred_task_family not in {"repository_query", "command_handler", "api_endpoint"}:
+            return list(ranked_candidates or []), {"family": family, "applied": []}
+        working = [dict(item) for item in list(ranked_candidates or [])]
+        applied: list[dict[str, Any]] = []
+        for candidate in working:
+            if not self._is_controller_processor_false_positive_candidate(candidate):
+                continue
+            anchor = self._best_controller_processor_anchor(candidate, working)
+            if anchor is None:
+                continue
+            score_before = float(candidate.get("final_score", 0.0) or 0.0)
+            score_after = round(max(0.0, score_before - 0.18), 3)
+            if score_after >= score_before:
+                continue
+            candidate["adjacent_false_positive_suppression_penalty"] = round(score_before - score_after, 3)
+            candidate["adjacent_false_positive_suppression_anchor_file"] = _normalize_path(anchor.get("file", ""))
+            candidate["adjacent_false_positive_suppression_family"] = family
+            candidate["adjacent_false_positive_suppression_score_before"] = round(score_before, 3)
+            candidate["adjacent_false_positive_suppression_score_after"] = score_after
+            candidate["final_score"] = score_after
+            candidate["confidence"] = _confidence_from_score(score_after)
+            applied.append(
+                {
+                    "jira_key": _safe_text(jira_key).upper(),
+                    "family": family,
+                    "demoted_candidate": _normalize_path(candidate.get("file", "")),
+                    "protecting_anchor_candidate": _normalize_path(anchor.get("file", "")),
+                    "score_before": round(score_before, 3),
+                    "score_after": score_after,
+                    "reason": "controller_or_processor_demoted_for_stronger_non_controller_anchor",
+                }
+            )
+        working.sort(key=lambda item: (-float(item.get("final_score", 0.0) or 0.0), _safe_text(item.get("file", ""))))
+        cleaned: list[dict[str, Any]] = []
+        for index, item in enumerate(working[:self._repo_settings.targeting_candidate_pool_size], start=1):
+            clone = dict(item)
+            clone["ranking_position"] = index
+            cleaned.append(clone)
+        return cleaned, {"family": family, "applied": applied}
+
+    @staticmethod
+    def _is_controller_processor_false_positive_candidate(candidate: dict[str, Any]) -> bool:
+        path = _normalize_path(candidate.get("file", "")).lower()
+        if not path:
+            return False
+        filename = Path(path).name
+        if not any(filename.endswith(marker) for marker in _ADJACENT_FALSE_POSITIVE_CONTROLLER_PROCESSOR_MARKERS):
+            return False
+        if float(candidate.get("benchmark_confusion_penalty", 0.0) or 0.0) <= 0.0:
+            return False
+        source_signals = set(candidate.get("source_signals", []) or [])
+        if {"surviving_exact_jira", "historical_exact_jira"} & source_signals:
+            return False
+        return True
+
+    @staticmethod
+    def _controller_processor_anchor_signal(candidate: dict[str, Any]) -> float:
+        source_signals = set(candidate.get("source_signals", []) or [])
+        return (
+            (float(candidate.get("exact_domain_overlap_score", 0.0) or 0.0) * 3.0)
+            + (float(candidate.get("symbol_overlap_score", 0.0) or 0.0) * 2.0)
+            + min(0.18, 0.05 * len(list(candidate.get("matched_task_tokens", []) or [])))
+            + min(0.12, 0.04 * len(list(candidate.get("matched_path_segments", []) or [])))
+            + (0.08 if {"surviving_exact_jira", "historical_exact_jira"} & source_signals else 0.0)
+        )
+
+    def _best_controller_processor_anchor(
+        self,
+        candidate: dict[str, Any],
+        ranked_candidates: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        candidate_signal = self._controller_processor_anchor_signal(candidate)
+        candidate_score = float(candidate.get("final_score", 0.0) or 0.0)
+        best_anchor: dict[str, Any] | None = None
+        best_signal = candidate_signal
+        for raw_anchor in list(ranked_candidates or []):
+            anchor = dict(raw_anchor)
+            if _normalize_path(anchor.get("file", "")) == _normalize_path(candidate.get("file", "")):
+                continue
+            if self._is_controller_processor_false_positive_candidate(anchor):
+                continue
+            anchor_signal = self._controller_processor_anchor_signal(anchor)
+            if anchor_signal < max(0.22, candidate_signal + 0.08):
+                continue
+            if float(anchor.get("final_score", 0.0) or 0.0) < (candidate_score - 0.18):
+                continue
+            if float(anchor.get("exact_domain_overlap_score", 0.0) or 0.0) < 0.08 and len(list(anchor.get("matched_task_tokens", []) or [])) < 1:
+                continue
+            if anchor_signal <= best_signal:
+                continue
+            best_anchor = anchor
+            best_signal = anchor_signal
+        return best_anchor
+
+    def _expand_structural_candidates(
+        self,
+        ranked_candidates: list[dict[str, Any]],
+        *,
+        file_index: Any,
+        task_text: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        expansion_limit = int(self._repo_settings.targeting_structural_expansion_limit or 0)
+        if expansion_limit <= 0 or file_index is None:
+            return list(ranked_candidates or []), {"added_files": []}
+        known_candidates = {
+            _normalize_path(item.get("file", "")): dict(item)
+            for item in list(ranked_candidates or [])
+            if _normalize_path(item.get("file", ""))
+        }
+        added_files: list[str] = []
+        candidate_pool = list(known_candidates.values())
+        top_anchors = list(ranked_candidates or [])[: min(3, int(self._repo_settings.targeting_selected_file_limit or 5))]
+        for anchor in top_anchors:
+            if len(added_files) >= expansion_limit:
+                break
+            anchor_path = _normalize_path(anchor.get("file", ""))
+            anchor_score = float(anchor.get("final_score", 0.0) or 0.0)
+            if not anchor_path or anchor_score < 0.45:
+                continue
+            for entry in list(getattr(file_index, "files", []) or []):
+                if len(added_files) >= expansion_limit:
+                    break
+                candidate_path = _normalize_path(getattr(entry, "relative_path", ""))
+                if not candidate_path or candidate_path == anchor_path:
+                    continue
+                if _is_generated_file(candidate_path):
+                    continue
+                match_kind, match_score = self._structural_match(anchor_path, candidate_path, task_text=task_text)
+                if not match_kind:
+                    continue
+                if candidate_path in known_candidates:
+                    current = known_candidates[candidate_path]
+                    current_bonus = float(current.get("structural_expansion_bonus", 0.0) or 0.0)
+                    structural_bonus = round(min(0.06, 0.02 + (0.03 * match_score)), 3)
+                    if structural_bonus <= current_bonus:
+                        continue
+                    current["structural_expansion_bonus"] = structural_bonus
+                    current["structural_anchor_file"] = anchor_path
+                    current["structural_match_kind"] = match_kind
+                    current["structural_match_score"] = round(match_score, 3)
+                    current["source_signals"] = sorted(set(current.get("source_signals", []) or []) | {"structural_expansion"})
+                    current["recall_channels"] = sorted(set(current.get("recall_channels", []) or []) | {"structural_expansion"})
+                    current["reason_fragments"] = list(current.get("reason_fragments", []) or []) + [f"structural {match_kind} from {anchor_path}"]
+                    continue
+                structural_bonus = round(min(0.12, 0.05 + (0.04 * match_score)), 3)
+                new_candidate = self._empty_file_candidate(candidate_path)
+                new_candidate["base_final_score"] = round(max(0.22, min(anchor_score - 0.08, anchor_score * 0.68)), 3)
+                new_candidate["structural_expansion_bonus"] = structural_bonus
+                new_candidate["structural_anchor_file"] = anchor_path
+                new_candidate["structural_match_kind"] = match_kind
+                new_candidate["structural_match_score"] = round(match_score, 3)
+                new_candidate["reason_fragments"] = [f"structural {match_kind} from {anchor_path}"]
+                new_candidate["reason"] = f"structural {match_kind} from {anchor_path}"
+                new_candidate["source_signals"] = ["structural_expansion"]
+                new_candidate["recall_channels"] = ["structural_expansion"]
+                new_candidate["matched_task_tokens"] = []
+                new_candidate["matched_path_segments"] = []
+                new_candidate["matched_understanding_entities"] = []
+                new_candidate["file"] = candidate_path
+                known_candidates[candidate_path] = new_candidate
+                candidate_pool.append(new_candidate)
+                added_files.append(candidate_path)
+        return candidate_pool, {"added_files": added_files}
+
+    @staticmethod
+    def _structural_match(anchor_path: str, candidate_path: str, *, task_text: str) -> tuple[str, float]:
+        normalized_anchor = _normalize_path(anchor_path)
+        normalized_candidate = _normalize_path(candidate_path)
+        if not normalized_anchor or not normalized_candidate or normalized_anchor == normalized_candidate:
+            return "", 0.0
+        anchor_tokens = set(_core_identifier_tokens(normalized_anchor))
+        candidate_tokens = set(_core_identifier_tokens(normalized_candidate))
+        if not anchor_tokens or not candidate_tokens:
+            return "", 0.0
+        shared = anchor_tokens & candidate_tokens
+        if not shared:
+            return "", 0.0
+        anchor_parent = str(Path(normalized_anchor).parent).replace("\\", "/").lower()
+        candidate_parent = str(Path(normalized_candidate).parent).replace("\\", "/").lower()
+        task_mentions_tests = "test" in _primary_task_text(task_text).lower()
+        if anchor_tokens == candidate_tokens and (
+            Path(normalized_anchor).stem.startswith("I")
+            or Path(normalized_candidate).stem.startswith("I")
+            or Path(normalized_anchor).stem.endswith("Base")
+            or Path(normalized_candidate).stem.endswith("Base")
+        ):
+            return "interface_or_base_pair", 1.0
+        if anchor_tokens == candidate_tokens and (_is_test_file(normalized_anchor) != _is_test_file(normalized_candidate)):
+            return ("test_pair", 0.96) if task_mentions_tests or not _is_test_file(normalized_candidate) else ("", 0.0)
+        if any(segment in f"/{anchor_parent}/" for segment in ("/viewmodels/", "/views/")) and any(segment in f"/{candidate_parent}/" for segment in ("/viewmodels/", "/views/")) and shared:
+            return "view_pair", 0.88
+        if anchor_parent == candidate_parent and len(shared) >= 1:
+            return "same_directory_companion", 0.82
+        if len(shared) >= 2 and Path(anchor_parent).name == Path(candidate_parent).name:
+            return "namespace_companion", 0.74
+        return "", 0.0
 
     def _finalize_symbols(
         self,
@@ -2041,15 +2799,15 @@ class MultiRepoFileTargetingService:
             cleaned.append(clone)
         return cleaned
 
-    @staticmethod
-    def _select_files(ranked_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _select_files(self, ranked_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         selected = [
             item
             for item in list(ranked_candidates or [])
             if float(item.get("final_score", 0.0) or 0.0) >= 0.35
-        ][:5]
+        ][:self._repo_settings.targeting_selected_file_limit]
         if not selected and ranked_candidates:
-            return list(ranked_candidates[:3])
+            fallback_limit = min(3, int(self._repo_settings.targeting_selected_file_limit or 5))
+            return list(ranked_candidates[:fallback_limit])
         return selected
 
     @staticmethod

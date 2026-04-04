@@ -4,6 +4,7 @@ import uuid
 import json
 from pathlib import Path
 
+from config import RepoIntelligenceSettings
 from contracts.repo_index import RepoFileIndex, RepoFileIndexEntry, RepoGlossary, RepoGlossaryTerm, RepoProfile, RepoSymbol, RepoSymbolIndex
 from services.multi_repo_file_targeting_service import MultiRepoFileTargetingService
 from services.repo_registry import RepositoryRegistryService
@@ -88,7 +89,33 @@ class MultiRepoFileTargetingServiceTests(unittest.TestCase):
         target.mkdir(parents=True, exist_ok=True)
         (target / "repo_profile.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def _service(self) -> MultiRepoFileTargetingService:
+    def _repo_settings(self, **overrides) -> RepoIntelligenceSettings:
+        payload = {
+            "provider": "native",
+            "gitnexus_enabled": True,
+            "gitnexus_use_skills": True,
+            "gitnexus_use_embeddings": False,
+            "gitnexus_repo_allowlist": ["catalog_service"],
+            "gitnexus_timeout_seconds": 120,
+            "gitnexus_version": "0.0.0",
+            "gitnexus_port": 3010,
+            "gitnexus_home": "/gitnexus",
+            "gitnexus_repo_root": "/repos",
+            "gitnexus_internal_base_url": "http://gitnexus:3010",
+            "gitnexus_external_ui_url": "",
+            "targeting_experimental_enabled": True,
+            "targeting_adjacent_false_positive_suppressor_enabled": False,
+            "targeting_recall_diversification_enabled": False,
+            "targeting_support_family_recall_enabled": False,
+            "targeting_candidate_pool_size": 20,
+            "targeting_selected_file_limit": 5,
+            "targeting_structural_expansion_limit": 2,
+            "targeting_diagnostic_frontier_depth": 0,
+        }
+        payload.update(overrides)
+        return RepoIntelligenceSettings(**payload)
+
+    def _service(self, *, repo_settings: RepoIntelligenceSettings | None = None) -> MultiRepoFileTargetingService:
         historical = _FakeHistoricalMemory(
             tasks=[
                 {
@@ -200,9 +227,10 @@ class MultiRepoFileTargetingServiceTests(unittest.TestCase):
             surviving_code_memory_service=surviving,
             index_service=index,
             benchmark_confusions_path=self.benchmark_confusions_path,
+            repo_settings=repo_settings or self._repo_settings(),
         )
 
-    def _service_for_regression_cases(self) -> MultiRepoFileTargetingService:
+    def _service_for_regression_cases(self, *, repo_settings: RepoIntelligenceSettings | None = None) -> MultiRepoFileTargetingService:
         self.benchmark_confusions_path.parent.mkdir(parents=True, exist_ok=True)
         self.benchmark_confusions_path.write_text(
             json.dumps(
@@ -370,9 +398,10 @@ class MultiRepoFileTargetingServiceTests(unittest.TestCase):
             surviving_code_memory_service=surviving,
             index_service=index,
             benchmark_confusions_path=self.benchmark_confusions_path,
+            repo_settings=repo_settings or self._repo_settings(),
         )
 
-    def _service_for_telemart_failures(self) -> MultiRepoFileTargetingService:
+    def _service_for_telemart_failures(self, *, repo_settings: RepoIntelligenceSettings | None = None) -> MultiRepoFileTargetingService:
         self.benchmark_confusions_path.parent.mkdir(parents=True, exist_ok=True)
         self.benchmark_confusions_path.write_text(
             json.dumps(
@@ -523,6 +552,7 @@ class MultiRepoFileTargetingServiceTests(unittest.TestCase):
             surviving_code_memory_service=surviving,
             index_service=index,
             benchmark_confusions_path=self.benchmark_confusions_path,
+            repo_settings=repo_settings or self._repo_settings(),
         )
 
     def test_single_repo_targeting_prefers_surviving_domain_files_and_penalizes_tests(self) -> None:
@@ -915,6 +945,449 @@ class MultiRepoFileTargetingServiceTests(unittest.TestCase):
         candidates = result["candidate_files_by_repo"]["telemart_service_test"]
         self.assertEqual(candidates[0]["file"], "src/Telemart.Service/DataTransferObjects/ProductLookupDto.cs")
         self.assertEqual(candidates[0]["inferred_task_family"], "dto_contract")
+
+    def test_candidate_pool_expands_beyond_final_selected_slice(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(targeting_candidate_pool_size=20, targeting_structural_expansion_limit=0),
+        )
+
+        result = service.build_targets(
+            workflow_type="implementation_plan",
+            task_text="Assembly report and repository flow should return order and product details without missing related files.",
+            selected_repos=[{"repo_id": "telemart_service_test"}],
+            jira_key="TEL-POOL",
+            provider_payload_by_repo={
+                "telemart_service_test": {
+                    "likely_file_details": [
+                        {"name": "src/Telemart.Service/Services/OrderService.cs", "confidence": 0.98, "reason": "generic service"},
+                        {"name": "src/Telemart.Service/Repositories/OrderRepository.cs", "confidence": 0.7, "reason": "repository"},
+                        {"name": "src/Telemart.Service/Repositories/ProductRepository.cs", "confidence": 0.68, "reason": "product repository"},
+                        {"name": "src/Telemart.Service/Application/Commands/ReportCommands/GetOrderAssemblyReportHandler.cs", "confidence": 0.67, "reason": "report handler"},
+                        {"name": "src/Telemart.Service/Application/Notifications/AssemblyServices/CreateAssemblyServicesHandler.cs", "confidence": 0.66, "reason": "assembly notification"},
+                    ]
+                }
+            },
+        )
+
+        candidates = result["candidate_files_by_repo"]["telemart_service_test"]
+        diagnostics = result["candidate_diagnostics_by_repo"]["telemart_service_test"]
+        self.assertGreater(len(candidates), diagnostics["selected_file_limit"])
+        self.assertEqual(diagnostics["candidate_pool_size_limit"], 20)
+        self.assertLessEqual(len(candidates), 20)
+
+    def test_diagnostic_frontier_captures_ranked_candidates_beyond_pool_cutoff(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(
+                targeting_experimental_enabled=False,
+                targeting_candidate_pool_size=5,
+                targeting_structural_expansion_limit=0,
+                targeting_diagnostic_frontier_depth=10,
+            ),
+        )
+
+        result = service.build_targets(
+            workflow_type="implementation_plan",
+            task_text="Assembly report and repository flow should return order and product details without missing related files.",
+            selected_repos=[{"repo_id": "telemart_service_test"}],
+            jira_key="TEL-FRONTIER",
+            provider_payload_by_repo={
+                "telemart_service_test": {
+                    "likely_file_details": [
+                        {"name": "src/Telemart.Service/Services/OrderService.cs", "confidence": 0.98, "reason": "generic service"},
+                        {"name": "src/Telemart.Service/Repositories/OrderRepository.cs", "confidence": 0.7, "reason": "repository"},
+                        {"name": "src/Telemart.Service/Repositories/ProductRepository.cs", "confidence": 0.68, "reason": "product repository"},
+                        {"name": "src/Telemart.Service/Application/Commands/ReportCommands/GetOrderAssemblyReportHandler.cs", "confidence": 0.67, "reason": "report handler"},
+                        {"name": "src/Telemart.Service/Application/Notifications/AssemblyServices/CreateAssemblyServicesHandler.cs", "confidence": 0.66, "reason": "assembly notification"},
+                    ]
+                }
+            },
+        )
+
+        candidates = result["candidate_files_by_repo"]["telemart_service_test"]
+        diagnostics = result["candidate_diagnostics_by_repo"]["telemart_service_test"]
+        frontier = diagnostics["diagnostic_ranked_frontier_files"]
+
+        self.assertEqual(len(candidates), 5)
+        self.assertGreater(len(frontier), len(candidates))
+        self.assertEqual(diagnostics["diagnostic_frontier_depth"], 10)
+        self.assertEqual(frontier[0]["ranking_position"], 1)
+        self.assertEqual(frontier[len(candidates)]["ranking_position"], len(candidates) + 1)
+        self.assertEqual(frontier[0]["file"], candidates[0]["file"])
+
+    def test_recall_diversification_keeps_top_nine_and_adds_lexical_lane_candidates(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(
+                targeting_experimental_enabled=False,
+                targeting_recall_diversification_enabled=True,
+                targeting_candidate_pool_size=12,
+                targeting_selected_file_limit=5,
+                targeting_structural_expansion_limit=0,
+            ),
+        )
+        ranked_candidates = []
+        for index in range(1, 16):
+            path = f"src/Telemart.Service/Generic/GenericCandidate{index}.cs"
+            if index == 10:
+                path = "src/Telemart.Service/Application/Commands/MaintenanceCommands/ChargeAdditionalServicesHandler.cs"
+            elif index == 12:
+                path = "src/Telemart.Service/Options/AdditionalServiceLeftoversOptions.cs"
+            ranked_candidates.append(
+                {
+                    "file": path,
+                    "ranking_position": index,
+                    "final_score": round(20.0 - index, 3),
+                    "reason": "blended repo evidence",
+                }
+            )
+
+        final_pool, diagnostics = service._apply_recall_diversification_lane(
+            ranked_candidates,
+            task_text="Maintenance charge additional services leftovers should be updated.",
+            task_understanding={},
+            pool_size=12,
+        )
+
+        final_files = [item["file"] for item in final_pool]
+        selected_via_lane = diagnostics["lexical_lane_candidates"]
+        self.assertEqual(len(final_pool), 12)
+        self.assertEqual(final_files[:9], [item["file"] for item in ranked_candidates[:9]])
+        self.assertIn("src/Telemart.Service/Application/Commands/MaintenanceCommands/ChargeAdditionalServicesHandler.cs", final_files)
+        self.assertIn("src/Telemart.Service/Options/AdditionalServiceLeftoversOptions.cs", final_files)
+        self.assertTrue(any(item["file"].endswith("ChargeAdditionalServicesHandler.cs") for item in selected_via_lane))
+        self.assertTrue(any(item["entered_via_recall_diversification"] for item in diagnostics["final_candidate_pool_after_diversification"]))
+
+    def test_support_family_recall_keeps_top_ten_and_adds_anchored_support_files(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(
+                targeting_experimental_enabled=False,
+                targeting_support_family_recall_enabled=True,
+                targeting_candidate_pool_size=12,
+                targeting_selected_file_limit=5,
+                targeting_structural_expansion_limit=0,
+            ),
+        )
+        ranked_candidates = []
+        for index in range(1, 17):
+            path = f"src/client/Telemart.Client/Generic/GenericCandidate{index}.cs"
+            if index == 3:
+                path = "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs"
+            elif index == 11:
+                path = "src/client/Telemart.Client/Reports/Service/ServiceRequests/ServiceRequestReport.Designer.cs"
+            elif index == 12:
+                path = "src/client/Telemart.Client/Reports/Service/ServiceRequests/ServiceRequestReport.resx"
+            ranked_candidates.append(
+                {
+                    "file": path,
+                    "ranking_position": index,
+                    "final_score": round(30.0 - index, 3),
+                    "reason": "blended repo evidence",
+                }
+            )
+
+        final_pool, diagnostics = service._apply_support_family_recall_lane(
+            ranked_candidates,
+            pool_size=12,
+        )
+
+        final_files = [item["file"] for item in final_pool]
+        self.assertEqual(len(final_pool), 12)
+        self.assertEqual(final_files[:10], [item["file"] for item in ranked_candidates[:10]])
+        self.assertIn("src/client/Telemart.Client/Reports/Service/ServiceRequests/ServiceRequestReport.Designer.cs", final_files)
+        self.assertIn("src/client/Telemart.Client/Reports/Service/ServiceRequests/ServiceRequestReport.resx", final_files)
+        added = diagnostics["support_family_lane_candidates"]
+        self.assertEqual(len(added), 2)
+        self.assertTrue(all(item["support_family_type"] in {"designer", "resx"} for item in added))
+        self.assertTrue(
+            all(
+                item["support_family_trigger_anchor"]
+                == "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs"
+                for item in added
+            )
+        )
+        self.assertTrue(any(item["entered_via_support_family_recall"] for item in diagnostics["final_candidate_pool_after_support_lane"]))
+
+    def test_support_family_recall_stays_inert_without_anchor(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(
+                targeting_experimental_enabled=False,
+                targeting_support_family_recall_enabled=True,
+                targeting_candidate_pool_size=12,
+                targeting_selected_file_limit=5,
+                targeting_structural_expansion_limit=0,
+            ),
+        )
+        ranked_candidates = []
+        for index in range(1, 17):
+            path = f"src/Telemart.Service/Generic/GenericCandidate{index}.cs"
+            if index == 13:
+                path = "src/client/Telemart.Client/Reports/Service/ServiceRequests/ServiceRequestReport.Designer.cs"
+            elif index == 14:
+                path = "src/client/Telemart.Client/Reports/Service/ServiceRequests/ServiceRequestReport.resx"
+            ranked_candidates.append(
+                {
+                    "file": path,
+                    "ranking_position": index,
+                    "final_score": round(25.0 - index, 3),
+                    "reason": "blended repo evidence",
+                }
+            )
+
+        final_pool, diagnostics = service._apply_support_family_recall_lane(
+            ranked_candidates,
+            pool_size=12,
+        )
+
+        final_files = [item["file"] for item in final_pool]
+        self.assertEqual(len(final_pool), 12)
+        self.assertEqual(final_files, [item["file"] for item in ranked_candidates[:12]])
+        self.assertEqual(diagnostics["support_family_lane_candidates"], [])
+        self.assertFalse(any(item["entered_via_support_family_recall"] for item in diagnostics["final_candidate_pool_after_support_lane"]))
+
+    def test_reranking_prefers_richer_multi_signal_candidate(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(targeting_structural_expansion_limit=0),
+        )
+
+        result = service.build_targets(
+            workflow_type="implementation_plan",
+            task_text="The api/v1/maintenance/orders/actions/purchase method returns a quantity of zero for items. Expected result: rows with zero quantities are absent.",
+            selected_repos=[{"repo_id": "telemart_service_test"}],
+            jira_key="TEL-10002",
+            provider_payload_by_repo={
+                "telemart_service_test": {
+                    "likely_file_details": [
+                        {"name": "src/Telemart.Service/Services/OrderService.cs", "confidence": 0.99, "reason": "generic service"},
+                        {"name": "src/Telemart.Service/Repositories/OrderRepository.cs", "confidence": 0.65, "reason": "repository match"},
+                    ]
+                }
+            },
+        )
+
+        candidates = result["candidate_files_by_repo"]["telemart_service_test"]
+        top_candidate = candidates[0]
+        generic_service = next(item for item in candidates if item["file"] == "src/Telemart.Service/Services/OrderService.cs")
+        self.assertEqual(top_candidate["file"], "src/Telemart.Service/Repositories/OrderRepository.cs")
+        self.assertGreater(top_candidate["rerank_bonus"], generic_service["rerank_bonus"])
+        self.assertGreater(top_candidate["final_score"], generic_service["final_score"])
+
+    def test_structural_expansion_adds_bounded_same_directory_companion(self) -> None:
+        historical = _FakeHistoricalMemory(
+            tasks=[
+                {
+                    "jira_key": "TEL-COMPANION",
+                    "task_snapshot_text": "Update product query handler response mapping",
+                    "normalized_task_text": "update product query handler response mapping",
+                }
+            ],
+            changes=[
+                {
+                    "jira_key": "TEL-COMPANION",
+                    "repo_id": "catalog_service",
+                    "changed_files": [
+                        "src/Features/Product/QueryProductInfoHandler.cs",
+                    ],
+                },
+            ],
+        )
+        surviving = _FakeSurvivingMemory(
+            snippets=[
+                {
+                    "repo_id": "catalog_service",
+                    "jira_key": "TEL-COMPANION",
+                    "file_path": "src/Features/Product/QueryProductInfoHandler.cs",
+                    "symbol_name": "QueryProductInfoHandler",
+                    "snippet_text": "product query handler response mapping",
+                },
+            ]
+        )
+        index = _FakeIndexService(
+            profiles={
+                "catalog_service": RepoProfile(repo_id="catalog_service", indexed_at="2026-03-25T10:00:00+00:00", source_roots=["src"]),
+            },
+            symbol_indexes={
+                "catalog_service": RepoSymbolIndex(
+                    repo_id="catalog_service",
+                    indexed_at="2026-03-25T10:00:00+00:00",
+                    symbols=[
+                        RepoSymbol(name="QueryProductInfoHandler", kind="class", file_path="src/Features/Product/QueryProductInfoHandler.cs"),
+                    ],
+                ),
+            },
+            file_indexes={
+                "catalog_service": RepoFileIndex(
+                    repo_id="catalog_service",
+                    root_path="catalog_service",
+                    indexed_at="2026-03-25T10:00:00+00:00",
+                    file_count=3,
+                    files=[
+                        RepoFileIndexEntry(repo_id="catalog_service", relative_path="src/Features/Product/QueryProductInfoHandler.cs", language="csharp", file_size=1, content_hash="a", last_indexed_at="x"),
+                        RepoFileIndexEntry(repo_id="catalog_service", relative_path="src/Features/Product/QueryProductInfoResponseBuilder.cs", language="csharp", file_size=1, content_hash="b", last_indexed_at="x"),
+                        RepoFileIndexEntry(repo_id="catalog_service", relative_path="src/Features/Product/UnrelatedNoiseService.cs", language="csharp", file_size=1, content_hash="c", last_indexed_at="x"),
+                    ],
+                ),
+            },
+        )
+        service = MultiRepoFileTargetingService(
+            registry_service=self.registry,
+            historical_change_memory_service=historical,
+            surviving_code_memory_service=surviving,
+            index_service=index,
+            benchmark_confusions_path=self.benchmark_confusions_path,
+            repo_settings=self._repo_settings(targeting_candidate_pool_size=10, targeting_structural_expansion_limit=1),
+        )
+
+        result = service.build_targets(
+            workflow_type="implementation_plan",
+            task_text="Update product query handler response mapping",
+            selected_repos=[{"repo_id": "catalog_service"}],
+            jira_key="TEL-COMPANION",
+            provider_payload_by_repo={
+                "catalog_service": {
+                    "likely_file_details": [
+                        {"name": "src/Features/Product/QueryProductInfoHandler.cs", "confidence": 0.8, "reason": "primary handler"},
+                    ]
+                }
+            },
+        )
+
+        candidates = result["candidate_files_by_repo"]["catalog_service"]
+        selected = result["selected_files_by_repo"]["catalog_service"]
+        diagnostics = result["candidate_diagnostics_by_repo"]["catalog_service"]
+        self.assertIn("src/Features/Product/QueryProductInfoResponseBuilder.cs", [item["file"] for item in candidates])
+        companion = next(item for item in candidates if item["file"] == "src/Features/Product/QueryProductInfoResponseBuilder.cs")
+        self.assertEqual(companion["structural_match_kind"], "same_directory_companion")
+        self.assertGreater(companion["structural_expansion_bonus"], 0.0)
+        self.assertIn("src/Features/Product/QueryProductInfoResponseBuilder.cs", [item["file"] for item in selected])
+        self.assertLessEqual(len(selected), 5)
+
+    def test_final_selection_stays_bounded_and_deterministic(self) -> None:
+        repo_settings = self._repo_settings(
+            targeting_candidate_pool_size=15,
+            targeting_selected_file_limit=4,
+            targeting_structural_expansion_limit=2,
+        )
+        service = self._service_for_telemart_failures(repo_settings=repo_settings)
+        payload = {
+            "telemart_service_test": {
+                "likely_file_details": [
+                    {"name": "src/Telemart.Service/Services/OrderService.cs", "confidence": 0.98, "reason": "generic service"},
+                    {"name": "src/Telemart.Service/Repositories/OrderRepository.cs", "confidence": 0.68, "reason": "repository"},
+                    {"name": "src/Telemart.Service/Repositories/ProductRepository.cs", "confidence": 0.67, "reason": "product repository"},
+                    {"name": "src/Telemart.Service/Application/Commands/ReportCommands/GetOrderAssemblyReportHandler.cs", "confidence": 0.66, "reason": "report handler"},
+                ]
+            }
+        }
+
+        first = service.build_targets(
+            workflow_type="implementation_plan",
+            task_text="Assembly report and repository flow should return order and product details without missing related files.",
+            selected_repos=[{"repo_id": "telemart_service_test"}],
+            jira_key="TEL-DETERMINISTIC",
+            provider_payload_by_repo=payload,
+        )
+        second = service.build_targets(
+            workflow_type="implementation_plan",
+            task_text="Assembly report and repository flow should return order and product details without missing related files.",
+            selected_repos=[{"repo_id": "telemart_service_test"}],
+            jira_key="TEL-DETERMINISTIC",
+            provider_payload_by_repo=payload,
+        )
+
+        first_selected = [item["file"] for item in first["selected_files_by_repo"]["telemart_service_test"]]
+        second_selected = [item["file"] for item in second["selected_files_by_repo"]["telemart_service_test"]]
+        self.assertEqual(first_selected, second_selected)
+        self.assertLessEqual(len(first_selected), 4)
+
+    def test_adjacent_false_positive_suppressor_demotes_confusing_controller_for_stronger_repository_anchor(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(
+                targeting_experimental_enabled=False,
+                targeting_adjacent_false_positive_suppressor_enabled=True,
+                targeting_candidate_pool_size=12,
+                targeting_selected_file_limit=5,
+                targeting_structural_expansion_limit=0,
+            ),
+        )
+        ranked_candidates = [
+            {
+                "file": "src/Telemart.Service/Controllers/OrdersController.cs",
+                "final_score": 1.01,
+                "benchmark_confusion_penalty": 0.22,
+                "exact_domain_overlap_score": 0.02,
+                "symbol_overlap_score": 0.0,
+                "matched_task_tokens": [],
+                "matched_path_segments": [],
+                "source_signals": [],
+            },
+            {
+                "file": "src/Telemart.Service/Repositories/OrderRepository.cs",
+                "final_score": 0.96,
+                "benchmark_confusion_penalty": 0.0,
+                "exact_domain_overlap_score": 0.19,
+                "symbol_overlap_score": 0.16,
+                "matched_task_tokens": ["order", "purchase"],
+                "matched_path_segments": ["orders", "repository"],
+                "source_signals": ["historical_recall"],
+            },
+        ]
+
+        reranked, details = service._apply_adjacent_false_positive_suppressor(
+            ranked_candidates,
+            inferred_task_family="repository_query",
+            jira_key="TEL-SUPPRESS",
+        )
+
+        self.assertEqual(reranked[0]["file"], "src/Telemart.Service/Repositories/OrderRepository.cs")
+        demoted = next(item for item in reranked if item["file"] == "src/Telemart.Service/Controllers/OrdersController.cs")
+        self.assertLess(demoted["final_score"], 1.01)
+        self.assertEqual(len(details["applied"]), 1)
+        self.assertEqual(details["applied"][0]["jira_key"], "TEL-SUPPRESS")
+        self.assertEqual(details["applied"][0]["protecting_anchor_candidate"], "src/Telemart.Service/Repositories/OrderRepository.cs")
+
+    def test_adjacent_false_positive_suppressor_stays_inert_without_explicit_flag(self) -> None:
+        service = self._service_for_telemart_failures(
+            repo_settings=self._repo_settings(
+                targeting_experimental_enabled=False,
+                targeting_adjacent_false_positive_suppressor_enabled=False,
+                targeting_candidate_pool_size=12,
+                targeting_selected_file_limit=5,
+                targeting_structural_expansion_limit=0,
+            ),
+        )
+        ranked_candidates = [
+            {
+                "file": "src/Telemart.Service/Controllers/OrdersController.cs",
+                "final_score": 1.01,
+                "benchmark_confusion_penalty": 0.22,
+                "exact_domain_overlap_score": 0.02,
+                "symbol_overlap_score": 0.0,
+                "matched_task_tokens": [],
+                "matched_path_segments": [],
+                "source_signals": [],
+            },
+            {
+                "file": "src/Telemart.Service/Repositories/OrderRepository.cs",
+                "final_score": 0.96,
+                "benchmark_confusion_penalty": 0.0,
+                "exact_domain_overlap_score": 0.19,
+                "symbol_overlap_score": 0.16,
+                "matched_task_tokens": ["order", "purchase"],
+                "matched_path_segments": ["orders", "repository"],
+                "source_signals": ["historical_recall"],
+            },
+        ]
+
+        reranked = list(ranked_candidates)
+        details = {"family": "", "applied": []}
+        if service._repo_settings.targeting_adjacent_false_positive_suppressor_enabled:
+            reranked, details = service._apply_adjacent_false_positive_suppressor(
+                ranked_candidates,
+                inferred_task_family="repository_query",
+                jira_key="TEL-SUPPRESS",
+            )
+
+        self.assertEqual([item["file"] for item in reranked], [item["file"] for item in ranked_candidates])
+        self.assertEqual(details["applied"], [])
 
 
 if __name__ == "__main__":

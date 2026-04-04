@@ -5,9 +5,11 @@ import shutil
 import sys
 import unittest
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from config import settings
 from services.bounded_implementation_service import BoundedImplementationService
 from services.bounded_real_codegen_service import BoundedRealCodegenService
 from services.repo_registry import RepositoryRegistryService
@@ -231,6 +233,1384 @@ class BoundedRealCodegenServiceTests(unittest.TestCase):
         self.assertGreater(result["patch_line_count"], 0)
         self.assertIn("search", json.dumps(result["patch_proposals"]))
 
+    def test_force_non_empty_patch_retry_stays_idle_when_first_attempt_is_real_patch(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "Update app behavior.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=True,
+            ),
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior.",
+            jira_key="TEL-A1",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(result["activation_rule_enabled"])
+        self.assertFalse(result["activation_rule_fired"])
+        self.assertGreater(result["first_attempt_patch_line_count"], 0)
+        self.assertEqual(result["second_attempt_patch_line_count"], 0)
+
+    def test_force_non_empty_patch_retry_fires_once_after_empty_first_attempt(self) -> None:
+        responses = [
+            json.dumps(
+                {
+                    "summary": "No-op first attempt.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'ok'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Concrete retry patch.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=True,
+            ),
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior.",
+            jira_key="TEL-A2",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(result["activation_rule_fired"])
+        self.assertTrue(result["activation_retry_improved_to_real_patch"])
+        self.assertEqual(result["changed_files"], ["src/app.py"])
+        self.assertEqual(result["first_attempt_changed_files_count"], 0)
+        self.assertEqual(result["first_attempt_patch_line_count"], 0)
+        self.assertGreater(result["second_attempt_changed_files_count"], 0)
+        self.assertGreater(result["second_attempt_patch_line_count"], 0)
+
+    def test_same_file_no_patch_hardening_retries_structured_empty_result(self) -> None:
+        responses = [
+            json.dumps(
+                {
+                    "summary": "No safe bounded change is possible in the provided writable file alone.",
+                    "files": [],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "No safe bounded change is possible in the provided writable file alone.",
+                    "files": [],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Concrete same-file retry patch.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior in the selected method.",
+            jira_key="TEL-NP1",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            selected_class="AppRunner",
+            selected_method="run",
+            long_tail_exception=False,
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(result["structured_empty_result_returned"])
+        self.assertTrue(result["model_claimed_no_safe_change"])
+        self.assertTrue(result["same_file_edit_required"])
+        self.assertTrue(result["no_patch_hardening_eligible"])
+        self.assertTrue(result["no_patch_hardening_activated"])
+        self.assertTrue(result["no_patch_hardening_changed_result"])
+        self.assertEqual(result["changed_files"], ["src/app.py"])
+
+    def test_same_file_no_patch_hardening_stays_idle_without_selected_symbol_context(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "No safe bounded change is possible in the provided writable file alone.",
+                    "files": [],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior.",
+            jira_key="TEL-NP2",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(result["structured_empty_result_returned"])
+        self.assertFalse(result["same_file_edit_required"])
+        self.assertFalse(result["no_patch_hardening_eligible"])
+        self.assertFalse(result["no_patch_hardening_activated"])
+        self.assertFalse(result["no_patch_hardening_changed_result"])
+        self.assertTrue(result["empty_patch"])
+
+    def test_same_file_no_patch_hardening_does_not_trigger_for_long_tail_exception(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "No safe bounded change is possible in the provided writable file alone.",
+                    "files": [],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior in the selected method.",
+            jira_key="TEL-NP3",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            selected_class="AppRunner",
+            selected_method="run",
+            long_tail_exception=True,
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(result["structured_empty_result_returned"])
+        self.assertTrue(result["same_file_edit_required"])
+        self.assertFalse(result["no_patch_hardening_eligible"])
+        self.assertFalse(result["no_patch_hardening_activated"])
+        self.assertFalse(result["no_patch_hardening_changed_result"])
+
+    def test_same_method_quality_hardening_prefers_behavior_methods_over_constructor_wiring(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public OrderPackCellViewModel() {\n"
+            "        RecognizeBarcodeViewModel.OnStarted += (s, e) => IsRecognitionInProgress = true;\n"
+            "        RecognizeBarcodeViewModel.OnFinishCommand += (s, e) => IsRecognitionInProgress = false;\n"
+            "        RecognizeBarcodeViewModel.OnFinished += RecognizeBarcodeViewModelOnFinished;\n"
+            "    }\n"
+            "    public void HandleLoadedAsync() {}\n"
+            "    public void HandleOkAsync() {}\n"
+            "    public void RecognizeBarcodeViewModelOnFinished() {}\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "Update the actual post-scan behavior path.",
+                    "behavior_methods_considered": [
+                        {"method": "RecognizeBarcodeViewModelOnFinished", "why": "Handles each completed scan and appends cells."},
+                        {"method": "HandleOkAsync", "why": "Controls explicit close/confirm behavior."},
+                    ],
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The Jira changes post-scan behavior, not constructor event wiring.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "public void RecognizeBarcodeViewModelOnFinished() {}",
+                                    "replace": "public void RecognizeBarcodeViewModelOnFinished() { /* keep dialog open for multi-cell scan */ }",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="After scanning a storage cell in the order pack window, keep the dialog open until OK and allow multiple cells.",
+            jira_key="TEL-SMQ1",
+            writable_repo_id="sample",
+            writable_files=["src/OrderPackCellViewModel.cs"],
+            writable_file_plan=[{"file": "src/OrderPackCellViewModel.cs", "why_this_file": "Exact order pack cell behavior path.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="ui_client",
+            selected_class="OrderPackCellViewModel",
+            selected_method="OrderPackCellViewModel",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 1)
+        user_prompt = "\n".join(message.get("content", "") for message in calls[0] if message.get("role") == "user")
+        self.assertIn("Ranked same-file behavior methods:", user_prompt)
+        self.assertIn("RecognizeBarcodeViewModelOnFinished", user_prompt)
+        self.assertIn("HandleOkAsync", user_prompt)
+        self.assertTrue(result["same_method_quality_hardening_eligible"])
+        self.assertTrue(result["same_method_quality_hardening_activated"])
+        ranked_methods = [item["method"] for item in result["ranked_same_file_behavior_methods"][:2]]
+        self.assertIn("RecognizeBarcodeViewModelOnFinished", ranked_methods)
+        self.assertIn("HandleOkAsync", ranked_methods)
+        self.assertEqual(result["chosen_behavior_method_reason"], "The Jira changes post-scan behavior, not constructor event wiring.")
+        self.assertFalse(result["constructor_wiring_edit_detected"])
+        self.assertFalse(result["preferred_behavior_method_missed"])
+        self.assertTrue(result["same_method_quality_hardening_changed_result"])
+
+    def test_behavior_path_hardening_retries_constructor_only_patch_toward_primary_method(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public OrderPackCellViewModel() {\n"
+            "        RecognizeBarcodeViewModel.OnStarted += (s, e) => IsRecognitionInProgress = true;\n"
+            "        RecognizeBarcodeViewModel.OnFinishCommand += (s, e) => IsRecognitionInProgress = false;\n"
+            "        RecognizeBarcodeViewModel.OnFinished += RecognizeBarcodeViewModelOnFinished;\n"
+            "    }\n"
+            "    public void HandleLoadedAsync() {}\n"
+            "    public void HandleOkAsync() {}\n"
+            "    public void RecognizeBarcodeViewModelOnFinished() {}\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        responses = [
+            json.dumps(
+                {
+                    "summary": "Disable auto-close after scan.",
+                    "behavior_methods_considered": [
+                        {"method": "RecognizeBarcodeViewModelOnFinished", "why": "Primary scan-complete path."},
+                        {"method": "HandleOkAsync", "why": "Explicit confirmation path."},
+                    ],
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "Scan-finished flow controls the problematic behavior.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "        RecognizeBarcodeViewModel.OnFinishCommand += (s, e) => IsRecognitionInProgress = false;\n",
+                                    "replace": "",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Move behavior change into the primary handler.",
+                    "behavior_methods_considered": [
+                        {"method": "RecognizeBarcodeViewModelOnFinished", "why": "Primary scan-complete path."},
+                        {"method": "HandleOkAsync", "why": "Explicit confirmation path."},
+                    ],
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The primary behavior path must change inside the finished handler.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "    public void RecognizeBarcodeViewModelOnFinished() {}\n",
+                                    "replace": "    public void RecognizeBarcodeViewModelOnFinished() { IsRecognitionInProgress = false; }\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="After scanning a storage cell in the order pack window, keep the dialog open until OK and allow multiple cells.",
+            jira_key="TEL-BPH1",
+            writable_repo_id="sample",
+            writable_files=["src/OrderPackCellViewModel.cs"],
+            writable_file_plan=[{"file": "src/OrderPackCellViewModel.cs", "why_this_file": "Exact order pack cell behavior path.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="ui_client",
+            selected_class="OrderPackCellViewModel",
+            selected_method="OrderPackCellViewModel",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        retry_user_prompt = "\n".join(message.get("content", "") for message in calls[1] if message.get("role") == "user")
+        self.assertIn("RecognizeBarcodeViewModelOnFinished", retry_user_prompt)
+        self.assertIn("Do not return constructor-only or event-subscription-only edits.", retry_user_prompt)
+        self.assertTrue(result["behavior_path_hardening_eligible"])
+        self.assertTrue(result["behavior_path_hardening_activated"])
+        self.assertEqual(result["chosen_primary_behavior_method"], "RecognizeBarcodeViewModelOnFinished")
+        self.assertTrue(result["patch_touched_primary_behavior_method"])
+        self.assertFalse(result["constructor_only_edit_detected"])
+        self.assertTrue(result["deeper_behavior_method_required"])
+        self.assertTrue(result["behavior_path_hardening_changed_result"])
+
+    def test_same_method_quality_hardening_stays_idle_for_unrelated_case(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "Update app behavior.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="Refactor the app helper return value.",
+            jira_key="TEL-SMQ2",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            selected_class="AppRunner",
+            selected_method="run",
+            max_retry_attempts=0,
+        )
+
+        self.assertFalse(result["same_method_quality_hardening_eligible"])
+        self.assertFalse(result["same_method_quality_hardening_activated"])
+        self.assertEqual(result["ranked_same_file_behavior_methods"], [])
+
+    def test_compile_hardening_detects_getter_only_assignment_with_writable_backing(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        if (e.IsValid) {\n"
+            "            WarehouseCells.Add(e.Cell);\n"
+            "            e.IsValid = false;\n"
+            "        }\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        args_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        diagnostics = service._detect_getter_only_assignment_retry_candidate(
+            repo_root=self.repo_root,
+            generation_payload={
+                "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                "files": [
+                    {
+                        "file": "src/OrderPackCellViewModel.cs",
+                        "planned_change_type": "modify",
+                        "edits": [
+                            {
+                                "search": "e.IsValid",
+                                "replace": "e.IsValid = false;",
+                            }
+                        ],
+                    }
+                ],
+            },
+            same_method_quality={"chosen_primary_behavior_method": "RecognizeBarcodeViewModelOnFinished"},
+            allowed_targets=["src/OrderPackCellViewModel.cs"],
+        )
+
+        self.assertTrue(diagnostics["compile_hardening_eligible"])
+        self.assertTrue(diagnostics["getter_only_assignment_detected"])
+        self.assertEqual(diagnostics["getter_only_property_name"], "IsValid")
+        self.assertEqual(diagnostics["writable_backing_candidate_detected"], "ErrorText")
+        self.assertTrue(diagnostics["computed_validation_property_assignment_detected"])
+        self.assertEqual(diagnostics["computed_validation_property_name"], "IsValid")
+        self.assertTrue(diagnostics["writable_validation_source_detected"])
+        self.assertEqual(diagnostics["writable_validation_source_name"], "ErrorText")
+        self.assertEqual(diagnostics["detector_input_source"], "generation_payload_edits")
+        self.assertFalse(diagnostics["detector_matches_materialized_patch"])
+
+    def test_compile_hardening_detects_computed_validation_assignment_from_materialized_changed_lines(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        original = (
+            "public class OrderPackCellViewModel {\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        if (e.IsValid) {\n"
+            "            e.ErrorText = \"duplicate\";\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        target.write_text(original, encoding="utf-8")
+        derived_file = self.repo_root / "src" / "RecognizeWarehouseCellBarcodeResultEventArgs.cs"
+        derived_file.write_text(
+            "public class RecognizeWarehouseCellBarcodeResultEventArgs : RecognizeBarcodeResultEventArgsBase {\n"
+            "    public object Cell { get; }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        args_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        materialized_files = [
+            {
+                "file": "src/OrderPackCellViewModel.cs",
+                "new_content": (
+                    "public class OrderPackCellViewModel {\n"
+                    "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+                    "        if (e.IsValid) {\n"
+                    "            e.ErrorText = \"duplicate\";\n"
+                    "        }\n"
+                    "        e.IsValid = false;\n"
+                    "    }\n"
+                    "}\n"
+                ),
+            }
+        ]
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        diagnostics = service._detect_getter_only_assignment_retry_candidate(
+            repo_root=self.repo_root,
+            generation_payload={"files": []},
+            same_method_quality={"chosen_primary_behavior_method": "RecognizeBarcodeViewModelOnFinished"},
+            allowed_targets=["src/OrderPackCellViewModel.cs"],
+            source_files=service._load_source_files(self.repo_root, ["src/OrderPackCellViewModel.cs"], max_files=1),
+            materialized_files=materialized_files,
+        )
+
+        self.assertTrue(diagnostics["computed_validation_property_assignment_detected"])
+        self.assertEqual(diagnostics["computed_validation_property_name"], "IsValid")
+        self.assertEqual(diagnostics["writable_validation_source_name"], "ErrorText")
+        self.assertEqual(diagnostics["resolved_event_args_type"], "RecognizeWarehouseCellBarcodeResultEventArgs")
+        self.assertEqual(diagnostics["resolved_event_args_base_types"], ["RecognizeBarcodeResultEventArgsBase"])
+        self.assertEqual(diagnostics["computed_validation_property_declaring_type"], "RecognizeBarcodeResultEventArgsBase")
+        self.assertEqual(diagnostics["writable_validation_source_declaring_type"], "RecognizeBarcodeResultEventArgsBase")
+        self.assertEqual(diagnostics["detector_input_source"], "materialized_changed_lines")
+        self.assertTrue(diagnostics["detector_matches_materialized_patch"])
+        self.assertIn("e.IsValid = false;", diagnostics["detector_input_excerpt"])
+
+    def test_compile_hardening_does_not_fire_on_unrelated_materialized_lines(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeBarcodeResultEventArgsBase e) {\n"
+            "        if (e.IsValid) {\n"
+            "            e.ErrorText = \"duplicate\";\n"
+            "        }\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        args_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        materialized_files = [
+            {
+                "file": "src/OrderPackCellViewModel.cs",
+                "new_content": (
+                    "public class OrderPackCellViewModel {\n"
+                    "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeBarcodeResultEventArgsBase e) {\n"
+                    "        if (e.IsValid) {\n"
+                    "            e.ErrorText = \"duplicate\";\n"
+                    "        }\n"
+                    "        var keepOpen = true;\n"
+                    "    }\n"
+                    "}\n"
+                ),
+            }
+        ]
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        diagnostics = service._detect_getter_only_assignment_retry_candidate(
+            repo_root=self.repo_root,
+            generation_payload={"files": []},
+            same_method_quality={"chosen_primary_behavior_method": "RecognizeBarcodeViewModelOnFinished"},
+            allowed_targets=["src/OrderPackCellViewModel.cs"],
+            source_files=service._load_source_files(self.repo_root, ["src/OrderPackCellViewModel.cs"], max_files=1),
+            materialized_files=materialized_files,
+        )
+
+        self.assertFalse(diagnostics["computed_validation_property_assignment_detected"])
+        self.assertEqual(diagnostics["computed_validation_property_name"], "")
+        self.assertEqual(diagnostics["writable_validation_source_name"], "")
+
+    def test_compile_hardening_retries_getter_only_assignment_inside_same_method(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public object WarehouseCells { get; set; }\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        if (e.IsValid) {\n"
+            "            WarehouseCells = e.Cell;\n"
+            "        }\n"
+            "    }\n"
+            "    public void HandleOkAsync() {}\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        derived_file = self.repo_root / "src" / "RecognizeWarehouseCellBarcodeResultEventArgs.cs"
+        derived_file.write_text(
+            "public class RecognizeWarehouseCellBarcodeResultEventArgs : RecognizeBarcodeResultEventArgsBase {\n"
+            "    public object Cell { get; }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        args_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        responses = [
+            json.dumps(
+                {
+                    "summary": "Keep the dialog open after a scanned cell is added.",
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The scan-finished handler controls the post-scan behavior.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "            WarehouseCells = e.Cell;\n",
+                                    "replace": "            WarehouseCells = e.Cell;\n            e.IsValid = false;\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Use writable event state instead of assigning the computed property.",
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The scan-finished handler should change writable event state directly.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "            WarehouseCells = e.Cell;\n",
+                                    "replace": "            WarehouseCells = e.Cell;\n            e.ErrorText = \"already processed\";\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="After scanning a storage cell, keep the dialog open and avoid treating the scan as final completion.",
+            jira_key="TEL-CH1",
+            writable_repo_id="sample",
+            writable_files=["src/OrderPackCellViewModel.cs"],
+            writable_file_plan=[{"file": "src/OrderPackCellViewModel.cs", "why_this_file": "Primary behavior path.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="ui_client",
+            selected_class="OrderPackCellViewModel",
+            selected_method="RecognizeBarcodeViewModelOnFinished",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        retry_user_prompt = "\n".join(message.get("content", "") for message in calls[1] if message.get("role") == "user")
+        self.assertIn("Do not assign to the computed validation property `IsValid`.", retry_user_prompt)
+        self.assertIn("`ErrorText`", retry_user_prompt)
+        self.assertTrue(result["compile_hardening_eligible"])
+        self.assertTrue(result["getter_only_assignment_detected"])
+        self.assertEqual(result["getter_only_property_name"], "IsValid")
+        self.assertEqual(result["writable_backing_candidate_detected"], "ErrorText")
+        self.assertTrue(result["computed_validation_property_assignment_detected"])
+        self.assertEqual(result["computed_validation_property_name"], "IsValid")
+        self.assertTrue(result["writable_validation_source_detected"])
+        self.assertEqual(result["writable_validation_source_name"], "ErrorText")
+        self.assertTrue(result["compile_hardening_retry_activated"])
+        self.assertTrue(result["compile_hardening_changed_result"])
+        self.assertEqual(result["changed_files"], ["src/OrderPackCellViewModel.cs"])
+
+    def test_compile_hardening_detects_nonexistent_event_args_member_assignment(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        e.IsHandled = true;\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeWarehouseCellBarcodeResultEventArgs.cs"
+        args_file.write_text(
+            "public class RecognizeWarehouseCellBarcodeResultEventArgs : RecognizeBarcodeResultEventArgsBase {\n"
+            "    public object Cell { get; }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        base_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        base_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        diagnostics = service._detect_nonexistent_event_args_member_retry_candidate(
+            repo_root=self.repo_root,
+            generation_payload={
+                "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                "files": [
+                    {
+                        "file": "src/OrderPackCellViewModel.cs",
+                        "planned_change_type": "modify",
+                        "edits": [
+                            {
+                                "search": "e.IsHandled",
+                                "replace": "e.IsHandled = true;",
+                            }
+                        ],
+                    }
+                ],
+            },
+            same_method_quality={"chosen_primary_behavior_method": "RecognizeBarcodeViewModelOnFinished"},
+            allowed_targets=["src/OrderPackCellViewModel.cs"],
+            source_files=service._load_source_files(self.repo_root, ["src/OrderPackCellViewModel.cs"], max_files=1),
+        )
+
+        self.assertTrue(diagnostics["compile_hardening_eligible"])
+        self.assertTrue(diagnostics["nonexistent_member_assignment_detected"])
+        self.assertEqual(diagnostics["nonexistent_member_name"], "IsHandled")
+        self.assertEqual(diagnostics["resolved_event_args_type"], "RecognizeWarehouseCellBarcodeResultEventArgs")
+        self.assertIn("ErrorText", diagnostics["known_event_args_members_excerpt"])
+        self.assertIn("Cell", diagnostics["known_event_args_members_excerpt"])
+
+    def test_compile_hardening_retries_nonexistent_event_args_member_inside_same_method(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public object WarehouseCells { get; set; }\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        if (e.IsValid) {\n"
+            "            WarehouseCells = e.Cell;\n"
+            "        }\n"
+            "    }\n"
+            "    public void HandleOkAsync() {}\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeWarehouseCellBarcodeResultEventArgs.cs"
+        args_file.write_text(
+            "public class RecognizeWarehouseCellBarcodeResultEventArgs : RecognizeBarcodeResultEventArgsBase {\n"
+            "    public object Cell { get; }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        base_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        base_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        responses = [
+            json.dumps(
+                {
+                    "summary": "Keep the dialog open after a scanned cell is added.",
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The scan-finished handler controls the post-scan behavior.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "            WarehouseCells = e.Cell;\n",
+                                    "replace": "            WarehouseCells = e.Cell;\n            e.IsHandled = true;\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Stay in the same handler without inventing fake event-args members.",
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The scan-finished handler should rely only on real event-args members.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "            WarehouseCells = e.Cell;\n",
+                                    "replace": "            WarehouseCells = e.Cell;\n            e.ErrorText = string.Empty;\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="After scanning a storage cell, keep the dialog open and avoid treating the scan as final completion.",
+            jira_key="TEL-CH2",
+            writable_repo_id="sample",
+            writable_files=["src/OrderPackCellViewModel.cs"],
+            writable_file_plan=[{"file": "src/OrderPackCellViewModel.cs", "why_this_file": "Primary behavior path.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="ui_client",
+            selected_class="OrderPackCellViewModel",
+            selected_method="RecognizeBarcodeViewModelOnFinished",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        retry_user_prompt = "\n".join(message.get("content", "") for message in calls[1] if message.get("role") == "user")
+        self.assertIn("Do not invent or assign the non-existent member `IsHandled`.", retry_user_prompt)
+        self.assertIn("RecognizeWarehouseCellBarcodeResultEventArgs", retry_user_prompt)
+        self.assertTrue(result["compile_hardening_eligible"])
+        self.assertTrue(result["nonexistent_member_assignment_detected"])
+        self.assertEqual(result["nonexistent_member_name"], "IsHandled")
+        self.assertEqual(result["resolved_event_args_type"], "RecognizeWarehouseCellBarcodeResultEventArgs")
+        self.assertTrue(result["compile_hardening_retry_activated"])
+        self.assertTrue(result["compile_hardening_changed_result"])
+        self.assertEqual(result["changed_files"], ["src/OrderPackCellViewModel.cs"])
+
+    def test_compile_hardening_detects_invalid_event_args_usage_shape(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        if (e.Found && e.Cell != null) {\n"
+            "        }\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeWarehouseCellBarcodeResultEventArgs.cs"
+        args_file.write_text(
+            "public class RecognizeWarehouseCellBarcodeResultEventArgs : RecognizeBarcodeResultEventArgsBase {\n"
+            "    public object Cell { get; }\n"
+            "    public static RecognizeWarehouseCellBarcodeResultEventArgs Found(object cell) => null;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        base_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        base_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        diagnostics = service._detect_invalid_event_args_usage_shape_retry_candidate(
+            repo_root=self.repo_root,
+            generation_payload={
+                "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                "files": [
+                    {
+                        "file": "src/OrderPackCellViewModel.cs",
+                        "planned_change_type": "modify",
+                        "edits": [
+                            {
+                                "search": "if (e.IsValid)",
+                                "replace": "if (e.Found && e.Cell != null)",
+                            }
+                        ],
+                    }
+                ],
+            },
+            same_method_quality={"chosen_primary_behavior_method": "RecognizeBarcodeViewModelOnFinished"},
+            allowed_targets=["src/OrderPackCellViewModel.cs"],
+            source_files=service._load_source_files(self.repo_root, ["src/OrderPackCellViewModel.cs"], max_files=1),
+        )
+
+        self.assertTrue(diagnostics["compile_hardening_eligible"])
+        self.assertTrue(diagnostics["invalid_event_args_usage_shape_detected"])
+        self.assertEqual(diagnostics["resolved_event_args_type"], "RecognizeWarehouseCellBarcodeResultEventArgs")
+        self.assertEqual(diagnostics["invalid_usage_expression"], "e.Found && e.Cell != null")
+        self.assertIn("Cell", diagnostics["known_event_args_members_excerpt"])
+        self.assertNotIn("Found", diagnostics["bool_compatible_members_excerpt"])
+
+    def test_compile_hardening_retries_invalid_event_args_usage_shape_inside_same_method(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public object WarehouseCells { get; set; }\n"
+            "    public bool IsRecognitionInProgress { get; set; }\n"
+            "    public void RecognizeBarcodeViewModelOnFinished(object sender, RecognizeWarehouseCellBarcodeResultEventArgs e) {\n"
+            "        if (e.IsValid) {\n"
+            "            WarehouseCells = e.Cell;\n"
+            "        }\n"
+            "        IsRecognitionInProgress = false;\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        args_file = self.repo_root / "src" / "RecognizeWarehouseCellBarcodeResultEventArgs.cs"
+        args_file.write_text(
+            "public class RecognizeWarehouseCellBarcodeResultEventArgs : RecognizeBarcodeResultEventArgsBase {\n"
+            "    public object Cell { get; }\n"
+            "    public static RecognizeWarehouseCellBarcodeResultEventArgs Found(object cell) => null;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        base_file = self.repo_root / "src" / "RecognizeBarcodeResultEventArgsBase.cs"
+        base_file.write_text(
+            "public abstract class RecognizeBarcodeResultEventArgsBase {\n"
+            "    public string ErrorText { get; set; }\n"
+            "    public bool IsValid => string.IsNullOrWhiteSpace(ErrorText);\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        responses = [
+            json.dumps(
+                {
+                    "summary": "Keep the dialog open after a scanned cell is added.",
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The scan-finished handler controls the post-scan behavior.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "        if (e.IsValid) {\n            WarehouseCells = e.Cell;\n        }\n",
+                                    "replace": "        if (e.Found && e.Cell != null) {\n            WarehouseCells = e.Cell;\n        }\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Stay in the same handler without relying on an invalid event-args condition shape.",
+                    "chosen_behavior_method": "RecognizeBarcodeViewModelOnFinished",
+                    "chosen_behavior_method_reason": "The scan-finished handler should use same-method logic without fake instance-bool flags.",
+                    "files": [
+                        {
+                            "file": "src/OrderPackCellViewModel.cs",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "        if (e.IsValid) {\n            WarehouseCells = e.Cell;\n        }\n",
+                                    "replace": "        if (e.Cell != null) {\n            WarehouseCells = e.Cell;\n        }\n",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="After scanning a storage cell, keep the dialog open and avoid treating the scan as final completion.",
+            jira_key="TEL-CH3",
+            writable_repo_id="sample",
+            writable_files=["src/OrderPackCellViewModel.cs"],
+            writable_file_plan=[{"file": "src/OrderPackCellViewModel.cs", "why_this_file": "Primary behavior path.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="ui_client",
+            selected_class="OrderPackCellViewModel",
+            selected_method="RecognizeBarcodeViewModelOnFinished",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        retry_user_prompt = "\n".join(message.get("content", "") for message in calls[1] if message.get("role") == "user")
+        self.assertIn("invalid event-args member condition shape", retry_user_prompt)
+        self.assertIn("e.Found && e.Cell != null", retry_user_prompt)
+        self.assertIn("RecognizeWarehouseCellBarcodeResultEventArgs", retry_user_prompt)
+        self.assertTrue(result["compile_hardening_eligible"])
+        self.assertTrue(result["invalid_event_args_usage_shape_detected"])
+        self.assertEqual(result["resolved_event_args_type"], "RecognizeWarehouseCellBarcodeResultEventArgs")
+        self.assertEqual(result["invalid_usage_expression"], "e.Found && e.Cell != null")
+        self.assertTrue(result["compile_hardening_retry_activated"])
+        self.assertTrue(result["compile_hardening_changed_result"])
+        self.assertEqual(result["changed_files"], ["src/OrderPackCellViewModel.cs"])
+
+    def test_same_method_behavior_ranking_is_deterministic(self) -> None:
+        target = self.repo_root / "src" / "OrderPackCellViewModel.cs"
+        target.write_text(
+            "public class OrderPackCellViewModel {\n"
+            "    public OrderPackCellViewModel() {}\n"
+            "    public void HandleLoadedAsync() {}\n"
+            "    public void HandleOkAsync() {}\n"
+            "    public void RecognizeBarcodeViewModelOnFinished() {}\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+        source_files = service._load_source_files(self.repo_root, ["src/OrderPackCellViewModel.cs"], max_files=1)
+
+        first = service._rank_same_file_behavior_methods(
+            task_text="After scanning a storage cell keep the dialog open until OK.",
+            source_files=source_files,
+            selected_class="OrderPackCellViewModel",
+            selected_method="OrderPackCellViewModel",
+        )
+        second = service._rank_same_file_behavior_methods(
+            task_text="After scanning a storage cell keep the dialog open until OK.",
+            source_files=source_files,
+            selected_class="OrderPackCellViewModel",
+            selected_method="OrderPackCellViewModel",
+        )
+
+        self.assertEqual(first, second)
+
+    def test_force_non_empty_patch_retry_does_not_run_when_flag_is_off(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "No-op first attempt.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'ok'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior.",
+            jira_key="TEL-A3",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(result["activation_rule_enabled"])
+        self.assertFalse(result["activation_rule_fired"])
+        self.assertTrue(result["empty_patch"])
+
+    def test_force_non_empty_patch_retry_keeps_same_target_scope_on_early_draft_gate(self) -> None:
+        (self.repo_root / "src" / "other.py").write_text(
+            "def helper() -> str:\n    return 'other'\n",
+            encoding="utf-8",
+        )
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "Concrete retry patch.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=True,
+            ),
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+        blocked_gate = {
+            "selected_codegen_targets": ["src/app.py"],
+            "shortlisted_writable_files": ["src/app.py", "src/other.py"],
+            "target_gate_status": "blocked",
+            "target_gate_reason": "Top writable file lacked a strong exact anchor.",
+            "target_gate_confidence": 0.5,
+            "selected_codegen_target_count": 1,
+            "collapsed_to_top1": True,
+            "tie_break_reason": "blocked_preconditions",
+            "top1_margin": 0.0,
+            "top2_margin": 0.0,
+            "top1_vs_top2_margin": 0.0,
+            "ambiguity_gate_status": "blocked",
+            "ambiguity_gate_reason": "blocked_preconditions",
+            "runner_up_file": "",
+            "runner_up_anchor_strength": 0.0,
+            "runner_up_overlap_summary": {},
+            "apply_eligibility_by_file": [
+                {"file": "src/app.py", "family": "api_endpoint", "path_family": "api_endpoint", "exact_basename_hits": 1}
+            ],
+            "anchor_type": "basename_overlap",
+            "anchor_strength": 1.0,
+        }
+
+        with patch.object(service, "_select_codegen_targets", return_value=blocked_gate):
+            result = service.generate(
+                task_text="Update app.py run behavior.",
+                jira_key="TEL-A4",
+                writable_repo_id="sample",
+                writable_files=["src/app.py", "src/other.py"],
+                writable_file_plan=[
+                    {"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"},
+                    {"file": "src/other.py", "why_this_file": "Neighbor only.", "intended_action": "modify"},
+                ],
+                execution_submode="dry_run_codegen",
+                primary_family="api_endpoint",
+                max_retry_attempts=0,
+            )
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(result["activation_rule_fired"])
+        self.assertTrue(result["activation_retry_target_unchanged"])
+        self.assertEqual(result["changed_files"], ["src/app.py"])
+        self.assertNotIn("src/other.py", result["activation_retry_changed_files"])
+
+    def test_force_non_empty_patch_retry_does_not_run_when_real_patch_later_hits_validation_env_failure(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return json.dumps(
+                {
+                    "summary": "Update app behavior.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
+        validation_results = [
+            {
+                "overall_status": "failed",
+                "passed": False,
+                "total_tests": 0,
+                "passed_tests": 0,
+                "failed_tests": 0,
+                "restore_supported": True,
+                "restore_pass": False,
+                "failure_reason_guess": "environment_failure",
+                "steps": [{"name": "restore", "status": "failed", "command": "dotnet restore", "exit_code": 1}],
+            }
+        ]
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=True,
+            ),
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _SequencedValidationService(validation_results),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior.",
+            jira_key="TEL-A5",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="apply_codegen",
+            primary_family="api_endpoint",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(result["activation_rule_fired"])
+        self.assertGreater(result["patch_line_count"], 0)
+
     def test_materialized_edits_preserve_full_file_content_beyond_prompt_truncation(self) -> None:
         long_tail = "x" * 300
         (self.repo_root / "src" / "app.py").write_text(
@@ -263,6 +1643,135 @@ class BoundedRealCodegenServiceTests(unittest.TestCase):
         self.assertEqual(len(materialized), 1)
         self.assertIn("return 'updated'", materialized[0]["new_content"])
         self.assertIn(long_tail, materialized[0]["new_content"])
+
+    def test_identical_full_file_rewrite_is_dropped_before_apply(self) -> None:
+        current = (self.repo_root / "src" / "app.py").read_text(encoding="utf-8")
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(_messages):
+            calls.append(list(_messages))
+            return json.dumps(
+                {
+                    "summary": "Rewrite file with the same content.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "new_content": current,
+                        }
+                    ],
+                }
+            )
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior.",
+            jira_key="TEL-NOOP",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="apply_codegen",
+            primary_family="api_endpoint",
+            selected_class="App",
+            selected_method="run",
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(result["full_file_rewrite_detected"])
+        self.assertTrue(result["rewritten_file_equal_to_original"])
+        self.assertFalse(result["materialized_diff_present"])
+        self.assertFalse(result["apply_meaningful_change_detected"])
+        self.assertEqual(result["rewrite_materialization_reason"], "full_file_rewrite_identical_to_original")
+        self.assertTrue(result["full_file_new_content_present"])
+        self.assertTrue(result["new_content_equal_to_original"])
+        self.assertTrue(result["no_op_full_file_rewrite_detected"])
+        self.assertTrue(result["no_op_full_file_retry_eligible"])
+        self.assertTrue(result["no_op_full_file_retry_activated"])
+        self.assertFalse(result["no_op_full_file_retry_changed_result"])
+        self.assertFalse(result["claimed_change_found_in_new_content"])
+        self.assertEqual(result["changed_files"], [])
+        self.assertEqual(result["patch_line_count"], 0)
+        self.assertEqual(result["real_apply_result"]["skip_reason"], "no_changes")
+        self.assertFalse(result["apply_success"])
+
+    def test_no_op_full_file_retry_converts_identical_rewrite_into_real_edit(self) -> None:
+        current = (self.repo_root / "src" / "app.py").read_text(encoding="utf-8")
+        responses = [
+            json.dumps(
+                {
+                    "summary": "Change user-visible run behavior in the selected method.",
+                    "chosen_behavior_method": "run",
+                    "chosen_behavior_method_reason": "The run method is the primary behavior path.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "new_content": current,
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "summary": "Apply a real edit in the selected method.",
+                    "chosen_behavior_method": "run",
+                    "chosen_behavior_method_reason": "The run method is the primary behavior path.",
+                    "files": [
+                        {
+                            "file": "src/app.py",
+                            "planned_change_type": "modify",
+                            "edits": [
+                                {
+                                    "search": "return 'ok'",
+                                    "replace": "return 'updated'",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ]
+        calls: list[list[dict[str, str]]] = []
+
+        def _completion(messages):
+            calls.append(list(messages))
+            return responses.pop(0)
+
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            completion_callable=_completion,
+            validation_service_factory=lambda **kwargs: _FakeValidationService(),
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_force_non_empty_patch_enabled=False,
+            ),
+        )
+
+        result = service.generate(
+            task_text="Update app.py run behavior in the selected method.",
+            jira_key="TEL-NOOP-RETRY",
+            writable_repo_id="sample",
+            writable_files=["src/app.py"],
+            writable_file_plan=[{"file": "src/app.py", "why_this_file": "Exact app path overlap.", "intended_action": "modify"}],
+            execution_submode="dry_run_codegen",
+            primary_family="api_endpoint",
+            selected_class="App",
+            selected_method="run",
+            max_retry_attempts=0,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(result["no_op_full_file_rewrite_detected"])
+        self.assertTrue(result["no_op_full_file_retry_eligible"])
+        self.assertTrue(result["no_op_full_file_retry_activated"])
+        self.assertTrue(result["no_op_full_file_retry_changed_result"])
+        self.assertEqual(result["changed_files"], ["src/app.py"])
+        self.assertGreater(result["patch_line_count"], 0)
 
     def test_codegen_downgrades_unanchored_structural_rewrite_to_draft(self) -> None:
         (self.repo_root / "src" / "Program.cs").write_text(
@@ -408,6 +1917,131 @@ class BoundedRealCodegenServiceTests(unittest.TestCase):
 
         self.assertEqual(gate["target_gate_status"], "blocked")
         self.assertEqual(gate["wrong_in_scope_target_reason_guess"], "unanchored_same_family_tie")
+
+    def test_worker_family_target_arbitration_prefers_same_family_worker_over_companions(self) -> None:
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_worker_family_target_arbitration_enabled=True,
+            ),
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+        )
+
+        ranked, diagnostics = service._apply_worker_family_target_arbitration(
+            [
+                {"file": "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/Telemart.Worker.EsputnikOrderStatusNotifications.csproj", "score": 22.0},
+                {"file": "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs", "score": 19.0},
+                {"file": "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsOptions.cs", "score": 18.5},
+                {"file": "src/Workers/Telemart.Worker.EsputnikNotifications/EsputnikNotificationsWorker.cs", "score": 17.0},
+            ]
+        )
+
+        self.assertTrue(diagnostics["fired"])
+        self.assertTrue(diagnostics["changed_target"])
+        self.assertEqual(diagnostics["family_type"], "worker_support_project_companion")
+        self.assertEqual(
+            diagnostics["worker_anchor"],
+            "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs",
+        )
+        self.assertEqual(
+            ranked[0]["file"],
+            "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs",
+        )
+        self.assertEqual(
+            diagnostics["original_selected_target"],
+            "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/Telemart.Worker.EsputnikOrderStatusNotifications.csproj",
+        )
+        self.assertEqual(
+            diagnostics["arbitrated_selected_target"],
+            "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs",
+        )
+        demoted = {item["file"]: item["companion_type"] for item in diagnostics["companion_candidates_demoted"]}
+        self.assertEqual(
+            demoted["src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/Telemart.Worker.EsputnikOrderStatusNotifications.csproj"],
+            "worker_project_companion",
+        )
+        self.assertEqual(
+            demoted["src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsOptions.cs"],
+            "worker_options_companion",
+        )
+
+    def test_worker_family_target_arbitration_stays_inert_for_handler_request_family(self) -> None:
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_worker_family_target_arbitration_enabled=True,
+            ),
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+        )
+
+        ranked, diagnostics = service._apply_worker_family_target_arbitration(
+            [
+                {"file": "src/Features/Np/CreateNPCourierCallHandler.cs", "score": 23.0},
+                {"file": "src/Features/Np/CreateNPCourierCallRequest.cs", "score": 22.0},
+                {"file": "src/Features/Np/OperationRequirement.cs", "score": 21.0},
+            ]
+        )
+
+        self.assertFalse(diagnostics["fired"])
+        self.assertFalse(diagnostics["changed_target"])
+        self.assertEqual(ranked[0]["file"], "src/Features/Np/CreateNPCourierCallHandler.cs")
+
+    def test_target_gate_payload_preserves_worker_family_arbitration_diagnostics(self) -> None:
+        service = BoundedRealCodegenService(
+            storage_path=self.registry_path,
+            repo_settings=replace(
+                settings.repo_intelligence,
+                targeting_worker_family_target_arbitration_enabled=True,
+            ),
+            completion_callable=lambda _messages: json.dumps({"summary": "noop", "files": []}),
+        )
+
+        gate = {
+            "selected_codegen_targets": ["src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs"],
+            "shortlisted_writable_files": [
+                "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/Telemart.Worker.EsputnikOrderStatusNotifications.csproj",
+                "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs",
+                "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsOptions.cs",
+            ],
+            "original_selected_codegen_targets": [
+                "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/Telemart.Worker.EsputnikOrderStatusNotifications.csproj"
+            ],
+            "arbitrated_selected_codegen_targets": [
+                "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs"
+            ],
+            "target_arbitration_rule_fired": True,
+            "target_arbitration_changed_target": True,
+            "target_arbitration_family_type": "worker_support_project_companion",
+            "target_arbitration_worker_anchor": "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs",
+            "target_arbitration_companion_candidates_demoted": [
+                {
+                    "file": "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsOptions.cs",
+                    "companion_type": "worker_options_companion",
+                }
+            ],
+            "target_arbitration_reason": "Preferred the same-family concrete worker implementation.",
+            "target_selection_reason": "worker_family_target_arbitration",
+        }
+
+        payload = service._target_gate_payload(gate)
+
+        self.assertTrue(payload["target_arbitration_rule_fired"])
+        self.assertTrue(payload["target_arbitration_changed_target"])
+        self.assertEqual(payload["target_selection_reason"], "worker_family_target_arbitration")
+        self.assertEqual(
+            payload["original_selected_codegen_targets"],
+            ["src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/Telemart.Worker.EsputnikOrderStatusNotifications.csproj"],
+        )
+        self.assertEqual(
+            payload["arbitrated_selected_codegen_targets"],
+            ["src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs"],
+        )
+        self.assertEqual(
+            payload["target_arbitration_worker_anchor"],
+            "src/Workers/Telemart.Worker.EsputnikOrderStatusNotifications/EsputnikOrderStatusNotificationsWorker.cs",
+        )
 
     def test_target_gate_blocks_ambiguous_top1_vs_top2_tie(self) -> None:
         service = BoundedRealCodegenService(

@@ -42,7 +42,8 @@ from services.benchmark_file_diagnostics_service import BenchmarkFileDiagnostics
 from services.benchmark_case_generation_service import BenchmarkCaseGenerationService
 from services.db_service import DatabaseService
 from services.i18n_service import DEFAULT_LOCALE, I18nService, SUPPORTED_LOCALES
-from services.jira_task_loader import load_jira_task
+from services.jira_evidence_service import JiraEvidenceService
+from services.jira_task_loader import JiraConfigurationError, jira_auth_present, load_jira_task
 from services.permission_service import PermissionService
 from services.repo_fleet_service import RepoFleetService
 from services.repo_index_service import RepositoryIndexService
@@ -54,6 +55,7 @@ from services.routing_benchmark_service import RoutingBenchmarkService
 from services.run_service import RunService
 from services.scm_service import ScmService
 from services.bitbucket_credentials import BitbucketCredentialResolver, parse_bitbucket_remote
+from llm_factory import LLMProviderError
 
 
 app = FastAPI(title="Research Agent API", version="0.1.0")
@@ -68,6 +70,7 @@ _routing_benchmark_service = RoutingBenchmarkService()
 _benchmark_file_diagnostics_service = BenchmarkFileDiagnosticsService()
 _benchmark_case_generation_service = BenchmarkCaseGenerationService()
 _bitbucket_credential_resolver = BitbucketCredentialResolver()
+_jira_evidence_service = JiraEvidenceService()
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SESSIONS: dict[str, dict[str, str]] = {}
 _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$", re.IGNORECASE)
@@ -119,6 +122,12 @@ class RoutingBenchmarkCaseGenerationRequest(BaseModel):
     include_empty_context: bool = False
     hydrate_jira_snapshots: bool = False
     max_expected_files: int = 5
+    max_task_count: int | None = None
+    newest_first: bool | None = None
+    allowed_creators: list[str] | None = None
+    curated_allowlist: list[str] | None = None
+    single_repo_only: bool | None = None
+    baseline_name: str = ""
 
 
 class RepoLearningRecomputeRequest(BaseModel):
@@ -887,15 +896,19 @@ def _raise_workflow_input_error(
     message: str,
     workflow_type: str,
     request_input_text: str = "",
+    extra_detail: dict[str, Any] | None = None,
 ) -> None:
+    detail = {
+        "error": error,
+        "message": message,
+        "workflow_type": workflow_type,
+        "request_input_text": str(request_input_text or "").strip(),
+    }
+    if isinstance(extra_detail, dict):
+        detail.update(extra_detail)
     raise HTTPException(
         status_code=status_code,
-        detail={
-            "error": error,
-            "message": message,
-            "workflow_type": workflow_type,
-            "request_input_text": str(request_input_text or "").strip(),
-        },
+        detail=detail,
     )
 
 
@@ -922,6 +935,7 @@ def _compose_resolved_jira_text(issue_payload: dict[str, Any]) -> str:
 
 def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dict[str, Any]:
     request_input_text = str(jira_ticket or "").strip()
+    resolved_jira_auth_present = bool(jira_auth_present())
     if not request_input_text:
         _raise_workflow_input_error(
             status_code=400,
@@ -929,6 +943,7 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
             message="jira_ticket is required.",
             workflow_type=workflow_type,
             request_input_text=request_input_text,
+            extra_detail={"jira_auth_present": resolved_jira_auth_present},
         )
     if not _JIRA_ISSUE_KEY_RE.match(request_input_text):
         _raise_workflow_input_error(
@@ -937,9 +952,22 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
             message="A valid Jira issue key is required to fetch real Jira content.",
             workflow_type=workflow_type,
             request_input_text=request_input_text,
+            extra_detail={"jira_auth_present": resolved_jira_auth_present},
         )
     try:
         issue_payload = load_jira_task(request_input_text)
+    except JiraConfigurationError as exc:
+        _raise_workflow_input_error(
+            status_code=424,
+            error=exc.failure_reason,
+            message=str(exc),
+            workflow_type=workflow_type,
+            request_input_text=request_input_text,
+            extra_detail={
+                "jira_auth_present": resolved_jira_auth_present,
+                "run_invalid_due_to_provider": False,
+            },
+        )
     except Exception as exc:
         _raise_workflow_input_error(
             status_code=424,
@@ -947,6 +975,7 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
             message=f"Failed to fetch Jira content for {request_input_text}: {exc}",
             workflow_type=workflow_type,
             request_input_text=request_input_text,
+            extra_detail={"jira_auth_present": resolved_jira_auth_present},
         )
     resolved_text = _compose_resolved_jira_text(issue_payload)
     if not resolved_text:
@@ -957,16 +986,45 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
             workflow_type=workflow_type,
             request_input_text=request_input_text,
         )
+    evidence_bundle = {}
+    if bool(settings.repo_intelligence.jira_evidence_layer_enabled):
+        evidence_bundle = _jira_evidence_service.build_runtime_evidence(
+            issue_payload,
+            workflow_name=workflow_type,
+        ).to_dict()
+    supplemental_text = _clean_user_text(evidence_bundle.get("supplemental_context_text", "") or "")
+    prompt_task_text = resolved_text
+    if supplemental_text:
+        prompt_task_text = f"{resolved_text}\n\nSupplemental Jira evidence:\n{supplemental_text}".strip()
     return {
         "workflow_type": workflow_type,
         "request_input_text": request_input_text,
         "request_input_length": len(request_input_text),
         "jira_fetch_attempted": True,
         "jira_fetch_succeeded": True,
+        "jira_auth_present": resolved_jira_auth_present,
         "resolved_jira_title": _clean_user_text(issue_payload.get("title", "") or issue_payload.get("summary", "") or ""),
         "resolved_jira_text_length": len(resolved_text),
         "final_workflow_input": resolved_text,
         "final_workflow_input_hash": _hash_workflow_input(resolved_text),
+        "prompt_task_text": prompt_task_text,
+        "supplemental_jira_evidence_text": supplemental_text,
+        "supplemental_jira_evidence_text_length": len(supplemental_text),
+        "jira_title_present": bool(_clean_user_text(issue_payload.get("title", "") or issue_payload.get("summary", "") or "")),
+        "jira_description_present": bool(_clean_user_text(issue_payload.get("description", "") or "")),
+        "acceptance_criteria_present": bool(list(issue_payload.get("acceptance_criteria", []) or [])),
+        "comments_count": int(evidence_bundle.get("comments_count", len(list(issue_payload.get("comments", []) or []))) or 0),
+        "comments_used_in_context": bool(evidence_bundle.get("comments_used_in_context", False)),
+        "attachments_count": int(evidence_bundle.get("attachments_count", len(list(issue_payload.get("attachments", []) or []))) or 0),
+        "attachment_types": list(evidence_bundle.get("attachment_types", []) or []),
+        "attachments_used_count": int(evidence_bundle.get("attachments_used_count", 0) or 0),
+        "attachment_text_chars": int(evidence_bundle.get("attachment_text_chars", 0) or 0),
+        "attachment_image_summaries_count": int(evidence_bundle.get("attachment_image_summaries_count", 0) or 0),
+        "attachment_signal_used_in_planning": bool(evidence_bundle.get("attachment_signal_used_in_planning", False)),
+        "attachment_signal_used_in_codegen": bool(evidence_bundle.get("attachment_signal_used_in_codegen", False)),
+        "attachment_signal_used_in_routing": bool(evidence_bundle.get("attachment_signal_used_in_routing", False)),
+        "attachment_signal_used_in_targeting": bool(evidence_bundle.get("attachment_signal_used_in_targeting", False)),
+        "image_attachment_runtime_available": bool(evidence_bundle.get("image_attachment_runtime_available", False)),
     }
 
 
@@ -986,10 +1044,29 @@ def _resolve_free_text_workflow_input(free_text: str, *, workflow_type: str) -> 
         "request_input_length": len(request_input_text),
         "jira_fetch_attempted": False,
         "jira_fetch_succeeded": False,
+        "jira_auth_present": False,
         "resolved_jira_title": "",
         "resolved_jira_text_length": 0,
         "final_workflow_input": request_input_text,
         "final_workflow_input_hash": _hash_workflow_input(request_input_text),
+        "prompt_task_text": request_input_text,
+        "supplemental_jira_evidence_text": "",
+        "supplemental_jira_evidence_text_length": 0,
+        "jira_title_present": False,
+        "jira_description_present": False,
+        "acceptance_criteria_present": False,
+        "comments_count": 0,
+        "comments_used_in_context": False,
+        "attachments_count": 0,
+        "attachment_types": [],
+        "attachments_used_count": 0,
+        "attachment_text_chars": 0,
+        "attachment_image_summaries_count": 0,
+        "attachment_signal_used_in_planning": False,
+        "attachment_signal_used_in_codegen": False,
+        "attachment_signal_used_in_routing": False,
+        "attachment_signal_used_in_targeting": False,
+        "image_attachment_runtime_available": False,
     }
 
 
@@ -1052,10 +1129,29 @@ def _workflow_technical_details(
         "request_input_length": int(resolved_input.get("request_input_length", 0) or 0),
         "jira_fetch_attempted": bool(resolved_input.get("jira_fetch_attempted", False)),
         "jira_fetch_succeeded": bool(resolved_input.get("jira_fetch_succeeded", False)),
+        "jira_auth_present": bool(resolved_input.get("jira_auth_present", False)),
         "resolved_jira_title": _clean_user_text(resolved_input.get("resolved_jira_title", "") or ""),
         "resolved_jira_text_length": int(resolved_input.get("resolved_jira_text_length", 0) or 0),
         "final_workflow_input": _clean_user_text(resolved_input.get("final_workflow_input", "") or normalized_task_text),
         "final_workflow_input_hash": str(resolved_input.get("final_workflow_input_hash", "") or _hash_workflow_input(normalized_task_text)).strip(),
+        "prompt_task_text_length": len(_clean_user_text(resolved_input.get("prompt_task_text", "") or "")),
+        "supplemental_jira_evidence_text": _clean_user_text(resolved_input.get("supplemental_jira_evidence_text", "") or ""),
+        "supplemental_jira_evidence_text_length": int(resolved_input.get("supplemental_jira_evidence_text_length", 0) or 0),
+        "jira_title_present": bool(resolved_input.get("jira_title_present", False)),
+        "jira_description_present": bool(resolved_input.get("jira_description_present", False)),
+        "acceptance_criteria_present": bool(resolved_input.get("acceptance_criteria_present", False)),
+        "comments_count": int(resolved_input.get("comments_count", 0) or 0),
+        "comments_used_in_context": bool(resolved_input.get("comments_used_in_context", False)),
+        "attachments_count": int(resolved_input.get("attachments_count", 0) or 0),
+        "attachment_types": list(resolved_input.get("attachment_types", []) or []),
+        "attachments_used_count": int(resolved_input.get("attachments_used_count", 0) or 0),
+        "attachment_text_chars": int(resolved_input.get("attachment_text_chars", 0) or 0),
+        "attachment_image_summaries_count": int(resolved_input.get("attachment_image_summaries_count", 0) or 0),
+        "attachment_signal_used_in_planning": bool(resolved_input.get("attachment_signal_used_in_planning", False)),
+        "attachment_signal_used_in_codegen": bool(resolved_input.get("attachment_signal_used_in_codegen", False)),
+        "attachment_signal_used_in_routing": bool(resolved_input.get("attachment_signal_used_in_routing", False)),
+        "attachment_signal_used_in_targeting": bool(resolved_input.get("attachment_signal_used_in_targeting", False)),
+        "image_attachment_runtime_available": bool(resolved_input.get("image_attachment_runtime_available", False)),
         "raw_jira_text_length": len(str(task_text or "")),
         "parsed_jira_sections": _parse_task_sections(task_text),
         "normalized_task_text": normalized_task_text,
@@ -1125,6 +1221,7 @@ def _workflow_technical_details(
         "top_candidate_symbols": list(payload.get("top_candidate_symbols", []) or []),
         "top_closest_areas": list(payload.get("top_closest_areas", []) or []),
         "candidate_files_by_repo": dict(payload.get("candidate_files_by_repo", {}) or {}),
+        "candidate_diagnostics_by_repo": dict(payload.get("candidate_diagnostics_by_repo", {}) or {}),
         "selected_files_by_repo": dict(payload.get("selected_files_by_repo", {}) or {}),
         "top_candidate_files_by_repo": dict(payload.get("top_candidate_files_by_repo", {}) or {}),
         "top_candidate_symbols_by_repo": dict(payload.get("top_candidate_symbols_by_repo", {}) or {}),
@@ -1169,6 +1266,7 @@ def _workflow_input_debug(detail: RunDetail, *, workflow_name: str) -> dict[str,
 def _attach_workflow_input_debug(detail: RunDetail, input_debug: dict[str, Any], *, workflow_name: str) -> None:
     payload = dict(detail.review_result or {}) if workflow_name == "pre_review" else dict(detail.spec_result or {})
     payload["workflow_input_debug"] = dict(input_debug or {})
+    detail.jira_auth_present = bool(dict(input_debug or {}).get("jira_auth_present", False))
     if workflow_name == "pre_review":
         detail.review_result = payload
     else:
@@ -3197,6 +3295,84 @@ def _spec_result_payload(result: AgentResult) -> dict | None:
         "title": str(getattr(spec, "title", "") or "").strip(),
         "goal": str(getattr(spec, "goal", "") or "").strip(),
         "context": str(getattr(spec, "context", "") or "").strip(),
+        "exact_file_path": str(getattr(spec, "exact_file_path", "") or "").strip(),
+        "exact_class_name": str(getattr(spec, "exact_class_name", "") or "").strip(),
+        "exact_method_name": str(getattr(spec, "exact_method_name", "") or "").strip(),
+        "system_selected_file": str(result.metadata.get("system_selected_file", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "grounding_enabled": bool(result.metadata.get("grounding_enabled", False)) if isinstance(result.metadata, dict) else False,
+        "grounding_provider_statuses": dict(result.metadata.get("grounding_provider_statuses", {}) or {}) if isinstance(result.metadata, dict) else {},
+        "gitnexus_available": bool(result.metadata.get("gitnexus_available", False)) if isinstance(result.metadata, dict) else False,
+        "gitnexus_indexed": bool(result.metadata.get("gitnexus_indexed", False)) if isinstance(result.metadata, dict) else False,
+        "tree_sitter_used": bool(result.metadata.get("tree_sitter_used", False)) if isinstance(result.metadata, dict) else False,
+        "embeddings_used": bool(result.metadata.get("embeddings_used", False)) if isinstance(result.metadata, dict) else False,
+        "grounded_candidate_file_count": int(result.metadata.get("grounded_candidate_file_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "grounded_file_count": int(result.metadata.get("grounded_file_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "grounded_symbol_count": int(result.metadata.get("grounded_symbol_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "grounded_method_count": int(result.metadata.get("grounded_method_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "grounded_method_provider_used": str(result.metadata.get("grounded_method_provider_used", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "grounded_method_candidates": list(result.metadata.get("grounded_method_candidates", []) or []) if isinstance(result.metadata, dict) else [],
+        "selected_file_has_grounded_methods": bool(result.metadata.get("selected_file_has_grounded_methods", False)) if isinstance(result.metadata, dict) else False,
+        "grounded_classes_for_selected_file": list(result.metadata.get("grounded_classes_for_selected_file", []) or []) if isinstance(result.metadata, dict) else [],
+        "grounded_methods_for_selected_file": list(result.metadata.get("grounded_methods_for_selected_file", []) or []) if isinstance(result.metadata, dict) else [],
+        "companion_patch_expansion_enabled": bool(result.metadata.get("companion_patch_expansion_enabled", False)) if isinstance(result.metadata, dict) else False,
+        "companion_detector_fired": bool(result.metadata.get("companion_detector_fired", False)) if isinstance(result.metadata, dict) else False,
+        "companion_detector_reason": str(result.metadata.get("companion_detector_reason", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "allowed_companion_files": list(result.metadata.get("allowed_companion_files", []) or []) if isinstance(result.metadata, dict) else [],
+        "patch_touched_companion_files": list(result.metadata.get("patch_touched_companion_files", []) or []) if isinstance(result.metadata, dict) else [],
+        "patch_touched_primary_file": bool(result.metadata.get("patch_touched_primary_file", False)) if isinstance(result.metadata, dict) else False,
+        "patch_used_options_companion": bool(result.metadata.get("patch_used_options_companion", False)) if isinstance(result.metadata, dict) else False,
+        "patch_used_appsettings_companion": bool(result.metadata.get("patch_used_appsettings_companion", False)) if isinstance(result.metadata, dict) else False,
+        "selected_file_symbol_extraction_status": str(result.metadata.get("selected_file_symbol_extraction_status", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "selected_file_symbol_extraction_reason": str(result.metadata.get("selected_file_symbol_extraction_reason", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "selected_file_bytes_loaded": int(result.metadata.get("selected_file_bytes_loaded", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "selected_file_classes_found": list(result.metadata.get("selected_file_classes_found", []) or []) if isinstance(result.metadata, dict) else [],
+        "selected_file_methods_found": list(result.metadata.get("selected_file_methods_found", []) or []) if isinstance(result.metadata, dict) else [],
+        "selected_file_symbol_filter_count": int(result.metadata.get("selected_file_symbol_filter_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "grounding_required_for_plan": bool(result.metadata.get("grounding_required_for_plan", False)) if isinstance(result.metadata, dict) else False,
+        "method_grounding_required": bool(result.metadata.get("method_grounding_required", False)) if isinstance(result.metadata, dict) else False,
+        "planner_used_grounding_candidates_only": bool(result.metadata.get("planner_used_grounding_candidates_only", False)) if isinstance(result.metadata, dict) else False,
+        "plan_file_in_grounded_candidates": bool(result.metadata.get("plan_file_in_grounded_candidates", False)) if isinstance(result.metadata, dict) else False,
+        "planner_selected_file_in_candidates": bool(result.metadata.get("planner_selected_file_in_candidates", False)) if isinstance(result.metadata, dict) else False,
+        "plan_class_in_grounded_classes": bool(result.metadata.get("plan_class_in_grounded_classes", False)) if isinstance(result.metadata, dict) else False,
+        "plan_class_in_grounded_symbols": bool(result.metadata.get("plan_class_in_grounded_symbols", False)) if isinstance(result.metadata, dict) else False,
+        "planner_selected_class_in_symbols": bool(result.metadata.get("planner_selected_class_in_symbols", False)) if isinstance(result.metadata, dict) else False,
+        "plan_method_in_grounded_methods": bool(result.metadata.get("plan_method_in_grounded_methods", False)) if isinstance(result.metadata, dict) else False,
+        "plan_method_in_grounded_symbols": bool(result.metadata.get("plan_method_in_grounded_symbols", False)) if isinstance(result.metadata, dict) else False,
+        "planner_selected_method_in_symbols": bool(result.metadata.get("planner_selected_method_in_symbols", False)) if isinstance(result.metadata, dict) else False,
+        "planner_selected_method_in_grounded_methods": bool(result.metadata.get("planner_selected_method_in_grounded_methods", False)) if isinstance(result.metadata, dict) else False,
+        "selected_file_grounded_method_count": int(result.metadata.get("selected_file_grounded_method_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "llm_attempted_non_grounded_method": bool(result.metadata.get("llm_attempted_non_grounded_method", False)) if isinstance(result.metadata, dict) else False,
+        "llm_attempted_unknown_method_despite_grounded_methods": bool(result.metadata.get("llm_attempted_unknown_method_despite_grounded_methods", False)) if isinstance(result.metadata, dict) else False,
+        "failed_unknown_method_despite_grounded_methods": bool(result.metadata.get("failed_unknown_method_despite_grounded_methods", False)) if isinstance(result.metadata, dict) else False,
+        "failed_non_grounded_method": bool(result.metadata.get("failed_non_grounded_method", False)) if isinstance(result.metadata, dict) else False,
+        "planner_method_ranking": list(result.metadata.get("planner_method_ranking", []) or []) if isinstance(result.metadata, dict) else [],
+        "planner_rejected_method_alternatives": list(result.metadata.get("planner_rejected_method_alternatives", []) or []) if isinstance(result.metadata, dict) else [],
+        "planner_rejected_candidates": list(result.metadata.get("planner_rejected_candidates", []) or []) if isinstance(result.metadata, dict) else [],
+        "implementation_location_validation_status": str(result.metadata.get("implementation_location_validation_status", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "implementation_location_validation_reason": str(result.metadata.get("implementation_location_validation_reason", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "llm_mode": str(result.metadata.get("llm_mode", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "llm_edit_mode": bool(result.metadata.get("llm_edit_mode", False)) if isinstance(result.metadata, dict) else False,
+        "llm_attempted_reasoning": bool(result.metadata.get("llm_attempted_reasoning", False)) if isinstance(result.metadata, dict) else False,
+        "llm_attempted_retarget": bool(result.metadata.get("llm_attempted_retarget", False)) if isinstance(result.metadata, dict) else False,
+        "llm_referenced_external_file": bool(result.metadata.get("llm_referenced_external_file", False)) if isinstance(result.metadata, dict) else False,
+        "patch_only_raw_output_present": bool(result.metadata.get("patch_only_raw_output_present", False)) if isinstance(result.metadata, dict) else False,
+        "patch_only_parse_status": str(result.metadata.get("patch_only_parse_status", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "patch_only_parse_failure_reason": str(result.metadata.get("patch_only_parse_failure_reason", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "patch_only_schema_valid": bool(result.metadata.get("patch_only_schema_valid", False)) if isinstance(result.metadata, dict) else False,
+        "patch_only_patch_present": bool(result.metadata.get("patch_only_patch_present", False)) if isinstance(result.metadata, dict) else False,
+        "patch_only_patch_nonempty": bool(result.metadata.get("patch_only_patch_nonempty", False)) if isinstance(result.metadata, dict) else False,
+        "patch_only_external_file_reference": bool(result.metadata.get("patch_only_external_file_reference", False)) if isinstance(result.metadata, dict) else False,
+        "patch_only_recovered_by_parser": bool(result.metadata.get("patch_only_recovered_by_parser", False)) if isinstance(result.metadata, dict) else False,
+        "patch_transport_mode": str(result.metadata.get("patch_transport_mode", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "patch_block_found": bool(result.metadata.get("patch_block_found", False)) if isinstance(result.metadata, dict) else False,
+        "patch_block_count": int(result.metadata.get("patch_block_count", 0) or 0) if isinstance(result.metadata, dict) else 0,
+        "patch_block_nonempty": bool(result.metadata.get("patch_block_nonempty", False)) if isinstance(result.metadata, dict) else False,
+        "patch_block_truncated": bool(result.metadata.get("patch_block_truncated", False)) if isinstance(result.metadata, dict) else False,
+        "duplicate_patch_blocks": bool(result.metadata.get("duplicate_patch_blocks", False)) if isinstance(result.metadata, dict) else False,
+        "trailing_noise_after_patch_block": bool(result.metadata.get("trailing_noise_after_patch_block", False)) if isinstance(result.metadata, dict) else False,
+        "patch_block_parse_status": str(result.metadata.get("patch_block_parse_status", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "patch_block_failure_reason": str(result.metadata.get("patch_block_failure_reason", "") or "").strip() if isinstance(result.metadata, dict) else "",
+        "generated_patch": str(result.metadata.get("generated_patch", "") or "").strip() if isinstance(result.metadata, dict) else "",
         "scope": list(getattr(spec, "scope", []) or []),
         "out_of_scope": list(getattr(spec, "out_of_scope", []) or []),
         "requirements": list(getattr(spec, "requirements", []) or []),
@@ -3259,14 +3435,23 @@ def _persist_tracked_run_detail(
         "goal": run_record.goal,
         "repo_id": run_record.repo_id,
         "jira_ticket": str(request_body.jira_ticket or "").strip(),
-        "model_used": str(result.metadata.get("model_used", "") or "").strip(),
+        "model_used": str(result.metadata.get("model_used", "") or result.metadata.get("llm_model", "") or "").strip(),
         "routing_reason": str(result.metadata.get("routing_reason", "") or "").strip(),
         "was_escalated": bool(result.metadata.get("was_escalated", False)),
         "source_stage": str(result.metadata.get("source_stage", "") or "").strip(),
         "estimated_prompt_size": int(result.metadata.get("estimated_prompt_size", 0) or 0),
-        "provider_used": str(result.metadata.get("provider_used", "") or "").strip(),
+        "provider_used": str(result.metadata.get("provider_used", "") or result.metadata.get("llm_provider", "") or "").strip(),
         "provider_fallback": bool(result.metadata.get("provider_fallback", False)),
         "provider_reason": str(result.metadata.get("provider_reason", "") or "").strip(),
+        "llm_provider": str(result.metadata.get("llm_provider", "") or "").strip(),
+        "llm_model": str(result.metadata.get("llm_model", "") or "").strip(),
+        "llm_runtime_available": bool(result.metadata.get("llm_runtime_available", False)),
+        "llm_auth_present": bool(result.metadata.get("llm_auth_present", False)),
+        "llm_request_attempted": bool(result.metadata.get("llm_request_attempted", False)),
+        "llm_request_succeeded": bool(result.metadata.get("llm_request_succeeded", False)),
+        "llm_failure_reason": str(result.metadata.get("llm_failure_reason", "") or "").strip(),
+        "provider_quota_exhausted": bool(result.metadata.get("provider_quota_exhausted", False)),
+        "run_invalid_due_to_provider": bool(result.metadata.get("run_invalid_due_to_provider", False)),
         "sync_status": str(sync_status.get("sync_status", "") or "").strip(),
         "local_head_before": str(sync_status.get("local_head_before", "") or "").strip(),
         "remote_head": str(sync_status.get("remote_head", "") or "").strip(),
@@ -3306,7 +3491,9 @@ def _persist_failed_tracked_run_detail(
     run_service: RunService,
     run_record: RunRecord,
     request_body: RunCreateRequest,
+    failure_payload: dict[str, Any] | None = None,
 ) -> None:
+    payload = dict(failure_payload or {})
     run_service.persist_run_detail(
         run_record.run_id,
         {
@@ -3320,6 +3507,17 @@ def _persist_failed_tracked_run_detail(
             "implementation_result": None,
             "publication_result": None,
             "validation_result": None,
+            "model_used": str(payload.get("llm_model", "") or "").strip(),
+            "provider_used": str(payload.get("llm_provider", "") or "").strip(),
+            "llm_provider": str(payload.get("llm_provider", "") or "").strip(),
+            "llm_model": str(payload.get("llm_model", "") or "").strip(),
+            "llm_runtime_available": bool(payload.get("llm_runtime_available", False)),
+            "llm_auth_present": bool(payload.get("llm_auth_present", False)),
+            "llm_request_attempted": bool(payload.get("llm_request_attempted", False)),
+            "llm_request_succeeded": bool(payload.get("llm_request_succeeded", False)),
+            "llm_failure_reason": str(payload.get("llm_failure_reason", "") or "").strip(),
+            "provider_quota_exhausted": bool(payload.get("provider_quota_exhausted", False)),
+            "run_invalid_due_to_provider": bool(payload.get("run_invalid_due_to_provider", False)),
             "diff_result": _default_diff_payload("No diff produced for this run."),
             "review_comments": [],
             "policy_decisions": [decision.to_dict() for decision in list(run_record.policy_decisions)],
@@ -3465,6 +3663,15 @@ def _run_command(command: str, actor_context: ActorContext) -> AgentResult:
             command,
             actor_context=actor_context,
         )
+    except LLMProviderError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "llm_provider_unavailable",
+                "message": str(exc),
+                **exc.telemetry(),
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -3494,6 +3701,15 @@ def _run_action_command(
             actor_context=actor_context,
             action_payload=action_payload,
         )
+    except LLMProviderError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "llm_provider_unavailable",
+                "message": str(exc),
+                **exc.telemetry(),
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -3660,6 +3876,33 @@ def _execute_tracked_api_run(
             actor_context=actor_context,
             workflow_name=workflow_name,
         )
+    except LLMProviderError as exc:
+        failure_payload = exc.telemetry()
+        run_service.fail_step(
+            run_id,
+            ExecutionError(
+                type="llm_provider_unavailable",
+                message=str(exc),
+                step=resolved_mode or "research",
+                details=failure_payload,
+            ),
+        )
+        finished_run = run_service.finish_run(run_id, "failed")
+        _persist_failed_tracked_run_detail(
+            run_service=run_service,
+            run_record=finished_run,
+            request_body=request_body,
+            failure_payload=failure_payload,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "llm_provider_unavailable",
+                "message": str(exc),
+                "run_id": finished_run.run_id,
+                **failure_payload,
+            },
+        ) from exc
     except Exception as exc:
         run_service.fail_step(
             run_id,
@@ -4102,6 +4345,12 @@ def generate_routing_benchmark_cases(
         include_empty_context=bool(resolved.include_empty_context),
         hydrate_jira_snapshots=bool(resolved.hydrate_jira_snapshots),
         max_expected_files=max(1, int(resolved.max_expected_files or 5)),
+        max_task_count=(None if resolved.max_task_count is None else max(1, int(resolved.max_task_count or 1))),
+        newest_first=resolved.newest_first,
+        allowed_creators=(list(resolved.allowed_creators or []) if resolved.allowed_creators is not None else None),
+        curated_allowlist=(list(resolved.curated_allowlist or []) if resolved.curated_allowlist is not None else None),
+        single_repo_only=resolved.single_repo_only,
+        baseline_name=(str(resolved.baseline_name or "").strip() or None),
     )
 
 
@@ -4548,7 +4797,7 @@ def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any
             workflow_name="analyze_task",
             jira_ticket=payload.jira_ticket,
             repo_id=payload.repo_id,
-            resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
+            resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
         ),
         actor_context=actor_context,
         workflow_name="analyze_task",
@@ -4576,7 +4825,7 @@ def structure_task(payload: StructureTaskRequest, request: Request) -> dict[str,
         request_body=_workflow_run_request(
             workflow_name="structure_task",
             free_text=payload.free_text,
-            resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
+            resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
         ),
         actor_context=actor_context,
     )
@@ -4601,7 +4850,7 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
             workflow_name="implementation_plan",
             jira_ticket=payload.jira_ticket,
             repo_id=payload.repo_id,
-            resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
+            resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
         ),
         actor_context=actor_context,
         workflow_name="implementation_plan",
@@ -4629,7 +4878,7 @@ def pre_review(payload: PreReviewRequest, request: Request) -> dict[str, Any]:
         workflow_name="pre_review",
         jira_ticket=payload.jira_ticket,
         repo_id=payload.repo_id,
-        resolved_input_text=str(input_debug.get("final_workflow_input", "") or ""),
+        resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
     )
     linked_run, linked_detail = _find_latest_implementation_run_with_artifact(
         repo_id=str(payload.repo_id or "").strip(),

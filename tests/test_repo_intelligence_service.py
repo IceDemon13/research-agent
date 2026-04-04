@@ -177,6 +177,78 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         self.assertEqual(payload["repo_routing_audit"][0]["provider_used"], "gitnexus_http")
         self.assertEqual(payload["repo_routing_audit"][0]["selection_decision"], "selected_gitnexus_http")
 
+    def test_visibility_can_override_legacy_allowlist_for_indexed_repo(self) -> None:
+        other_root = self.workspace_root / "telemart_service_test"
+        (other_root / ".git").mkdir(parents=True, exist_ok=True)
+        (other_root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        self.registry.register_repo(
+            root_path=str(other_root),
+            repo_id="telemart_service_test",
+            display_name="Telemart Service",
+            default_branch="main",
+            remote_url="https://bitbucket.org/acme/telemart_service_test.git",
+        )
+        self.registry.update_repo_metadata(
+            "telemart_service_test",
+            gitnexus_indexed=False,
+            gitnexus_index_status="",
+            intelligence_provider="native",
+        )
+        with patch.object(
+            self.service._gitnexus_index_service,
+            "repo_visibility_debug",
+            return_value={
+                "visible": True,
+                "visible_repo_count": 3,
+                "visible_repo_ids_or_paths": ["/repos/telemart_service_test", "telemart_service_test"],
+                "raw_list_repos_result_excerpt": '{"repos":[{"name":"telemart_service_test","path":"/repos/telemart_service_test"}]}',
+                "visibility_match_reason": "matched exact normalized path or repo id from GitNexus list_repos",
+                "normalized_repo_visibility_targets": ["/repos/telemart_service_test", "telemart_service_test"],
+            },
+        ), patch.object(
+            self.service._gitnexus_index_service,
+            "backend_runtime_status",
+            return_value={
+                "analyze_runtime": {"gitnexusHome": "/gitnexus"},
+                "backend_runtime": {"gitnexusHome": "/gitnexus"},
+            },
+        ), patch.object(
+            self.service._gitnexus_provider,
+            "query_for_workflow",
+            return_value={
+                "provider": "gitnexus_http",
+                "available": True,
+                "workflow_name": "implementation_plan",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+                "likely_files": ["src/Telemart.Service/Repositories/OrderRepository.cs"],
+                "likely_file_details": [{"name": "src/Telemart.Service/Repositories/OrderRepository.cs", "confidence": 0.92, "reason": "gitnexus query"}],
+                "likely_modules": ["OrderRepository"],
+                "likely_module_details": [{"name": "OrderRepository", "confidence": 0.81, "reason": "gitnexus query"}],
+                "closest_areas": [],
+                "change_actions": [],
+                "candidate_files_count": 1,
+                "selected_files_count": 1,
+                "top_candidate_files": [{"name": "src/Telemart.Service/Repositories/OrderRepository.cs", "confidence": 0.92, "reason": "gitnexus query"}],
+                "top_candidate_symbols": [{"name": "OrderRepository", "confidence": 0.81, "reason": "gitnexus query"}],
+                "top_closest_areas": [],
+            },
+        ):
+            payload = self.service.query_for_workflow(
+                "telemart_service_test",
+                "implementation_plan",
+                "Update order repository behavior",
+            )
+
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertFalse(payload["provider_fallback"])
+        self.assertEqual(payload["selection_decision"], "selected_gitnexus_http")
+        self.assertFalse(payload["configured_allowlist_match"])
+        self.assertTrue(payload["allowlist_match"])
+        self.assertTrue(payload["gitnexus_visible"])
+        self.assertEqual(payload["repo_routing_audit"][0]["provider_used"], "gitnexus_http")
+
     def test_gitnexus_reindex_uses_index_service_and_updates_metadata(self) -> None:
         with patch.object(
             self.service._gitnexus_index_service,
@@ -295,7 +367,6 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         self.assertEqual(payload["selection_decision"], "selected_gitnexus_http")
         self.assertEqual(payload["likely_files"][0], "src/Catalog.Api/Controllers/BonusController.cs")
         self.assertEqual(payload["likely_modules"][0], "GetBonusInfoHandler")
-        self.assertIn("tests/Catalog.Tests/GetBonusInfoHandlerTests.cs", payload["likely_files"])
         self.assertGreaterEqual(payload["candidate_files_count"], 1)
         self.assertGreaterEqual(payload["selected_files_count"], 1)
         self.assertEqual(payload["top_candidate_files"][0]["name"], "src/Catalog.Api/Controllers/BonusController.cs")

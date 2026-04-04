@@ -139,6 +139,16 @@ class DatabaseService:
                 jira_snapshot_title TEXT NOT NULL DEFAULT '',
                 jira_snapshot_text TEXT NOT NULL DEFAULT '',
                 jira_snapshot_acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
+                jira_status TEXT NOT NULL DEFAULT '',
+                jira_status_category_name TEXT NOT NULL DEFAULT '',
+                jira_status_category_key TEXT NOT NULL DEFAULT '',
+                jira_resolution_name TEXT NOT NULL DEFAULT '',
+                jira_resolution_date TEXT NOT NULL DEFAULT '',
+                jira_created_at TEXT NOT NULL DEFAULT '',
+                jira_updated_at TEXT NOT NULL DEFAULT '',
+                jira_creator_email TEXT NOT NULL DEFAULT '',
+                jira_creator_display_name TEXT NOT NULL DEFAULT '',
+                jira_creator_identifier TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL
             )
             """,
@@ -553,6 +563,66 @@ class DatabaseService:
                 "historical_task",
                 "jira_snapshot_acceptance_criteria_json",
                 "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_status",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_status_category_name",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_status_category_key",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_resolution_name",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_resolution_date",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_created_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_updated_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_creator_email",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_creator_display_name",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                cursor,
+                "historical_task",
+                "jira_creator_identifier",
+                "TEXT NOT NULL DEFAULT ''",
             )
             self._ensure_column(
                 cursor,
@@ -1340,6 +1410,16 @@ class DatabaseService:
         jira_snapshot_title: str = "",
         jira_snapshot_text: str = "",
         jira_snapshot_acceptance_criteria_json: str = "[]",
+        jira_status: str = "",
+        jira_status_category_name: str = "",
+        jira_status_category_key: str = "",
+        jira_resolution_name: str = "",
+        jira_resolution_date: str = "",
+        jira_created_at: str = "",
+        jira_updated_at: str = "",
+        jira_creator_email: str = "",
+        jira_creator_display_name: str = "",
+        jira_creator_identifier: str = "",
     ) -> None:
         if not self.enabled:
             return
@@ -1354,15 +1434,29 @@ class DatabaseService:
                     INSERT INTO historical_task (
                         jira_key, normalized_task_text, task_snapshot_text,
                         jira_snapshot_title, jira_snapshot_text, jira_snapshot_acceptance_criteria_json,
+                        jira_status, jira_status_category_name, jira_status_category_key,
+                        jira_resolution_name, jira_resolution_date,
+                        jira_created_at, jira_updated_at,
+                        jira_creator_email, jira_creator_display_name, jira_creator_identifier,
                         updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(jira_key) DO UPDATE SET
                         normalized_task_text = excluded.normalized_task_text,
                         task_snapshot_text = excluded.task_snapshot_text,
                         jira_snapshot_title = excluded.jira_snapshot_title,
                         jira_snapshot_text = excluded.jira_snapshot_text,
                         jira_snapshot_acceptance_criteria_json = excluded.jira_snapshot_acceptance_criteria_json,
+                        jira_status = excluded.jira_status,
+                        jira_status_category_name = excluded.jira_status_category_name,
+                        jira_status_category_key = excluded.jira_status_category_key,
+                        jira_resolution_name = excluded.jira_resolution_name,
+                        jira_resolution_date = excluded.jira_resolution_date,
+                        jira_created_at = excluded.jira_created_at,
+                        jira_updated_at = excluded.jira_updated_at,
+                        jira_creator_email = excluded.jira_creator_email,
+                        jira_creator_display_name = excluded.jira_creator_display_name,
+                        jira_creator_identifier = excluded.jira_creator_identifier,
                         updated_at = excluded.updated_at
                     """
                 ),
@@ -1373,6 +1467,16 @@ class DatabaseService:
                     str(jira_snapshot_title or "").strip(),
                     str(jira_snapshot_text or "").strip(),
                     str(jira_snapshot_acceptance_criteria_json or "[]").strip() or "[]",
+                    str(jira_status or "").strip(),
+                    str(jira_status_category_name or "").strip(),
+                    str(jira_status_category_key or "").strip(),
+                    str(jira_resolution_name or "").strip(),
+                    str(jira_resolution_date or "").strip(),
+                    str(jira_created_at or "").strip(),
+                    str(jira_updated_at or "").strip(),
+                    str(jira_creator_email or "").strip(),
+                    str(jira_creator_display_name or "").strip(),
+                    str(jira_creator_identifier or "").strip(),
                     _timestamp(),
                 ),
             )
@@ -1671,6 +1775,10 @@ class DatabaseService:
             """
             SELECT jira_key, normalized_task_text, task_snapshot_text,
                    jira_snapshot_title, jira_snapshot_text, jira_snapshot_acceptance_criteria_json,
+                   jira_status, jira_status_category_name, jira_status_category_key,
+                   jira_resolution_name, jira_resolution_date,
+                   jira_created_at, jira_updated_at,
+                   jira_creator_email, jira_creator_display_name, jira_creator_identifier,
                    updated_at
             FROM historical_task
             ORDER BY jira_key ASC

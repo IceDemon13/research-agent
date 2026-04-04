@@ -7,6 +7,9 @@ from dataclasses import dataclass, field
 class SpecContract:
     title: str = ""
     summary: str = ""
+    exact_file_path: str = ""
+    exact_class_name: str = ""
+    exact_method_name: str = ""
     functional_requirements: list[str] = field(default_factory=list)
     backend_changes: list[str] = field(default_factory=list)
     frontend_changes: list[str] = field(default_factory=list)
