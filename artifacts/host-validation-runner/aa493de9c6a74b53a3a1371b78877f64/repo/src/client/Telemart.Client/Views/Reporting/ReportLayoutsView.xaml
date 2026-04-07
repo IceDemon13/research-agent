@@ -1,0 +1,161 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Reporting.ReportLayoutsView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Reporting"
+                              xmlns:viewItems="clr-namespace:Telemart.Client.ViewModels.Reporting.ViewItems"
+                              DataContext="{client:Container Type={x:Type viewModels:ReportLayoutsViewModel}}"
+                              Loaded="OnLoaded"
+                              mc:Ignorable="d"
+                              d:DesignWidth="768"
+                              d:DesignHeight="432"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:ReportLayoutsViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CommonImages.xaml" />
+                <ResourceDictionary>
+                    <dxmvvm:ObjectToObjectConverter x:Key="ReportViewToNameConverter">
+                        <dxmvvm:MapItem Source="{x:Static viewModels:ReportLayoutType.Grid}"
+                                        Target="Отчет" />
+                        <dxmvvm:MapItem Source="{x:Static viewModels:ReportLayoutType.PivotGrid}"
+                                        Target="Анализ" />
+                    </dxmvvm:ObjectToObjectConverter>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}, Mode=OneWay}"
+                            IsEnabled="{Binding Path=IsVisible, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}, ElementName=BusyIndicator}">
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              ItemSpace="0">
+                <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                    <dxb:BarButtonItem Content="Добавить"
+                                       Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                       LargeGlyph="{dx:DXImage Image=Add_32x32.png}"
+                                       IsVisible="{Binding Path=IsLoad, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                                       Command="{Binding Path=AddCommand, Mode=OneTime}" />
+                    <dxb:BarButtonItem Content="Сохранить"
+                                       Glyph="{dx:DXImage Image=Save_16x16.png}"
+                                       LargeGlyph="{dx:DXImage Image=Save_32x32.png}"
+                                       IsVisible="{Binding Path=IsLoad, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                                       Command="{Binding Path=SaveCommand, Mode=OneTime}"
+                                       CommandParameter="{Binding Path=CurrentItem, ElementName=GridControl, Mode=OneWay}" />
+                    <dxb:BarButtonItem Content="Удалить"
+                                       Glyph="../../Images/Common/cross.png"
+                                       IsVisible="{Binding Path=IsLoad, Mode=OneWay}"
+                                       Command="{Binding Path=RemoveCommand, Mode=OneTime}"
+                                       CommandParameter="{Binding Path=CurrentItem, ElementName=GridControl, Mode=OneWay}" />
+                    <dxb:BarButtonItem Content="Загрузить"
+                                       Glyph="{dx:DXImage Image=Open2_16x16.png}"
+                                       LargeGlyph="{dx:DXImage Image=Open2_32x32.png}"
+                                       IsVisible="{Binding Path=IsLoad, Mode=OneWay}"
+                                       Command="{Binding Path=LoadCommand, Mode=OneTime}"
+                                       CommandParameter="{Binding Path=CurrentItem, ElementName=GridControl, Mode=OneWay}" />
+                </dxb:ToolBarControl>
+                <dxg:GridControl x:Name="GridControl"
+                                 ItemsSource="{Binding Path=Items, Mode=OneWay}"
+                                 CurrentItem="{Binding Path=CurrentReportLayout, Mode=TwoWay}"
+                                 SelectionMode="None"
+                                 DesignTimeDataObjectType="{x:Type viewItems:ReportLayoutViewItem}"
+                                 DesignTimeDataSourceRowCount="12">
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:CopyCurrentCellToClipboardBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn FieldName="View"
+                                        Header="Тип"
+                                        Width="50">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings DisplayTextConverter="{StaticResource ReportViewToNameConverter}" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="Name"
+                                        Header="Название" />
+                        <dxg:GridColumn FieldName="CreatedBy"
+                                        Header="Автор"
+                                        AllowColumnFiltering="True"
+                                        ColumnFilterMode="DisplayText"
+                                        FilterPopupMode="CheckedList"
+                                        FixedWidth="True"
+                                        Width="160">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Employees, Mode=OneWay}"
+                                                          DisplayMember="Name"
+                                                          ValueMember="Id" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView x:Name="TableView"
+                                       ShowSearchPanelMode="Always"
+                                       AllowSorting="False"
+                                       Style="{StaticResource ReadOnlyTableViewStyle}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                                       Command="{Binding Path=HandleRowDoubleClickCommand, Mode=OneTime}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Bottom">
+                    <viewComponents:WaitImage x:Name="BusyIndicator"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center">
+                        <viewComponents:WaitImage.Visibility>
+                            <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                                <Binding Path="OkCommand.IsExecuting" />
+                                <Binding Path="SaveCommand.IsExecuting" />
+                                <Binding Path="RemoveCommand.IsExecuting" />
+                                <Binding Path="AddCommand.IsExecuting" />
+                            </MultiBinding>
+                        </viewComponents:WaitImage.Visibility>
+                    </viewComponents:WaitImage>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Top">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>
+

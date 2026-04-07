@@ -159,6 +159,22 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
         "role.manage",
         "integration.manage",
     },
+    "workflow_runner": {
+        "task.read",
+        "jira.read",
+        "task.analyze",
+        "spec.generate",
+        "acceptance.generate",
+        "repo.context.read",
+        "repo.search",
+        "plan.generate",
+        "draft.generate",
+        "workflow.analyze_task",
+        "workflow.implementation_plan",
+        "run.read_all",
+        "runs.read_all",
+        "repo.read",
+    },
 }
 
 ROLE_POLICIES: dict[str, RolePolicy] = {
@@ -167,6 +183,7 @@ ROLE_POLICIES: dict[str, RolePolicy] = {
     "developer": RolePolicy(role_name="developer", dry_run_only=True, publication_requires_pr=True),
     "techlead": RolePolicy(role_name="techlead", dry_run_only=False, publication_requires_pr=True),
     "admin": RolePolicy(role_name="admin", dry_run_only=False, publication_requires_pr=False),
+    "workflow_runner": RolePolicy(role_name="workflow_runner", dry_run_only=True, publication_requires_pr=True),
 }
 
 ROLE_DESCRIPTIONS: dict[str, str] = {
@@ -175,6 +192,7 @@ ROLE_DESCRIPTIONS: dict[str, str] = {
     "developer": "Developer with retry and implementation planning access.",
     "techlead": "Tech lead with approval, publication, and review capabilities.",
     "admin": "Administrator with full auth, user, role, policy, and repo management access.",
+    "workflow_runner": "Automation role scoped to read, analysis, planning, draft generation, and run inspection.",
 }
 
 SENSITIVE_DRY_RUN_CAPABILITIES = {

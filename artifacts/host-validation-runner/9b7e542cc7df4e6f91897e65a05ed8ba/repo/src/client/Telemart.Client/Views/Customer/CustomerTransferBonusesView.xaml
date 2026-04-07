@@ -1,0 +1,132 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Customer.CustomerTransferBonusesView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Customer"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries"
+             xmlns:business="clr-namespace:Telemart.Client.Business"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:CustomerTransferBonusesViewModel}"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:CustomerTransferBonusesViewModel}, IsDesignTimeCreatable=True}"
+             Width="320"
+             Height="280">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="ConditionsMaskStyle"
+                   TargetType="dxe:TextEdit">
+                <Setter Property="MaskType"
+                        Value="Simple" />
+                <Setter Property="Mask"
+                        Value="(000) 000-00-00" />
+                <Setter Property="MaskUseAsDisplayFormat"
+                        Value="True" />
+                <Setter Property="MaskSaveLiteral"
+                        Value="False" />
+                <Setter Property="InvalidValueBehavior"
+                        Value="AllowLeaveEditor" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Path=DataContext.SelectedFindType, ElementName=CurrentUserControl, Mode=OneWay, Converter={converters:IsEqualConverter Inverse=True}, ConverterParameter={x:Static dictionaries:CustomerFindType.Phone}}"
+                                 Value="True">
+                        <Setter Property="MaskType"
+                                Value="None" />
+                        <Setter Property="Mask"
+                                Value="" />
+                        <Setter Property="MaskUseAsDisplayFormat"
+                                Value="False" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup View="GroupBox"
+                              Header="Получатель"
+                              Orientation="Vertical"
+                              GroupBoxStyle="{StaticResource GroupBoxWithHeaderStyle}">
+                <dxlc:LayoutItem Label="Способ">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=FindTypes}"
+                                      EditValue="{Binding Path=SelectedFindType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name"
+                                      IsTextEditable="False" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Поиск">
+                    <dxe:TextEdit EditValue="{Binding Path=Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  Style="{StaticResource ConditionsMaskStyle}" />
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup View="GroupBox"
+                              Header="Бонусы"
+                              Orientation="Vertical"
+                              GroupBoxStyle="{StaticResource GroupBoxWithHeaderStyle}">
+                <dxlc:LayoutItem Label="Тип бонусов">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=BonusTypes, Mode=OneWay}"
+                                      DisplayMember="Name"
+                                      EditValue="{Binding Path=SelectedBonusType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Количество">
+                    <dxe:SpinEdit EditValue="{Binding Path=Quantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  AllowNullInput="False"
+                                  MaskType="Numeric"
+                                  EditValueType="{x:Type system:Int32}"
+                                  IsFloatValue="False"
+                                  InvalidValueBehavior="AllowLeaveEditor" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Дата сгорания">
+                    <dxe:DateEdit EditValue="{Binding ExpireDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  HorizontalAlignment="Stretch"
+                                  AllowNullInput="True"
+                                  MinValue="{x:Static system:DateTime.Now}"
+                                  Mask="{x:Static business:DateFormattingRules.DateFormatYear}"
+                                  Style="{StaticResource BasicDateEdit}"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  Visibility="{Binding Path=OkCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                    <viewComponents:WaitImage HorizontalAlignment="Left"
+                                              VerticalAlignment="Center" />
+                    <TextBlock Text="Перевод..." />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

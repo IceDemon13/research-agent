@@ -24,10 +24,13 @@ from services.lightweight_implementation_draft_service import LightweightImpleme
 from services.repo_knowledge_pack_service import RepoKnowledgePackService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
 from services.routing_benchmark_service import _normalize_file_list, _safe_text
+from services.scm_service import ScmService
 from services.task_understanding_service import TaskUnderstandingService
 from services.temp_workspace_service import TempWorkspaceService
 from services.validation_service import ValidationService
 from services.validated_codegen_failure_mining_service import classify_validation_failure_case
+
+BOUNDED_GENERATION_CONTRACT_VERSION = "2026-04-04.prompt-context-v1"
 
 
 def _normalize_path(value: object) -> str:
@@ -37,6 +40,50 @@ def _normalize_path(value: object) -> str:
 def _json_safe_string(value: object) -> str:
     text = str(value or "")
     return text.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+
+
+def _json_dumps_stable(value: object) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
+    except TypeError:
+        return json.dumps(str(value or ""), ensure_ascii=False)
+
+
+def _normalize_lane_override(value: object) -> dict[str, Any]:
+    return dict(value or {}) if isinstance(value, dict) else {}
+
+
+def _lane_bool(override: dict[str, Any] | None, key: str, default: bool = False) -> bool:
+    payload = _normalize_lane_override(override)
+    if key not in payload:
+        return bool(default)
+    return bool(payload.get(key))
+
+
+def _drop_nested_key(payload: dict[str, Any], dotted_path: str) -> bool:
+    parts = [part for part in _safe_text(dotted_path).split(".") if part]
+    if not parts:
+        return False
+    current: Any = payload
+    for part in parts[:-1]:
+        if not isinstance(current, dict) or part not in current:
+            return False
+        current = current.get(part)
+    if not isinstance(current, dict) or parts[-1] not in current:
+        return False
+    current.pop(parts[-1], None)
+    return True
+
+
+def _payload_hash(value: object) -> str:
+    text = _json_dumps_stable(value)
+    return sha256(text.encode("utf-8")).hexdigest() if text else ""
+
+
+def _bool_or_default(value: object, default: bool) -> bool:
+    if value is None:
+        return default
+    return bool(value)
 
 
 def _extract_json_payload(text: str) -> dict[str, Any]:
@@ -275,16 +322,28 @@ class BoundedRealCodegenService:
             "writable_backing_candidate_detected": "",
             "computed_validation_property_name": "",
             "writable_validation_source_name": "",
+            "computed_validation_helper_names": [],
             "nonexistent_member_name": "",
             "resolved_event_args_type": "",
             "known_event_args_members_excerpt": [],
             "invalid_usage_expression": "",
             "bool_compatible_members_excerpt": [],
+            "same_file_fragmentation_detected": False,
+            "localized_edit_count": 0,
+            "normalized_edit_summaries": [],
+            "primary_behavior_method": "",
+            "touched_same_file_regions": [],
+            "out_of_primary_region_edit_detected": False,
+            "concentration_retry_activated": False,
+            "concentration_retry_changed_result": False,
         }
         for key, value in dict(payload or {}).items():
             if key in defaults:
                 defaults[key] = value
         defaults["ranked_same_file_behavior_methods"] = list(defaults.get("ranked_same_file_behavior_methods", []) or [])
+        defaults["normalized_edit_summaries"] = list(defaults.get("normalized_edit_summaries", []) or [])
+        defaults["touched_same_file_regions"] = list(defaults.get("touched_same_file_regions", []) or [])
+        defaults["computed_validation_helper_names"] = list(defaults.get("computed_validation_helper_names", []) or [])
         return defaults
 
     @staticmethod
@@ -308,6 +367,9 @@ class BoundedRealCodegenService:
     def _compile_hardening_payload(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         defaults = {
             "compile_hardening_eligible": False,
+            "compile_hardening_activation_gate_inputs": {},
+            "compile_hardening_activation_gate_failed_predicate": "",
+            "compile_hardening_activation_gate_reason": "",
             "detector_input_source": "",
             "detector_input_line_count": 0,
             "detector_input_excerpt": "",
@@ -321,6 +383,11 @@ class BoundedRealCodegenService:
             "writable_validation_source_detected": False,
             "writable_validation_source_name": "",
             "writable_validation_source_declaring_type": "",
+            "computed_validation_prompt_symbol_names_resolved": False,
+            "computed_validation_prompt_property_name": "",
+            "computed_validation_prompt_source_name": "",
+            "computed_validation_prompt_helper_names": [],
+            "computed_validation_prompt_used_concrete_symbols": False,
             "nonexistent_member_assignment_detected": False,
             "invalid_event_args_usage_shape_detected": False,
             "nonexistent_member_name": "",
@@ -335,6 +402,12 @@ class BoundedRealCodegenService:
         for key, value in dict(payload or {}).items():
             if key in defaults:
                 defaults[key] = value
+        defaults["compile_hardening_activation_gate_inputs"] = dict(
+            defaults.get("compile_hardening_activation_gate_inputs", {}) or {}
+        )
+        defaults["computed_validation_prompt_helper_names"] = list(
+            defaults.get("computed_validation_prompt_helper_names", []) or []
+        )
         return defaults
 
     @staticmethod
@@ -789,6 +862,7 @@ class BoundedRealCodegenService:
         writable_source_declaring_type = ""
         resolved_event_args_type = ""
         resolved_event_args_base_types: list[str] = []
+        computed_validation_helper_names: list[str] = []
         param_types = {}
         if list(source_files or []):
             source_content = _safe_text(dict(source_files[0] or {}).get("full_content", "")) or _safe_text(
@@ -797,6 +871,7 @@ class BoundedRealCodegenService:
             chosen_method = _safe_text(self._same_method_quality_payload(same_method_quality).get("chosen_primary_behavior_method", ""))
             if source_content and chosen_method:
                 param_types = self._extract_method_parameter_types(source_content, chosen_method)
+                computed_validation_helper_names = self._detect_same_file_helper_names(source_content, chosen_method)
         for assignment_match in re.finditer(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s*=\s*[^=]", detector_text):
             receiver_name = _safe_text(assignment_match.group(1))
             candidate_property_name = _safe_text(assignment_match.group(2))
@@ -888,6 +963,15 @@ class BoundedRealCodegenService:
                 "writable_validation_source_detected": bool(writable_backing_candidate),
                 "writable_validation_source_name": writable_backing_candidate,
                 "writable_validation_source_declaring_type": writable_source_declaring_type,
+                "computed_validation_prompt_symbol_names_resolved": bool(
+                    property_is_getter_only and writable_backing_candidate
+                ),
+                "computed_validation_prompt_property_name": property_name if property_is_getter_only else "",
+                "computed_validation_prompt_source_name": writable_backing_candidate,
+                "computed_validation_prompt_helper_names": list(computed_validation_helper_names),
+                "computed_validation_prompt_used_concrete_symbols": bool(
+                    property_is_getter_only and writable_backing_candidate
+                ),
                 "resolved_event_args_type": resolved_event_args_type,
                 "resolved_event_args_base_types": list(resolved_event_args_base_types),
             }
@@ -1146,6 +1230,67 @@ class BoundedRealCodegenService:
             if param_name and param_type:
                 result[param_name] = param_type
         return result
+
+    @staticmethod
+    def _extract_method_body(content: str, method_name: str) -> str:
+        source = _safe_text(content)
+        normalized_method = _safe_text(method_name)
+        if not source or not normalized_method:
+            return ""
+        match = re.search(
+            rf"{re.escape(normalized_method)}\s*\((.*?)\)\s*\{{",
+            source,
+            re.DOTALL,
+        )
+        if not match:
+            return ""
+        brace_start = source.find("{", match.end() - 1)
+        if brace_start < 0:
+            return ""
+        depth = 0
+        for index in range(brace_start, len(source)):
+            char = source[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return source[brace_start + 1 : index]
+        return ""
+
+    @staticmethod
+    def _detect_same_file_helper_names(content: str, method_name: str) -> list[str]:
+        method_body = BoundedRealCodegenService._extract_method_body(content, method_name)
+        if not method_body:
+            return []
+        ignored = {
+            _safe_text(method_name),
+            "if",
+            "for",
+            "foreach",
+            "while",
+            "switch",
+            "return",
+            "nameof",
+            "typeof",
+            "catch",
+            "when",
+        }
+        helper_names: list[str] = []
+        seen: set[str] = set()
+        for match in re.finditer(r"\b([A-Za-z_]\w*)\s*\(", method_body):
+            candidate = _safe_text(match.group(1))
+            if not candidate or candidate in ignored or candidate in seen:
+                continue
+            if not re.search(
+                rf"\b(?:public|protected|internal|private)\s+[\w<>\[\]\.,\?\s]+\b{re.escape(candidate)}\s*\(",
+                content,
+                re.DOTALL,
+            ):
+                continue
+            seen.add(candidate)
+            helper_names.append(candidate)
+        return helper_names[:6]
 
     def _detect_nonexistent_event_args_member_retry_candidate(
         self,
@@ -1449,6 +1594,137 @@ class BoundedRealCodegenService:
         )
         return diagnostics
 
+    @staticmethod
+    def _compact_edit_summary(text: str) -> str:
+        lines = [line.strip() for line in _safe_text(text).splitlines() if line.strip()]
+        if not lines:
+            return ""
+        summary = " ".join(lines[:2])
+        return summary[:220]
+
+    @staticmethod
+    def _normalize_edit_summaries(raw_generated_files: list[dict[str, Any]]) -> list[str]:
+        summaries: list[str] = []
+        for item in list(raw_generated_files or []):
+            if not isinstance(item, dict):
+                continue
+            file_path = _normalize_path(dict(item or {}).get("file", ""))
+            for edit in list(dict(item or {}).get("edits", []) or []):
+                if not isinstance(edit, dict):
+                    continue
+                search_summary = BoundedRealCodegenService._compact_edit_summary(_safe_text(edit.get("search", "")))
+                replace_summary = BoundedRealCodegenService._compact_edit_summary(_safe_text(edit.get("replace", "")))
+                if search_summary or replace_summary:
+                    summary = f"{file_path}: {search_summary or '<empty>'} -> {replace_summary or '<empty>'}"
+                    if summary not in summaries:
+                        summaries.append(summary[:280])
+        return summaries[:8]
+
+    @staticmethod
+    def _same_file_region_symbols(file_content: str, selected_class: str) -> list[str]:
+        symbols: list[str] = []
+        if _safe_text(selected_class):
+            symbols.append(_safe_text(selected_class))
+        for symbol in BoundedRealCodegenService._extract_declared_method_symbols(file_content):
+            if _safe_text(symbol):
+                symbols.append(_safe_text(symbol))
+        property_pattern = re.compile(
+            r"\b(?:public|protected|private|internal)\s+(?:override\s+)?(?:static\s+)?(?:async\s+)?[\w<>\[\],?.]+\s+([A-Za-z_]\w+)\s*(?:=>|\{)",
+            re.MULTILINE,
+        )
+        for match in property_pattern.finditer(file_content):
+            symbol = _safe_text(match.group(1))
+            if symbol:
+                symbols.append(symbol)
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for symbol in symbols:
+            if symbol in seen:
+                continue
+            seen.add(symbol)
+            ordered.append(symbol)
+        return ordered
+
+    def _detect_same_file_fragmentation_retry_candidate(
+        self,
+        *,
+        task_text: str,
+        generation_payload: dict[str, Any],
+        same_method_quality: dict[str, Any],
+        codegen_safety: dict[str, Any],
+        source_files: list[dict[str, Any]],
+        selected_class: str,
+    ) -> dict[str, Any]:
+        diagnostics = self._same_method_quality_payload(same_method_quality)
+        primary_behavior_method = _safe_text(diagnostics.get("chosen_primary_behavior_method", ""))
+        localized_edit_count = int(codegen_safety.get("localized_edit_count", 0) or 0)
+        if (
+            len(list(source_files or [])) != 1
+            or not _safe_text(primary_behavior_method)
+            or not diagnostics.get("same_method_quality_hardening_activated", False)
+            or not self._task_describes_user_visible_behavior(task_text)
+        ):
+            return self._same_method_quality_payload(
+                {
+                    **diagnostics,
+                    "localized_edit_count": localized_edit_count,
+                    "primary_behavior_method": primary_behavior_method,
+                }
+            )
+        source_content = _safe_text(dict(source_files[0] or {}).get("full_content", "")) or _safe_text(
+            dict(source_files[0] or {}).get("content", "")
+        )
+        region_symbols = self._same_file_region_symbols(source_content, selected_class)
+        edit_text_parts: list[str] = []
+        raw_generated_files = list(generation_payload.get("files", []) or [])
+        for item in raw_generated_files:
+            if not isinstance(item, dict):
+                continue
+            edit_text_parts.append(_safe_text(item.get("new_content", "")))
+            for edit in list(item.get("edits", []) or []):
+                if not isinstance(edit, dict):
+                    continue
+                edit_text_parts.append(_safe_text(edit.get("search", "")))
+                edit_text_parts.append(_safe_text(edit.get("replace", "")))
+        edit_text = "\n".join(part for part in edit_text_parts if part)
+        touched_regions = [
+            symbol
+            for symbol in region_symbols
+            if _safe_text(symbol) and re.search(rf"\b{re.escape(symbol)}\b", edit_text)
+        ]
+        if not touched_regions and localized_edit_count > 0:
+            # Fall back to nearby well-known regions when localized edits are present but the patch text omits symbol names.
+            detector_excerpt = self._compact_edit_summary("\n".join(self._changed_lines_from_materialized_files(
+                source_files=source_files,
+                materialized_files=self._materialize_generated_files(
+                    source_files=source_files,
+                    generated_files=raw_generated_files,
+                ),
+            )))
+            fallback_regions = []
+            for symbol in region_symbols:
+                if symbol and re.search(rf"\b{re.escape(symbol)}\b", detector_excerpt):
+                    fallback_regions.append(symbol)
+            touched_regions = fallback_regions
+        out_of_primary_region_edit_detected = any(
+            _safe_text(region).lower() != primary_behavior_method.lower() for region in touched_regions
+        )
+        fragmentation_detected = bool(
+            localized_edit_count > 4
+            and _safe_text(codegen_safety.get("downgraded_to_draft_reason", "")) == "too_many_localized_edit_blocks"
+        )
+        return self._same_method_quality_payload(
+            {
+                **diagnostics,
+                "same_file_fragmentation_detected": fragmentation_detected,
+                "localized_edit_count": localized_edit_count,
+                "normalized_edit_summaries": self._normalize_edit_summaries(raw_generated_files),
+                "primary_behavior_method": primary_behavior_method,
+                "touched_same_file_regions": touched_regions[:8],
+                "out_of_primary_region_edit_detected": out_of_primary_region_edit_detected,
+            }
+        )
+
     def generate(
         self,
         *,
@@ -1464,7 +1740,20 @@ class BoundedRealCodegenService:
         selected_class: str = "",
         selected_method: str = "",
         long_tail_exception: bool = False,
+        lane_override: dict[str, Any] | None = None,
+        progress_callback: Any | None = None,
     ) -> dict[str, Any]:
+        def _emit_bounded_generation_progress(substep_name: str, marker: str, **extra: Any) -> None:
+            if not callable(progress_callback):
+                return
+            try:
+                progress_callback(substep_name, marker, **extra)
+            except Exception:
+                return
+
+        def _emit_post_materialization_transition(step_name: str, marker: str, **extra: Any) -> None:
+            _emit_bounded_generation_progress(step_name, marker, **extra)
+
         normalized_repo_id = normalize_repo_id(writable_repo_id)
         normalized_writable_files = _normalize_file_list(writable_files)
         normalized_readonly = {
@@ -1502,6 +1791,25 @@ class BoundedRealCodegenService:
         workspace = self._temp_workspace_service.create_workspace(normalized_repo_id)
         try:
             repo_root = Path(workspace.workspace_repo_root).resolve()
+            workspace_dotgit_path = repo_root / ".git"
+            workspace_creation_mode = _safe_text(workspace.workspace_creation_mode) or "copytree_ignore_dotgit"
+            workspace_git_identity_expected = _safe_text(workspace.workspace_git_identity_expected) or "copied_files_only_non_git"
+            workspace_is_git_checkout = bool(workspace.workspace_is_git_checkout)
+            scm_service = ScmService()
+            scm_detect_git_repo_started = True
+            scm_detect_git_repo_finished = False
+            scm_detect_git_repo_error = ""
+            scm_git_detection_skipped = not workspace_is_git_checkout
+            scm_git_detection_skip_reason = "workspace marked as copied non-git workspace" if scm_git_detection_skipped else ""
+            if scm_git_detection_skipped:
+                scm_detect_git_repo_result = False
+            else:
+                try:
+                    scm_detect_git_repo_result = scm_service.detect_git_repo(repo_root)
+                    scm_detect_git_repo_finished = True
+                except Exception as exc:  # noqa: BLE001
+                    scm_detect_git_repo_result = False
+                    scm_detect_git_repo_error = _safe_text(exc)
             symbol_local_gate = self._symbol_local_gate_payload()
             activation_details = self._activation_rule_payload()
             no_patch_details = self._no_patch_hardening_payload(
@@ -1512,6 +1820,11 @@ class BoundedRealCodegenService:
             same_method_quality = self._same_method_quality_payload()
             no_op_full_file_details = self._no_op_full_file_retry_payload()
             compile_hardening = self._compile_hardening_payload()
+            _emit_bounded_generation_progress(
+                "bounded_build_context_assembly",
+                "started",
+                writable_file_count=len(normalized_writable_files),
+            )
             candidate_source_files = self._load_source_files(
                 repo_root,
                 normalized_writable_files,
@@ -1544,6 +1857,32 @@ class BoundedRealCodegenService:
                 selected_class=selected_class,
                 selected_method=selected_method,
             )
+            lane_override_payload = _normalize_lane_override(lane_override)
+            same_method_quality = self._apply_lane_override_to_same_method_quality(
+                same_method_quality=same_method_quality,
+                lane_override=lane_override_payload,
+            )
+            comparison_mode_active = _lane_bool(lane_override_payload, "comparison_mode_active", False)
+            mutation_points_frozen = _lane_bool(lane_override_payload, "mutation_points_frozen", False)
+            compile_hardening_retry_allowed = _lane_bool(lane_override_payload, "compile_hardening_retry_allowed", True)
+            initial_lane_reason = _safe_text(lane_override_payload.get("force_non_empty_patch_reason", ""))
+            final_post_activation_lane_reason = initial_lane_reason
+            payload_mutation_points: list[str] = []
+            lane_flags_active = self._bounded_generation_flags_active(
+                retry=False,
+                force_non_empty_patch=bool(lane_override_payload.get("force_non_empty_patch", False)),
+                force_non_empty_patch_reason=_safe_text(lane_override_payload.get("force_non_empty_patch_reason", "")),
+                same_method_quality=same_method_quality,
+                lane_override=lane_override_payload,
+            )
+            def _record_payload_mutation(point: str, activation_retry: dict[str, Any]) -> None:
+                nonlocal final_post_activation_lane_reason
+                if mutation_points_frozen:
+                    return
+                payload_mutation_points.append(point)
+                final_post_activation_lane_reason = _safe_text(
+                    activation_retry.get("activation_retry_reason", final_post_activation_lane_reason)
+                ) or final_post_activation_lane_reason
             def _build_empty_result(
                 *,
                 generation_status: str,
@@ -1652,6 +1991,24 @@ class BoundedRealCodegenService:
                     **same_method_quality,
                     **compile_hardening,
                     **activation_details,
+                    "bounded_generation_flags_active": dict(lane_flags_active or {}),
+                    "bounded_generation_lane_id": _safe_text(lane_override_payload.get("lane_id", "")),
+                    "lane_frozen_for_comparison": bool(lane_override_payload.get("lane_frozen_for_comparison", False)),
+                    "comparison_mode_active": comparison_mode_active,
+                    "mutation_points_frozen": mutation_points_frozen,
+                    "compile_hardening_retry_allowed": compile_hardening_retry_allowed,
+                    "compile_hardening_retry_applied": False,
+                    "initial_lane_reason": initial_lane_reason,
+                    "final_post_activation_lane_reason": final_post_activation_lane_reason,
+                    "post_activation_payload_frozen": bool(lane_override_payload.get("lane_frozen_for_comparison", False)),
+                    "post_activation_prompt_hash": "",
+                    "post_activation_context_hash": "",
+                    "post_activation_flags_hash": _payload_hash(lane_flags_active),
+                    "comparison_context_hash": "",
+                    "comparison_context_normalized_fields": [],
+                    "excluded_comparison_noise_fields": [],
+                    "payload_mutation_points": list(payload_mutation_points),
+                    "payload_mutation_count": len(payload_mutation_points),
                     **self._llm_payload(llm_payload),
                 }
 
@@ -1662,6 +2019,7 @@ class BoundedRealCodegenService:
             llm_metadata = self._llm_payload()
             raw_model_output = ""
             latency_ms = 0
+            compile_hardening_retry_applied = False
             if _safe_text(target_gate.get("target_gate_status", "")).lower() != "passed":
                 weak_anchor_gate = "strong exact anchor" in _safe_text(target_gate.get("target_gate_reason", "")).lower()
                 activation_details = self._activation_rule_payload(
@@ -1692,7 +2050,9 @@ class BoundedRealCodegenService:
                     target_gate=target_gate,
                     reason="empty_patch_after_target_gate",
                     same_method_quality=same_method_quality,
+                    lane_override=lane_override_payload,
                 )
+                _record_payload_mutation("target_gate_activation_retry", activation_retry)
                 activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
                 if not bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
                     return {**baseline_empty_result, **activation_details}
@@ -1730,7 +2090,9 @@ class BoundedRealCodegenService:
                     target_gate=target_gate,
                     reason="empty_patch_after_ambiguity_gate",
                     same_method_quality=same_method_quality,
+                    lane_override=lane_override_payload,
                 )
+                _record_payload_mutation("ambiguity_gate_activation_retry", activation_retry)
                 activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
                 if not bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
                     return {**baseline_empty_result, **activation_details}
@@ -1749,6 +2111,12 @@ class BoundedRealCodegenService:
                 writable_file_plan=writable_file_plan,
                 target_gate=target_gate,
             )
+            _emit_bounded_generation_progress(
+                "bounded_build_context_assembly",
+                "finished",
+                selected_target_count=len(list(target_gate.get("selected_codegen_targets", []) or [])),
+                source_file_count=len(source_files),
+            )
             if generation_payload is None:
                 started = perf_counter()
                 generation_payload = self._generate_with_retry(
@@ -1762,13 +2130,34 @@ class BoundedRealCodegenService:
                     source_files=source_files,
                     max_retry_attempts=max_retry_attempts,
                     same_method_quality=same_method_quality,
+                    lane_override=lane_override_payload,
+                    progress_callback=progress_callback,
                 )
                 latency_ms = int((perf_counter() - started) * 1000)
                 llm_metadata = self._llm_payload(generation_payload.get("_llm_call_metadata"))
                 raw_model_output = _safe_text(generation_payload.get("_raw_model_output", ""))
+                _emit_bounded_generation_progress(
+                    "bounded_patch_materialization",
+                    "started",
+                    generated_file_count=len(list(generation_payload.get("files", []) or [])),
+                )
                 materialized_files = self._materialize_generated_files(
                     source_files=source_files,
                     generated_files=list(generation_payload.get("files", []) or []),
+                )
+                _emit_bounded_generation_progress(
+                    "bounded_patch_materialization",
+                    "finished",
+                    materialized_file_count=len(materialized_files),
+                )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition",
+                    "started",
+                    materialized_file_count=len(materialized_files),
+                )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_rewrite_analysis",
+                    "started",
                 )
                 rewrite_diagnostics = self._analyze_rewrite_materialization(
                     source_files=source_files,
@@ -1793,6 +2182,10 @@ class BoundedRealCodegenService:
                 )
                 if bool(rewrite_diagnostics.get("rewritten_file_equal_to_original", False)):
                     claimed_change_found_in_new_content = False
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_rewrite_analysis",
+                    "finished",
+                )
                 no_op_full_file_rewrite_detected = bool(
                     rewrite_diagnostics.get("full_file_rewrite_detected", False)
                     and rewrite_diagnostics.get("rewritten_file_equal_to_original", False)
@@ -1819,9 +2212,23 @@ class BoundedRealCodegenService:
                         "no_op_full_file_retry_eligible": no_op_full_file_retry_eligible,
                     }
                 )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_noop_filter",
+                    "started",
+                    materialized_file_count=len(materialized_files),
+                )
                 materialized_files = self._drop_noop_materialized_files(
                     source_files=source_files,
                     materialized_files=materialized_files,
+                )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_noop_filter",
+                    "finished",
+                    materialized_file_count=len(materialized_files),
+                )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_codegen_safety",
+                    "started",
                 )
                 codegen_safety = self._assess_codegen_safety(
                     task_text=task_text,
@@ -1830,12 +2237,28 @@ class BoundedRealCodegenService:
                     raw_generated_files=list(generation_payload.get("files", []) or []),
                     apply_eligibility_by_file=list(target_gate.get("apply_eligibility_by_file", []) or []),
                 )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_codegen_safety",
+                    "finished",
+                )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_patch_metrics",
+                    "started",
+                )
                 first_attempt_metrics = self._estimate_materialized_patch_metrics(
                     source_files=source_files,
                     materialized_files=materialized_files,
                 )
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_patch_metrics",
+                    "finished",
+                )
                 structured_empty_result_returned = self._is_structured_empty_result(generation_payload, raw_model_output)
                 model_claimed_no_safe_change = self._model_claimed_no_safe_change(generation_payload, raw_model_output)
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_retry_resolution",
+                    "started",
+                )
                 same_file_edit_required = bool(_safe_text(selected_class) and _safe_text(selected_method) and len(allowed_targets) == 1)
                 no_patch_hardening_eligible = bool(
                     same_file_edit_required
@@ -1873,7 +2296,9 @@ class BoundedRealCodegenService:
                         target_gate=target_gate,
                         reason="structured_empty_same_file_no_patch",
                         same_method_quality=same_method_quality,
+                        lane_override=lane_override_payload,
                     )
+                    _record_payload_mutation("structured_empty_retry", activation_retry)
                     activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
                     no_patch_details = self._no_patch_hardening_payload(
                         {
@@ -1909,7 +2334,9 @@ class BoundedRealCodegenService:
                         target_gate=target_gate,
                         reason="no_op_full_file_rewrite_same_method",
                         same_method_quality=same_method_quality,
+                        lane_override=lane_override_payload,
                     )
+                    _record_payload_mutation("no_op_full_file_retry", activation_retry)
                     activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
                     no_op_full_file_details = self._no_op_full_file_retry_payload(
                         {
@@ -1933,6 +2360,61 @@ class BoundedRealCodegenService:
                     raw_model_output=raw_model_output,
                     same_method_quality=same_method_quality,
                 )
+                same_method_quality = self._detect_same_file_fragmentation_retry_candidate(
+                    task_text=task_text,
+                    generation_payload=dict(generation_payload or {}),
+                    same_method_quality=same_method_quality,
+                    codegen_safety=codegen_safety,
+                    source_files=source_files,
+                    selected_class=selected_class,
+                )
+                if bool(same_method_quality.get("same_file_fragmentation_detected", False)):
+                    activation_retry = self._attempt_force_non_empty_patch_retry(
+                        task_text=task_text,
+                        jira_key=jira_key,
+                        primary_family=primary_family,
+                        writable_repo_id=normalized_repo_id,
+                        allowed_targets=allowed_targets,
+                        readonly_files_by_repo=normalized_readonly,
+                        lightweight_draft=draft,
+                        source_files=source_files,
+                        target_gate=target_gate,
+                        reason="same_file_fragmentation_primary_method",
+                        same_method_quality=same_method_quality,
+                        lane_override=lane_override_payload,
+                    )
+                    _record_payload_mutation("same_file_concentration_retry", activation_retry)
+                    same_method_quality = self._same_method_quality_payload(
+                        {
+                            **same_method_quality,
+                            "concentration_retry_activated": True,
+                            "concentration_retry_changed_result": bool(
+                                activation_retry.get("activation_retry_improved_to_real_patch", False)
+                            ),
+                        }
+                    )
+                    activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
+                    if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
+                        generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
+                        materialized_files = list(activation_retry.get("_materialized_files", []) or [])
+                        rewrite_diagnostics = dict(activation_retry.get("_rewrite_diagnostics", {}) or rewrite_diagnostics)
+                        codegen_safety = dict(activation_retry.get("_codegen_safety", {}) or {})
+                        raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
+                        llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
+                        latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
+                        same_method_quality = self._analyze_same_method_quality_result(
+                            generation_payload=dict(generation_payload or {}),
+                            raw_model_output=raw_model_output,
+                            same_method_quality=same_method_quality,
+                        )
+                        same_method_quality = self._detect_same_file_fragmentation_retry_candidate(
+                            task_text=task_text,
+                            generation_payload=dict(generation_payload or {}),
+                            same_method_quality=same_method_quality,
+                            codegen_safety=codegen_safety,
+                            source_files=source_files,
+                            selected_class=selected_class,
+                        )
                 compile_hardening = self._detect_getter_only_assignment_retry_candidate(
                     repo_root=repo_root,
                     generation_payload=dict(generation_payload or {}),
@@ -1997,7 +2479,9 @@ class BoundedRealCodegenService:
                         target_gate=target_gate,
                         reason="behavior_path_constructor_only_same_file",
                         same_method_quality=same_method_quality,
+                        lane_override=lane_override_payload,
                     )
+                    _record_payload_mutation("behavior_path_retry", activation_retry)
                     same_method_quality = self._same_method_quality_payload(
                         {
                             **same_method_quality,
@@ -2072,7 +2556,21 @@ class BoundedRealCodegenService:
                                     ),
                                 }
                             )
-                if bool(compile_hardening.get("compile_hardening_eligible", False)):
+                compile_hardening_retry_applied = False
+                compile_hardening_gate_inputs = {
+                    "compile_hardening_eligible": bool(compile_hardening.get("compile_hardening_eligible", False)),
+                    "compile_hardening_retry_allowed": bool(compile_hardening_retry_allowed),
+                    "computed_validation_property_assignment_detected": bool(
+                        compile_hardening.get("computed_validation_property_assignment_detected", False)
+                    ),
+                    "writable_validation_source_detected": bool(
+                        compile_hardening.get("writable_validation_source_detected", False)
+                    ),
+                    "chosen_primary_behavior_method_present": bool(
+                        _safe_text(same_method_quality.get("chosen_primary_behavior_method", ""))
+                    ),
+                }
+                if bool(compile_hardening.get("compile_hardening_eligible", False)) and compile_hardening_retry_allowed:
                     getter_only_property_name = _safe_text(compile_hardening.get("getter_only_property_name", ""))
                     writable_backing_candidate = _safe_text(
                         compile_hardening.get("writable_backing_candidate_detected", "")
@@ -2096,6 +2594,9 @@ class BoundedRealCodegenService:
                         "writable_backing_candidate_detected": writable_backing_candidate,
                         "computed_validation_property_name": computed_validation_property_name,
                         "writable_validation_source_name": writable_validation_source_name,
+                        "computed_validation_helper_names": list(
+                            compile_hardening.get("computed_validation_prompt_helper_names", []) or []
+                        ),
                         "nonexistent_member_name": _safe_text(compile_hardening.get("nonexistent_member_name", "")),
                         "resolved_event_args_type": _safe_text(compile_hardening.get("resolved_event_args_type", "")),
                         "invalid_usage_expression": _safe_text(compile_hardening.get("invalid_usage_expression", "")),
@@ -2114,10 +2615,16 @@ class BoundedRealCodegenService:
                         target_gate=target_gate,
                         reason=retry_reason,
                         same_method_quality=same_method_quality_for_compile,
+                        lane_override=lane_override_payload,
                     )
+                    compile_hardening_retry_applied = True
+                    _record_payload_mutation("compile_hardening_retry", activation_retry)
                     compile_hardening = self._compile_hardening_payload(
                         {
                             **compile_hardening,
+                            "compile_hardening_activation_gate_inputs": compile_hardening_gate_inputs,
+                            "compile_hardening_activation_gate_failed_predicate": "",
+                            "compile_hardening_activation_gate_reason": "activation_gate_passed",
                             "getter_only_property_name": getter_only_property_name,
                             "writable_backing_candidate_detected": writable_backing_candidate,
                             "computed_validation_property_assignment_detected": bool(
@@ -2128,6 +2635,21 @@ class BoundedRealCodegenService:
                                 compile_hardening.get("writable_validation_source_detected", False)
                             ),
                             "writable_validation_source_name": writable_validation_source_name,
+                            "computed_validation_prompt_symbol_names_resolved": bool(
+                                compile_hardening.get("computed_validation_prompt_symbol_names_resolved", False)
+                            ),
+                            "computed_validation_prompt_property_name": _safe_text(
+                                compile_hardening.get("computed_validation_prompt_property_name", "")
+                            ),
+                            "computed_validation_prompt_source_name": _safe_text(
+                                compile_hardening.get("computed_validation_prompt_source_name", "")
+                            ),
+                            "computed_validation_prompt_helper_names": list(
+                                compile_hardening.get("computed_validation_prompt_helper_names", []) or []
+                            ),
+                            "computed_validation_prompt_used_concrete_symbols": bool(
+                                compile_hardening.get("computed_validation_prompt_used_concrete_symbols", False)
+                            ),
                             "nonexistent_member_name": _safe_text(compile_hardening.get("nonexistent_member_name", "")),
                             "resolved_event_args_type": _safe_text(compile_hardening.get("resolved_event_args_type", "")),
                             "invalid_event_args_usage_shape_detected": bool(
@@ -2203,44 +2725,68 @@ class BoundedRealCodegenService:
                                     recomputed_compile_hardening.get("writable_validation_source_name", "")
                                 )
                                 or _safe_text(compile_hardening.get("writable_validation_source_name", "")),
+                                "computed_validation_prompt_symbol_names_resolved": bool(
+                                    compile_hardening.get("computed_validation_prompt_symbol_names_resolved", False)
+                                )
+                                or bool(
+                                    recomputed_compile_hardening.get(
+                                        "computed_validation_prompt_symbol_names_resolved", False
+                                    )
+                                ),
+                                "computed_validation_prompt_property_name": _safe_text(
+                                    recomputed_compile_hardening.get("computed_validation_prompt_property_name", "")
+                                )
+                                or _safe_text(compile_hardening.get("computed_validation_prompt_property_name", "")),
+                                "computed_validation_prompt_source_name": _safe_text(
+                                    recomputed_compile_hardening.get("computed_validation_prompt_source_name", "")
+                                )
+                                or _safe_text(compile_hardening.get("computed_validation_prompt_source_name", "")),
+                                "computed_validation_prompt_helper_names": list(
+                                    recomputed_compile_hardening.get("computed_validation_prompt_helper_names", []) or []
+                                )
+                                or list(compile_hardening.get("computed_validation_prompt_helper_names", []) or []),
+                                "computed_validation_prompt_used_concrete_symbols": bool(
+                                    compile_hardening.get("computed_validation_prompt_used_concrete_symbols", False)
+                                )
+                                or bool(
+                                    recomputed_compile_hardening.get(
+                                        "computed_validation_prompt_used_concrete_symbols", False
+                                    )
+                                ),
                             }
                         )
-                        if bool(nonexistent_member_hardening.get("nonexistent_member_assignment_detected", False)):
-                            compile_hardening = self._compile_hardening_payload(
-                                {
-                                    **compile_hardening,
-                                    "compile_hardening_eligible": True,
-                                    "nonexistent_member_assignment_detected": True,
-                                    "nonexistent_member_name": _safe_text(nonexistent_member_hardening.get("nonexistent_member_name", "")),
-                                    "resolved_event_args_type": _safe_text(nonexistent_member_hardening.get("resolved_event_args_type", "")),
-                                    "known_event_args_members_excerpt": list(
-                                        nonexistent_member_hardening.get("known_event_args_members_excerpt", []) or []
-                                    ),
-                                }
-                            )
-                        invalid_usage_hardening = self._detect_invalid_event_args_usage_shape_retry_candidate(
-                            repo_root=repo_root,
-                            generation_payload=dict(generation_payload or {}),
-                            same_method_quality=same_method_quality,
-                            allowed_targets=allowed_targets,
-                            source_files=source_files,
-                        )
-                        if bool(invalid_usage_hardening.get("invalid_event_args_usage_shape_detected", False)):
-                            compile_hardening = self._compile_hardening_payload(
-                                {
-                                    **compile_hardening,
-                                    "compile_hardening_eligible": True,
-                                    "invalid_event_args_usage_shape_detected": True,
-                                    "resolved_event_args_type": _safe_text(invalid_usage_hardening.get("resolved_event_args_type", "")),
-                                    "invalid_usage_expression": _safe_text(invalid_usage_hardening.get("invalid_usage_expression", "")),
-                                    "known_event_args_members_excerpt": list(
-                                        invalid_usage_hardening.get("known_event_args_members_excerpt", []) or []
-                                    ),
-                                    "bool_compatible_members_excerpt": list(
-                                        invalid_usage_hardening.get("bool_compatible_members_excerpt", []) or []
-                                    ),
-                                }
-                            )
+                elif bool(compile_hardening.get("compile_hardening_eligible", False)):
+                    failed_predicate = ""
+                    if not compile_hardening_retry_allowed:
+                        failed_predicate = "compile_hardening_retry_allowed"
+                    compile_hardening = self._compile_hardening_payload(
+                        {
+                            **compile_hardening,
+                            "compile_hardening_activation_gate_inputs": compile_hardening_gate_inputs,
+                            "compile_hardening_activation_gate_failed_predicate": failed_predicate,
+                            "compile_hardening_activation_gate_reason": (
+                                "eligible_detected_but_retry_disallowed"
+                                if failed_predicate
+                                else "eligible_detected_but_activation_not_taken"
+                            ),
+                            "compile_hardening_retry_activated": False,
+                            "compile_hardening_changed_result": False,
+                        }
+                    )
+                else:
+                    failed_predicate = ""
+                    if not bool(compile_hardening.get("compile_hardening_eligible", False)):
+                        failed_predicate = "compile_hardening_eligible"
+                    compile_hardening = self._compile_hardening_payload(
+                        {
+                            **compile_hardening,
+                            "compile_hardening_activation_gate_inputs": compile_hardening_gate_inputs,
+                            "compile_hardening_activation_gate_failed_predicate": failed_predicate,
+                            "compile_hardening_activation_gate_reason": (
+                                "compile_hardening_not_eligible" if failed_predicate else ""
+                            ),
+                        }
+                    )
                 if (
                     bool(self._repo_settings.targeting_force_non_empty_patch_enabled)
                     and not self._has_real_patch_attempt(
@@ -2260,7 +2806,9 @@ class BoundedRealCodegenService:
                         target_gate=target_gate,
                         reason="empty_patch_after_first_codegen_attempt",
                         same_method_quality=same_method_quality,
+                        lane_override=lane_override_payload,
                     )
+                    _record_payload_mutation("empty_patch_after_first_codegen_attempt_retry", activation_retry)
                     activation_details = self._activation_rule_payload({**activation_details, **activation_retry})
                     if bool(activation_retry.get("activation_retry_improved_to_real_patch", False)):
                         generation_payload = dict(activation_retry.get("_generation_payload", {}) or {})
@@ -2270,8 +2818,17 @@ class BoundedRealCodegenService:
                         raw_model_output = _safe_text(activation_retry.get("_raw_model_output", ""))
                         llm_metadata = self._llm_payload(activation_retry.get("_llm_metadata"))
                         latency_ms += int(activation_retry.get("_latency_ms", 0) or 0)
+                _emit_post_materialization_transition(
+                    "post_materialization_transition_retry_resolution",
+                    "finished",
+                )
             proposed_files = _normalize_file_list(
                 [dict(item or {}).get("file", "") for item in list(materialized_files or []) if isinstance(item, dict)]
+            )
+            _emit_post_materialization_transition(
+                "post_materialization_transition_scope_validation",
+                "started",
+                proposed_file_count=len(proposed_files),
             )
             scope_validation = self._bounded_service.validate_file_scope(
                 attempted_repo_id=normalized_repo_id,
@@ -2280,12 +2837,26 @@ class BoundedRealCodegenService:
                 writable_files=normalized_writable_files,
                 planned_create_files=[],
             )
+            _emit_post_materialization_transition(
+                "post_materialization_transition_scope_validation",
+                "finished",
+                blocked_out_of_scope_count=len(list(scope_validation.get("blocked_out_of_scope_files", []) or [])),
+            )
             blocked_out_of_scope_files = list(scope_validation.get("blocked_out_of_scope_files", []) or [])
             attempted_out_of_scope_files = list(scope_validation.get("attempted_out_of_scope_files", []) or [])
+            _emit_post_materialization_transition(
+                "post_materialization_transition_target_gate_validation",
+                "started",
+            )
             target_gate_validation = self._validate_generated_targets(
                 proposed_files=proposed_files,
                 selected_targets=list(target_gate.get("selected_codegen_targets", []) or []),
                 apply_eligibility_by_file=list(target_gate.get("apply_eligibility_by_file", []) or []),
+            )
+            _emit_post_materialization_transition(
+                "post_materialization_transition_target_gate_validation",
+                "finished",
+                target_gate_status=_safe_text(target_gate_validation.get("status", "")),
             )
             if blocked_out_of_scope_files:
                 return {
@@ -2409,6 +2980,11 @@ class BoundedRealCodegenService:
                     **llm_metadata,
                     **compile_hardening,
                 }
+            _emit_post_materialization_transition(
+                "post_materialization_transition_downgrade_check",
+                "started",
+                downgraded_to_draft_reason=_safe_text(codegen_safety.get("downgraded_to_draft_reason", "")),
+            )
             if _safe_text(codegen_safety.get("downgraded_to_draft_reason", "")):
                 return {
                     "execution_mode": "bounded_real_codegen",
@@ -2484,31 +3060,95 @@ class BoundedRealCodegenService:
                     **llm_metadata,
                     **compile_hardening,
                 }
+            _emit_post_materialization_transition(
+                "post_materialization_transition_downgrade_check",
+                "finished",
+            )
+            _emit_post_materialization_transition(
+                "post_materialization_transition",
+                "finished",
+                materialized_file_count=len(materialized_files),
+            )
 
+            _emit_bounded_generation_progress(
+                "bounded_apply_preparation",
+                "started",
+                materialized_file_count=len(materialized_files),
+            )
+            _emit_bounded_generation_progress(
+                "apply_input_build",
+                "started",
+                materialized_file_count=len(materialized_files),
+            )
             apply_input = self._build_apply_input(
                 repo_id=normalized_repo_id,
                 source_files=source_files,
                 generated_files=materialized_files,
                 dry_run=execution_submode != "apply_codegen",
             )
+            _emit_bounded_generation_progress(
+                "apply_input_build",
+                "finished",
+                operation_count=len(list(getattr(apply_input, "operations", []) or [])),
+            )
+            _emit_bounded_generation_progress(
+                "bounded_apply_preparation",
+                "finished",
+                operation_count=len(list(getattr(apply_input, "operations", []) or [])),
+            )
             apply_service = self._apply_service_factory(storage_path=workspace.registry_path)
+            _emit_bounded_generation_progress(
+                "apply_service",
+                "started",
+                dry_run=bool(execution_submode != "apply_codegen"),
+            )
             apply_result = apply_service.apply(
                 apply_input,
                 allow_real_writes=execution_submode == "apply_codegen",
             )
+            _emit_bounded_generation_progress(
+                "apply_service",
+                "finished",
+                apply_success=bool(getattr(apply_result, "success", False)),
+            )
             diff_service = self._diff_service_factory(storage_path=workspace.registry_path)
+            _emit_bounded_generation_progress(
+                "diff_build",
+                "started",
+                dry_run=bool(execution_submode != "apply_codegen"),
+            )
             diff_result = diff_service.build_diff(
                 repo_id=normalized_repo_id,
                 apply_input=apply_input,
                 apply_result=apply_result,
             )
+            _emit_bounded_generation_progress(
+                "diff_build",
+                "finished",
+                changed_file_count=len(list(getattr(diff_result, "files", []) or [])),
+            )
+            _emit_bounded_generation_progress(
+                "post_diff",
+                "started",
+                changed_file_count=len(list(getattr(diff_result, "files", []) or [])),
+            )
             changed_files = _normalize_file_list([item.relative_path for item in list(diff_result.files or []) if _safe_text(item.relative_path)])
+            _emit_bounded_generation_progress(
+                "validation_workspace_preparation",
+                "started",
+                repo_root=repo_root.as_posix(),
+            )
             post_scope = self._bounded_service.validate_file_scope(
                 attempted_repo_id=normalized_repo_id,
                 attempted_files=changed_files,
                 writable_repo_id=normalized_repo_id,
                 writable_files=normalized_writable_files,
                 planned_create_files=[],
+            )
+            _emit_bounded_generation_progress(
+                "validation_workspace_preparation",
+                "finished",
+                blocked_out_of_scope_count=len(list(post_scope.get("blocked_out_of_scope_files", []) or [])),
             )
             compile_supported = False
             compile_pass = False
@@ -2536,6 +3176,27 @@ class BoundedRealCodegenService:
             credential_provider_detected = False
             restore_used_configfile = ""
             restore_used_sources_safe: list[str] = []
+            host_runner_nuget_config_path = ""
+            host_runner_nuget_config_contents = ""
+            host_runner_restore_command_raw = ""
+            host_runner_restore_command_args: list[str] = []
+            host_runner_restore_configfile_arg = ""
+            host_runner_public_feed_present_in_file = False
+            host_runner_public_feed_present_in_command_target = False
+            host_runner_config_used_by_restore_confirmed = False
+            host_runner_restore_guard_checked = False
+            host_runner_restore_guard_passed = False
+            host_runner_restore_guard_reason = ""
+            restore_subprocess_owner_function = ""
+            restore_subprocess_command_raw = ""
+            restore_subprocess_command_args: list[str] = []
+            restore_subprocess_config_path = ""
+            restore_subprocess_config_contents = ""
+            restore_subprocess_public_feed_present = False
+            restore_subprocess_private_feed_present = False
+            restore_subprocess_guard_ran_here = False
+            restore_subprocess_guard_decision = ""
+            restore_subprocess_config_rewritten_after_guard = False
             restore_auth_mode_guess = ""
             restore_secret_redaction_applied = False
             failure_reason_guess = ""
@@ -2563,10 +3224,21 @@ class BoundedRealCodegenService:
             repair_changed_files: list[str] = []
             repair_patch_line_count = 0
             repair_success = False
+            _emit_bounded_generation_progress(
+                "validation_input_assembly",
+                "started",
+                changed_file_count=len(changed_files),
+            )
             validation_plan = self._detect_validation_plan(
                 repo_id=normalized_repo_id,
                 repo_root=repo_root,
                 changed_files=changed_files,
+            )
+            _emit_bounded_generation_progress(
+                "validation_input_assembly",
+                "finished",
+                command_count=len(list(validation_plan.get("commands_to_run", []) or [])),
+                validation_supported=bool(validation_plan.get("validation_supported", False)),
             )
             nuget_config_detected = bool(validation_plan.get("nuget_config_detected", False))
             private_feed_detected = bool(validation_plan.get("private_feed_detected", False))
@@ -2592,6 +3264,11 @@ class BoundedRealCodegenService:
                 else (test_commands_detected[0] if test_commands_detected else "no_test_command_detected")
             )
             if execution_submode == "apply_codegen" and not post_scope.get("blocked_out_of_scope_files"):
+                _emit_bounded_generation_progress(
+                    "validation_handoff",
+                    "started",
+                    command_count=len(list(validation_plan.get("commands_to_run", []) or [])),
+                )
                 validation_service = self._validation_service_factory(storage_path=workspace.registry_path)
                 commands = list(validation_plan.get("commands_to_run", []) or [])
                 restore_supported = bool(validation_plan.get("restore_supported", False))
@@ -2606,13 +3283,48 @@ class BoundedRealCodegenService:
                     for command in commands
                     if _safe_text(getattr(command, "command", ""))
                 ]
+                def _emit_validation_runner_progress(step_name: str, marker: str, **extra: Any) -> None:
+                    _emit_bounded_generation_progress(step_name, marker, **extra)
+                _emit_bounded_generation_progress(
+                    "validation_runner_invocation",
+                    "started",
+                    command_count=len(commands),
+                    validation_workspace_path=Path(workspace.workspace_repo_root).as_posix(),
+                    validation_runner_repo_id=normalized_repo_id,
+                )
                 validation_result = validation_service.run_validation(
                     normalized_repo_id,
                     commands=commands,
                     changed_files=changed_files,
                     timeout_seconds=min(120, max(30, int(settings.runtime.validation_timeout_seconds or 120))),
+                    progress_callback=_emit_validation_runner_progress,
+                )
+                _emit_bounded_generation_progress(
+                    "validation_result_handoff",
+                    "started",
+                    validation_runner_used=bool(getattr(validation_result, "validation_runner_used", False)),
+                )
+                _emit_bounded_generation_progress(
+                    "validation_runner_invocation",
+                    "finished",
+                    step_count=len(list(getattr(validation_result, "steps", []) or [])),
                 )
                 validation_payload = validation_result.to_dict()
+                _emit_bounded_generation_progress(
+                    "validation_result_handoff",
+                    "finished",
+                    validation_result_keys=sorted(str(key) for key in validation_payload.keys()),
+                )
+                _emit_bounded_generation_progress(
+                    "validation_result_normalization",
+                    "started",
+                    validation_overall_status=_safe_text(validation_payload.get("overall_status", "")),
+                )
+                _emit_bounded_generation_progress(
+                    "validation_result_collection",
+                    "started",
+                    validation_outcome=_safe_text(validation_payload.get("outcome_type", "")),
+                )
                 validation_errors = list(validation_payload.get("errors", []) or [])
                 validation_steps = list(validation_payload.get("steps", []) or [])
                 if validation_steps:
@@ -2650,6 +3362,27 @@ class BoundedRealCodegenService:
                 credential_provider_detected = bool(validation_result.credential_provider_detected or credential_provider_detected)
                 restore_used_configfile = _safe_text(validation_result.restore_used_configfile or restore_used_configfile)
                 restore_used_sources_safe = list(validation_result.restore_used_sources_safe or restore_used_sources_safe)
+                host_runner_nuget_config_path = _safe_text(validation_result.host_runner_nuget_config_path or host_runner_nuget_config_path)
+                host_runner_nuget_config_contents = _safe_text(validation_result.host_runner_nuget_config_contents or host_runner_nuget_config_contents)
+                host_runner_restore_command_raw = _safe_text(validation_result.host_runner_restore_command_raw or host_runner_restore_command_raw)
+                host_runner_restore_command_args = list(validation_result.host_runner_restore_command_args or host_runner_restore_command_args)
+                host_runner_restore_configfile_arg = _safe_text(validation_result.host_runner_restore_configfile_arg or host_runner_restore_configfile_arg)
+                host_runner_public_feed_present_in_file = bool(validation_result.host_runner_public_feed_present_in_file or host_runner_public_feed_present_in_file)
+                host_runner_public_feed_present_in_command_target = bool(validation_result.host_runner_public_feed_present_in_command_target or host_runner_public_feed_present_in_command_target)
+                host_runner_config_used_by_restore_confirmed = bool(validation_result.host_runner_config_used_by_restore_confirmed or host_runner_config_used_by_restore_confirmed)
+                host_runner_restore_guard_checked = bool(validation_result.host_runner_restore_guard_checked or host_runner_restore_guard_checked)
+                host_runner_restore_guard_passed = bool(validation_result.host_runner_restore_guard_passed or host_runner_restore_guard_passed)
+                host_runner_restore_guard_reason = _safe_text(validation_result.host_runner_restore_guard_reason or host_runner_restore_guard_reason)
+                restore_subprocess_owner_function = _safe_text(validation_result.restore_subprocess_owner_function or restore_subprocess_owner_function)
+                restore_subprocess_command_raw = _safe_text(validation_result.restore_subprocess_command_raw or restore_subprocess_command_raw)
+                restore_subprocess_command_args = list(validation_result.restore_subprocess_command_args or restore_subprocess_command_args)
+                restore_subprocess_config_path = _safe_text(validation_result.restore_subprocess_config_path or restore_subprocess_config_path)
+                restore_subprocess_config_contents = _safe_text(validation_result.restore_subprocess_config_contents or restore_subprocess_config_contents)
+                restore_subprocess_public_feed_present = bool(validation_result.restore_subprocess_public_feed_present or restore_subprocess_public_feed_present)
+                restore_subprocess_private_feed_present = bool(validation_result.restore_subprocess_private_feed_present or restore_subprocess_private_feed_present)
+                restore_subprocess_guard_ran_here = bool(validation_result.restore_subprocess_guard_ran_here or restore_subprocess_guard_ran_here)
+                restore_subprocess_guard_decision = _safe_text(validation_result.restore_subprocess_guard_decision or restore_subprocess_guard_decision)
+                restore_subprocess_config_rewritten_after_guard = bool(validation_result.restore_subprocess_config_rewritten_after_guard or restore_subprocess_config_rewritten_after_guard)
                 restore_auth_mode_guess = _safe_text(validation_result.restore_auth_mode_guess or restore_auth_mode_guess)
                 restore_secret_redaction_applied = bool(validation_result.restore_secret_redaction_applied or restore_secret_redaction_applied)
                 failure_reason_guess = _safe_text(validation_result.failure_reason_guess)
@@ -2677,6 +3410,28 @@ class BoundedRealCodegenService:
                         else "No test command was detected."
                     )
                 validation_failed_commands = list(failing_commands)
+                _emit_bounded_generation_progress(
+                    "validation_result_collection",
+                    "finished",
+                    error_count=len(validation_errors),
+                    step_count=len(validation_steps),
+                )
+                _emit_bounded_generation_progress(
+                    "validation_result_normalization",
+                    "finished",
+                    compile_started=bool(compile_started),
+                    test_started=bool(test_started),
+                )
+                _emit_bounded_generation_progress(
+                    "validation_outcome_mapping",
+                    "started",
+                    failure_reason_guess=failure_reason_guess,
+                )
+                _emit_bounded_generation_progress(
+                    "post_validation_result_mapping",
+                    "started",
+                    validation_handoff_status=validation_handoff_status,
+                )
                 pre_repair_apply_success = bool(
                     apply_result.applied and not apply_result.errors
                 )
@@ -2698,6 +3453,16 @@ class BoundedRealCodegenService:
                         "downgraded_to_draft_reason": _safe_text(codegen_safety.get("downgraded_to_draft_reason", "")),
                         "full_rewrite_used": bool(codegen_safety.get("full_rewrite_used", False)),
                     }
+                )
+                _emit_bounded_generation_progress(
+                    "post_validation_result_mapping",
+                    "finished",
+                    validation_failure_class=validation_failure_class,
+                )
+                _emit_bounded_generation_progress(
+                    "validation_outcome_mapping",
+                    "finished",
+                    validation_failure_class=validation_failure_class,
                 )
                 if self._enable_repair_pass and self._is_explicit_actionable_repair_failure(
                     failure_class=validation_failure_class,
@@ -2801,6 +3566,17 @@ class BoundedRealCodegenService:
                         validation_plan = repair_validation_plan
                         codegen_safety["codegen_style_used"] = "repair_localized_edits"
                         raw_model_output = _safe_text(repair_result.get("repair_raw_output_excerpt", "")) or raw_model_output
+                _emit_bounded_generation_progress(
+                    "validation_handoff",
+                    "finished",
+                    validation_handoff_status=validation_handoff_status,
+                    validation_handoff_reason=validation_handoff_reason,
+                )
+            _emit_bounded_generation_progress(
+                "post_diff",
+                "finished",
+                validation_handoff_status=validation_handoff_status,
+            )
             combined_patch = "\n\n".join(str(item.diff or "") for item in list(diff_result.files or []) if _safe_text(item.diff))
             patch_line_count = int(diff_result.total_additions or 0) + int(diff_result.total_deletions or 0)
             apply_success = bool(
@@ -2862,6 +3638,13 @@ class BoundedRealCodegenService:
                     or bool(compile_hardening.get("compile_hardening_eligible", False)),
                 }
             )
+            raw_context_payload_text = _safe_text(generation_payload.get("_bounded_build_context_payload", ""))
+            comparison_context_payload_text, comparison_context_normalized_fields, excluded_comparison_noise_fields = (
+                self._comparison_context_payload(
+                    context_payload_text=raw_context_payload_text,
+                    lane_override=lane_override_payload,
+                )
+            )
             return {
                 "execution_mode": "bounded_real_codegen",
                 "execution_submode": execution_submode,
@@ -2891,6 +3674,51 @@ class BoundedRealCodegenService:
                 "raw_model_output": raw_model_output,
                 "raw_model_output_length": len(raw_model_output),
                 "raw_model_output_excerpt": raw_model_output[:1000],
+                "bounded_prompt_text": _safe_text(generation_payload.get("_bounded_prompt_text", "")),
+                "bounded_prompt_hash": sha256(
+                    _safe_text(generation_payload.get("_bounded_prompt_text", "")).encode("utf-8")
+                ).hexdigest()
+                if _safe_text(generation_payload.get("_bounded_prompt_text", ""))
+                else "",
+                "bounded_prompt_length": len(_safe_text(generation_payload.get("_bounded_prompt_text", ""))),
+                "bounded_build_context_payload": raw_context_payload_text,
+                "bounded_context_hash": sha256(
+                    raw_context_payload_text.encode("utf-8")
+                ).hexdigest()
+                if raw_context_payload_text
+                else "",
+                "bounded_context_length": len(raw_context_payload_text),
+                "bounded_model_name": _safe_text(llm_metadata.get("llm_model", "")),
+                "bounded_provider_name": _safe_text(llm_metadata.get("llm_provider", "")),
+                "generation_contract_version": BOUNDED_GENERATION_CONTRACT_VERSION,
+                "bounded_generation_flags_active": dict(generation_payload.get("_bounded_generation_flags_active", {}) or {}),
+                "bounded_generation_lane_id": _safe_text(generation_payload.get("_bounded_generation_lane_id", "")),
+                "lane_frozen_for_comparison": bool(generation_payload.get("_lane_frozen_for_comparison", False)),
+                "comparison_mode_active": comparison_mode_active,
+                "mutation_points_frozen": mutation_points_frozen,
+                "compile_hardening_retry_allowed": compile_hardening_retry_allowed,
+                "compile_hardening_retry_applied": compile_hardening_retry_applied,
+                "initial_lane_reason": initial_lane_reason,
+                "final_post_activation_lane_reason": final_post_activation_lane_reason,
+                "post_activation_payload_frozen": bool(lane_override_payload.get("lane_frozen_for_comparison", False)),
+                "post_activation_prompt_hash": sha256(
+                    _safe_text(generation_payload.get("_bounded_prompt_text", "")).encode("utf-8")
+                ).hexdigest()
+                if _safe_text(generation_payload.get("_bounded_prompt_text", ""))
+                else "",
+                "post_activation_context_hash": sha256(
+                    raw_context_payload_text.encode("utf-8")
+                ).hexdigest()
+                if raw_context_payload_text
+                else "",
+                "post_activation_flags_hash": _payload_hash(dict(generation_payload.get("_bounded_generation_flags_active", {}) or {})),
+                "comparison_context_hash": sha256(comparison_context_payload_text.encode("utf-8")).hexdigest()
+                if comparison_context_payload_text
+                else "",
+                "comparison_context_normalized_fields": list(comparison_context_normalized_fields),
+                "excluded_comparison_noise_fields": list(excluded_comparison_noise_fields),
+                "payload_mutation_points": list(payload_mutation_points),
+                "payload_mutation_count": len(payload_mutation_points),
                 "compile_supported": compile_supported,
                 "compile_pass": compile_pass,
                 "test_supported": test_supported,
@@ -2906,6 +3734,20 @@ class BoundedRealCodegenService:
                 "validation_workspace_exists": validation_workspace_exists,
                 "validation_input_repo_id": validation_input_repo_id,
                 "validation_input_repo_root": validation_input_repo_root,
+                "temp_workspace_path": repo_root.as_posix(),
+                "original_repo_root": _normalize_path(workspace.source_root_path),
+                "workspace_creation_mode": workspace_creation_mode,
+                "workspace_git_identity_expected": workspace_git_identity_expected,
+                "workspace_is_git_checkout": workspace_is_git_checkout,
+                "scm_detect_git_repo_started": scm_detect_git_repo_started,
+                "scm_detect_git_repo_finished": scm_detect_git_repo_finished,
+                "scm_detect_git_repo_target_path": repo_root.as_posix(),
+                "scm_detect_git_repo_exists": bool(repo_root.exists()),
+                "scm_detect_git_repo_has_dotgit": bool(workspace_dotgit_path.exists()),
+                "scm_detect_git_repo_error": scm_detect_git_repo_error,
+                "scm_detect_git_repo_result": bool(scm_detect_git_repo_result),
+                "scm_git_detection_skipped": scm_git_detection_skipped,
+                "scm_git_detection_skip_reason": scm_git_detection_skip_reason,
                 "compile_discovery_attempted": compile_discovery_attempted,
                 "compile_discovery_result": compile_discovery_result,
                 "targeted_test_discovery_attempted": targeted_test_discovery_attempted,
@@ -2956,6 +3798,27 @@ class BoundedRealCodegenService:
                 "credential_provider_detected": credential_provider_detected,
                 "restore_used_configfile": restore_used_configfile,
                 "restore_used_sources_safe": restore_used_sources_safe,
+                "host_runner_nuget_config_path": host_runner_nuget_config_path,
+                "host_runner_nuget_config_contents": host_runner_nuget_config_contents,
+                "host_runner_restore_command_raw": host_runner_restore_command_raw,
+                "host_runner_restore_command_args": host_runner_restore_command_args,
+                "host_runner_restore_configfile_arg": host_runner_restore_configfile_arg,
+                "host_runner_public_feed_present_in_file": host_runner_public_feed_present_in_file,
+                "host_runner_public_feed_present_in_command_target": host_runner_public_feed_present_in_command_target,
+                "host_runner_config_used_by_restore_confirmed": host_runner_config_used_by_restore_confirmed,
+                "host_runner_restore_guard_checked": host_runner_restore_guard_checked,
+                "host_runner_restore_guard_passed": host_runner_restore_guard_passed,
+                "host_runner_restore_guard_reason": host_runner_restore_guard_reason,
+                "restore_subprocess_owner_function": restore_subprocess_owner_function,
+                "restore_subprocess_command_raw": restore_subprocess_command_raw,
+                "restore_subprocess_command_args": restore_subprocess_command_args,
+                "restore_subprocess_config_path": restore_subprocess_config_path,
+                "restore_subprocess_config_contents": restore_subprocess_config_contents,
+                "restore_subprocess_public_feed_present": restore_subprocess_public_feed_present,
+                "restore_subprocess_private_feed_present": restore_subprocess_private_feed_present,
+                "restore_subprocess_guard_ran_here": restore_subprocess_guard_ran_here,
+                "restore_subprocess_guard_decision": restore_subprocess_guard_decision,
+                "restore_subprocess_config_rewritten_after_guard": restore_subprocess_config_rewritten_after_guard,
                 "restore_auth_mode_guess": restore_auth_mode_guess,
                 "restore_secret_redaction_applied": restore_secret_redaction_applied,
                 "failure_reason_guess": failure_reason_guess,
@@ -3836,8 +4699,10 @@ class BoundedRealCodegenService:
         target_gate: dict[str, Any],
         reason: str,
         same_method_quality: dict[str, Any] | None = None,
+        lane_override: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         started = perf_counter()
+        effective_reason = self._effective_lane_retry_reason(reason=reason, lane_override=lane_override)
         retry_payload = self._generate_with_retry(
             task_text=task_text,
             jira_key=jira_key,
@@ -3849,8 +4714,9 @@ class BoundedRealCodegenService:
             source_files=source_files,
             max_retry_attempts=0,
             force_non_empty_patch=True,
-            force_non_empty_patch_reason=reason,
+            force_non_empty_patch_reason=effective_reason,
             same_method_quality=same_method_quality,
+            lane_override=lane_override,
         )
         latency_ms = int((perf_counter() - started) * 1000)
         llm_metadata = self._llm_payload(retry_payload.get("_llm_call_metadata"))
@@ -3884,7 +4750,8 @@ class BoundedRealCodegenService:
             "activation_rule_fired": True,
             "second_attempt_patch_line_count": int(patch_metrics.get("patch_line_count", 0) or 0),
             "second_attempt_changed_files_count": int(patch_metrics.get("changed_files_count", 0) or 0),
-            "activation_retry_reason": _safe_text(reason),
+            "activation_retry_reason": _safe_text(effective_reason),
+            "activation_retry_requested_reason": _safe_text(reason),
             "activation_retry_improved_to_real_patch": self._has_real_patch_attempt(
                 patch_metrics=patch_metrics,
                 codegen_safety=codegen_safety,
@@ -3915,12 +4782,40 @@ class BoundedRealCodegenService:
         force_non_empty_patch: bool = False,
         force_non_empty_patch_reason: str = "",
         same_method_quality: dict[str, Any] | None = None,
+        lane_override: dict[str, Any] | None = None,
+        progress_callback: Any | None = None,
     ) -> dict[str, Any]:
         attempts = max(1, int(max_retry_attempts or 1))
         last_payload: dict[str, Any] = {}
         last_raw = ""
         last_llm_metadata = self._llm_payload()
+        last_prompt_messages: list[dict[str, str]] = []
+        last_prompt_text = ""
+        last_context_payload_text = ""
+        lane_override_payload = _normalize_lane_override(lane_override)
+        effective_force_non_empty_patch, effective_force_non_empty_patch_reason = self._effective_force_non_empty_patch_state(
+            force_non_empty_patch=force_non_empty_patch,
+            force_non_empty_patch_reason=force_non_empty_patch_reason,
+            lane_override=lane_override_payload,
+        )
+        active_flags = self._bounded_generation_flags_active(
+            retry=False,
+            force_non_empty_patch=effective_force_non_empty_patch,
+            force_non_empty_patch_reason=effective_force_non_empty_patch_reason,
+            same_method_quality=same_method_quality,
+            lane_override=lane_override_payload,
+        )
         for index in range(attempts + 1):
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        "bounded_prompt_assembly",
+                        "started",
+                        retry=index > 0,
+                        attempt_index=index,
+                    )
+                except Exception:
+                    pass
             prompt = self._build_prompt(
                 task_text=task_text,
                 jira_key=jira_key,
@@ -3931,24 +4826,248 @@ class BoundedRealCodegenService:
                 lightweight_draft=lightweight_draft,
                 source_files=source_files,
                 retry=index > 0,
-                force_non_empty_patch=force_non_empty_patch,
-                force_non_empty_patch_reason=force_non_empty_patch_reason,
+                force_non_empty_patch=effective_force_non_empty_patch,
+                force_non_empty_patch_reason=effective_force_non_empty_patch_reason,
                 same_method_quality=same_method_quality,
             )
-            raw_text, last_llm_metadata = self._complete(prompt)
+            last_prompt_messages = [dict(message or {}) for message in list(prompt or [])]
+            last_prompt_text = self._serialize_prompt_messages(last_prompt_messages)
+            last_context_payload_text = self._serialize_bounded_build_context_payload(
+                task_text=task_text,
+                jira_key=jira_key,
+                primary_family=primary_family,
+                writable_repo_id=writable_repo_id,
+                writable_files=writable_files,
+                readonly_files_by_repo=readonly_files_by_repo,
+                lightweight_draft=lightweight_draft,
+                source_files=source_files,
+                retry=index > 0,
+                force_non_empty_patch=effective_force_non_empty_patch,
+                force_non_empty_patch_reason=effective_force_non_empty_patch_reason,
+                same_method_quality=same_method_quality,
+            )
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        "bounded_prompt_assembly",
+                        "finished",
+                        retry=index > 0,
+                        attempt_index=index,
+                        prompt_length=len(last_prompt_text),
+                        context_length=len(last_context_payload_text),
+                    )
+                except Exception:
+                    pass
+            active_flags = self._bounded_generation_flags_active(
+                retry=index > 0,
+                force_non_empty_patch=effective_force_non_empty_patch,
+                force_non_empty_patch_reason=effective_force_non_empty_patch_reason,
+                same_method_quality=same_method_quality,
+                lane_override=lane_override_payload,
+            )
+            raw_text, last_llm_metadata = self._complete(
+                prompt,
+                progress_callback=progress_callback,
+                attempt_index=index,
+            )
             last_raw = raw_text
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        "bounded_model_output_normalization",
+                        "started",
+                        retry=index > 0,
+                        attempt_index=index,
+                        raw_output_length=len(raw_text),
+                    )
+                except Exception:
+                    pass
             payload = _extract_json_payload(raw_text)
+            if callable(progress_callback):
+                try:
+                    progress_callback(
+                        "bounded_model_output_normalization",
+                        "finished",
+                        retry=index > 0,
+                        attempt_index=index,
+                        extracted_file_count=len(list(payload.get("files", []) or [])),
+                    )
+                except Exception:
+                    pass
             if payload.get("files"):
                 last_payload = payload
                 proposed = _normalize_file_list([dict(item or {}).get("file", "") for item in list(payload.get("files", []) or []) if isinstance(item, dict)])
                 if proposed and all(path in set(writable_files) for path in proposed):
                     payload["_raw_model_output"] = raw_text
                     payload["_llm_call_metadata"] = dict(last_llm_metadata or {})
+                    payload["_bounded_prompt_text"] = last_prompt_text
+                    payload["_bounded_build_context_payload"] = last_context_payload_text
+                    payload["_bounded_generation_flags_active"] = dict(active_flags or {})
+                    payload["_bounded_generation_lane_id"] = _safe_text(lane_override_payload.get("lane_id", ""))
+                    payload["_lane_frozen_for_comparison"] = bool(lane_override_payload.get("lane_frozen_for_comparison", False))
                     return payload
         fallback = last_payload or {"summary": "Model did not produce a valid bounded patch proposal.", "files": []}
         fallback["_raw_model_output"] = last_raw
         fallback["_llm_call_metadata"] = dict(last_llm_metadata or {})
+        fallback["_bounded_prompt_text"] = last_prompt_text
+        fallback["_bounded_build_context_payload"] = last_context_payload_text
+        fallback["_bounded_generation_flags_active"] = dict(active_flags or {})
+        fallback["_bounded_generation_lane_id"] = _safe_text(lane_override_payload.get("lane_id", ""))
+        fallback["_lane_frozen_for_comparison"] = bool(lane_override_payload.get("lane_frozen_for_comparison", False))
         return fallback
+
+    def _serialize_prompt_messages(self, messages: list[dict[str, str]]) -> str:
+        return "\n\n".join(
+            f"[{_safe_text(message.get('role', 'unknown')).upper()}]\n{_safe_text(message.get('content', ''))}"
+            for message in list(messages or [])
+        ).strip()
+
+    def _serialize_bounded_build_context_payload(
+        self,
+        *,
+        task_text: str,
+        jira_key: str,
+        primary_family: str,
+        writable_repo_id: str,
+        writable_files: list[str],
+        readonly_files_by_repo: dict[str, list[str]],
+        lightweight_draft: dict[str, Any],
+        source_files: list[dict[str, Any]],
+        retry: bool,
+        force_non_empty_patch: bool,
+        force_non_empty_patch_reason: str,
+        same_method_quality: dict[str, Any] | None,
+    ) -> str:
+        payload = {
+            "task_text": _safe_text(task_text),
+            "jira_key": _safe_text(jira_key),
+            "primary_family": _safe_text(primary_family),
+            "writable_repo_id": _safe_text(writable_repo_id),
+            "writable_files": list(writable_files or []),
+            "readonly_files_by_repo": dict(readonly_files_by_repo or {}),
+            "lightweight_draft": dict(lightweight_draft or {}),
+            "source_files": [
+                {
+                    "file": _safe_text(dict(item or {}).get("file", "")),
+                    "expected_hash": _safe_text(dict(item or {}).get("expected_hash", "")),
+                    "content": _safe_text(dict(item or {}).get("content", "")),
+                }
+                for item in list(source_files or [])
+            ],
+            "generation_flags_active": self._bounded_generation_flags_active(
+                retry=retry,
+                force_non_empty_patch=force_non_empty_patch,
+                force_non_empty_patch_reason=force_non_empty_patch_reason,
+                same_method_quality=same_method_quality,
+            ),
+            "generation_contract_version": BOUNDED_GENERATION_CONTRACT_VERSION,
+        }
+        return _json_dumps_stable(payload)
+
+    def _comparison_context_payload(
+        self,
+        *,
+        context_payload_text: str,
+        lane_override: dict[str, Any] | None,
+    ) -> tuple[str, list[str], list[str]]:
+        raw_text = _safe_text(context_payload_text)
+        if not raw_text:
+            return "", [], []
+        if not _lane_bool(lane_override, "comparison_mode_active", False):
+            return raw_text, [], []
+        try:
+            payload = json.loads(raw_text)
+        except json.JSONDecodeError:
+            return raw_text, [], []
+        if not isinstance(payload, dict):
+            return raw_text, [], []
+        excluded_noise_fields: list[str] = []
+        normalized_payload = json.loads(_json_dumps_stable(payload))
+        for dotted_path in ["lightweight_draft.generation_latency_ms"]:
+            if _drop_nested_key(normalized_payload, dotted_path):
+                excluded_noise_fields.append(dotted_path)
+        return _json_dumps_stable(normalized_payload), list(excluded_noise_fields), list(excluded_noise_fields)
+
+    def _bounded_generation_flags_active(
+        self,
+        *,
+        retry: bool,
+        force_non_empty_patch: bool,
+        force_non_empty_patch_reason: str,
+        same_method_quality: dict[str, Any] | None,
+        lane_override: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        same_method_payload = self._same_method_quality_payload(same_method_quality)
+        lane_override_payload = _normalize_lane_override(lane_override)
+        force_patch = bool(lane_override_payload.get("force_non_empty_patch", force_non_empty_patch))
+        force_reason = _safe_text(lane_override_payload.get("force_non_empty_patch_reason", force_non_empty_patch_reason))
+        chosen_primary_behavior_method = _safe_text(
+            lane_override_payload.get(
+                "chosen_primary_behavior_method",
+                same_method_payload.get("chosen_primary_behavior_method", ""),
+            )
+        )
+        return {
+            "retry": bool(retry),
+            "force_non_empty_patch": force_patch,
+            "force_non_empty_patch_reason": force_reason,
+            "same_method_quality_hardening_activated": bool(
+                same_method_payload.get("same_method_quality_hardening_activated", False)
+            ),
+            "behavior_path_hardening_activated": bool(
+                same_method_payload.get("behavior_path_hardening_activated", False)
+            ),
+            "chosen_primary_behavior_method": chosen_primary_behavior_method,
+            "constructor_only_edit_detected": bool(
+                same_method_payload.get("constructor_only_edit_detected", False)
+            ),
+        }
+
+    def _apply_lane_override_to_same_method_quality(
+        self,
+        *,
+        same_method_quality: dict[str, Any] | None,
+        lane_override: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        payload = self._same_method_quality_payload(same_method_quality)
+        override = _normalize_lane_override(lane_override)
+        if not override:
+            return payload
+        chosen_primary_behavior_method = _safe_text(override.get("chosen_primary_behavior_method", ""))
+        if chosen_primary_behavior_method:
+            payload["chosen_primary_behavior_method"] = chosen_primary_behavior_method
+        if "same_method_quality_hardening_activated" in override:
+            payload["same_method_quality_hardening_activated"] = bool(
+                override.get("same_method_quality_hardening_activated", False)
+            )
+        return self._same_method_quality_payload(payload)
+
+    def _effective_lane_retry_reason(
+        self,
+        *,
+        reason: str,
+        lane_override: dict[str, Any] | None,
+    ) -> str:
+        override = _normalize_lane_override(lane_override)
+        if bool(override.get("lane_frozen_for_comparison", False)):
+            frozen_reason = _safe_text(override.get("force_non_empty_patch_reason", ""))
+            if frozen_reason:
+                return frozen_reason
+        return _safe_text(reason)
+
+    def _effective_force_non_empty_patch_state(
+        self,
+        *,
+        force_non_empty_patch: bool,
+        force_non_empty_patch_reason: str,
+        lane_override: dict[str, Any] | None,
+    ) -> tuple[bool, str]:
+        override = _normalize_lane_override(lane_override)
+        if bool(override.get("lane_frozen_for_comparison", False)):
+            frozen_reason = _safe_text(override.get("force_non_empty_patch_reason", ""))
+            frozen_force = _bool_or_default(override.get("force_non_empty_patch"), force_non_empty_patch)
+            return bool(frozen_force), frozen_reason
+        return bool(force_non_empty_patch), _safe_text(force_non_empty_patch_reason)
 
     def _materialize_generated_files(
         self,
@@ -5227,13 +6346,57 @@ class BoundedRealCodegenService:
                 chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
                 computed_validation_property_name = _safe_text(same_method_payload.get("computed_validation_property_name", ""))
                 writable_validation_source_name = _safe_text(same_method_payload.get("writable_validation_source_name", ""))
+                computed_validation_helper_names = [
+                    _safe_text(item)
+                    for item in list(same_method_payload.get("computed_validation_helper_names", []) or [])
+                    if _safe_text(item)
+                ]
+                helper_preview = ", ".join(f"`{name}(...)`" for name in computed_validation_helper_names[:3])
+                concrete_symbols_used = bool(
+                    computed_validation_property_name or writable_validation_source_name or computed_validation_helper_names
+                )
+                helper_note = (
+                    f"Preserve and prefer the existing helper-based duplicate handling through {helper_preview}. "
+                    "Do not rewrite the duplicate branch inline if that helper-based durable-state pattern already exists. "
+                    if helper_preview
+                    else ""
+                )
                 activation_note = (
                     "Previous attempt assigned to a computed or read-only validation property inside the chosen same-file behavior method. "
                     f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
                     f"Do not assign to the computed validation property `{computed_validation_property_name or 'unknown'}`. "
-                    f"Use the writable source-of-truth state that actually controls validation, such as `{writable_validation_source_name or 'the writable validation source'}`, while staying in the same method and same file. "
+                    f"Use `{writable_validation_source_name or 'the writable validation source'}` only for user-facing validation feedback inside the same method and same file. "
+                    f"{helper_note}"
                     "Do not widen scope. Do not move the change back to constructor wiring. "
                     "Return at least one concrete changed line inside the chosen behavior method body."
+                )
+                same_method_payload["computed_validation_prompt_symbol_names_resolved"] = concrete_symbols_used
+                same_method_payload["computed_validation_prompt_property_name"] = computed_validation_property_name
+                same_method_payload["computed_validation_prompt_source_name"] = writable_validation_source_name
+                same_method_payload["computed_validation_prompt_helper_names"] = list(computed_validation_helper_names)
+                same_method_payload["computed_validation_prompt_used_concrete_symbols"] = concrete_symbols_used
+            elif _safe_text(force_non_empty_patch_reason) == "same_file_fragmentation_primary_method":
+                chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
+                localized_edit_count = int(same_method_payload.get("localized_edit_count", 0) or 0)
+                touched_regions = ", ".join(
+                    _safe_text(item)
+                    for item in list(same_method_payload.get("touched_same_file_regions", []) or [])[:6]
+                    if _safe_text(item)
+                )
+                edit_summaries = "\n".join(
+                    f"- {_safe_text(item)}"
+                    for item in list(same_method_payload.get("normalized_edit_summaries", []) or [])[:5]
+                    if _safe_text(item)
+                )
+                activation_note = (
+                    "Previous attempt scattered one same-file behavior change across too many localized edit blocks, which caused the bounded safety gate to downgrade the patch to draft-only. "
+                    f"The chosen primary behavior method is: {chosen_primary_behavior_method or 'unknown'}. "
+                    f"The previous attempt produced {localized_edit_count} localized edit blocks. "
+                    f"Touched same-file regions included: {touched_regions or 'unknown'}. "
+                    "This retry must keep the patch concentrated in the chosen primary behavior method body or directly adjacent same-flow lines only. "
+                    "Do not edit unrelated same-file regions like constructor wiring, DeleteCellCommand, CanOk, HandleLoadedAsync, or distant helpers unless you explicitly justify them. "
+                    "Return a concentrated same-file patch with as few localized edit blocks as possible.\n"
+                    f"Previous localized edit summaries:\n{edit_summaries or '- none'}"
                 )
             elif _safe_text(force_non_empty_patch_reason) == "nonexistent_event_args_member_same_method":
                 chosen_primary_behavior_method = _safe_text(same_method_payload.get("chosen_primary_behavior_method", ""))
@@ -5338,7 +6501,13 @@ class BoundedRealCodegenService:
             {"role": "user", "content": _json_safe_string(user_prompt)},
         ]
 
-    def _complete(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
+    def _complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        progress_callback: Any | None = None,
+        attempt_index: int = 0,
+    ) -> tuple[str, dict[str, Any]]:
         if self._completion_callable is not None:
             return _safe_text(self._completion_callable(messages)), self._llm_payload(
                 {
@@ -5369,7 +6538,37 @@ class BoundedRealCodegenService:
         for model_name in candidate_models:
             client, runtime_metadata = build_openai_client_with_runtime(model_name=model_name)
             last_metadata = dict(runtime_metadata or {})
+            request_started_perf = perf_counter()
             try:
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_provider_request_send",
+                            "started",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                            bounded_provider_request_current_step="provider_client_selected",
+                            bounded_provider_request_last_step_reached="provider_client_selected",
+                            bounded_provider_request_elapsed_ms=0,
+                        )
+                    except Exception:
+                        pass
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_provider_first_response_byte",
+                            "started",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                            bounded_provider_request_current_step="http_request_opened",
+                            bounded_provider_request_last_step_reached="http_request_opened",
+                            bounded_provider_request_elapsed_ms=int((perf_counter() - request_started_perf) * 1000),
+                            bounded_provider_first_response_byte_started=True,
+                        )
+                    except Exception:
+                        pass
                 response = client.chat.completions.create(
                     model=model_name,
                     messages=messages,
@@ -5377,6 +6576,47 @@ class BoundedRealCodegenService:
                     max_completion_tokens=max(4000, int(settings.llm.llm_max_completion_tokens or 4000)),
                     temperature=min(0.2, float(settings.llm.llm_temperature or 0.2)),
                 )
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_provider_first_response_byte",
+                            "finished",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                            bounded_provider_request_current_step="first_response_byte_received",
+                            bounded_provider_request_last_step_reached="first_response_byte_received",
+                            bounded_provider_request_elapsed_ms=int((perf_counter() - request_started_perf) * 1000),
+                            bounded_provider_first_response_byte_finished=True,
+                        )
+                    except Exception:
+                        pass
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_provider_response_received",
+                            "finished",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                            bounded_provider_request_current_step="full_response_received",
+                            bounded_provider_request_last_step_reached="full_response_received",
+                            bounded_provider_request_elapsed_ms=int((perf_counter() - request_started_perf) * 1000),
+                            bounded_provider_response_received=True,
+                        )
+                    except Exception:
+                        pass
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_full_model_response_received",
+                            "finished",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                        )
+                    except Exception:
+                        pass
                 content = ""
                 for choice in list(getattr(response, "choices", []) or []):
                     message = getattr(choice, "message", None)
@@ -5385,7 +6625,36 @@ class BoundedRealCodegenService:
                     content = _safe_text(getattr(message, "content", ""))
                     if content:
                         break
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_provider_response_parsed",
+                            "finished",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                            bounded_provider_request_current_step="response_parsed",
+                            bounded_provider_request_last_step_reached="response_parsed",
+                            bounded_provider_request_elapsed_ms=int((perf_counter() - request_started_perf) * 1000),
+                            bounded_provider_response_parsed=True,
+                        )
+                    except Exception:
+                        pass
                 if content:
+                    if callable(progress_callback):
+                        try:
+                            progress_callback(
+                                "bounded_provider_request_send",
+                                "finished",
+                                attempt_index=attempt_index,
+                                model_name=model_name,
+                                provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                                bounded_provider_request_current_step="completed",
+                                bounded_provider_request_last_step_reached="completed",
+                                bounded_provider_request_elapsed_ms=int((perf_counter() - request_started_perf) * 1000),
+                            )
+                        except Exception:
+                            pass
                     return content, self._llm_payload(
                         {
                             **last_metadata,
@@ -5400,6 +6669,22 @@ class BoundedRealCodegenService:
                     provider=str(last_metadata.get("llm_provider", "") or ""),
                     model=model_name,
                 )
+                if callable(progress_callback):
+                    try:
+                        progress_callback(
+                            "bounded_provider_request_send",
+                            "finished",
+                            attempt_index=attempt_index,
+                            model_name=model_name,
+                            provider_name=_safe_text(last_metadata.get("llm_provider", "")),
+                            bounded_generation_timeout_reason=_safe_text(last_error),
+                            bounded_provider_request_current_step="request_failed",
+                            bounded_provider_request_last_step_reached="request_failed",
+                            bounded_provider_request_elapsed_ms=int((perf_counter() - request_started_perf) * 1000),
+                            bounded_provider_timeout_reason=_safe_text(last_error),
+                        )
+                    except Exception:
+                        pass
                 continue
         if last_error is not None:
             raise last_error

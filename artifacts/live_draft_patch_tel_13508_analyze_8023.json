@@ -1,0 +1,3036 @@
+{
+  "workflow": "analyze_task",
+  "run_id": "2bc9aa8163044c179baa3be8508714ed",
+  "result": {
+    "task_quality_summary": "Задачу вже можна передавати в implementation planning.",
+    "quality_score": 40,
+    "confidence_score": 71,
+    "novelty_score": 62,
+    "domain_novelty_score": 90,
+    "repo_novelty_score": 40,
+    "repo_confidence": 75,
+    "file_confidence": 90,
+    "task_confidence": 45,
+    "quality_state": "reasonably_specified",
+    "quality_breakdown": {
+      "jira": 0,
+      "attachments": 10,
+      "repo": 25
+    },
+    "novelty_level": "medium",
+    "analysis_mode": "guided",
+    "advisory_block_title": "Що перевірити перед реалізацією",
+    "missing_details": [
+      "У задачі немає acceptance criteria, тому точний user-visible результат після зміни ще не зафіксований."
+    ],
+    "concrete_questions": [
+      "Чи має фінальний UI/друк збігатися з прикріпленими скріншотами буквально, включно з відступами та переносами рядків?",
+      "Чи повинні .Designer.cs і .resx залишатися синхронними для одного й того самого service-request output?"
+    ],
+    "decision_questions": [
+      "Це зміна існуючого шаблону друку/звіту чи створення нового варіанту для окремого сценарію?",
+      "Починати реалізацію з історично змінених файлів чи спершу ще раз перевірити ownership перед редагуванням?",
+      "Чи змінює задача існуючий шаблон друку/звіту, чи потрібно ввести новий варіант тексту для окремого сценарію?",
+      "Це новий модуль або bounded context, чи розширення наявного шляху реалізації?"
+    ],
+    "risks": [],
+    "suggested_additions": [
+      "Звірте фінальний текст, відступи, переноси та layout зі скріншотами.",
+      "Перевірте синхронність .Designer.cs і .resx для одного й того самого output."
+    ],
+    "repo_match": {
+      "status": "match",
+      "confidence": 0.75,
+      "reason": "Вибраний репозиторій self має історичні сигнали для цієї сім'ї задач."
+    },
+    "selected_repos": [
+      {
+        "repo_id": "self",
+        "score": 0.0,
+        "reasons": [],
+        "historical_match_count": 0,
+        "top_historical_matches": [],
+        "top_historical_changed_files": []
+      }
+    ],
+    "top_historical_matches": [],
+    "top_historical_changed_files": [],
+    "candidate_files_count": 12,
+    "selected_files_count": 5,
+    "top_candidate_files": [
+      {
+        "name": "agents/change_agent.py",
+        "confidence": 1.0,
+        "reason": "lexical_overlap, path_domain, symbol_overlap"
+      },
+      {
+        "name": "services/repo_context_rules.py",
+        "confidence": 1.0,
+        "reason": "lexical_overlap, path_domain, symbol_overlap"
+      },
+      {
+        "name": "agents/root_agent.py",
+        "confidence": 1.0,
+        "reason": "path_domain, symbol_overlap"
+      }
+    ],
+    "implementation_plan_preview": [
+      {
+        "file": "agents/change_agent.py",
+        "action": "modify",
+        "reason": "Поточне file targeting виводить change_agent.py як ймовірну точку змін.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      },
+      {
+        "file": "services/repo_context_rules.py",
+        "action": "modify",
+        "reason": "Поточне file targeting виводить repo_context_rules.py як ймовірну точку змін.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      },
+      {
+        "file": "agents/root_agent.py",
+        "action": "modify",
+        "reason": "Поточне file targeting виводить root_agent.py як ймовірну точку змін.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      }
+    ],
+    "implementation_plan_branches": [
+      {
+        "decision": "Це зміна існуючого шаблону друку/звіту чи створення нового варіанту для окремого сценарію?",
+        "options": [
+          {
+            "option": "A",
+            "plan": [
+              "Почніть з change_agent.py і перевикористайте наявний шлях реалізації, який уже підказує історія.",
+              "Внесіть потрібну зміну тексту або поведінки в change_agent.py без створення паралельного варіанту.",
+              "Перевірте, що суміжні generated/resource-артефакти залишаються синхронними після точкової зміни."
+            ]
+          },
+          {
+            "option": "B",
+            "plan": [
+              "Використайте change_agent.py як стартову точку, але ізолюйте новий варіант або сценарій окремим шляхом.",
+              "Додайте нову гілку з явними межами, щоб поточний сценарій не змінився побічно.",
+              "Перевірте, які допоміжні файли/ресурси потребують окремого оновлення для нової гілки."
+            ]
+          }
+        ]
+      },
+      {
+        "decision": "Починати реалізацію з історично змінених файлів чи спершу ще раз перевірити ownership перед редагуванням?",
+        "options": [
+          {
+            "option": "A",
+            "plan": [
+              "Почніть з repo_context_rules.py і перевикористайте наявний шлях реалізації, який уже підказує історія.",
+              "Внесіть потрібну зміну тексту або поведінки в repo_context_rules.py без створення паралельного варіанту.",
+              "Перевірте, що суміжні generated/resource-артефакти залишаються синхронними після точкової зміни."
+            ]
+          },
+          {
+            "option": "B",
+            "plan": [
+              "Використайте repo_context_rules.py як стартову точку, але ізолюйте новий варіант або сценарій окремим шляхом.",
+              "Додайте нову гілку з явними межами, щоб поточний сценарій не змінився побічно.",
+              "Перевірте, які допоміжні файли/ресурси потребують окремого оновлення для нової гілки."
+            ]
+          }
+        ]
+      }
+    ],
+    "patch_generation_ready": false,
+    "patch_generation_blockers": [
+      "novelty too high",
+      "decision questions unresolved"
+    ],
+    "patch_generation_allowed_files": [
+      "agents/change_agent.py",
+      "services/repo_context_rules.py",
+      "agents/root_agent.py"
+    ],
+    "recommendation": "Review the proposed files, risks, and acceptance criteria.",
+    "technical_details": {
+      "workflow_name": "analyze_task",
+      "workflow_type": "analyze_task",
+      "request_input_text": "TEL-13508",
+      "request_input_length": 9,
+      "jira_fetch_attempted": true,
+      "jira_fetch_succeeded": true,
+      "jira_auth_present": true,
+      "resolved_jira_title": "Service request: change of text and printed form “Receipt” p.2",
+      "resolved_jira_text_length": 671,
+      "final_workflow_input": "Title: Service request: change of text and printed form “Receipt” p.2\nDescription:\nПотреба:\nВ друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст\n“Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\"\n\nhttps://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715",
+      "final_workflow_input_hash": "ff4c681eff39193ed92555d4b53dfcc4f205098d30df99a1e73fc0a022b4d730",
+      "prompt_task_text_length": 671,
+      "acceptance_criteria_count": 0,
+      "acceptance_criteria_source": "customfield_11145",
+      "acceptance_criteria_included_in_workflow_input": false,
+      "raw_jira_fields": {
+        "acceptance_criteria_field_id": "customfield_11145",
+        "acceptance_criteria_field_present": true,
+        "available_field_names": {}
+      },
+      "supplemental_jira_evidence_text": "",
+      "supplemental_jira_evidence_text_length": 0,
+      "jira_title_present": true,
+      "jira_description_present": true,
+      "acceptance_criteria_present": true,
+      "comments_count": 2,
+      "comments_used_in_context": false,
+      "attachments_count": 1,
+      "attachment_types": [],
+      "attachments_used_count": 0,
+      "attachment_text_chars": 0,
+      "attachment_image_summaries_count": 0,
+      "attachment_signal_used_in_planning": false,
+      "attachment_signal_used_in_codegen": false,
+      "attachment_signal_used_in_routing": false,
+      "attachment_signal_used_in_targeting": false,
+      "image_attachment_runtime_available": false,
+      "raw_jira_text_length": 671,
+      "parsed_jira_sections": {
+        "line_count": 6,
+        "bullet_count": 0,
+        "question_count": 1,
+        "jira_keys": [],
+        "first_line": "Title: Service request: change of text and printed form “Receipt” p.2",
+        "acceptance_criteria_count": 0,
+        "has_acceptance_criteria_section": false
+      },
+      "normalized_task_text": "Title: Service request: change of text and printed form “Receipt” p.2 Description: Потреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715",
+      "baseline_summary": "Базове розуміння задачі: Title: Service request: change of text and printed form “Receipt” p.2 Description: Потреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715.",
+      "retrieval_query_text": "Title: Service request: change of text and printed form “Receipt” p.2 Description: Потреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715",
+      "configured_provider": "gitnexus_http",
+      "repo_metadata_provider": "native",
+      "provider_used": "native",
+      "provider_fallback": false,
+      "provider_reason": "Workflow 'analyze_task' stayed on the native provider because this repo is not in the GitNexus allowlist.",
+      "mcp_initialize_attempted": false,
+      "mcp_initialize_succeeded": false,
+      "mcp_session_reused": false,
+      "mcp_retry_after_initialize": false,
+      "mcp_failure_stage": "",
+      "mcp_session_id_present": false,
+      "mcp_notifications_initialized_accepted": false,
+      "mcp_session_id_present_before_notification": false,
+      "mcp_session_id_present_after_notification": false,
+      "mcp_initialize_http_status": 0,
+      "mcp_notifications_initialized_status": 0,
+      "mcp_tools_list_status": 0,
+      "mcp_tools_call_status": 0,
+      "mcp_session_reset_count": 0,
+      "gitnexus_tool_name": "",
+      "gitnexus_query_payload": "",
+      "gitnexus_tool_arguments_sent": {},
+      "gitnexus_raw_result_excerpt": "",
+      "gitnexus_unwrapped_result_excerpt": "",
+      "gitnexus_raw_hit_count": 0,
+      "gitnexus_raw_hit_kinds": [],
+      "gitnexus_unwrapped_hit_count": 0,
+      "gitnexus_unwrapped_hit_kinds": [],
+      "normalization_source_shape": "",
+      "normalization_drop_reasons": [],
+      "raw_hit_count": 0,
+      "normalized_file_count": 0,
+      "normalized_symbol_count": 0,
+      "normalized_module_count": 0,
+      "dropped_hit_count": 0,
+      "evidence_mapping_reason": "",
+      "resolved_process_count": 0,
+      "resolved_symbol_count": 0,
+      "resolved_definition_count": 0,
+      "resolved_file_count": 0,
+      "evidence_resolution_reason": "",
+      "backend_repo_visible_after_analyze": false,
+      "backend_visible_repo_count": 0,
+      "backend_visible_repo_ids_or_paths": [],
+      "gitnexus_home_used_for_analyze": "",
+      "gitnexus_home_used_for_backend": "",
+      "raw_list_repos_result_excerpt": "",
+      "visibility_match_reason": "",
+      "normalized_repo_visibility_targets": [],
+      "candidate_repos_count": 1,
+      "candidate_repos": [
+        {
+          "repo_id": "self",
+          "score": 0.0,
+          "reasons": [],
+          "historical_match_count": 0,
+          "top_historical_matches": [],
+          "top_historical_changed_files": []
+        }
+      ],
+      "selected_repos": [
+        {
+          "repo_id": "self",
+          "score": 0.0,
+          "reasons": [],
+          "historical_match_count": 0,
+          "top_historical_matches": [],
+          "top_historical_changed_files": []
+        }
+      ],
+      "repo_routing_reason": "Selected self from the highest available weak repo signal.",
+      "historical_match_count": 0,
+      "top_historical_matches": [],
+      "top_historical_changed_files": [],
+      "candidate_files_count": 12,
+      "selected_files_count": 5,
+      "total_candidate_file_count": 12,
+      "total_selected_file_count": 5,
+      "top_candidate_files": [
+        {
+          "name": "agents/change_agent.py",
+          "confidence": 1.0,
+          "reason": "lexical_overlap, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.16,
+          "lexical_overlap_score": 0.16,
+          "path_domain_score": 2.59,
+          "symbol_overlap_score": 3.24,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 8.61,
+          "raw_score_after_penalties": 8.61,
+          "raw_score_before_normalization": 8.61,
+          "final_score": 8.61,
+          "ranking_position": 1,
+          "triggered_penalties": [],
+          "source_signals": [
+            "lexical_overlap",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "services/repo_context_rules.py",
+          "confidence": 1.0,
+          "reason": "lexical_overlap, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.16,
+          "lexical_overlap_score": 0.16,
+          "path_domain_score": 1.78,
+          "symbol_overlap_score": 3.24,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 7.8,
+          "raw_score_after_penalties": 7.8,
+          "raw_score_before_normalization": 7.8,
+          "final_score": 7.8,
+          "ranking_position": 2,
+          "triggered_penalties": [],
+          "source_signals": [
+            "lexical_overlap",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "agents/root_agent.py",
+          "confidence": 1.0,
+          "reason": "path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.0,
+          "lexical_overlap_score": 0.0,
+          "path_domain_score": 0.04,
+          "symbol_overlap_score": 4.2,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 6.44,
+          "raw_score_after_penalties": 6.44,
+          "raw_score_before_normalization": 6.44,
+          "final_score": 6.44,
+          "ranking_position": 3,
+          "triggered_penalties": [],
+          "source_signals": [
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "web_app.py",
+          "confidence": 1.0,
+          "reason": "symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.0,
+          "lexical_overlap_score": 0.0,
+          "path_domain_score": 0.0,
+          "symbol_overlap_score": 4.32,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 6.067,
+          "raw_score_after_penalties": 6.067,
+          "raw_score_before_normalization": 6.067,
+          "final_score": 6.067,
+          "ranking_position": 4,
+          "triggered_penalties": [],
+          "source_signals": [
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "agents/draft_agent.py",
+          "confidence": 1.0,
+          "reason": "path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.0,
+          "lexical_overlap_score": 0.0,
+          "path_domain_score": 0.04,
+          "symbol_overlap_score": 3.48,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 5.72,
+          "raw_score_after_penalties": 5.72,
+          "raw_score_before_normalization": 5.72,
+          "final_score": 5.72,
+          "ranking_position": 5,
+          "triggered_penalties": [],
+          "source_signals": [
+            "path_domain",
+            "symbol_overlap"
+          ]
+        }
+      ],
+      "top_candidate_symbols": [
+        {
+          "name": "__init__",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        },
+        {
+          "name": "_extract_command_handlers",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        },
+        {
+          "name": "fake_spec_agent",
+          "confidence": 0.96,
+          "reason": "module evidence"
+        },
+        {
+          "name": "setUp",
+          "confidence": 0.88,
+          "reason": "module evidence"
+        },
+        {
+          "name": "tearDown",
+          "confidence": 0.88,
+          "reason": "module evidence"
+        }
+      ],
+      "top_closest_areas": [],
+      "candidate_files_by_repo": {
+        "self": [
+          {
+            "file": "agents/change_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 8.8,
+            "glossary_recall_score": 1.64,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 2.59,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 8.61,
+            "raw_score_after_penalties": 8.61,
+            "raw_score_before_normalization": 8.61,
+            "final_score": 8.61,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "change_agent.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "change"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/change_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py",
+              "agents/change_agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "services/repo_context_rules.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 16.48,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 1.78,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 7.8,
+            "raw_score_after_penalties": 7.8,
+            "raw_score_before_normalization": 7.8,
+            "final_score": 7.8,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "text"
+            ],
+            "matched_path_segments": [
+              "repo_context_rules.py"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "text"
+            ],
+            "matched_repo_knowledge_entities": [
+              "repo",
+              "context",
+              "text"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.1,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [
+              "generic_service_mismatch"
+            ],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "agents/root_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.56,
+            "glossary_recall_score": 3.28,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.44,
+            "raw_score_after_penalties": 6.44,
+            "raw_score_before_normalization": 6.44,
+            "final_score": 6.44,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "root"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          },
+          {
+            "file": "web_app.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.24,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.32,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 1.747,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.0,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.067,
+            "raw_score_after_penalties": 6.067,
+            "raw_score_before_normalization": 6.067,
+            "final_score": 6.067,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 4
+          },
+          {
+            "file": "agents/draft_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 5.67,
+            "glossary_recall_score": 2.46,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.48,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 5.72,
+            "raw_score_after_penalties": 5.72,
+            "raw_score_before_normalization": 5.72,
+            "final_score": 5.72,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/draft_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 5
+          },
+          {
+            "file": "contracts/repo_context_contract.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 1.6,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.48,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.511,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 3.09,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 4.661,
+            "raw_score_after_penalties": 4.661,
+            "raw_score_before_normalization": 4.661,
+            "final_score": 4.661,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "text"
+            ],
+            "matched_path_segments": [
+              "repo_context_contract.py"
+            ],
+            "matched_understanding_entities": [
+              "text"
+            ],
+            "matched_repo_knowledge_entities": [
+              "repo",
+              "context",
+              "text"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "contracts"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 6
+          },
+          {
+            "file": "contracts/proposed_file_change.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 0.48,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.402,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 3.13,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 4.232,
+            "raw_score_after_penalties": 4.232,
+            "raw_score_before_normalization": 4.232,
+            "final_score": 4.232,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "proposed_file_change.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "file",
+              "change"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "contracts"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "contracts/proposed_file_change.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 7
+          },
+          {
+            "file": "contracts/change_set.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 0.16,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.313,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 3.13,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 4.143,
+            "raw_score_after_penalties": 4.143,
+            "raw_score_before_normalization": 4.143,
+            "final_score": 4.143,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "change_set.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "change",
+              "set"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "contracts"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "contracts/change_set.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 8
+          },
+          {
+            "file": "contracts/file_change_plan.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 0.16,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.313,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 3.13,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 4.143,
+            "raw_score_after_penalties": 4.143,
+            "raw_score_before_normalization": 4.143,
+            "final_score": 4.143,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "file_change_plan.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "file",
+              "change"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "contracts"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "contracts/file_change_plan.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 9
+          },
+          {
+            "file": "formatters/commands.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 1.09,
+            "symbol_recall_score": 0.96,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.855,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 2.41,
+            "role_path_score": 0.45,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 3.925,
+            "raw_score_after_penalties": 3.925,
+            "raw_score_before_normalization": 3.925,
+            "final_score": 3.925,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "form"
+            ],
+            "matched_path_segments": [
+              "formatters"
+            ],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "and",
+              "command"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "formatters"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 10
+          },
+          {
+            "file": "contracts/pull_request_contract.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 0.32,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.153,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 3.05,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 3.903,
+            "raw_score_after_penalties": 3.903,
+            "raw_score_before_normalization": 3.903,
+            "final_score": 3.903,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "request"
+            ],
+            "matched_path_segments": [
+              "pull_request_contract.py"
+            ],
+            "matched_understanding_entities": [
+              "request"
+            ],
+            "matched_repo_knowledge_entities": [
+              "request"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "contracts"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 11
+          },
+          {
+            "file": "formatters/common.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 1.28,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.36,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.626,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 1.96,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 3.366,
+            "raw_score_after_penalties": 3.366,
+            "raw_score_before_normalization": 3.366,
+            "final_score": 3.366,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "form"
+            ],
+            "matched_path_segments": [
+              "formatters"
+            ],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "formatters"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 12
+          }
+        ]
+      },
+      "candidate_diagnostics_by_repo": {
+        "self": {
+          "candidate_count_before_dedupe": 1087,
+          "candidate_count_after_dedupe": 107,
+          "recall_source_summary": {
+            "filename_recall": {
+              "raw_hits": 68,
+              "unique_candidates": 68
+            },
+            "glossary_recall": {
+              "raw_hits": 40,
+              "unique_candidates": 26
+            },
+            "symbol_recall": {
+              "raw_hits": 979,
+              "unique_candidates": 96
+            }
+          },
+          "candidates_dropped_by_admission_gate": 0,
+          "dropped_generic_candidates_count": 0,
+          "dropped_by_channel": {},
+          "kept_by_channel": {
+            "filename_recall": 68,
+            "glossary_recall": 26,
+            "symbol_recall": 96
+          },
+          "final_pool_size_per_repo": 12,
+          "targeting_experimental_enabled": false,
+          "adjacent_false_positive_suppressor_enabled": false,
+          "candidate_pool_size_limit": 12,
+          "selected_file_limit": 5,
+          "structural_expansion_limit": 0,
+          "structural_expansion_added_count": 0,
+          "structural_expansion_added_files": [],
+          "adjacent_false_positive_suppressor_family": "",
+          "adjacent_false_positive_suppression_count": 0,
+          "adjacent_false_positive_suppressions": [],
+          "diagnostic_frontier_depth": 0,
+          "diagnostic_ranked_frontier_count": 0,
+          "diagnostic_ranked_frontier_files": [],
+          "recall_diversification_enabled": false,
+          "support_family_recall_enabled": false,
+          "blended_top_candidates_before_diversification": [],
+          "lexical_lane_candidates": [],
+          "final_candidate_pool_after_diversification": [],
+          "pool_construction_summary": {},
+          "blended_top_candidates_before_support_lane": [],
+          "support_family_lane_candidates": [],
+          "final_candidate_pool_after_support_lane": [],
+          "support_pool_construction_summary": {},
+          "dropped_candidates": {},
+          "repo_knowledge_used": true,
+          "repo_knowledge_used_for_enrichment": true,
+          "enriched_entities_added": [
+            "request",
+            "change",
+            "text"
+          ],
+          "enriched_path_hints_added": [
+            "Reports",
+            "Print",
+            "Documents",
+            "Commands",
+            "static/admin",
+            "artifacts/test-temp",
+            "__init__.py",
+            "actor_contract.py"
+          ],
+          "enrichment_overlap_source": [
+            "entity_vocabulary_overlap",
+            "task_family_overlap"
+          ],
+          "failure_mining_used_for_enrichment": false,
+          "failure_mined_entities_added": [],
+          "failure_mined_path_hints_added": [],
+          "failure_mined_overlap_source": [],
+          "expected_files_recalled_due_to_enrichment_count": 0
+        }
+      },
+      "selected_files_by_repo": {
+        "self": [
+          {
+            "file": "agents/change_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 8.8,
+            "glossary_recall_score": 1.64,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 2.59,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 8.61,
+            "raw_score_after_penalties": 8.61,
+            "raw_score_before_normalization": 8.61,
+            "final_score": 8.61,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "change_agent.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "change"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/change_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py",
+              "agents/change_agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "services/repo_context_rules.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 16.48,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 1.78,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 7.8,
+            "raw_score_after_penalties": 7.8,
+            "raw_score_before_normalization": 7.8,
+            "final_score": 7.8,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "text"
+            ],
+            "matched_path_segments": [
+              "repo_context_rules.py"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "text"
+            ],
+            "matched_repo_knowledge_entities": [
+              "repo",
+              "context",
+              "text"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.1,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [
+              "generic_service_mismatch"
+            ],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "agents/root_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.56,
+            "glossary_recall_score": 3.28,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.44,
+            "raw_score_after_penalties": 6.44,
+            "raw_score_before_normalization": 6.44,
+            "final_score": 6.44,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "root"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          },
+          {
+            "file": "web_app.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.24,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.32,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 1.747,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.0,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.067,
+            "raw_score_after_penalties": 6.067,
+            "raw_score_before_normalization": 6.067,
+            "final_score": 6.067,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 4
+          },
+          {
+            "file": "agents/draft_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 5.67,
+            "glossary_recall_score": 2.46,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.48,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 5.72,
+            "raw_score_after_penalties": 5.72,
+            "raw_score_before_normalization": 5.72,
+            "final_score": 5.72,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/draft_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 5
+          }
+        ]
+      },
+      "top_candidate_files_by_repo": {
+        "self": [
+          {
+            "file": "agents/change_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 8.8,
+            "glossary_recall_score": 1.64,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 2.59,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 8.61,
+            "raw_score_after_penalties": 8.61,
+            "raw_score_before_normalization": 8.61,
+            "final_score": 8.61,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "change_agent.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "change"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/change_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py",
+              "agents/change_agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "services/repo_context_rules.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 16.48,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 1.78,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 7.8,
+            "raw_score_after_penalties": 7.8,
+            "raw_score_before_normalization": 7.8,
+            "final_score": 7.8,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "text"
+            ],
+            "matched_path_segments": [
+              "repo_context_rules.py"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "text"
+            ],
+            "matched_repo_knowledge_entities": [
+              "repo",
+              "context",
+              "text"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.1,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [
+              "generic_service_mismatch"
+            ],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "agents/root_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.56,
+            "glossary_recall_score": 3.28,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.44,
+            "raw_score_after_penalties": 6.44,
+            "raw_score_before_normalization": 6.44,
+            "final_score": 6.44,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "root"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          }
+        ]
+      },
+      "top_candidate_symbols_by_repo": {
+        "self": [
+          {
+            "name": "__init__",
+            "confidence": 1.0,
+            "final_score": 3.04,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "services/apply_adapter.py",
+              "services/apply_service.py",
+              "services/auth_service.py",
+              "services/crucible_service.py",
+              "services/db_service.py",
+              "services/diff_service.py",
+              "services/i18n_service.py",
+              "services/permission_service.py",
+              "services/publication_service.py",
+              "services/repo_index_service.py",
+              "services/repo_onboarding_service.py",
+              "services/repo_registry.py",
+              "services/run_service.py",
+              "services/scm_service.py",
+              "services/temp_workspace_service.py",
+              "services/validation_service.py",
+              "tests/test_publication_service.py",
+              "tests/test_repo_onboarding_service.py"
+            ],
+            "ranking_position": 1
+          },
+          {
+            "name": "_extract_command_handlers",
+            "confidence": 1.0,
+            "final_score": 2.7,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "agents/deterministic_repair.py",
+              "agents/draft_agent.py",
+              "agents/review_agent.py"
+            ],
+            "ranking_position": 2
+          },
+          {
+            "name": "fake_spec_agent",
+            "confidence": 0.96,
+            "final_score": 1.92,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "tests/test_repo_commands.py"
+            ],
+            "ranking_position": 3
+          },
+          {
+            "name": "setUp",
+            "confidence": 0.88,
+            "final_score": 1.76,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "tests/test_apply_service.py",
+              "tests/test_crucible_service.py",
+              "tests/test_db_service.py",
+              "tests/test_diff_service.py",
+              "tests/test_publication_service.py",
+              "tests/test_repo_index_service.py",
+              "tests/test_repo_onboarding_service.py",
+              "tests/test_run_service.py",
+              "tests/test_scm_service.py",
+              "tests/test_temp_workspace_service.py",
+              "tests/test_validation_service.py"
+            ],
+            "ranking_position": 4
+          },
+          {
+            "name": "tearDown",
+            "confidence": 0.88,
+            "final_score": 1.76,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "tests/test_apply_service.py",
+              "tests/test_crucible_service.py",
+              "tests/test_db_service.py",
+              "tests/test_diff_service.py",
+              "tests/test_publication_service.py",
+              "tests/test_repo_index_service.py",
+              "tests/test_repo_onboarding_service.py",
+              "tests/test_run_service.py",
+              "tests/test_scm_service.py",
+              "tests/test_temp_workspace_service.py",
+              "tests/test_validation_service.py"
+            ],
+            "ranking_position": 5
+          }
+        ]
+      },
+      "repo_file_match_reason_by_repo": {
+        "self": "analyze_task: top file agents/change_agent.py from lexical_overlap, path_domain, symbol_overlap"
+      },
+      "repo_file_match_quality_by_repo": {
+        "self": "exact"
+      },
+      "multi_repo_file_targeting_summary": "Top file targets by repo: self -> agents/change_agent.py, services/repo_context_rules.py, agents/root_agent.py.",
+      "execution_mode": "plan_only",
+      "writable_repo_id": "",
+      "writable_files": [],
+      "readonly_repo_ids": [
+        "self"
+      ],
+      "readonly_files_by_repo": {
+        "self": [
+          {
+            "file": "agents/change_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.18,
+            "symbol_recall_score": 8.8,
+            "glossary_recall_score": 1.64,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 2.59,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 8.61,
+            "raw_score_after_penalties": 8.61,
+            "raw_score_before_normalization": 8.61,
+            "final_score": 8.61,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change"
+            ],
+            "matched_path_segments": [
+              "change_agent.py"
+            ],
+            "matched_understanding_entities": [
+              "change"
+            ],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "change"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/change_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py",
+              "agents/change_agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.55,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "services/repo_context_rules.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 16.48,
+            "glossary_recall_score": 0.82,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 1.78,
+            "role_path_score": 0.42,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 7.8,
+            "raw_score_after_penalties": 7.8,
+            "raw_score_before_normalization": 7.8,
+            "final_score": 7.8,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "text"
+            ],
+            "matched_path_segments": [
+              "repo_context_rules.py"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "text"
+            ],
+            "matched_repo_knowledge_entities": [
+              "repo",
+              "context",
+              "text"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.1,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [
+              "generic_service_mismatch"
+            ],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "agents/root_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.56,
+            "glossary_recall_score": 3.28,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.44,
+            "raw_score_after_penalties": 6.44,
+            "raw_score_before_normalization": 6.44,
+            "final_score": 6.44,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent",
+              "root"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          },
+          {
+            "file": "web_app.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 6.24,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 4.32,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 1.747,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.0,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 6.067,
+            "raw_score_after_penalties": 6.067,
+            "raw_score_before_normalization": 6.067,
+            "final_score": 6.067,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 4
+          },
+          {
+            "file": "agents/draft_agent.py",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 5.67,
+            "glossary_recall_score": 2.46,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.48,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "glossary_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 0.04,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 5.72,
+            "raw_score_after_penalties": 5.72,
+            "raw_score_before_normalization": 5.72,
+            "final_score": 5.72,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [],
+            "matched_repo_knowledge_entities": [
+              "agent"
+            ],
+            "matched_repo_knowledge_feature_areas": [
+              "agents/draft_agent.py"
+            ],
+            "matched_repo_knowledge_path_hints": [
+              "agents"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "agent.py"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 0.0,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 5
+          }
+        ]
+      },
+      "implementation_scope_summary": "Plan-only scope across 1 selected repos with no writable files.",
+      "scope_enforcement_reason": "Plan-only mode produces structured file-by-file intent without applying code changes.",
+      "scope_blocked": false,
+      "scope_execution_ready": false,
+      "writable_file_count": 0,
+      "readonly_repo_count": 1,
+      "readonly_file_count": 5,
+      "attempted_out_of_scope_files": [],
+      "blocked_out_of_scope_files": [],
+      "writable_file_plan": [
+        {
+          "file": "agents/change_agent.py",
+          "intended_action": "modify",
+          "why_this_file": "lexical_overlap, path_domain, symbol_overlap Symbol references: change_agent.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "change_agent"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 2,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "agents"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "agents"
+          ],
+          "symbol_anchors": [
+            "change_agent"
+          ],
+          "likely_symbols": [
+            "change_agent"
+          ],
+          "why_this_file_symbol_references": [
+            "change_agent"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "import",
+            "_repo_context_root_path",
+            "isinstance",
+            "str",
+            "get",
+            "strip",
+            "_repo_context_repo_id",
+            "_get_real_repo_context_paths",
+            "lower",
+            "append",
+            "list",
+            "fromkeys",
+            "_get_locked_repo_target_paths",
+            "values",
+            "_get_locked_symbol_names",
+            "_build_empty_change_set",
+            "ChangeSet",
+            "_has_context_for_locked_paths",
+            "any",
+            "_get_relevant_chunks_for_paths",
+            "set",
+            "_has_relevant_symbol_context",
+            "join",
+            "_symbol_present_in_chunks",
+            "_has_unique_symbol_locked_target",
+            "len",
+            "bool",
+            "validate_manifest_file_path",
+            "_get_candidate_repo_context_paths",
+            "_has_relevant_task_context",
+            "_log_insufficient_context",
+            "log_line",
+            "_categorize_insufficient_context",
+            "and",
+            "_is_path_hint_match",
+            "replace",
+            "endswith",
+            "rsplit",
+            "_choose_obvious_target_paths",
+            "_infer_requested_symbols"
+          ],
+          "candidate_local_members": [],
+          "candidate_local_namespace_tokens": [
+            "agents",
+            "change_agent"
+          ],
+          "candidate_local_anchor_summary": [
+            "agents",
+            "change_agent"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [],
+          "why_this_file_grounded_namespace_refs": [
+            "agents",
+            "change_agent"
+          ],
+          "grounded_anchor_count_per_file": 2,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "services/repo_context_rules.py",
+          "intended_action": "modify",
+          "why_this_file": "lexical_overlap, path_domain, symbol_overlap Symbol references: repo_context_rules.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "repo_context_rules"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 2,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "services"
+          ],
+          "dropped_neighbor_overlap_tokens": [],
+          "symbol_anchors": [
+            "repo_context_rules"
+          ],
+          "likely_symbols": [
+            "repo_context_rules"
+          ],
+          "why_this_file_symbol_references": [
+            "repo_context_rules"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "RepoContextPriorityTier"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "RepoContextPriorityTier",
+            "normalize_repo_context_path",
+            "str",
+            "strip",
+            "replace",
+            "cleanup_repo_context_chunks",
+            "isinstance",
+            "make_trace_entry",
+            "items",
+            "append_pipeline_trace",
+            "get",
+            "dict",
+            "_trace_contains_entry",
+            "_collect_repo_context_surface_paths",
+            "set",
+            "update",
+            "keys",
+            "_collect_repo_context_paths",
+            "_filter_repo_context_paths",
+            "normalize_repo_context",
+            "should_remove",
+            "list",
+            "fromkeys",
+            "finalize_repo_context_consistency",
+            "add",
+            "append",
+            "len",
+            "_record_repo_context_debug",
+            "_append_debug_values",
+            "finalize_repo_context_debug",
+            "sorted",
+            "validate_final_repo_context",
+            "parse_repo_query",
+            "with_command_mode",
+            "is_implementation_focused_request",
+            "not",
+            "_is_repo_internal_noise_path",
+            "_is_excluded_final_spec_stage_path",
+            "get_repo_context_priority_tier",
+            "lower"
+          ],
+          "candidate_local_members": [],
+          "candidate_local_namespace_tokens": [
+            "services",
+            "repo_context_rules"
+          ],
+          "candidate_local_anchor_summary": [
+            "services",
+            "repo_context_rules"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [],
+          "why_this_file_grounded_namespace_refs": [
+            "services",
+            "repo_context_rules"
+          ],
+          "grounded_anchor_count_per_file": 2,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "agents/root_agent.py",
+          "intended_action": "modify",
+          "why_this_file": "path_domain, symbol_overlap Symbol references: root_agent.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "root_agent"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 2,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "agents"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "agents"
+          ],
+          "symbol_anchors": [
+            "root_agent"
+          ],
+          "likely_symbols": [
+            "root_agent"
+          ],
+          "why_this_file_symbol_references": [
+            "root_agent"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "RootAgentAdapter"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "import",
+            "compile",
+            "answer",
+            "run_root_agent",
+            "inspect_query",
+            "route_request",
+            "inspect_research_query",
+            "strip",
+            "detect_language",
+            "str",
+            "_resolve_repo_execution",
+            "resolve_repo",
+            "bound_read_file_range",
+            "read_file_range",
+            "bound_validate_manifest_file_path",
+            "validate_manifest_file_path",
+            "_with_command_mode",
+            "lower",
+            "startswith",
+            "_query_mentions_existing_target",
+            "parse_repo_query",
+            "get",
+            "_build_stage_summary",
+            "isinstance",
+            "list",
+            "len",
+            "bool",
+            "any",
+            "_attach_stage_summary",
+            "dict",
+            "AgentResult",
+            "_route_stage_metadata",
+            "route_model",
+            "to_metadata",
+            "_attach_routing_metadata",
+            "update",
+            "_invoke_agent_with_optional_routing",
+            "agent_callable",
+            "_build_shared_repo_context",
+            "normalize_repo_context"
+          ],
+          "candidate_local_members": [],
+          "candidate_local_namespace_tokens": [
+            "agents",
+            "root_agent"
+          ],
+          "candidate_local_anchor_summary": [
+            "agents",
+            "root_agent"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [],
+          "why_this_file_grounded_namespace_refs": [
+            "agents",
+            "root_agent"
+          ],
+          "grounded_anchor_count_per_file": 2,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "web_app.py",
+          "intended_action": "modify",
+          "why_this_file": "symbol_overlap Symbol references: web_app.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "web_app"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 1,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [],
+          "dropped_neighbor_overlap_tokens": [],
+          "symbol_anchors": [
+            "web_app"
+          ],
+          "likely_symbols": [
+            "web_app"
+          ],
+          "why_this_file_symbol_references": [
+            "web_app"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "RunCreateRequest",
+            "RepoOnboardRequest",
+            "RoutingBenchmarkCaseRequest",
+            "RoutingBenchmarkRequest",
+            "RoutingBenchmarkCaseGenerationRequest",
+            "RepoLearningRecomputeRequest",
+            "RepoCommentHydrationRequest",
+            "RepoCommentLearningRequest",
+            "RunDecisionRequest",
+            "RunRetryRequest",
+            "AnalyzeTaskRequest",
+            "StructureTaskRequest",
+            "ImplementationPlanRequest",
+            "DraftPatchRequest",
+            "PreReviewRequest",
+            "FixAndRetryRequest",
+            "LoginRequest",
+            "ChangePasswordRequest",
+            "AdminUserCreateRequest",
+            "AdminUserUpdateRequest",
+            "AdminPasswordResetRequest",
+            "AdminRoleRequest",
+            "AdminRoleCapabilitiesRequest",
+            "AdminPolicyRequest"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "import",
+            "FastAPI",
+            "getLogger",
+            "RunService",
+            "I18nService",
+            "RepositoryIndexService",
+            "RepoKnowledgePackService",
+            "RepoIntelligenceService",
+            "ScmService",
+            "RepoFleetService",
+            "RoutingBenchmarkService",
+            "BenchmarkFileDiagnosticsService",
+            "BenchmarkCaseGenerationService",
+            "BitbucketCredentialResolver",
+            "JiraEvidenceService",
+            "Path",
+            "resolve",
+            "compile",
+            "middleware",
+            "_ensure_utf8_json_charset",
+            "call_next",
+            "str",
+            "get",
+            "strip",
+            "lower",
+            "startswith",
+            "on_event",
+            "_startup_bootstrap",
+            "_auth_service",
+            "bootstrap_admin_if_needed",
+            "RunCreateRequest",
+            "RepoOnboardRequest",
+            "RoutingBenchmarkCaseRequest",
+            "RoutingBenchmarkRequest",
+            "RoutingBenchmarkCaseGenerationRequest",
+            "RepoLearningRecomputeRequest",
+            "RepoCommentHydrationRequest",
+            "RepoCommentLearningRequest",
+            "RunDecisionRequest",
+            "RunRetryRequest"
+          ],
+          "candidate_local_members": [],
+          "candidate_local_namespace_tokens": [
+            "web_app"
+          ],
+          "candidate_local_anchor_summary": [
+            "web_app"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [],
+          "why_this_file_grounded_namespace_refs": [
+            "web_app"
+          ],
+          "grounded_anchor_count_per_file": 1,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "agents/draft_agent.py",
+          "intended_action": "modify",
+          "why_this_file": "path_domain, symbol_overlap Symbol references: draft_agent.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "draft_agent"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 2,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "agents"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "agents"
+          ],
+          "symbol_anchors": [
+            "draft_agent"
+          ],
+          "likely_symbols": [
+            "draft_agent"
+          ],
+          "why_this_file_symbol_references": [
+            "draft_agent"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "role"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "import",
+            "compile",
+            "_repo_context_root_path",
+            "isinstance",
+            "str",
+            "get",
+            "strip",
+            "_repo_context_repo_id",
+            "_read_repo_file_from_context",
+            "read_repo_file",
+            "_get_real_repo_context_paths",
+            "lower",
+            "append",
+            "list",
+            "fromkeys",
+            "_get_locked_repo_target_paths",
+            "values",
+            "replace",
+            "_get_locked_symbol_names",
+            "_has_unique_symbol_locked_target",
+            "len",
+            "validate_manifest_file_path",
+            "_get_symbol_scope_for_file",
+            "bool",
+            "find_symbol_occurrences",
+            "max",
+            "int",
+            "read_file_range",
+            "startswith",
+            "log_line",
+            "_build_empty_draft_set",
+            "DraftSet",
+            "_has_context_for_locked_paths",
+            "any",
+            "_build_locked_change_set",
+            "symbol",
+            "join",
+            "ChangeSet",
+            "ProposedFileChange",
+            "_validate_draft_set_paths"
+          ],
+          "candidate_local_members": [],
+          "candidate_local_namespace_tokens": [
+            "agents",
+            "draft_agent"
+          ],
+          "candidate_local_anchor_summary": [
+            "agents",
+            "draft_agent"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [],
+          "why_this_file_grounded_namespace_refs": [
+            "agents",
+            "draft_agent"
+          ],
+          "grounded_anchor_count_per_file": 2,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        }
+      ],
+      "readonly_plan_by_repo": {
+        "self": {
+          "supporting_context_files": [
+            "agents/change_agent.py",
+            "services/repo_context_rules.py",
+            "agents/root_agent.py",
+            "web_app.py",
+            "agents/draft_agent.py"
+          ],
+          "why_readonly": "Default bounded implementation mode allows writes only in the top-ranked repository.",
+          "future_cross_repo_follow_up_may_be_needed": true
+        }
+      },
+      "implementation_file_plan": [],
+      "dropped_candidates_reasons": [],
+      "final_merge_strategy": "repo_intelligence_first",
+      "repo_routing_audit": [
+        {
+          "repo_id": "self",
+          "configured_provider": "gitnexus_http",
+          "repo_metadata_provider": "native",
+          "allowlist_match": false,
+          "gitnexus_enabled": true,
+          "gitnexus_index_status": "",
+          "selection_decision": "repo_not_in_gitnexus_allowlist",
+          "accepted": false,
+          "provider_used": "native"
+        }
+      ],
+      "spec_snapshot": {
+        "goal_length": 0,
+        "context_length": 0,
+        "requirements_count": 0,
+        "acceptance_criteria_count": 0,
+        "risks_count": 0
+      },
+      "quality_score": 40,
+      "quality_breakdown": {
+        "jira": 0,
+        "attachments": 10,
+        "repo": 25
+      },
+      "confidence_score": 71,
+      "novelty_score": 62,
+      "domain_novelty_score": 90,
+      "repo_novelty_score": 40,
+      "repo_confidence": 75,
+      "file_confidence": 90,
+      "task_confidence": 45,
+      "novelty_level": "medium",
+      "analysis_mode": "guided",
+      "patch_generation_ready": false,
+      "patch_generation_blockers": [
+        "novelty too high",
+        "decision questions unresolved"
+      ],
+      "patch_generation_allowed_files": [
+        "agents/change_agent.py",
+        "services/repo_context_rules.py",
+        "agents/root_agent.py"
+      ],
+      "advisory_suggestions_debug": [
+        {
+          "text": "Звірте фінальний текст, відступи, переноси та layout зі скріншотами.",
+          "source": "attachment"
+        },
+        {
+          "text": "Перевірте синхронність .Designer.cs і .resx для одного й того самого output.",
+          "source": "repo"
+        }
+      ]
+    },
+    "technical_run": {
+      "run_id": "2bc9aa8163044c179baa3be8508714ed",
+      "status": "success",
+      "run_detail_url": "/ui/run.html?id=2bc9aa8163044c179baa3be8508714ed"
+    }
+  }
+}

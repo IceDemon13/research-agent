@@ -1,0 +1,225 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Store.PackagePropertiesView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              DataContext="{client:Container Type=viewModels:PackagePropertiesViewModel}"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:PackagePropertiesViewModel}}"
+                              d:DesignWidth="360"
+                              d:DesignHeight="275">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl x:Name="LayoutControl"
+                        Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}"
+                        dxe:ValidationService.IsValidationContainer="True">
+        <dxlc:LayoutGroup Orientation="Vertical">
+            <dxlc:LayoutItem Label="Мест">
+                <dxe:SpinEdit EditValue="{Binding Path=PackagePlaces, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              Increment="1"
+                              MinValue="0"
+                              MaxValue="100"
+                              IsFloatValue="False"
+                              ValidateOnTextInput="True"
+                              ValidateOnEnterKeyPressed="True"
+                              InvalidValueBehavior="AllowLeaveEditor"
+                              IsEnabled="{Binding Path=AllowEditPlacesQuantity, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                              EditValueChanged="PlacesSpinEditOnEditValueChanged" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Вес">
+                <dxe:SpinEdit EditValue="{Binding Path=TotalWeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskUseAsDisplayFormat="True"
+                              MaskCulture="en-US"
+                              Mask="F1"
+                              MaskSaveLiteral="False"
+                              IsFloatValue="True"
+                              ValidateOnTextInput="True"
+                              EditValueType="{x:Type system:Decimal}"
+                              ValidateOnEnterKeyPressed="True" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Объемный вес"
+                             Visibility="{Binding VisibleVolumeWeight, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                <dxe:SpinEdit EditValue="{Binding Path=VolumeWeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskUseAsDisplayFormat="True"
+                              MaskCulture="en-US"
+                              Mask="F1"
+                              MaskSaveLiteral="False"
+                              IsFloatValue="True"
+                              ValidateOnTextInput="True"
+                              EditValueType="{x:Type system:Decimal}"
+                              ValidateOnEnterKeyPressed="True" />
+            </dxlc:LayoutItem>
+            <dxg:GridControl x:Name="GridControl"
+                             ItemsSource="{Binding Path=PackagePlaceItems, Mode=OneWay}"
+                             SelectionMode="None"
+                             DesignTimeDataObjectType="{x:Type viewModels:PackagePlaceViewItem}"
+                             DesignTimeDataSourceRowCount="6"
+                             DesignTimeUseDistinctSampleValues="True"
+                             DesignTimeShowSampleData="True"
+                             AllowLiveDataShaping="True">
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn Header="№"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    FieldName="Number"
+                                    FixedWidth="True"
+                                    Width="30">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Страховка"
+                                    HorizontalHeaderContentAlignment="Right"
+                                    AllowEditing="{Binding Path=AllowEditInsurance, Mode=OneWay}"
+                                    FieldName="Insurance">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:SpinEditSettings  MaskUseAsDisplayFormat="True"
+                                                   MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                                   Mask="C2"
+                                                   MaskSaveLiteral="False"
+                                                   IsFloatValue="True"
+                                                   MinValue="0"
+                                                   IsTextEditable="True"
+                                                   Increment="100"
+                                                   ValidateOnTextInput="True"
+                                                   ValidateOnEnterKeyPressed="True"/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Вес"
+                                    HorizontalHeaderContentAlignment="Right"
+                                    FieldName="Weight">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:SpinEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskCulture="en-US"
+                                                  Mask="F1"
+                                                  MaskSaveLiteral="False"
+                                                  IsFloatValue="True"
+                                                  IsTextEditable="False"
+                                                  ValidateOnTextInput="True"
+                                                  ValidateOnEnterKeyPressed="True" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Высота (см)"
+                                    ToolTip="Высота (см)"
+                                    Visible="{Binding Path=DimensionsSupport,Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                    HorizontalHeaderContentAlignment="Right"
+                                    IsEnabled="True"
+                                    FieldName="Height">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:SpinEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskCulture="en-US"
+                                                  MaskSaveLiteral="False"
+                                                  IsFloatValue="False"
+                                                  ValidateOnTextInput="True"
+                                                  IsEnabled="True"
+                                                  AllowSpin="True"
+                                                  IsTextEditable="True"
+                                                  Increment="1"
+                                                  ValidateOnEnterKeyPressed="True" >
+                            </dxe:SpinEditSettings>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Ширина (см)"
+                                    ToolTip="Ширина (см)"
+                                    Visible="{Binding Path=DimensionsSupport,Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                    HorizontalHeaderContentAlignment="Right"
+                                    IsEnabled="True"
+                                    FieldName="Width">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:SpinEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskCulture="en-US"
+                                                  MaskSaveLiteral="False"
+                                                  IsFloatValue="False"
+                                                  ValidateOnTextInput="True"
+                                                  IsEnabled="True"
+                                                  AllowSpin="True"
+                                                  IsTextEditable="True"
+                                                  Increment="1"
+                                                  ValidateOnEnterKeyPressed="True" >
+                            </dxe:SpinEditSettings>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Длина (см)"
+                                    ToolTip="Длина (см)"
+                                    HorizontalHeaderContentAlignment="Right"
+                                    IsEnabled="True"
+                                    Visible="{Binding Path=DimensionsSupport,Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                    FieldName="Length">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:SpinEditSettings MaskUseAsDisplayFormat="True"
+                                                  x:Name="PART_Editor"
+                                                  MaskCulture="en-US"
+                                                  MaskSaveLiteral="False"
+                                                  IsFloatValue="False"
+                                                  ValidateOnTextInput="True"
+                                                  IsEnabled="True"
+                                                  AllowSpin="True"
+                                                  IsTextEditable="True"
+                                                  Increment="1"
+                                                  ValidateOnEnterKeyPressed="True" >
+                            </dxe:SpinEditSettings>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.TotalSummary>
+                    <dxg:GridSummaryItem FieldName="Insurance"
+                                         SummaryType="Sum"
+                                         Alignment="Right"
+                                         DisplayFormat="{}Страховка: {0:F2} грн" />
+                    <dxg:GridSummaryItem FieldName="Weight"
+                                         SummaryType="Sum"
+                                         Alignment="Right"
+                                         DisplayFormat="{} вес: {0:F1} кг" />
+                </dxg:GridControl.TotalSummary>
+                <dxg:GridControl.View>
+                    <dxg:TableView x:Name="TableView"
+                                   ShowFixedTotalSummary="True"
+                                   EditorShowMode="MouseDown"
+                                   EnableImmediatePosting="True"
+                                   AllowLeaveInvalidEditor="True"
+                                   AllowGrouping="False"
+                                   AllowSorting="False"
+                                   AllowEditing="True"
+                                   NavigationStyle="Cell"
+                                   CellValueChanging="TableViewOnCellValueChanging"
+                                   Style="{StaticResource SimpleTableViewStyle}" />
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup HorizontalAlignment="Stretch"
+                          VerticalAlignment="Bottom">
+            <CheckBox Content="Не добавлять в заявку"
+                      IsChecked="{Binding Path=NotAddToNpApplication, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      HorizontalAlignment="Left"/>
+            <Button Content="ОК"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    HorizontalAlignment="Right" />
+            <Button Content="Отмена"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}"
+                    HorizontalAlignment="Right" />
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+
+</controls:TelemartUserControl>

@@ -1,0 +1,47 @@
+{
+  "task": "TEL-13508",
+  "analyze_status": 200,
+  "analyze_auth_mode": "",
+  "provider_used": null,
+  "patch_generation_ready": false,
+  "patch_generation_blockers": [
+    "novelty too high",
+    "decision questions unresolved"
+  ],
+  "allowed_files": [
+    "agents/change_agent.py",
+    "services/repo_context_rules.py",
+    "agents/root_agent.py"
+  ],
+  "selected_files_count": 5,
+  "candidate_files_count": 12,
+  "patch_status": 200,
+  "patch_auth_mode": "",
+  "diff_generated": false,
+  "diff_len": 0,
+  "touched_files": [],
+  "hallucinated_files": [],
+  "bounded": false,
+  "file_rationales": [
+    {
+      "file": "agents/change_agent.py",
+      "why": "Поточне file targeting виводить change_agent.py як ймовірну точку змін.",
+      "expected_effect": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+    },
+    {
+      "file": "services/repo_context_rules.py",
+      "why": "Поточне file targeting виводить repo_context_rules.py як ймовірну точку змін.",
+      "expected_effect": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+    },
+    {
+      "file": "agents/root_agent.py",
+      "why": "Поточне file targeting виводить root_agent.py як ймовірну точку змін.",
+      "expected_effect": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+    }
+  ],
+  "validation_plan": [
+    "Зберіть виявлений репозиторій self після ручного перегляду draft diff."
+  ],
+  "auto_apply": false,
+  "review_required": true
+}

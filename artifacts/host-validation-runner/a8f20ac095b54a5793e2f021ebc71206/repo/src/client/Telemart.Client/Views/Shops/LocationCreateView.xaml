@@ -1,0 +1,111 @@
+<UserControl x:Class="Telemart.Client.Views.Shops.LocationCreateView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Locations"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:LocationCreateViewModel}"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:LocationCreateViewModel}, IsDesignTimeCreatable=True}"
+             Width="400"
+             Height="260">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutItem Label="Название">
+                <dxe:TextEdit EditValue="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Адрес">
+                <dxe:TextEdit EditValue="{Binding Path=Address, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Город">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Cities, Mode=OneWay}"
+                                  EditValue="{Binding Path=CityId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  DisplayMember="DisplayValue"
+                                  ValueMember="Id"
+                                  FilterCondition="StartsWith"
+                                  Style="{StaticResource SearchableComboBoxStyle}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Тип локации">
+                <dxe:ComboBoxEdit EditValue="{Binding LocationTypeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path= LocationTypes, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                  ValueMember="Id"
+                                  DisplayMember="Name"
+                                  IsReadOnly="False"
+                                  Style="{StaticResource SearchableComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Основной график">
+                <dxe:ComboBoxEdit EditValue="{Binding WorkScheduleTypeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path= WorkScheduleTypes, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                  ValueMember="Id"
+                                  DisplayMember="Name"
+                                  IsReadOnly="False"
+                                  AllowNullInput="True"
+                                  NullValue="{x:Null}"
+                                  NullValueButtonPlacement="EditBox"
+                                  Style="{StaticResource SearchableComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="График услуг">
+                <dxe:ComboBoxEdit EditValue="{Binding AdditionalScheduleTypeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path= AdditionalWorkScheduleTypes, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                  ValueMember="Id"
+                                  DisplayMember="Name"
+                                  IsReadOnly="False"
+                                  AllowNullInput="True"
+                                  NullValue="{x:Null}"
+                                  NullValueButtonPlacement="EditBox"
+                                  Style="{StaticResource SearchableComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Кластер">
+                <dxe:ComboBoxEdit EditValue="{Binding ClusterId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path= Clusters, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                  ValueMember="Id"
+                                  DisplayMember="Name"
+                                  Style="{StaticResource SearchableComboBoxStyle}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Создание..."
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter}}"/>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

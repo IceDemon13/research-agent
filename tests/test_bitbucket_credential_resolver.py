@@ -46,6 +46,28 @@ class BitbucketCredentialAliasResolverTests(unittest.TestCase):
         self.assertEqual(credentials.resolved_credential_alias, "CATALOG_TEST")
         self.assertFalse(credentials.used_global_fallback)
 
+    def test_alias_specific_token_can_be_read_from_env_file_values(self) -> None:
+        fake_runtime = SimpleNamespace(
+            bitbucket_repo_token="global-read-token",
+            bitbucket_api_token="",
+            bitbucket_username="",
+            bitbucket_app_password="",
+        )
+        with patch.dict(os.environ, {}, clear=False), patch.object(
+            bitbucket_credentials_module.settings,
+            "runtime",
+            fake_runtime,
+        ), patch.object(
+            bitbucket_credentials_module,
+            "_env_file_values",
+            return_value={"BITBUCKET_REPO_TOKEN__TELEMART_SOFT_TEST": "repo-file-token"},
+        ):
+            credentials = self.resolver.resolve(repo_id="telemart_soft_test")
+
+        self.assertEqual(credentials.secret, "repo-file-token")
+        self.assertEqual(credentials.source, "repo:TELEMART_SOFT_TEST")
+        self.assertFalse(credentials.used_global_fallback)
+
     def test_alias_specific_username_and_password_override_global(self) -> None:
         fake_runtime = SimpleNamespace(
             bitbucket_repo_token="",

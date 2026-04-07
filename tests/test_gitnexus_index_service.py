@@ -5,6 +5,7 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from config import RepoIntelligenceSettings
@@ -30,7 +31,7 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         self.registry_path = self.workspace_root / "artifacts" / "repos" / "registry.json"
         self.registry = RepositoryRegistryService(storage_path=self.registry_path)
-        self.repo_root = self.workspace_root / "catalog_service"
+        self.repo_root = self.workspace_root / "repos" / "catalog_service"
         self.repo_root.mkdir(parents=True, exist_ok=True)
         self.repo = self.registry.register_repo(
             root_path=str(self.repo_root),
@@ -146,13 +147,16 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         with patch(
             "services.gitnexus_index_service.urllib.request.urlopen",
             side_effect=_fake_urlopen,
-        ) as mocked_urlopen:
+        ) as mocked_urlopen, patch(
+            "services.gitnexus_index_service.settings",
+            SimpleNamespace(runtime=SimpleNamespace(repo_clone_root=str(self.workspace_root / "repos"))),
+        ):
             result = self.service.analyze_repo(self.repo, force=True)
 
         request = mocked_urlopen.call_args_list[1].args[0]
         body = json.loads(request.data.decode("utf-8"))
         self.assertEqual(request.full_url, "http://gitnexus:3010/control/analyze")
-        self.assertEqual(body["repoPath"], str(self.repo.local_path))
+        self.assertEqual(body["repoPath"], "/repos/catalog_service")
         self.assertTrue(body["force"])
         self.assertTrue(body["skipEmbeddings"])
         self.assertTrue(body["useSkills"])
@@ -311,6 +315,52 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertTrue(result["backend_repo_visible_after_analyze"])
         self.assertTrue(result["visibility_match_reason"])
+
+    def test_analyze_repo_can_run_for_unlisted_repo_when_explicitly_allowed(self) -> None:
+        other_root = self.workspace_root / "repos" / "telemart_catalog_test"
+        other_root.mkdir(parents=True, exist_ok=True)
+        other_repo = self.registry.register_repo(
+            root_path=str(other_root),
+            repo_id="telemart_catalog_test",
+            display_name="Telemart Catalog Test",
+            default_branch="main",
+            remote_url="https://bitbucket.org/acme/telemart_catalog_test.git",
+        )
+        self.service = GitNexusIndexService(
+            repo_settings=self.settings,
+            registry_service=self.registry,
+            mcp_client=self._build_mcp_client(["/repos/telemart_catalog_test"]),
+        )
+
+        with patch(
+            "services.gitnexus_index_service.urllib.request.urlopen",
+            side_effect=[
+                _http_response(
+                    {
+                        "success": True,
+                        "analyzeRuntime": {"gitnexusHome": "/gitnexus"},
+                        "backendRuntime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+                _http_response(
+                    {
+                        "success": True,
+                        "repoPath": "/repos/telemart_catalog_test",
+                        "command": "gitnexus analyze",
+                        "exitCode": 0,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "message": "GitNexus analyze completed successfully.",
+                        "runtime": {"gitnexusHome": "/gitnexus"},
+                    }
+                ),
+            ],
+        ):
+            result = self.service.analyze_repo(other_repo, force=True, allow_unlisted=True)
+
+        refreshed = self.registry.get_repo("telemart_catalog_test")
+        self.assertTrue(result["success"])
+        self.assertEqual(refreshed.gitnexus_index_status, "ready")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,100 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Directories.ProductsPrices.ViolatorsRrpPriceView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Directories.ProductsPrices"
+             DataContext="{client:Container Type=viewModels:ViolatorsRrpPriceViewModel}"
+             Width="535"
+             Height="300"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:ViolatorsRrpPriceViewModel}, IsDesignTimeCreatable=True}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                    <Style x:Key="BorderedGroupBoxWithNoPaddingStyle"
+                           BasedOn="{StaticResource GroupBoxWithNoPaddingStyle}"
+                           TargetType="dxlc:GroupBox">
+                        <Setter Property="BorderThickness"
+                                Value="1" />
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxg:GridControl ItemsSource="{Binding RrpSuppliers, Mode=OneWay}"
+                                 SelectedItems="{Binding SelectedRrpSuppliers, Mode=OneWay}"
+                                 SelectionMode="Row">
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="РРЦ"
+                                        FieldName="DisplayValue" />
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView Style="{StaticResource ReadOnlyTableViewStyle}"
+                                       NavigationStyle="Row"
+                                       ShowCheckBoxSelectorColumn="True"
+                                       CheckBoxSelectorColumnWidth="24" />
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+                <dxg:GridControl ItemsSource="{Binding Competitiors, Mode=OneWay}"
+                                 SelectedItems="{Binding SelectedCompetitiors, Mode=OneWay}"
+                                 SelectionMode="Row">
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Конкуренты"
+                                        FieldName="DisplayValue" />
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView Style="{StaticResource ReadOnlyTableViewStyle}"
+                                       NavigationStyle="Row"
+                                       ShowCheckBoxSelectorColumn="True"
+                                       CheckBoxSelectorColumnWidth="24"/>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="Сохранить"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

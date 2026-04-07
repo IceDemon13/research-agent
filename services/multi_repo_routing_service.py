@@ -64,6 +64,15 @@ class MultiRepoRoutingService:
         ]
         if not read_only:
             self._historical_memory_service.ensure_history_for_repos(repos)
+        repos_still_missing_history = [
+            repo.repo_id
+            for repo in repos
+            if int(getattr(repo, "historical_change_count", 0) or 0) <= 0
+            and self._historical_memory_service._existing_history_count_for_repo(repo.repo_id) <= 0
+        ]
+        if not read_only and repos_still_missing_history:
+            missing_repos = [repo for repo in repos if normalize_repo_id(repo.repo_id) in {normalize_repo_id(item) for item in repos_still_missing_history}]
+            self._historical_memory_service.schedule_history_bootstrap_for_repos(missing_repos)
         repo_scores: list[dict[str, Any]] = []
         historical_matches = self._historical_memory_service.find_matches(
             task_text=task_text,
@@ -147,6 +156,7 @@ class MultiRepoRoutingService:
             "used_existing_historical_state": True,
             "skipped_recompute_in_read_only_mode": bool(read_only),
             "repos_missing_precomputed_history": repos_missing_precomputed_history,
+            "repos_warming_up": self._historical_memory_service.repos_warming_up(repos_still_missing_history),
         }
 
     @staticmethod

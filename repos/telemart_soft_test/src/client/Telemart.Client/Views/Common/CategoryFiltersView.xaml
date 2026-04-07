@@ -1,0 +1,62 @@
+﻿<UserControl x:Name="CurrentUserControl"
+             x:Class="Telemart.Client.Views.Common.CategoryFiltersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxa="http://schemas.devexpress.com/winfx/2008/xaml/accordion"
+             xmlns:local="clr-namespace:Telemart.Client.Views.Common"
+             xmlns:accordion="clr-namespace:Telemart.Client.Controls.Accordion"
+             mc:Ignorable="d"
+             d:DesignHeight="600"
+             d:DesignWidth="300"
+             d:DataContext="{d:DesignInstance Type=local:CategoryFiltersView, IsDesignTimeCreatable=False}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/AccordionItemTemplates.xaml" />
+                <ResourceDictionary>
+                    <accordion:AccordionItemTemplateSelector x:Key="AccordionItemTemplateSelector"
+                                                             CheckedListTemplate="{StaticResource CheckedListAccordionItemTemplate}"
+                                                             RangeTemplate="{StaticResource RangeAccordionItemTemplate}" />
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid DataContext="{Binding ElementName=CurrentUserControl, Mode=OneWay}">
+        <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=IsSplashScreenShown, Mode=OneWay}">
+            <dxa:AccordionControl ItemsSource="{Binding Path=AccordionItems, Mode=OneWay}">
+                <dxa:AccordionControl.ItemTemplate>
+                    <HierarchicalDataTemplate ItemsSource="{Binding Path=Children, Mode=OneWay}"
+                                              ItemTemplateSelector="{StaticResource AccordionItemTemplateSelector}"
+                                              DataType="accordion:RootAccordionItem">
+                        <HierarchicalDataTemplate.ItemContainerStyle>
+                            <Style TargetType="dxa:AccordionItem">
+                                <Setter Property="Margin"
+                                        Value="-21 0 0 0" />
+                            </Style>
+                        </HierarchicalDataTemplate.ItemContainerStyle>
+                        <TextBlock Text="{Binding Path=Item.Title, Mode=OneWay}" />
+                    </HierarchicalDataTemplate>
+                </dxa:AccordionControl.ItemTemplate>
+                <dxa:AccordionControl.ItemContainerStyle>
+                    <Style TargetType="dxa:AccordionItem">
+                        <Setter Property="IsExpanded"
+                                Value="{Binding Path=Item.IsExpanded, Mode=OneWay}" />
+                        <Setter Property="HighlightOnHover"
+                                Value="False" />
+                        <Setter Property="HighlightOnPress"
+                                Value="False" />
+                        <Setter Property="HorizontalContentAlignment"
+                                Value="Left" />
+                    </Style>
+                </dxa:AccordionControl.ItemContainerStyle>
+            </dxa:AccordionControl>
+        </dx:LoadingDecorator>
+    </Grid>
+
+</UserControl>

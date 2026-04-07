@@ -1,0 +1,45 @@
+{
+  "run_id": "8e0961b7009442b5a8c857d767870422",
+  "goal": "Analyze this Jira task content and return concrete missing details, task text:\nTitle: Service request receipt text update\nDescription:\nReplace the printed receipt wording in the service request flow.\n\ntechnical risks, and direct follow-up questions. Avoid generic wording. If a repo is supplied, state whether the task matches that repo and why.",
+  "status": "success",
+  "started_at": "2026-04-06T22:04:18.651990+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "",
+  "actor_context": {
+    "actor_id": "lead-1",
+    "actor_type": "api",
+    "role": "techlead",
+    "source_channel": "api",
+    "display_name": "Local API Developer",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-04-06T22:04:18.653986+00:00",
+  "steps": [
+    {
+      "name": "spec",
+      "status": "partial",
+      "started_at": "2026-04-06T22:04:18.652986+00:00",
+      "finished_at": "2026-04-06T22:04:18.652986+00:00",
+      "message": "Analyze-task routed directly to repo intelligence after Jira input resolution.",
+      "error": null
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/8e0961b7009442b5a8c857d767870422.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}

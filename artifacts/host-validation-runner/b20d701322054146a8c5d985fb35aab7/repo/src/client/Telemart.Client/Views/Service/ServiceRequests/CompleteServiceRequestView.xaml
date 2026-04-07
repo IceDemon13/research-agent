@@ -1,0 +1,117 @@
+<UserControl x:Class="Telemart.Client.Views.Service.ServiceRequests.CompleteServiceRequestView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRequests"
+             Width="320"
+             Height="107"
+             DataContext="{client:Container Type=viewModels:CompleteServiceRequestViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CompleteServiceRequestViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup x:Name="Center"
+                              Orientation="Vertical">
+                <dxlc:LayoutItem Label="Данные">
+                    <dxg:LookUpEdit ItemsSource="{Binding Path=Sources, Mode=OneWay}"
+                                    EditValue="{Binding Path=CurrentSource, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                    DisplayMember="Source"
+                                    AutoPopulateColumns="False"
+                                    PopupWidth="660"
+                                    PopupMinWidth="500">
+                        <dxg:LookUpEdit.StyleSettings>
+                            <dxg:LookUpEditStyleSettings />
+                        </dxg:LookUpEdit.StyleSettings>
+                        <dxg:LookUpEdit.PopupContentTemplate>
+                            <ControlTemplate>
+                                <dxg:GridControl x:Name="PART_GridControl">
+                                    <dxg:GridControl.Resources>
+                                        <Style TargetType="dxg:GridColumn"
+                                               BasedOn="{StaticResource GeneralGridColumnStyle}">
+                                        </Style>
+                                    </dxg:GridControl.Resources>
+                                    <dxg:GridControl.Columns>
+                                        <dxg:GridColumn FieldName="Source"
+                                                        Header="Данные"
+                                                        Width="90" />
+                                        <dxg:GridColumn FieldName="Recipient"
+                                                        Header="Получатель"
+                                                        FixedWidth="False"
+                                                        AllowResizing="True" />
+                                        <dxg:GridColumn FieldName="Phone"
+                                                        Header="Телефон"
+                                                        Width="80" />
+                                        <dxg:GridColumn FieldName="Address"
+                                                        Header="Адрес"
+                                                        FixedWidth="False"
+                                                        AllowResizing="True" />
+                                    </dxg:GridControl.Columns>
+                                    <dxg:GridControl.View>
+                                        <dxg:TableView AutoWidth="True"
+                                                       ShowColumnHeaders="True"
+                                                       ShowIndicator="False" />
+                                    </dxg:GridControl.View>
+                                </dxg:GridControl>
+                            </ControlTemplate>
+                        </dxg:LookUpEdit.PopupContentTemplate>
+                    </dxg:LookUpEdit>
+                </dxlc:LayoutItem>
+
+                <dxlc:LayoutItem Label="ТТН">
+                    <dxe:ButtonEdit EditValue="{Binding Path=TrackNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                    AllowDefaultButton="False">
+                        <dxe:ButtonInfo GlyphKind="Plus"
+                                        ToolTipService.ToolTip="Создать ТТН"
+                                        Command="{Binding Path=CreateTrackNumberCommand, Mode=OneTime}" />
+                    </dxe:ButtonEdit>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          HorizontalAlignment="Left"
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <Button Content="ОК"
+                        Command="{Binding Path=OkCommand, Mode=OneTime}"
+                        HorizontalAlignment="Right"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}" />
+                <Button Content="Отмена"
+                        HorizontalAlignment="Right"
+                        Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</UserControl>

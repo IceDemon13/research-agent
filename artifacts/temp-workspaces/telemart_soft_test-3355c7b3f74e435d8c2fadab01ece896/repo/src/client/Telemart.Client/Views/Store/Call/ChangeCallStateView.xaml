@@ -1,0 +1,78 @@
+<UserControl x:Class="Telemart.Client.Views.Store.Call.ChangeCallStateView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Call"
+             DataContext="{client:Container Type=viewModels:ChangeCallStateViewModel}"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:ChangeCallStateViewModel}, IsDesignTimeCreatable=True}"
+             Width="480"
+             Height="120"
+             mc:Ignorable="d"
+             d:DesignHeight="170" d:DesignWidth="480">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent"
+                         Margin="0">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=IsVisible, ElementName=BusyIndicator, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              VerticalAlignment="Top">
+                <dxlc:LayoutItem Label="Текущий статус">
+                    <dxe:TextEdit EditValue="{Binding Path=CurrentAsteriskStatus, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=False}"
+                                  IsReadOnly="True"
+                                  AllowNullInput="True"
+                                  NullText="статус не определен"/>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Новый статус">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=AsteriskStatuses, Mode=OneWay}"
+                                      DisplayMember="Status"
+                                      EditValue="{Binding Path=SelectedAsteriskStatus, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      Style="{StaticResource SearchableLookUpReadOnlyConditionsStyle}"
+                                      AllowNullInput="True"
+                                      IsReadOnly="False"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage x:Name="BusyIndicator"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Изменение статуса..."
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter}}"/>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

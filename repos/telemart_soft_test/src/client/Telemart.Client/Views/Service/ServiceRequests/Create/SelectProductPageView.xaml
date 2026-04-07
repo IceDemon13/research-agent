@@ -1,0 +1,148 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Service.ServiceRequests.Create.SelectProductPageView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxco="http://schemas.devexpress.com/winfx/2008/xaml/controls"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRequests.Create"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             DataContext="{client:Container Type=viewModels:SelectProductPageViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:SelectProductPageViewModel}}"
+             d:DesignWidth="600"
+             d:DesignHeight="280">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Contractor.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Subdivision.xaml" />
+                <ResourceDictionary>
+                    <Style x:Key="ReadOnlyComboBoxEditStyle"
+                           TargetType="{x:Type dxe:ComboBoxEdit}">
+                        <Setter Property="IsReadOnly"
+                                Value="False" />
+                        <Setter Property="IsTextEditable"
+                                Value="False" />
+                        <Setter Property="ShowEditorButtons"
+                                Value="True" />
+                        <Style.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <Binding Path="Model.SearchMode"
+                                             Mode="OneWay"
+                                             Converter="{converters:IsEqualConverter}"
+                                             ConverterParameter="{x:Static viewModels:SearchOrderMode.SerialNumber}" />
+                                </DataTrigger.Binding>
+                                <Setter Property="IsReadOnly"
+                                        Value="True" />
+                                <Setter Property="IsTextEditable"
+                                        Value="True" />
+                                <Setter Property="Opacity"
+                                        Value="{StaticResource DisabledElementOpacity}" />
+                                <Setter Property="ShowEditorButtons"
+                                        Value="False" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <DockPanel>
+        <dx:DialogFooter>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          Visibility="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxco:WizardButton Content="Назад"
+                                   dxco:Wizard.IsButtonBack="True" />
+                <dxco:WizardButton Content="Далее"
+                                   dxco:Wizard.IsButtonNext="True">
+                    <dxco:WizardButton.IsEnabled>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                            <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                     ElementName="LayoutControl" />
+                            <Binding Path="IsLongOperationInProgress" />
+                        </MultiBinding>
+                    </dxco:WizardButton.IsEnabled>
+                </dxco:WizardButton>
+                <dxco:WizardButton Content="Отмена"
+                                   dxco:Wizard.IsButtonCancel="True" />
+            </StackPanel>
+        </dx:DialogFooter>
+        <ContentPresenter DockPanel.Dock="Top"
+                          Content="{Binding}"
+                          ContentTemplate="{StaticResource WizardHeaderTemplate}" />
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            IsEnabled="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+            <dxlc:LayoutGroup  Orientation="Vertical"
+                               VerticalAlignment="Stretch">
+                <dxlc:LayoutItem Label="Группа">
+                    <dxlc:LayoutItem.LabelTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </dxlc:LayoutItem.LabelTemplate>
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Groups, Mode=OneWay}"
+                                                      EditValue="{Binding Path=Model.GroupId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      DisplayMember="DisplayValue"
+                                                      ValueMember="Id"
+                                                      Style="{StaticResource SearchableComboBoxStyle}">
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Заказ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.OrderId, Mode=OneWay}"
+                                  MaskType="Numeric"
+                                  Mask="f0"
+                                  MaskUseAsDisplayFormat="True"
+                                  IsReadOnly="True"
+                                  Opacity="{StaticResource DisabledElementOpacity}">
+                    </dxe:TextEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Товар">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.Products, Mode=OneWay}"
+                                      EditValue="{Binding Path=Model.ProductId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,ValidatesOnDataErrors=True}"
+                                      ValueMember="Id"
+                                      DisplayMember="DisplayValue"
+                                      Style="{StaticResource ReadOnlyComboBoxEditStyle}">
+                        <dxmvvm:Interaction.Behaviors>
+                            <dxmvvm:EventToCommand EventName="EditValueChanged"
+                                                   Command="{Binding Path=HandleProductChangedCommand, Mode=OneTime}"
+                                                   PassEventArgsToCommand="True" />
+                        </dxmvvm:Interaction.Behaviors>
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="SN">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.SerialNumbers, Mode=OneWay}"
+                                      DisplayMember="SerialNumber"
+                                      EditValue="{Binding Path=Model.SerialNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,ValidatesOnDataErrors=True}"
+                                      AllowNullInput="True"
+                                      NullValue="{x:Null}"
+                                      NullText="{StaticResource NullTextValue}"
+                                      NullValueButtonPlacement="EditBox"
+                                      Style="{StaticResource SearchableComboBoxStyle}">
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </DockPanel>
+</UserControl>

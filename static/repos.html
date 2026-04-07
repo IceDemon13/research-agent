@@ -69,6 +69,106 @@
 
     <section class="card">
       <div class="toolbar">
+        <h2>Bulk Onboard / Refresh All Repositories</h2>
+        <div class="actions">
+          <button id="openBulkOnboardPanelButton" type="button" class="primary">Bulk Onboard / Refresh All Repositories</button>
+        </div>
+      </div>
+      <p class="muted">Run a safe bulk preparation job across registered and discoverable local repos. Start with dry run, then re-run with mutations enabled when the plan looks correct.</p>
+
+      <div id="bulkOnboardPanel" class="bulk-job-panel hidden">
+        <div class="grid">
+          <label>
+            <span>Dry run</span>
+            <input id="bulkDryRunInput" type="checkbox" checked>
+          </label>
+          <label>
+            <span>Clone / sync repos</span>
+            <input id="bulkCloneSyncInput" type="checkbox" checked>
+          </label>
+          <label>
+            <span>Register if missing</span>
+            <input id="bulkRegisterMissingInput" type="checkbox" checked>
+          </label>
+          <label>
+            <span>GitNexus reindex</span>
+            <input id="bulkGitnexusReindexInput" type="checkbox" checked>
+          </label>
+          <label>
+            <span>Historical bootstrap</span>
+            <input id="bulkHistoricalBootstrapInput" type="checkbox" checked>
+          </label>
+          <label>
+            <span>Skip already ready repos</span>
+            <input id="bulkSkipReadyInput" type="checkbox" checked>
+          </label>
+          <label>
+            <span>Force refresh</span>
+            <input id="bulkForceRefreshInput" type="checkbox">
+          </label>
+        </div>
+        <p class="muted">Dry run never mutates repos. Force refresh stays non-destructive, but re-runs stages even for repos that already look ready.</p>
+        <div class="actions">
+          <button id="startBulkOnboardButton" type="button" class="primary">Start Bulk Job</button>
+          <button id="closeBulkOnboardPanelButton" type="button" class="secondary">Close</button>
+        </div>
+      </div>
+
+      <div id="bulkJobStatusCard" class="bulk-job-status hidden">
+        <div class="toolbar">
+          <h3>Bulk Job Status</h3>
+          <div class="actions">
+            <button id="retryFailedBulkJobButton" type="button" class="secondary hidden">Retry Failed Repos</button>
+          </div>
+        </div>
+        <div id="bulkJobMeta" class="muted"></div>
+        <div class="progress-bar-shell" aria-hidden="true">
+          <div id="bulkJobProgressBar" class="progress-bar-fill" style="width:0%;"></div>
+        </div>
+        <div id="bulkJobSummaryGrid" class="repo-summary-grid" style="margin-top:12px;">
+          <div><strong>Total repos</strong><br>-</div>
+          <div><strong>Pending</strong><br>-</div>
+          <div><strong>Running</strong><br>-</div>
+          <div><strong>Succeeded</strong><br>-</div>
+          <div><strong>Failed</strong><br>-</div>
+          <div><strong>Skipped</strong><br>-</div>
+          <div><strong>Current repo</strong><br>-</div>
+          <div><strong>Current stage</strong><br>-</div>
+          <div><strong>Progress</strong><br>-</div>
+        </div>
+        <div id="bulkJobLoadingPanel" class="loading-panel hidden" aria-busy="false">
+          <div class="loading-panel-inner">
+            <video id="bulkJobLoadingVideo" class="loading-video" autoplay muted loop playsinline preload="metadata">
+              <source src="./media/telemart-loader.mp4" type="video/mp4">
+            </video>
+            <div class="loading-copy">
+              <div class="loading-title">Preparing repositories...</div>
+              <div class="loading-text">Syncing sources, rebuilding GitNexus context, and warming historical memory.</div>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap" style="margin-top:16px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Repository</th>
+                <th>Status</th>
+                <th>Stage</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th>Readiness / Notes</th>
+              </tr>
+            </thead>
+            <tbody id="bulkJobTableBody">
+              <tr><td colspan="6" class="muted">No bulk repo job has been started yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
         <h2 data-i18n="repo.page.list_title">Зареєстровані repo</h2>
       </div>
       <div id="reposContainer" class="repo-grid">
@@ -599,6 +699,204 @@
       }
     }
 
+    let activeBulkJobId = "";
+    let bulkJobPollHandle = null;
+
+    function bulkJobStageLabel(value) {
+      const labels = {
+        resolve_source: "Resolve source",
+        clone_or_sync: "Clone / sync",
+        register_repo: "Register repo",
+        normalize_mapping: "Normalize mapping",
+        gitnexus_index: "GitNexus index",
+        historical_bootstrap: "Historical bootstrap",
+        readiness_check: "Readiness check"
+      };
+      return labels[String(value || "").trim()] || (value || "-");
+    }
+
+    function bulkJobOptionsPayload() {
+      return {
+        dry_run: Boolean(document.getElementById("bulkDryRunInput").checked),
+        include_clone_or_sync: Boolean(document.getElementById("bulkCloneSyncInput").checked),
+        include_register_if_missing: Boolean(document.getElementById("bulkRegisterMissingInput").checked),
+        include_gitnexus_reindex: Boolean(document.getElementById("bulkGitnexusReindexInput").checked),
+        include_historical_bootstrap: Boolean(document.getElementById("bulkHistoricalBootstrapInput").checked),
+        skip_already_ready: Boolean(document.getElementById("bulkSkipReadyInput").checked),
+        force_refresh: Boolean(document.getElementById("bulkForceRefreshInput").checked)
+      };
+    }
+
+    function setBulkPanelOpen(isOpen) {
+      document.getElementById("bulkOnboardPanel").classList.toggle("hidden", !isOpen);
+    }
+
+    function setBulkStartEnabled(enabled) {
+      const openButton = document.getElementById("openBulkOnboardPanelButton");
+      const startButton = document.getElementById("startBulkOnboardButton");
+      openButton.disabled = !enabled;
+      startButton.disabled = !enabled;
+    }
+
+    function stopBulkPolling() {
+      if (bulkJobPollHandle) {
+        window.clearTimeout(bulkJobPollHandle);
+        bulkJobPollHandle = null;
+      }
+    }
+
+    function scheduleBulkPolling() {
+      stopBulkPolling();
+      if (!activeBulkJobId) return;
+      bulkJobPollHandle = window.setTimeout(() => {
+        loadBulkJob(activeBulkJobId).catch(() => {});
+      }, 2000);
+    }
+
+    function renderBulkJob(job) {
+      const statusCard = document.getElementById("bulkJobStatusCard");
+      const retryButton = document.getElementById("retryFailedBulkJobButton");
+      const loadingPanel = document.getElementById("bulkJobLoadingPanel");
+      const loadingVideo = document.getElementById("bulkJobLoadingVideo");
+      const summary = job?.summary || {};
+      const isActive = ["pending", "running"].includes(String(job?.status || "").trim());
+      activeBulkJobId = isActive ? (job?.job_id || "") : "";
+      statusCard.classList.toggle("hidden", !job);
+      if (!job) {
+        retryButton.classList.add("hidden");
+        loadingPanel.classList.add("hidden");
+        return;
+      }
+      const meta = [];
+      meta.push(`Job: ${job.job_id || "-"}`);
+      meta.push(`Status: ${job.status || "-"}`);
+      if (job.options?.dry_run) meta.push("Mode: dry run");
+      if (job.created_at) meta.push(`Created: ${auth.formatDateTime(job.created_at)}`);
+      if (job.started_at) meta.push(`Started: ${auth.formatDateTime(job.started_at)}`);
+      if (job.finished_at) meta.push(`Finished: ${auth.formatDateTime(job.finished_at)}`);
+      if (job.source_job_id) meta.push(`Retried from: ${job.source_job_id}`);
+      document.getElementById("bulkJobMeta").textContent = meta.join(" | ");
+      document.getElementById("bulkJobProgressBar").style.width = `${Number(summary.percent_complete || 0)}%`;
+      document.getElementById("bulkJobSummaryGrid").innerHTML = `
+        <div><strong>Total repos</strong><br>${auth.escapeHtml(String(summary.total_repos ?? 0))}</div>
+        <div><strong>Pending</strong><br>${auth.escapeHtml(String(summary.pending ?? 0))}</div>
+        <div><strong>Running</strong><br>${auth.escapeHtml(String(summary.running ?? 0))}</div>
+        <div><strong>Succeeded</strong><br>${auth.escapeHtml(String(summary.succeeded ?? 0))}</div>
+        <div><strong>Failed</strong><br>${auth.escapeHtml(String(summary.failed ?? 0))}</div>
+        <div><strong>Skipped</strong><br>${auth.escapeHtml(String(summary.skipped ?? 0))}</div>
+        <div><strong>Current repo</strong><br>${auth.escapeHtml(summary.current_repo || "-")}</div>
+        <div><strong>Current stage</strong><br>${auth.escapeHtml(bulkJobStageLabel(summary.current_stage || "-"))}</div>
+        <div><strong>Progress</strong><br>${auth.escapeHtml(String(summary.percent_complete ?? 0))}%</div>
+      `;
+      loadingPanel.classList.toggle("hidden", !isActive);
+      loadingPanel.setAttribute("aria-busy", isActive ? "true" : "false");
+      if (isActive) {
+        loadingVideo?.play?.().catch(() => {});
+      } else {
+        loadingVideo?.pause?.();
+      }
+      const rows = Array.isArray(job.repos) ? job.repos : [];
+      document.getElementById("bulkJobTableBody").innerHTML = rows.length
+        ? rows.map((item) => {
+            const notes = [];
+            const stageSummary = Object.entries(item.stages || {})
+              .filter(([, stage]) => String(stage?.status || "").trim())
+              .map(([stageName, stage]) => `${bulkJobStageLabel(stageName)}: ${stage.status}`)
+              .join(" | ");
+            if (item.error_summary) notes.push(`Error: ${item.error_summary}`);
+            if (item.skipped_reason) notes.push(`Skipped: ${item.skipped_reason}`);
+            if (item.readiness?.ready) notes.push("Ready");
+            else if (item.readiness?.repo_registered === false) notes.push("Not registered yet");
+            else if (item.readiness && Object.keys(item.readiness).length) {
+              notes.push(`sync=${item.readiness.sync_ok ? "ok" : "no"}, index=${item.readiness.index_ready ? "ok" : "no"}, history=${item.readiness.historical_ready ? "ok" : "no"}`);
+            }
+            if (stageSummary) notes.push(stageSummary);
+            return `
+              <tr>
+                <td>${auth.escapeHtml(item.display_name || item.repo_id || "-")}<br><span class="muted">${auth.escapeHtml(item.repo_id || "-")}</span></td>
+                <td>${renderBadge(item.status || "-", `status-${String(item.status || "").trim().toLowerCase() || "neutral"}`)}</td>
+                <td>${auth.escapeHtml(bulkJobStageLabel(item.current_stage || item.stage_status || "-"))}</td>
+                <td>${auth.escapeHtml(auth.formatDateTime(item.started_at || ""))}</td>
+                <td>${auth.escapeHtml(auth.formatDateTime(item.finished_at || ""))}</td>
+                <td>${auth.escapeHtml(notes.join(" | ") || "-")}</td>
+              </tr>
+            `;
+          }).join("")
+        : `<tr><td colspan="6" class="muted">No repositories were selected for this bulk job.</td></tr>`;
+      retryButton.classList.toggle("hidden", isActive || Number(summary.failed || 0) === 0);
+      retryButton.disabled = isActive;
+      setBulkStartEnabled(!isActive);
+      if (isActive) {
+        scheduleBulkPolling();
+      } else {
+        stopBulkPolling();
+      }
+    }
+
+    async function loadLatestBulkJob() {
+      try {
+        const payload = await auth.fetchJson("/repos/bulk/onboard-refresh/latest");
+        renderBulkJob(payload.available ? payload.job : null);
+      } catch (error) {
+        renderBulkJob(null);
+      }
+    }
+
+    async function loadBulkJob(jobId) {
+      if (!jobId) {
+        await loadLatestBulkJob();
+        return;
+      }
+      const payload = await auth.fetchJson(`/repos/bulk/onboard-refresh/${encodeURIComponent(jobId)}`);
+      renderBulkJob(payload.job || null);
+    }
+
+    async function startBulkJob() {
+      setMessage("");
+      const button = document.getElementById("startBulkOnboardButton");
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Starting...";
+      try {
+        const payload = await auth.fetchJson("/repos/bulk/onboard-refresh", {
+          method: "POST",
+          body: bulkJobOptionsPayload()
+        });
+        setBulkPanelOpen(false);
+        renderBulkJob(payload.job || null);
+        setMessage("Bulk repo job started.");
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+        await loadLatestBulkJob();
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    async function retryFailedBulkJob() {
+      if (!activeBulkJobId && !document.getElementById("bulkJobMeta").textContent.trim()) return;
+      const latest = await auth.fetchJson("/repos/bulk/onboard-refresh/latest");
+      const job = latest.job || null;
+      if (!job?.job_id) return;
+      const button = document.getElementById("retryFailedBulkJobButton");
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Retrying...";
+      try {
+        const payload = await auth.fetchJson(`/repos/bulk/onboard-refresh/${encodeURIComponent(job.job_id)}/retry-failed`, {
+          method: "POST"
+        });
+        renderBulkJob(payload.job || null);
+        setMessage("Retry job started for failed repositories.");
+      } catch (error) {
+        setMessage(error.message || auth.t("common.failed"), "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
     async function runBulkAction(button, path, successMessage) {
       const originalText = button.textContent;
       button.disabled = true;
@@ -715,6 +1013,10 @@
     document.getElementById("bulkLearningAllButton").addEventListener("click", (event) => runLearningAction(event.currentTarget, "all", "Bulk learning recompute finished."));
     document.getElementById("bulkLearningHistoricalButton").addEventListener("click", (event) => runLearningAction(event.currentTarget, "historical_only", "Bulk historical recompute finished."));
     document.getElementById("bulkLearningSurvivingButton").addEventListener("click", (event) => runLearningAction(event.currentTarget, "surviving_only", "Bulk surviving recompute finished."));
+    document.getElementById("openBulkOnboardPanelButton").addEventListener("click", () => setBulkPanelOpen(true));
+    document.getElementById("closeBulkOnboardPanelButton").addEventListener("click", () => setBulkPanelOpen(false));
+    document.getElementById("startBulkOnboardButton").addEventListener("click", startBulkJob);
+    document.getElementById("retryFailedBulkJobButton").addEventListener("click", retryFailedBulkJob);
     document.getElementById("runBenchmarkButton").addEventListener("click", runBenchmark);
     document.getElementById("loadLatestBenchmarkButton").addEventListener("click", loadLatestBenchmark);
     document.getElementById("logoutLink").addEventListener("click", (event) => {
@@ -730,6 +1032,7 @@
       });
       await loadRepos();
       await loadFleetHealth();
+      await loadLatestBulkJob();
       await loadLatestBenchmark();
     });
   </script>

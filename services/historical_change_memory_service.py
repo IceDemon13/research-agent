@@ -4,8 +4,10 @@ import json
 import logging
 import re
 import subprocess
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +49,8 @@ _CONFUSABLE_JIRA_CHAR_MAP = str.maketrans(
     }
 )
 _LOGGER = logging.getLogger(__name__)
+_BOOTSTRAP_IN_PROGRESS: set[str] = set()
+_BOOTSTRAP_LOCK = threading.Lock()
 _COMMENT_NOISE_EXACT = {
     "ok", "done", "checked", "merged", "ready", "approved", "tested", "fixed", "+1",
 }
@@ -196,14 +200,91 @@ class HistoricalChangeMemoryService:
     def state_diagnostics(self) -> dict[str, Any]:
         return dict(self._last_state_diagnostics)
 
-    def ensure_history_for_repos(self, repos: list[RepoMetadata], *, max_commits: int = 200) -> None:
+    def ensure_history_for_repos(self, repos: list[RepoMetadata], *, max_commits: int = 200) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
         for repo in list(repos or []):
             if int(getattr(repo, "historical_change_count", 0) or 0) > 0 or self._existing_history_count_for_repo(repo.repo_id) > 0:
                 continue
-            local_path = Path(str(repo.resolved_local_path or "")).expanduser()
-            if not (local_path / ".git").exists():
+            results.append(self.bootstrap_repo_history(repo.repo_id, max_commits=max_commits))
+        return results
+
+    def schedule_history_bootstrap_for_repos(self, repos: list[RepoMetadata], *, max_commits: int = 200) -> list[str]:
+        scheduled: list[str] = []
+        for repo in list(repos or []):
+            if int(getattr(repo, "historical_change_count", 0) or 0) > 0 or self._existing_history_count_for_repo(repo.repo_id) > 0:
                 continue
-            self.ingest_repo_history(repo.repo_id, max_commits=max_commits)
+            normalized_repo_id = normalize_repo_id(repo.repo_id)
+            if not normalized_repo_id:
+                continue
+            with _BOOTSTRAP_LOCK:
+                if normalized_repo_id in _BOOTSTRAP_IN_PROGRESS:
+                    scheduled.append(normalized_repo_id)
+                    continue
+                _BOOTSTRAP_IN_PROGRESS.add(normalized_repo_id)
+            scheduled.append(normalized_repo_id)
+            threading.Thread(
+                target=self._run_scheduled_bootstrap,
+                args=(normalized_repo_id, max_commits),
+                daemon=True,
+                name=f"history-bootstrap-{normalized_repo_id}",
+            ).start()
+        return scheduled
+
+    def repos_warming_up(self, repo_ids: list[str] | None = None) -> list[str]:
+        requested = {
+            normalize_repo_id(item)
+            for item in list(repo_ids or [])
+            if normalize_repo_id(item)
+        }
+        with _BOOTSTRAP_LOCK:
+            active = sorted(_BOOTSTRAP_IN_PROGRESS)
+        if not requested:
+            return active
+        return [repo_id for repo_id in active if repo_id in requested]
+
+    def bootstrap_repo_history(
+        self,
+        repo_id: str,
+        *,
+        max_commits: int = 200,
+    ) -> dict[str, Any]:
+        normalized_repo_id = normalize_repo_id(repo_id)
+        if not normalized_repo_id:
+            return {
+                "repo_id": "",
+                "ingested": False,
+                "historical_change_count": 0,
+                "bootstrap_source": "invalid_repo",
+            }
+        existing_count = self._existing_history_count_for_repo(normalized_repo_id)
+        repo = self._registry_service.get_repo(normalized_repo_id)
+        if repo is None:
+            raise KeyError(f"Unknown repo_id: {repo_id}")
+        if int(getattr(repo, "historical_change_count", 0) or 0) > 0 or existing_count > 0:
+            return {
+                "repo_id": normalized_repo_id,
+                "ingested": True,
+                "historical_change_count": max(int(getattr(repo, "historical_change_count", 0) or 0), existing_count),
+                "historical_last_seen_at": _safe_text(getattr(repo, "historical_last_seen_at", "")),
+                "bootstrap_source": "existing_state",
+            }
+        local_path = Path(str(repo.resolved_local_path or "")).expanduser()
+        if (local_path / ".git").exists():
+            git_result = self.ingest_repo_history(normalized_repo_id, max_commits=max_commits)
+            if int(git_result.get("historical_change_count", 0) or 0) > 0:
+                git_result["bootstrap_source"] = "git"
+                return git_result
+        artifact_result = self._bootstrap_repo_history_from_artifacts(repo)
+        if int(artifact_result.get("historical_change_count", 0) or 0) > 0:
+            return artifact_result
+        return {
+            "repo_id": normalized_repo_id,
+            "ingested": False,
+            "historical_change_count": 0,
+            "historical_last_seen_at": "",
+            "bootstrap_source": "none",
+            "bootstrap_message": "No git or artifact-backed historical evidence is available yet.",
+        }
 
     def ingest_all_registered_repos(self, *, max_commits: int = 200) -> dict[str, Any]:
         repos = list(self._registry_service.list_repos() or [])
@@ -223,6 +304,15 @@ class HistoricalChangeMemoryService:
             task_snapshots=task_snapshots,
             full_recompute=True,
         )
+
+    def _run_scheduled_bootstrap(self, repo_id: str, max_commits: int) -> None:
+        try:
+            self.bootstrap_repo_history(repo_id, max_commits=max_commits)
+        except Exception:
+            _LOGGER.exception("Historical bootstrap failed for repo %s", repo_id)
+        finally:
+            with _BOOTSTRAP_LOCK:
+                _BOOTSTRAP_IN_PROGRESS.discard(normalize_repo_id(repo_id))
 
     def recompute_repo_history(
         self,
@@ -657,6 +747,175 @@ class HistoricalChangeMemoryService:
             }
         state["tasks"] = list(task_map.values())
         self._save_json_state(state)
+
+    def _bootstrap_repo_history_from_artifacts(self, repo: RepoMetadata) -> dict[str, Any]:
+        changes: dict[str, HistoricalChangeRecord] = {}
+        task_snapshots: dict[str, str] = {}
+        source_files: list[str] = []
+        for candidate_path in self._historical_bootstrap_candidate_paths():
+            payload = self._load_bootstrap_payload(candidate_path)
+            if payload is None:
+                continue
+            extracted_changes, extracted_snapshots = self._extract_bootstrap_evidence_from_payload(
+                payload,
+                repo_id=repo.repo_id,
+                source_id=candidate_path.as_posix(),
+            )
+            if not extracted_changes and not extracted_snapshots:
+                continue
+            source_files.append(candidate_path.as_posix())
+            for record in extracted_changes:
+                changes[record.change_id] = record
+            for jira_key, snapshot_text in extracted_snapshots.items():
+                normalized_key = self.normalize_jira_key(jira_key)
+                if not normalized_key or not _safe_text(snapshot_text):
+                    continue
+                current = _safe_text(task_snapshots.get(normalized_key, ""))
+                if len(snapshot_text) > len(current):
+                    task_snapshots[normalized_key] = snapshot_text
+        if not changes and not task_snapshots:
+            return {
+                "repo_id": repo.repo_id,
+                "ingested": False,
+                "historical_change_count": 0,
+                "historical_last_seen_at": "",
+                "bootstrap_source": "artifacts",
+                "bootstrap_source_files": [],
+                "bootstrap_task_snapshot_count": 0,
+            }
+        merged_changes = self._merge_with_existing_history(repo.repo_id, list(changes.values()))
+        self._persist_history(repo, merged_changes, task_snapshots=task_snapshots)
+        last_seen = max([change.committed_at for change in merged_changes], default="")
+        self._registry_service.update_repo_metadata(
+            repo.repo_id,
+            historical_change_count=len(merged_changes),
+            historical_last_seen_at=last_seen,
+        )
+        return {
+            "repo_id": repo.repo_id,
+            "ingested": True,
+            "historical_change_count": len(merged_changes),
+            "historical_last_seen_at": last_seen,
+            "bootstrap_source": "artifacts",
+            "bootstrap_source_files": source_files,
+            "bootstrap_task_snapshot_count": len(task_snapshots),
+            "sample_canonical_jira_keys": sorted(task_snapshots.keys())[:10],
+        }
+
+    def _historical_bootstrap_candidate_paths(self) -> list[Path]:
+        artifacts_root = self._storage_path.parent.parent
+        candidate_paths = sorted(artifacts_root.glob("*.case.json"))
+        runs_dir = artifacts_root / "runs"
+        if runs_dir.exists():
+            candidate_paths.extend(sorted(runs_dir.glob("*.detail.json")))
+        return [path for path in candidate_paths if path.is_file()]
+
+    @staticmethod
+    def _load_bootstrap_payload(path: Path) -> dict[str, Any] | list[Any] | None:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    def _extract_bootstrap_evidence_from_payload(
+        self,
+        payload: dict[str, Any] | list[Any],
+        *,
+        repo_id: str,
+        source_id: str,
+    ) -> tuple[list[HistoricalChangeRecord], dict[str, str]]:
+        normalized_repo_id = normalize_repo_id(repo_id)
+        changes: dict[str, HistoricalChangeRecord] = {}
+        task_snapshots: dict[str, str] = {}
+
+        def _remember_snapshot(jira_key: str, snapshot_text: str) -> None:
+            normalized_key = self.normalize_jira_key(jira_key)
+            normalized_text = _safe_text(snapshot_text)
+            if not normalized_key or not normalized_text:
+                return
+            current = _safe_text(task_snapshots.get(normalized_key, ""))
+            if len(normalized_text) > len(current):
+                task_snapshots[normalized_key] = normalized_text
+
+        def _walk(node: Any) -> None:
+            if isinstance(node, dict):
+                node_repo_id = normalize_repo_id(node.get("repo_id", ""))
+                jira_key = self.normalize_jira_key(node.get("jira_key", ""))
+                changed_files = [
+                    _safe_text(item).replace("\\", "/")
+                    for item in list(node.get("changed_files", []) or [])
+                    if _safe_text(item)
+                ]
+                commit_hash = _safe_text(node.get("commit_hash", ""))
+                if node_repo_id == normalized_repo_id and jira_key and (changed_files or commit_hash):
+                    stable_suffix = commit_hash or sha1(
+                        json.dumps(
+                            {
+                                "jira_key": jira_key,
+                                "changed_files": changed_files,
+                                "source_id": source_id,
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ).encode("utf-8")
+                    ).hexdigest()[:12]
+                    change_id = _safe_text(node.get("change_id", "")) or f"{normalized_repo_id}:{jira_key}:{stable_suffix}"
+                    changes[change_id] = HistoricalChangeRecord(
+                        change_id=change_id,
+                        jira_key=jira_key,
+                        repo_id=normalized_repo_id,
+                        commit_hash=commit_hash,
+                        branch_name=_safe_text(node.get("branch_name", "")),
+                        committed_at=_safe_text(node.get("committed_at", "")),
+                        changed_files=changed_files,
+                        subject=_safe_text(node.get("subject", "")),
+                        raw_refs=_safe_text(node.get("raw_refs", "")),
+                    )
+                if jira_key:
+                    snapshot_text = self._extract_bootstrap_snapshot_text(node)
+                    if snapshot_text:
+                        _remember_snapshot(jira_key, snapshot_text)
+                for value in node.values():
+                    _walk(value)
+                return
+            if isinstance(node, list):
+                for item in node:
+                    _walk(item)
+
+        _walk(payload)
+        return list(changes.values()), task_snapshots
+
+    def _extract_bootstrap_snapshot_text(self, payload: dict[str, Any]) -> str:
+        nested_result = dict(payload.get("result", {}) or {}) if isinstance(payload.get("result", {}), dict) else {}
+        title = _safe_text(payload.get("jira_snapshot_title", "") or payload.get("title", ""))
+        body = _safe_text(
+            payload.get("jira_snapshot_text", "")
+            or payload.get("task_snapshot_text", "")
+            or payload.get("final_workflow_input", "")
+            or payload.get("goal", "")
+            or payload.get("normalized_task_text", "")
+            or payload.get("description", "")
+            or nested_result.get("goal", "")
+            or nested_result.get("final_workflow_input", "")
+        )
+        acceptance = [
+            _safe_text(item)
+            for item in list(
+                payload.get(
+                    "jira_snapshot_acceptance_criteria",
+                    payload.get("acceptance_criteria", nested_result.get("acceptance_criteria", [])),
+                ) or []
+            )
+            if _safe_text(item)
+        ]
+        parts: list[str] = []
+        if title:
+            parts.append(title)
+        if body:
+            parts.append(body)
+        if acceptance:
+            parts.append("Acceptance Criteria:\n" + "\n".join(f"- {item}" for item in acceptance))
+        return "\n\n".join(part for part in parts if part)
 
     def _upsert_task_snapshot(
         self,

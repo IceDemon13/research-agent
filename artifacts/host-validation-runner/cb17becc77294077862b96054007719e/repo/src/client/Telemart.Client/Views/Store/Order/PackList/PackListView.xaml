@@ -1,0 +1,183 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Store.Order.PackList.PackListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Order.PackList"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:PackListViewModel}"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:PackListViewModel}}"
+             Width="780"
+             Height="550">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CommonImages.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/OrderStatus.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator OwnerLock="LoadingContent"
+                         IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting}">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                            IsEnabled="{Binding ElementName=WaitImage, Path=IsVisible, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            Padding="8">
+            <dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Vertical"
+                                  ItemSpace="0"
+                                  Padding="0,-4,0,0">
+                    <dxb:ToolBarControl VerticalAlignment="Top"
+                                        Style="{StaticResource SmallToolBarStyle}">
+                        <dxb:BarButtonItem Content="Удалить"
+                                           Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                           Command="{Binding Path=DeleteOrderCommand, Mode=OneWay}"
+                                           CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=GridControl}">
+                        </dxb:BarButtonItem>
+                    </dxb:ToolBarControl>
+                    <dxg:GridControl x:Name="GridControl"
+                                     ItemsSource="{Binding Path=PackList.PackListOrders, Mode=OneWay}"
+                                     SelectionMode="None">
+                        <dxmvvm:Interaction.Behaviors>
+                            <behaviors:CopyCurrentCellToClipboardBehavior />
+                        </dxmvvm:Interaction.Behaviors>
+                        <dxg:GridControl.Columns>
+                            <dxg:GridColumn FieldName="OrderId"
+                                            Header="Заказ"
+                                            HeaderToolTip="Заказ"
+                                            AllowBestFit="True"
+                                            Width="60"
+                                            HorizontalHeaderContentAlignment="Center">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn FieldName="RowCount"
+                                            Header="Строк"
+                                            HeaderToolTip="Строк"
+                                            HorizontalHeaderContentAlignment="Center">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn FieldName="ProductCount"
+                                            Header="Товаров"
+                                            HeaderToolTip="Товаров"
+                                            HorizontalHeaderContentAlignment="Center">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn FieldName="Weight"
+                                            Header="Вес"
+                                            HeaderToolTip="Вес"
+                                            HorizontalHeaderContentAlignment="Center">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Статус"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FieldName="OrderState"
+                                            FixedWidth="True"
+                                            Width="85"
+                                            MinWidth="24"
+                                            DisplayTemplate="{StaticResource OrderStatusColumnDisplayTemplate}">
+                            </dxg:GridColumn>
+                        </dxg:GridControl.Columns>
+                        <dxg:GridControl.View>
+                            <dxg:TableView AllowPerPixelScrolling="True"
+                                           ShowTotalSummary="False"
+                                           ShowIndicator="False"
+                                           ShowFixedTotalSummary="False"
+                                           ShowAutoFilterRow="False"
+                                           ShowSearchPanelMode="Never"
+                                           ShowGroupPanel="False"
+                                           IsColumnMenuEnabled="False"
+                                           AutoWidth="True"
+                                           NavigationStyle="Cell"
+                                           AllowResizing="True"
+                                           AllowEditing="False"
+                                           AllowGrouping="False"
+                                           AllowColumnMoving="False"
+                                           AllowColumnFiltering="False"
+                                           AllowSorting="False"
+                                           AllowBestFit="True"
+                                           AllowMoveColumnToDropArea="False" />
+                        </dxg:GridControl.View>
+                    </dxg:GridControl>
+                    <common:RecognizeBarcodeView x:Name="RecognizeBarcodeView"
+                                                 MaxHeight="160"
+                                                 Visibility="{Binding Path=DataContext.PackList.RecognizeBarcodeViewModelVisible, Mode=OneWay, ElementName=GridControl, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=False}}"
+                                                 DataContext="{Binding Path=RecognizeBarcodeViewModel, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+                <common:SummaryItemsView SummaryItems="{Binding Path=SummaryItems, Mode=OneWay}"
+                                         LabelColumnWidth="*"
+                                         ContentColumnWidth="2.5*"
+                                         Width="220" />
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage x:Name="WaitImage"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="PrintCommand.IsExecuting" />
+                            <Binding Path="DeleteOrderCommand.IsExecuting" />
+                            <Binding Path="PackTransferCommand.IsExecuting"/>
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup VerticalAlignment="Center">
+                    <dx:SimpleButton Content="Передать на упаковку"
+                                     HorizontalAlignment="Right"
+                                     Style="{StaticResource VisibilityBasedOnEnabledButtonStyle}"
+                                     Command="{Binding Path=PackTransferCommand, Mode=OneWay}" />
+                    <dx:SimpleButton Content="Печать"
+                                     Glyph="{dx:DXImage Image=Printer_16x16.png}"
+                                     HorizontalAlignment="Right"
+                                     Command="{Binding Path=PrintCommand, Mode=OneWay}" />
+                    <StackPanel Style="{StaticResource VerticalSeparatorStackPanelStyle}"
+                                HorizontalAlignment="Right" />
+                    <dx:SimpleButton Content="Завершить"
+                                     HorizontalAlignment="Right"
+                                     Glyph="../../../../Images/Common/tick.png"
+                                     Command="{Binding Path=OkCommand, Mode=OneWay}"
+                                     IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            HorizontalAlignment="Right"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</UserControl>

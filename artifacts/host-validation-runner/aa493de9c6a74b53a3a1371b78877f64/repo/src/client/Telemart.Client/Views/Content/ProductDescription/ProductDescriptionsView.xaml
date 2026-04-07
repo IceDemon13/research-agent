@@ -1,0 +1,200 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Content.ProductDescription.ProductDescriptionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:controls="clr-namespace:Telemart.Client.Controls"
+             xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Content.ProductDescription"
+             DataContext="{client:Container Type=viewModels:ProductDescriptionsViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:ProductDescriptionsViewModel, IsDesignTimeCreatable=True}"
+             d:DesignWidth="1024"
+             d:DesignHeight="768">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:FolderBrowserDialogService Description="Выберите папку, в которой находятся файлы с описаниями товаров" />
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl x:Name="LayoutControl"
+                        Orientation="Vertical"
+                        Padding="0"
+                        ItemSpace="0">
+        <dxb:BarManager VerticalAlignment="Top">
+            <dxb:ToolBarControl IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, ElementName=GridControl, Converter={dxmvvm:BooleanNegationConverter}}">
+                <dxb:BarButtonItem Content="Очистить"
+                                   LargeGlyph="{dx:DXImage Image=New_32x32.png}"
+                                   Glyph="{dx:DXImage Image=New_16x16.png}"
+                                   Command="{Binding Path=ClearCommand, Mode=OneTime}" />
+                <dxb:BarSubItem Content="Добавить"
+                                LargeGlyph="{dx:DXImage Image=Add_32x32.png}"
+                                Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                BarItemDisplayMode="ContentAndGlyph"
+                                GlyphAlignment="Top">
+                    <dxb:BarButtonItem Content="Русский"
+                                       ToolTip="Добавить (insert)"
+                                       Glyph="../../../Images/Common/russian_flag.png"
+                                       BarItemDisplayMode="ContentAndGlyph"
+                                       GlyphAlignment="Top"
+                                       Command="{Binding Path=AddCommand, Mode=OneTime}"
+                                       CommandParameter="{x:Static dictionaries:Language.Russian}" />
+                    <dxb:BarButtonItem Content="Украинский"
+                                       Glyph="../../../Images/Common/ukrainian_flag.png"
+                                       BarItemDisplayMode="ContentAndGlyph"
+                                       GlyphAlignment="Top"
+                                       Command="{Binding Path=AddCommand, Mode=OneTime}"
+                                       CommandParameter="{x:Static dictionaries:Language.Ukrainian}" />
+                    <dxb:BarButtonItem Content="Английский"
+                                       Glyph="../../../Images/Common/flag_great_britain.png"
+                                       BarItemDisplayMode="ContentAndGlyph"
+                                       GlyphAlignment="Top"
+                                       Command="{Binding Path=AddCommand, Mode=OneTime}"
+                                       CommandParameter="{x:Static dictionaries:Language.English}" />
+                </dxb:BarSubItem>
+                <dxb:BarButtonItem Content="Удалить"
+                                   ToolTip="Удалить (Del)"
+                                   LargeGlyph="{dx:DXImage Image=Delete_32x32.png}"
+                                   Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                   Command="{Binding Path=DeleteCommand, Mode=OneWay}" />
+                <dxb:BarItemSeparator />
+                <dxb:BarButtonItem Content="Сохранить"
+                                   LargeGlyph="{dx:DXImage Image=Save_32x32.png}"
+                                   Glyph="{dx:DXImage Image=Save_16x16.png}"
+                                   Command="{Binding Path=SaveCommand, Mode=OneWay}" />
+                <dxb:BarItemSeparator />
+                <controls:WikiBarButtonItem />
+            </dxb:ToolBarControl>
+        </dxb:BarManager>
+        <dxlc:LayerSeparator Height="1"
+                             Kind="Horizontal" />
+        <dxg:GridControl x:Name="GridControl"
+                         CurrentItem="{Binding Path=SelectedProductDescription, Mode=TwoWay}"
+                         ItemsSource="{Binding Path=ProductDescriptions, Mode=OneWay}"
+                         ShowBorder="False"
+                         SelectionMode="None"
+                         ShowLoadingPanel="{Binding Path=AddCommand.IsExecuting, Mode=OneWay}">
+            <dxmvvm:Interaction.Behaviors>
+                <behaviors:LayoutSerializationBehavior FileName="product_fotos_1.xml" />
+                <behaviors:CopyCurrentCellToClipboardBehavior />
+            </dxmvvm:Interaction.Behaviors>
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn Header="Путь к папке"
+                                HeaderToolTip="Путь к папке"
+                                FieldName="FilePath"
+                                MinWidth="200"
+                                Width="0.3*" />
+                <dxg:GridColumn Header="Файл"
+                                HeaderToolTip="Файл"
+                                FieldName="FileName"
+                                MinWidth="200"
+                                Width="0.35*">
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Товар"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                FieldName="ProductName"
+                                MinWidth="200"
+                                Width="0.35*">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel>
+                                <dxe:TextEdit x:Name="PART_Editor"
+                                              EditValue="{Binding RowData.Row.ProductName}" />
+                                <dx:SimpleButton Command="{Binding Path=DataContext.SelectProductCommand, Mode=OneWay, ElementName=LayoutControl}"
+                                                 Content="..."
+                                                 Width="20"
+                                                 MinWidth="20"
+                                                 Height="20"
+                                                 Padding="1 1 1 1"
+                                                 HorizontalAlignment="Right" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Язык"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                HorizontalHeaderContentAlignment="Left"
+                                FieldName="LanguageId"
+                                AllowBestFit="False"
+                                AllowResizing="False"
+                                Width="100"
+                                FixedWidth="True"
+                                AllowGrouping="False"
+                                AllowColumnFiltering="True"
+                                FilterPopupMode="CheckedList"
+                                AllowAutoFilter="False">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Languages}"
+                                                  ValueMember="Id"
+                                                  DisplayMember="DisplayValue"
+                                                  HorizontalContentAlignment="Left" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="C"
+                                HeaderToolTip="Статус"
+                                Width="24"
+                                FixedWidth="True"
+                                HorizontalHeaderContentAlignment="Center">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Vertical"
+                                        Margin="0 2 0 0"
+                                        VerticalAlignment="Center"
+                                        HorizontalAlignment="Center">
+                                <dx:DXImage Source="../../../Images/Common/tick.png"
+                                            Width="16"
+                                            Height="16"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            Visibility="{Binding Path=RowData.Row.IsSuccess, Converter={dx:BooleanToVisibilityConverter}}" />
+                                <dx:DXImage Source="../../../Images/warning.png"
+                                            Width="16"
+                                            Height="16"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            ToolTipService.ToolTip="{Binding Path=RowData.Row.ErrorMessage}"
+                                            Visibility="{Binding Path=RowData.Row.IsError, Converter={dx:BooleanToVisibilityConverter}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TableView AutoWidth="True"
+                               AllowEditing="False"
+                               NavigationStyle="Cell"
+                               ShowIndicator="False"
+                               ShowAutoFilterRow="False"
+                               ShowFixedTotalSummary="False"
+                               IsTotalSummaryMenuEnabled="False"
+                               ShowTotalSummary="False"
+                               ShowGroupPanel="False"
+                               AllowGrouping="False"
+                               AllowMoveColumnToDropArea="False"
+                               AllowColumnMoving="False"
+                               AllowColumnFiltering="False"
+                               AllowSorting="True"
+                               AllowResizing="True"
+                               EnableImmediatePosting="True" />
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+    </dxlc:LayoutControl>
+
+</UserControl>

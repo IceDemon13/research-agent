@@ -1,0 +1,73 @@
+﻿{
+    "reindex":  {
+                    "repo_id":  "telemart_soft_test",
+                    "success":  true,
+                    "gitnexus_enabled":  true,
+                    "gitnexus_index_status":  "ready",
+                    "gitnexus_indexed_at":  "2026-04-07T01:00:06.870810+00:00",
+                    "gitnexus_ui_url":  "",
+                    "gitnexus_home_used_for_analyze":  "/gitnexus",
+                    "gitnexus_home_used_for_backend":  "/gitnexus",
+                    "backend_repo_visible_after_analyze":  true,
+                    "backend_visible_repo_count":  12,
+                    "backend_visible_repo_ids_or_paths":  [
+                                                              "/repos/telemart_soft_test",
+                                                              "telemart_soft_test",
+                                                              "c2eb1cb0b4962f3b6c1abccedbc40c6e9fe0e193",
+                                                              "/repos/telemart_service_test",
+                                                              "telemart_service_test",
+                                                              "a300de106d0c75e2e3370f36ffd99f772b4480ff",
+                                                              "/repos/telemart_parser_service_test",
+                                                              "telemart_parser_service_test",
+                                                              "7986c916ef3c44ae0288b9292c67abfe28fb06c8",
+                                                              "/repos/telemart_jobs_test",
+                                                              "telemart_jobs_test",
+                                                              "ab5e2b72a679995adeff8c11a3fb3be71017c2cb"
+                                                          ],
+                    "message":  "GitNexus analyze completed successfully."
+                },
+    "provider_used":  "native",
+    "configured_provider":  "gitnexus_http",
+    "provider_reason":  "Workflow \u0027analyze_task\u0027 stayed on the native provider because this repo is not in the GitNexus allowlist.",
+    "selected_repos":  [
+                           {
+                               "repo_id":  "self",
+                               "score":  0.0,
+                               "reasons":  [
+
+                                           ],
+                               "historical_match_count":  0,
+                               "top_historical_matches":  [
+
+                                                          ],
+                               "top_historical_changed_files":  [
+
+                                                                ]
+                           }
+                       ],
+    "top_historical_matches":  [
+
+                               ],
+    "top_historical_changed_files":  [
+
+                                     ],
+    "novelty_score":  62,
+    "analysis_mode":  "guided",
+    "patch_generation_ready":  false,
+    "patch_generation_blockers":  [
+                                      "novelty too high",
+                                      "decision questions unresolved"
+                                  ],
+    "allowed_files":  [
+                          "agents/change_agent.py",
+                          "services/repo_context_rules.py",
+                          "agents/root_agent.py"
+                      ],
+    "diff_generated":  false,
+    "patch_repo_id":  null,
+    "touched_files":  [
+                          null
+                      ],
+    "review_required":  null,
+    "auto_apply":  null
+}

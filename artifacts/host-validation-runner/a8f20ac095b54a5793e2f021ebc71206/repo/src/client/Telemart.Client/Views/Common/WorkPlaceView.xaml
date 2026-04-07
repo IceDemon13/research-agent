@@ -1,0 +1,99 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Common.WorkPlaceView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Common"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:themes="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                              DataContext="{client:Container Type=viewModels:WorkPlaceViewModel}"
+                              mc:Ignorable="d"
+                              Width="350"
+                              Height="140"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:WorkPlaceViewModel}}">
+  
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+     
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        Orientation="Vertical"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        IsEnabled="{Binding Path=IsVisible, Mode=OneWay, ElementName=BusyIndicatorLayoutGroup, Converter={dxmvvm:BooleanNegationConverter}}"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              VerticalAlignment="Top">
+                <dxlc:LayoutItem>
+                    <TextBlock Text="{Binding Path = Title}" 
+                               HorizontalAlignment="Left"
+                               FontSize="18"
+                               FontWeight="DemiBold"/>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Место работы">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=WorkPlaceTypes, Mode=OneWay}"
+                                      DisplayMember="Name"
+                                      EditValue="{Binding Path=SelectedWorkPlaceType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      IsReadOnly="false"
+                                      IsEnabled="True" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Тип устройства">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=WorkPlaceDeviceTypes, Mode=OneWay}"
+                                      DisplayMember="Name"
+                                      EditValue="{Binding Path=SelectedWorkPlaceDeviceType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      IsReadOnly="false"
+                                      IsEnabled="True" />
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup x:Name="BusyIndicatorLayoutGroup"
+                                  Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Bottom">
+                    <dxlc:LayoutGroup.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="HandleLoadedCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxlc:LayoutGroup.Visibility>
+                    <viewComponents:WaitImage HorizontalAlignment="Left"
+                                              VerticalAlignment="Bottom" />
+                    <TextBlock Text="Обработка..." />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  VerticalAlignment="Bottom"
+                                  HorizontalAlignment="Right">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsTabStop="True"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=ValidationContainer, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}"
+                            Visibility="{Binding Path=CancelCommandVisible, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter}}"
+                            HorizontalAlignment="Right" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+</controls:TelemartUserControl>

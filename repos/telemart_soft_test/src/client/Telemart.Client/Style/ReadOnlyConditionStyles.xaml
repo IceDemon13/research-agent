@@ -1,0 +1,219 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:common="clr-namespace:Telemart.Client.Common"
+                    xmlns:business="clr-namespace:Telemart.Client.Business"
+                    xmlns:converters="clr-namespace:Telemart.Client.Common.Converters">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+        <ResourceDictionary>
+            <Style x:Key="ReadOnlyConditionsStyle"
+                   TargetType="dxe:BaseEdit">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="LookUpReadOnlyConditionsStyle"
+                   TargetType="dxe:PopupBaseEdit">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Setter Property="AllowDefaultButton"
+                        Value="True" />
+                <Setter Property="IsTextEditable"
+                        Value="False"/>
+                <Setter Property="dxmvvm:Interaction.BehaviorsTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <ContentControl>
+                                <dxmvvm:EventToCommand EventName="PopupOpening"
+                                                       Command="{x:Static common:StyleCommands.LookUpEditPopupOpening}"
+                                                       PassEventArgsToCommand="True"/>
+                            </ContentControl>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Setter Property="AllowDefaultButton"
+                                Value="False" />
+                        <Setter Property="IsTextEditable"
+                                Value="True"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="ReadOnlySearchableComboBoxStyle"
+                   BasedOn="{StaticResource SearchableComboBoxStyle}"
+                   TargetType="dxe:LookUpEditBase">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Setter Property="AllowDefaultButton"
+                                Value="False" />
+                        <Setter Property="NullValueButtonPlacement"
+                                Value="None" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="SearchableLookUpReadOnlyConditionsStyle"
+                   BasedOn="{StaticResource SearchableComboBoxStyle}"
+                   TargetType="dxe:LookUpEditBase">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Setter Property="AllowDefaultButton"
+                        Value="True" />
+                <Setter Property="NullValueButtonPlacement"
+                        Value="EditBox" />
+                <Setter Property="dxmvvm:Interaction.BehaviorsTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <ContentControl>
+                                <dxmvvm:EventToCommand EventName="PopupOpening"
+                                                       Command="{x:Static common:StyleCommands.LookUpEditPopupOpening}"
+                                                       PassEventArgsToCommand="True"/>
+                            </ContentControl>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Setter Property="AllowDefaultButton"
+                                Value="False" />
+                        <Setter Property="NullValueButtonPlacement"
+                                Value="None" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="CheckedTokenComboBoxReadOnlyConditionsStyle"
+                   BasedOn="{StaticResource CheckedTokenComboBoxStyle}"
+                   TargetType="dxe:ComboBoxEdit">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Setter Property="AllowDefaultButton"
+                        Value="True" />
+                <Setter Property="NullValueButtonPlacement"
+                        Value="None" />
+                <Setter Property="dxmvvm:Interaction.BehaviorsTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <ContentControl>
+                                <dxmvvm:EventToCommand EventName="PopupOpening"
+                                                       Command="{x:Static common:StyleCommands.LookUpEditPopupOpening}"
+                                                       PassEventArgsToCommand="True" />
+                            </ContentControl>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Setter Property="AllowDefaultButton"
+                                Value="False" />
+                        <Setter Property="NullValueButtonPlacement"
+                                Value="None" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="DateEditReadOnlyConditionsStyle"
+                   TargetType="dxe:DateEdit"
+                   BasedOn="{StaticResource BasicDateEdit}">
+                <Setter Property="Mask"
+                        Value="{x:Static business:DateFormattingRules.FullDateTimeFormat}"/>
+                <Setter Property="InvalidValueBehavior"
+                        Value="AllowLeaveEditor"/>
+                <Setter Property="AllowDefaultButton"
+                        Value="True" />
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="AllowRoundOutOfRangeValue"
+                                Value="False" />
+                        <Setter Property="AllowDefaultButton"
+                                Value="False" />
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="SpinEditReadOnlyConditionsStyle"
+                   TargetType="{x:Type dxe:SpinEdit}">
+                <Setter Property="AllowDefaultButton"
+                        Value="True" />
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}"
+                                 Value="True">
+                        <Setter Property="AllowDefaultButton"
+                                Value="False" />
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="PhoneTextEditReadOnlyConditionsStyle"
+                           TargetType="dxe:TextEdit"
+                           BasedOn="{StaticResource PhoneTextEdit}">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="SmallTimeSpanReadonlyTextEdit"
+                   TargetType="dxe:TextEdit"
+                   BasedOn="{StaticResource SmallTimeSpanTextEdit}">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="TimeSpanReadonlyButtonEdit"
+                   TargetType="dxe:ButtonEdit"
+                   BasedOn="{StaticResource TimeSpanButtonEdit}">
+                <Setter Property="Opacity"
+                        Value="{StaticResource EnabledElementOpacity}" />
+                <Setter Property="NullValueButtonPlacement"
+                        Value="EditBox"/>
+                <Style.Triggers>
+                    <DataTrigger Value="True"
+                                 Binding="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}">
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Setter Property="NullValueButtonPlacement"
+                                Value="None"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

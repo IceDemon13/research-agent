@@ -1,0 +1,1598 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Version>3.72.0</Version>
+    <CodeAnalysisRuleSet>Telemart.Client.ruleset</CodeAnalysisRuleSet>
+    <UseWPF>true</UseWPF>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>x64;x86</Platforms>
+    <EnvironmentName>Development</EnvironmentName>
+    <ApplicationIcon>Images\bug_fixing.ico</ApplicationIcon>
+    <PackPath>..\..\$(ProjectDir)release</PackPath>
+    <ApplicationId>TelemartClient$(EnvironmentName)</ApplicationId>
+    <Product>Telemart.Client.$(EnvironmentName)</Product>
+    <UserSecretsId>6e117cf2-750e-4ade-9c61-c25ab0550b99</UserSecretsId>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnvironmentName)' == 'Production'">
+    <ApplicationIcon>Images\Icon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnvironmentName)' == 'Staging'">
+    <ApplicationIcon>Images\IconStaging.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnvironmentName)' == 'Uat'">
+    <ApplicationIcon>Images\IconUat.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(EnvironmentName)' == 'Production'">
+    <ApplicationId>TelemartClient</ApplicationId>
+    <Product>Telemart.Client</Product>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <SelfContained>True</SelfContained>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>True</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Images\Bonus\telemart_point.png" />
+    <None Remove="Images\Common\arrow_refresh.png" />
+    <None Remove="Images\Common\clock_stop.png" />
+    <None Remove="Images\Common\document_hash_tag.png" />
+    <None Remove="Images\Common\microformats.png" />
+    <None Remove="Images\Common\phone-call-down_16x16.png" />
+    <None Remove="Images\Common\phone-call-up_16x16.png" />
+    <None Remove="Images\Common\priority_small.png" />
+    <None Remove="Images\Common\sobaka.png" />
+    <None Remove="Images\Common\table_insert.png" />
+    <None Remove="Images\Common\upgrade_downgrade_account_32x32.png" />
+    <None Remove="Images\Common\user_bart.png" />
+    <None Remove="Images\NavigationMenu\money_bag.png" />
+    <None Remove="Images\NavigationMenu\server.png" />
+    <None Remove="Images\Order\Payment\payment11.png" />
+    <None Remove="Images\Order\Payment\Payment13.png" />
+    <None Remove="Images\telemart_logo.png" />
+    <None Remove="Images\Order\Payment\payment12.png" />
+    <None Remove="Images\Order\Payment_g\payment12_g.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.2.0" />
+    <PackageReference Include="ArpLookup" Version="2.0.3" />
+    <PackageReference Include="AutoMapper" Version="14.0.0" />
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageReference Include="CompareNETObjects" Version="4.83.0" />
+    <PackageReference Include="DevExpress.Reporting.Core" Version="24.2.6" />
+    <PackageReference Include="DevExpress.Wpf" Version="24.2.6" />
+    <PackageReference Include="DevExpress.Wpf.Themes.Win10Dark" Version="24.2.6" />
+    <PackageReference Include="DevExpress.Wpf.Themes.Win10Light" Version="24.2.6" />
+    <PackageReference Include="DevExpress.Wpf.Themes.Office2016DarkGraySE" Version="24.2.6" />
+    <PackageReference Include="DevExpress.Wpf.Themes.Office2016BlackSE" Version="24.2.6" />
+    <PackageReference Include="DynamicData" Version="9.2.1" />
+    <PackageReference Include="EPPlus" Version="8.0.1" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.70.0" />
+    <PackageReference Include="Humanizer.Core" Version="2.14.1" />
+    <PackageReference Include="Humanizer.Core.ru" Version="2.14.1" />
+    <PackageReference Include="IdentityModel" Version="6.2.0" />
+    <PackageReference Include="MediatR" Version="12.5.0" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.4" />
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.4" />
+    <PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.13.61">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3179.45" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Polly" Version="8.5.2" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="Quartz.Extensions.DependencyInjection" Version="3.14.0" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.1" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="SerilogAnalyzer" Version="0.15.0" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="SmartFormat.NET" Version="2.7.2" />
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.435">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Telemart.Common" Version="2.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Reports\Inventory\LeftoversReport.cs" />
+    <Compile Update="Reports\Inventory\LeftoversReport.Designer.cs">
+      <DependentUpon>LeftoversReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\Common\StickerReport.cs" />
+    <Compile Update="Reports\Common\StickerReport.Designer.cs">
+      <DependentUpon>StickerReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\Common\StickerProductReport.cs" />
+    <Compile Update="Reports\Common\StickerProductReport.Designer.cs">
+      <DependentUpon>StickerProductReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\Movement\MovementPlaceReport.cs" />
+    <Compile Update="Reports\Movement\MovementReport.cs" />
+    <Compile Update="Reports\OrderPack\ScanSheetReport.cs" />
+    <Compile Update="Reports\Order\Assembly\AssemblyReport.cs" />
+    <Compile Update="Reports\Order\Assembly\OrderSingleAssemblyReport.cs" />
+    <Compile Update="Reports\Order\Assembly\AssemblySerialsReport.cs" />
+    <Compile Update="Reports\Order\OrderTapeChequeReport.cs" />
+    <Compile Update="Reports\Product\Barcode50x40Report.cs" />
+    <Compile Update="Reports\Product\SerialNumberReport.cs" />
+    <Compile Update="Reports\Refund\StatementReturnRefundReport.cs" />
+    <Compile Update="Reports\Refund\RefundReport.cs" />
+    <Compile Update="Reports\ReturnInvoice\ReturnInvoiceAssemblyReport.cs" />
+    <Compile Update="Reports\ReturnInvoice\ReturnInvoiceAssemblyReport.Designer.cs">
+      <DependentUpon>ReturnInvoiceAssemblyReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ReturnInvoice\ReturnInvoiceSupplierReport.cs" />
+    <Compile Update="Reports\ReturnInvoice\ReturnInvoiceSupplierReport.Designer.cs">
+      <DependentUpon>ReturnInvoiceSupplierReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestDefectivenessReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReturnProtocolReport.cs" />
+    <Compile Update="Reports\AssemblyService\AssembledComputerRuleMovementReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReturnReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestRudyakovReturnProtocolReport.Designer.cs">
+      <DependentUpon>ServiceRequestRudyakovReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\AssemblyService\AssemblyServicePassportReport.Designer.cs">
+      <DependentUpon>AssemblyServicePassportReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTeleSvitReturnProtocolReport.Designer.cs">
+      <DependentUpon>ServiceRequestTeleSvitReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReturnProtocolBaseReport.Designer.cs">
+      <DependentUpon>ServiceRequestReturnProtocolBaseReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReturnProtocol14BaseReport.Designer.cs">
+      <DependentUpon>ServiceRequestReturnProtocol14BaseReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTeleSvit14ReturnProtocolReport.Designer.cs">
+      <DependentUpon>ServiceRequestTeleSvit14ReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTuzovskiyReturnProtocolReport.Designer.cs">
+      <DependentUpon>ServiceRequestTuzovskiyReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTuzovskiy14ReturnProtocolReport.Designer.cs">
+      <DependentUpon>ServiceRequestTuzovskiy14ReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Reports\SmartPost\SmartPostTtnReport.cs" />
+    <Compile Update="Reports\Order\OrderPackListReport.cs" />
+    <Compile Update="Reports\Order\OrderPrepaymentReport.cs" />
+    <Compile Update="Reports\ServiceInvoice\ServiceInvoiceReport.cs" />
+    <Compile Update="Reports\Order\OrderReport.cs" />
+    <Compile Update="Reports\Order\OrderWarrantyCardReport.cs" />
+    <Compile Update="Reports\Product\BarcodeExtendedReport.cs" />
+    <Compile Update="Reports\Product\BarcodeReport.cs" />
+    <Compile Update="Reports\Product\BarcodeLargeReport.cs" />
+    <Compile Update="Reports\SerialNumber\SerialNumberReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestRudyakovReturnProtocolReport.cs" />
+    <Compile Update="Reports\AssemblyService\AssemblyServicePassportReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestRudyakov14ReturnProtocolReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTuzovskiyReturnProtocolReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTuzovskiy14ReturnProtocolReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTeleSvitReturnProtocolReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestTeleSvit14ReturnProtocolReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReturnProtocolBaseReport.cs" />
+    <Compile Update="Reports\ServiceRequest\ServiceRequestReturnProtocol14BaseReport.cs" />
+    <Compile Update="Reports\TextReport\TextReport.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\AssemblyService\AssembledComputerRuleMovementReport.resx">
+      <DependentUpon>AssembledComputerRuleMovementReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\AssemblyService\AssemblyServicePassportReport.resx">
+      <DependentUpon>AssemblyServicePassportReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Common\StickerReport.resx">
+      <DependentUpon>StickerReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Common\StickerProductReport.resx">
+      <DependentUpon>StickerProductReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Inventory\LeftoversReport.resx">
+      <DependentUpon>LeftoversReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Movement\MovementPlaceReport.resx">
+      <DependentUpon>MovementPlaceReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Movement\MovementReport.resx">
+      <DependentUpon>MovementReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\OrderPack\ScanSheetReport.resx">
+      <DependentUpon>ScanSheetReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\Assembly\AssemblyReport.resx">
+      <DependentUpon>AssemblyReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Assembly\OrderSingleAssemblyReport.resx">
+      <DependentUpon>OrderSingleAssemblyReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\Assembly\AssemblySerialsReport.resx">
+      <DependentUpon>AssemblySerialsReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\OrderPackListReport.resx">
+      <DependentUpon>OrderPackListReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\OrderPrepaymentReport.resx">
+      <DependentUpon>OrderPrepaymentReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\OrderReport.resx">
+      <DependentUpon>OrderReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\OrderTapeChequeReport.resx">
+      <DependentUpon>OrderTapeChequeReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Order\OrderWarrantyCardReport.resx">
+      <DependentUpon>OrderWarrantyCardReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Product\Barcode50x40Report.resx">
+      <DependentUpon>Barcode50x40Report.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Product\BarcodeExtendedReport.resx">
+      <DependentUpon>BarcodeExtendedReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Product\BarcodeReport.resx">
+      <DependentUpon>BarcodeReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Product\BarcodeLargeReport.resx">
+      <DependentUpon>BarcodeLargeReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Product\SerialNumberReport.resx">
+      <DependentUpon>SerialNumberReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Refund\RefundReport.resx">
+      <DependentUpon>RefundReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\Refund\StatementReturnRefundReport.resx">
+      <DependentUpon>StatementReturnRefundReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ReturnInvoice\ReturnInvoiceAssemblyReport.resx">
+      <DependentUpon>ReturnInvoiceAssemblyReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ReturnInvoice\ReturnInvoiceSupplierReport.resx">
+      <DependentUpon>ReturnInvoiceSupplierReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\SerialNumber\SerialNumberReport.resx">
+      <DependentUpon>SerialNumberReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceInvoice\ServiceInvoiceReport.resx">
+      <DependentUpon>ServiceInvoiceReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestDefectivenessReport.resx">
+      <DependentUpon>ServiceRequestDefectivenessReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestReport.resx">
+      <DependentUpon>ServiceRequestReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestRudyakovReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestRudyakovReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\AssemblyService\AssemblyServicePassportReport.resx">
+      <DependentUpon>AssemblyServicePassportReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestTeleSvitReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestTeleSvitReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestReturnProtocolBaseReport.resx">
+      <DependentUpon>ServiceRequestReturnProtocolBaseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestReturnProtocol14BaseReport.resx">
+      <DependentUpon>ServiceRequestReturnProtocol14BaseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestTeleSvit14ReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestTeleSvit14ReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestTuzovskiyReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestTuzovskiyReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestTuzovskiy14ReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestTuzovskiy14ReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestRudyakov14ReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestRudyakov14ReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestReturnProtocolReport.resx">
+      <DependentUpon>ServiceRequestReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\AssemblyService\AssembledComputerRuleMovementReport.resx">
+      <DependentUpon>AssembledComputerRuleMovementReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\ServiceRequest\ServiceRequestReturnReport.resx">
+      <DependentUpon>ServiceRequestReturnReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\SmartPost\SmartPostTtnReport.resx">
+      <DependentUpon>SmartPostTtnReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Reports\TextReport\TextReport.resx">
+      <DependentUpon>TextReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <None Include="Properties\DataSources\Telemart.Client.Reports.Order.OrderAcceptanceProtocolReportData.datasource" />
+    <None Include="Properties\DataSources\Telemart.Client.Reports.Order.OrderWarrantyCardReportData.datasource" />
+    <None Include="Properties\DataSources\Telemart.Client.Reports.OrderReportData.datasource" />
+    <None Include="Properties\DataSources\Telemart.Client.Reports.Product.BarcodeReportData.datasource" />
+    <None Include="Properties\DataSources\Telemart.Client.Reports.SerialNumber.SerialNumberReportData.datasource" />
+    <None Include="Properties\DataSources\Telemart.Client.Reports.ServiceRequest.ServiceRequestReportData.datasource" />
+    <None Include="Telemart.Client.ruleset" />
+    <None Remove="Images\NavigationMenu\segment.png" />
+    <Resource Include="Images\Arrows\down_red_16_16.png" />
+    <Resource Include="Images\Arrows\up_green_16_16.png" />
+    <Resource Include="Images\Common\headphone.png" />
+    <Resource Include="Images\Common\phone-call-down_16x16.png" />
+    <Resource Include="Images\Common\phone-call-up_16x16.png" />
+    <Resource Include="Images\Common\table_refresh_16x16.png" />
+    <Resource Include="Images\Common\wrench_orange.png" />
+    <Resource Include="Images\NavigationMenu\comments_16x16.png" />
+    <Resource Include="Images\NavigationMenu\segment_tradein.png" />
+    <Resource Include="Images\NavigationMenu\segment.png" />
+    <None Remove="Images\Common\calculate-segments.png" />
+    <Resource Include="Images\Common\calculate-segments.png" />
+    <None Remove="Images\Common\class_module.png" />
+    <Resource Include="Images\Common\class_module.png" />
+    <None Remove="Images\NavigationMenu\area.png" />
+    <Resource Include="Images\NavigationMenu\area.png" />
+    <None Remove="Images\NavigationMenu\district.png" />
+    <Resource Include="Images\NavigationMenu\district.png" />
+    <None Remove="Images\Common\copying_and_distribution.png" />
+    <Resource Include="Images\Common\copying_and_distribution.png" />
+    <None Remove="Images\Common\viber_16x16.png" />
+    <Resource Include="Images\Common\viber_16x16.png" />
+    <None Remove="Images\CarryStiker\fragile.png" />
+    <Resource Include="Images\CarryStiker\fragile.png" />
+    <None Remove="Images\CarryStiker\thiswayup.png" />
+    <Resource Include="Images\CarryStiker\thiswayup.png" />
+    <None Remove="Images\ukrposhta_logo.png" />
+    <None Remove="Images\Common\flag_great_britain.png" />
+    <Resource Include="Images\Common\flag_great_britain.png" />
+    <None Remove="Images\Common\flag_great_britain_32x32.png" />
+    <Resource Include="Images\Common\flag_great_britain_32x32.png" />
+    <None Remove="Images\Order\Payment_g\payment16_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment16_g.png" />
+    <None Remove="Images\Order\Payment\payment16.png" />
+    <Resource Include="Images\Order\Payment\payment16.png" />
+    <None Remove="Images\Common\pci.png" />
+    <Resource Include="Images\Common\pci.png" />
+    <None Remove="Images\Common\camera_black.png" />
+    <Resource Include="Images\Common\camera_black.png" />
+    <None Remove="Images\NavigationMenu\sort_ascending_16x16.png" />
+    <None Remove="Images\NavigationMenu\map_logo.png" />
+    <Resource Include="Images\NavigationMenu\map_logo.png" />
+    <None Remove="Images\NavigationMenu\conversion_of_currency.png" />
+    <Resource Include="Images\NavigationMenu\conversion_of_currency.png" />
+    <None Remove="Images\Common\hand.png" />
+    <Resource Include="Images\Common\hand.png" />
+    <None Remove="Images\Common\cursor.png" />
+    <Resource Include="Images\Common\cursor.png" />
+    <None Remove="Images\NavigationMenu\android_16x16.png" />
+    <Resource Include="Images\NavigationMenu\android_16x16.png" />
+    <None Remove="Images\Common\application_cascade.png" />
+    <Resource Include="Images\Common\application_cascade.png" />
+    <None Remove="Images\Order\Payment\payment18.png" />
+    <Resource Include="Images\Order\Payment\payment18.png" />
+    <None Remove="Images\Order\Payment_g\payment18_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment18_g.png" />
+    <None Remove="Images\TradeIn\ruby.png" />
+    <None Remove="Images\TradeIn\ruby_gear.png" />
+    <Resource Include="Images\TradeIn\ruby_gear.png" />
+    <None Remove="Images\TradeIn\ruby_go.png" />
+    <Resource Include="Images\TradeIn\ruby_go.png" />
+    <None Remove="Images\TradeIn\ruby_go_1.png" />
+    <Resource Include="Images\TradeIn\ruby_go_1.png" />
+    <None Remove="Images\TradeIn\ruby_key.png" />
+    <Resource Include="Images\TradeIn\ruby_key.png" />
+    <None Remove="Images\NavigationMenu\ruby.png" />
+    <Resource Include="Images\NavigationMenu\ruby.png" />
+    <None Remove="Images\Order\Payment\ruby.png" />
+    <Resource Include="Images\Order\Payment\ruby.png" />
+    <None Remove="Images\Order\Payment\payment19.png" />
+    <Resource Include="Images\Order\Payment\payment19.png" />
+    <None Remove="Images\Common\page_add.png" />
+    <Resource Include="Images\Common\page_add.png" />
+    <None Remove="Images\Common\page_edit.png" />
+    <Resource Include="Images\Common\page_edit.png" />
+    <None Remove="Images\Common\page_white_magnify.png" />
+    <Resource Include="Images\Common\page_white_magnify.png" />
+    <None Remove="Images\Common\page_white_ruby.png" />
+    <Resource Include="Images\Common\page_white_ruby.png" />
+    <None Remove="Images\CompanyStructure\chart_organisation.png" />
+    <Resource Include="Images\CompanyStructure\chart_organisation.png" />
+    <None Remove="Images\CompanyStructure\chart_organisation32.png" />
+    <Resource Include="Images\CompanyStructure\chart_organisation32.png" />
+    <None Remove="Images\CompanyStructure\chart_organisation_add.png" />
+    <Resource Include="Images\CompanyStructure\chart_organisation_add.png" />
+    <None Remove="Images\CompanyStructure\chart_organisation_delete.png" />
+    <Resource Include="Images\CompanyStructure\chart_organisation_delete.png" />
+    <None Remove="Images\CompanyStructure\worker_departments.png" />
+    <Resource Include="Images\CompanyStructure\worker_departments.png" />
+    <None Remove="Images\CompanyStructure\manager_departments.png" />
+    <Resource Include="Images\CompanyStructure\manager_departments.png" />
+    <None Remove="Images\Order\Payment_g\payment20_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment20_g.png" />
+    <None Remove="Images\Order\Payment\payment20.png" />
+    <Resource Include="Images\Order\Payment\payment20.png" />
+    <None Remove="Images\Common\session_idle_time.png" />
+    <Resource Include="Images\Common\session_idle_time.png" />
+    <None Remove="Images\NavigationMenu\org_structure_users.png" />
+    <Resource Include="Images\NavigationMenu\org_structure_users.png" />
+    <None Remove="Images\Common\screwdriver.png" />
+    <Resource Include="Images\Common\screwdriver.png" />
+    <None Remove="Images\NavigationMenu\calendar.png" />
+    <Resource Include="Images\NavigationMenu\calendar.png" />
+    <None Remove="Images\Call\report_user.png" />
+    <Resource Include="Images\Call\report_user.png" />
+    <None Remove="Images\Call\user_go.png" />
+    <Resource Include="Images\Call\user_go.png" />
+    <None Remove="Images\Common\clock_32.png" />
+    <Resource Include="Images\Common\clock_32.png" />
+    <None Remove="Images\table_refresh_16x16.png" />
+    <None Remove="Images\NavigationMenu\user_comment_16x16.png" />
+    <None Remove="Images\NavigationMenu\date_next.png" />
+    <Resource Include="Images\NavigationMenu\date_next.png" />
+    <None Remove="Images\Common\fire.png" />
+    <Resource Include="Images\Common\fire.png" />
+    <None Remove="Images\clock_history_frame.png" />
+    <Resource Include="Images\clock_history_frame.png" />
+    <None Remove="Images\NavigationMenu\account_functions.png" />
+    <None Remove="Images\Order\Source\source7.png" />
+    <None Remove="Images\Order\Source\user_green.png" />
+    <Resource Include="Images\Order\Source\source7.png" />
+    <None Remove="Images\Order\Payment\payment21.png" />
+    <Resource Include="Images\Order\Payment\payment21.png" />
+    <None Remove="Images\Order\Payment_g\payment21_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment21_g.png" />
+    <None Remove="Images\Common\qr.png" />
+    <Resource Include="Images\Common\qr.png" />
+    <None Remove="Images\IconStaging.ico" />
+    <Resource Include="Images\IconStaging.ico" />
+    <None Remove="Images\Order\Payment\payment22.png" />
+    <Resource Include="Images\Order\Payment\payment22.png" />
+    <None Remove="Images\Order\Payment_g\payment22_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment22_g.png" />
+    <None Remove="Images\NavigationMenu\bullet_yellow_16x16.png" />
+    <Resource Include="Images\NavigationMenu\bullet_yellow_16x16.png" />
+    <None Remove="Images\Showcase\Cluster_32bits_16.png" />
+    <Resource Include="Images\Showcase\Cluster_32bits_16.png" />
+    <None Remove="Images\NavigationMenu\Location.png" />
+    <Resource Include="Images\NavigationMenu\Location.png" />
+    <None Remove="Images\Showcase\cluster_segment_16.png" />
+    <Resource Include="Images\Showcase\cluster_segment_16.png" />
+    <None Remove="Images\Actions\barcode_16.png" />
+    <Resource Include="Images\Actions\barcode_16.png" />
+    <None Remove="Images\NavigationMenu\lightbulb_delete.png" />
+    <Resource Include="Images\NavigationMenu\lightbulb_delete.png" />
+    <None Remove="Images\Common\uklon.png" />
+    <Resource Include="Images\Common\uklon.png" />
+    <None Remove="Images\NavigationMenu\metabase.png" />
+    <Resource Include="Images\NavigationMenu\metabase.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Telemart.Client.Fonts\Telemart.Client.Fonts.csproj" />
+    <ProjectReference Include="..\..\Telemart.Client.HtmlToPdf\Telemart.Client.HtmlToPdf.csproj" />
+    <ProjectReference Include="..\..\Telemart.Client.Cache\Telemart.Client.Cache.csproj" />
+    <ProjectReference Include="..\..\Telemart.Client.Protos\Telemart.Client.Protos.csproj" />
+    <ProjectReference Include="..\Telemart.Client.Core\Telemart.Client.Core.csproj" />
+    <ProjectReference Include="..\Telemart.Client.Data\Telemart.Client.Data.csproj" />
+    <ProjectReference Include="..\Telemart.Client.Dictionaries\Telemart.Client.Dictionaries.csproj" />
+    <ProjectReference Include="..\Telemart.Client.FiscalRegistrar.Programmical\Telemart.Client.FiscalRegistrar.Programmical.csproj" />
+    <ProjectReference Include="..\Telemart.Client.FiscalRegistrar\Telemart.Client.FiscalRegistrar.csproj" />
+    <ProjectReference Include="..\Telemart.Client.Oktell\Telemart.Client.Oktell.csproj" />
+    <ProjectReference Include="..\Telemart.Client.PosTerminal.Ingenico\Telemart.Client.PosTerminal.Ingenico.csproj" />
+    <ProjectReference Include="..\Telemart.Client.PosTerminal.PrivatBank\Telemart.Client.PosTerminal.PrivatBank.csproj" />
+    <ProjectReference Include="..\Telemart.Client.TransferObjects\Telemart.Client.TransferObjects.csproj" />
+    <ProjectReference Include="..\TelemartAnimatedGif\TelemartAnimatedGif.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Bonus\coin.png" />
+    <Resource Include="Images\Bonus\telemart_point.png" />
+    <Resource Include="Images\Common\account_functions.png" />
+    <Resource Include="Images\Common\android.png" />
+    <Resource Include="Images\Common\arrow_redo16x16.png" />
+    <Resource Include="Images\Common\carry2.png" />
+    <Resource Include="Images\Common\check_boxes.png" />
+    <Resource Include="Images\Common\check_boxes_series.png" />
+    <Resource Include="Images\Common\check_box_list.png" />
+    <Resource Include="Images\Common\clock_stop.png" />
+    <Resource Include="Images\Common\computer_error.png" />
+    <Resource Include="Images\Common\computer_go.png" />
+    <Resource Include="Images\Common\computer_key.png" />
+    <Resource Include="Images\Common\document_hash_tag.png" />
+    <Resource Include="Images\Common\flag_russia.png" />
+    <Resource Include="Images\Common\flag_ukraine.png" />
+    <Resource Include="Images\Common\google_custom_search_32x32.png" />
+    <Resource Include="Images\Common\microformats.png" />
+    <Resource Include="Images\Common\order_settings.png" />
+    <Resource Include="Images\Common\priority_small.png" />
+    <Resource Include="Images\Common\russian_flag.png" />
+    <Resource Include="Images\Common\server_configuration.png" />
+    <Resource Include="Images\Common\server_go.png" />
+    <Resource Include="Images\Common\sobaka.png" />
+    <Resource Include="Images\Common\spellcheck_error.png" />
+    <Resource Include="Images\Common\table_insert.png" />
+    <Resource Include="Images\Common\table_multiple.png" />
+    <Resource Include="Images\Common\ukrainian_flag.png" />
+    <Resource Include="Images\Common\upgrade_downgrade_account_32x32.png" />
+    <Resource Include="Images\Common\user_bart.png" />
+    <Resource Include="Images\Movement\State\5.png" />
+    <Resource Include="Images\NavigationMenu\arrow_redo_16x16.png" />
+    <Resource Include="Images\NavigationMenu\check_box_list.png" />
+    <Resource Include="Images\NavigationMenu\money_bag.png" />
+    <Resource Include="Images\NavigationMenu\server.png" />
+    <Resource Include="Images\NavigationMenu\server_configuration.png" />
+    <Resource Include="Images\NavigationMenu\server_lightning.png" />
+    <Resource Include="Images\Order\Carry\carry1.png" />
+    <Resource Include="Images\Order\Carry\carry2.png" />
+    <Resource Include="Images\Order\Carry\carry3.png" />
+    <Resource Include="Images\Order\Carry\carry4.png" />
+    <Resource Include="Images\Order\Carry\carry5.png" />
+    <Resource Include="Images\Order\Carry\carry6.png" />
+    <Resource Include="Images\Order\Carry\carry7.png" />
+    <Resource Include="Images\Order\Carry\carry8.png" />
+    <Resource Include="Images\Common\module.png" />
+    <Resource Include="Images\Common\tag_hash.png" />
+    <Resource Include="Images\Common\sobaka_blue.png" />
+    <Resource Include="Images\Common\sobaka_green.png" />
+    <Resource Include="Images\Common\server.png" />
+    <Resource Include="Images\Common\server_add.png" />
+    <Resource Include="Images\Common\theater.png" />
+    <Resource Include="Images\Common\assorti.png" />
+    <Resource Include="Images\Common\1.png" />
+    <Resource Include="Images\Common\2.png" />
+    <Resource Include="Images\NavigationMenu\shape_square_key.png" />
+    <Resource Include="Images\NavigationMenu\table_key.png" />
+    <Resource Include="Images\Common\3.png" />
+    <Resource Include="Images\Common\4.png" />
+    <Resource Include="Images\Common\5.png" />
+    <Resource Include="Images\Order\Carry\ukrposhta_logo.png" />
+    <Resource Include="Images\Order\Payment_g\payment14_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment15_g.png" />
+    <Resource Include="Images\Order\Payment\payment14.png" />
+    <Resource Include="Images\Order\Payment\payment15.png" />
+    <Resource Include="Images\Common\segment_delete.png" />
+    <Resource Include="Images\Common\segment_add.png" />
+    <Resource Include="Images\Common\segment_edit.png" />
+    <Resource Include="Images\Common\segment_settings.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Filter\arrow_refresh.png" />
+    <Resource Include="Images\Order\Filter\headphone_mic_16x16.png" />
+    <Resource Include="Images\Order\Payment\payment1.png" />
+    <Resource Include="Images\Order\Payment\payment11.png" />
+    <Resource Include="Images\Order\Payment\payment12.png" />
+    <Resource Include="Images\Order\Payment\Payment13.png" />
+    <Resource Include="Images\Order\Payment\payment2.png" />
+    <Resource Include="Images\Order\Payment\payment3.png" />
+    <Resource Include="Images\Order\Payment\payment4.png" />
+    <Resource Include="Images\Order\Payment\payment5.png" />
+    <Resource Include="Images\Order\Payment\payment6.png" />
+    <Resource Include="Images\Order\Payment\payment7.png" />
+    <Resource Include="Images\Order\Payment\payment8.png" />
+    <Resource Include="Images\Order\Payment_g\payment12_g.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Subdivision\subdivision2.png" />
+    <Resource Include="Images\Order\Subdivision\subdivision3.png" />
+    <Resource Include="Images\Order\Subdivision\subdivision4.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\OrderState\0.png" />
+    <Resource Include="Images\Order\OrderState\1.png" />
+    <Resource Include="Images\Order\OrderState\2.png" />
+    <Resource Include="Images\Order\OrderState\3.png" />
+    <Resource Include="Images\Order\OrderState\4.png" />
+    <Resource Include="Images\Order\OrderState\5.png" />
+    <Resource Include="Images\Order\OrderState\6.png" />
+    <Resource Include="Images\Order\OrderState\7.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\OrderProductState\0.png" />
+    <Resource Include="Images\Order\OrderProductState\1.png" />
+    <Resource Include="Images\Order\OrderProductState\2.png" />
+    <Resource Include="Images\Order\OrderProductState\6.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Source\source1.png" />
+    <Resource Include="Images\Order\Source\source2.png" />
+    <Resource Include="Images\Order\Source\source3.png" />
+    <Resource Include="Images\Order\Source\source4.png" />
+    <Resource Include="Images\Order\Source\source5.png" />
+    <Resource Include="Images\Order\Source\source6.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\baggage_cart_box_16x16.png" />
+    <Resource Include="Images\Order\Filter\1Cv8.png" />
+    <Resource Include="Images\Order\Filter\building_go.png" />
+    <Resource Include="Images\Order\Filter\calendar.png" />
+    <Resource Include="Images\Order\Filter\cart.png" />
+    <Resource Include="Images\Order\Filter\house.png" />
+    <Resource Include="Images\Order\Filter\lightbulb.png" />
+    <Resource Include="Images\Order\Filter\money.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Menu\copy.png" />
+    <Resource Include="Images\Order\Menu\print.png" />
+    <Resource Include="Images\Order\Menu\barcode.png" />
+    <Resource Include="Images\Order\Menu\mail_yellow.png" />
+    <Resource Include="Images\Order\Menu\phone.png" />
+    <Resource Include="Images\Order\Menu\search.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\comment.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Filter\accept.png" />
+    <Resource Include="Images\Order\Filter\building.png" />
+    <Resource Include="Images\Order\Filter\phone.png" />
+    <Resource Include="Images\Order\Filter\user_green.png" />
+    <Resource Include="Images\Order\Filter\user_suit.png" />
+    <Resource Include="Images\Order\Filter\package.png" />
+    <Resource Include="Images\Order\Filter\user.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Nomenclature\cart.png" />
+    <Resource Include="Images\Order\Nomenclature\find.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\select_new_post_warehouse.png" />
+    <Resource Include="Images\Order\get_new_post_delivery_date.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\cart.png" />
+    <Resource Include="Images\NavigationMenu\cheque.png" />
+    <Resource Include="Images\NavigationMenu\folder_wrench.png" />
+    <Resource Include="Images\NavigationMenu\report_user.png" />
+    <Resource Include="Images\NavigationMenu\three_tags.png" />
+    <Resource Include="Images\NavigationMenu\user_suit.png" />
+    <Resource Include="Images\NavigationMenu\gear.png" />
+    <Resource Include="Images\NavigationMenu\lorry.png" />
+    <Resource Include="Images\NavigationMenu\book_key.png" />
+    <Resource Include="Images\NavigationMenu\monitoring.png" />
+    <Resource Include="Images\NavigationMenu\money.png" />
+    <Resource Include="Images\NavigationMenu\toolbox.png" />
+    <Resource Include="Images\NavigationMenu\box_open.png" />
+    <Resource Include="Images\NavigationMenu\document_valid.png" />
+    <Resource Include="Images\NavigationMenu\house_table.png" />
+    <Resource Include="Images\NavigationMenu\box_front_open.png" />
+    <Resource Include="Images\NavigationMenu\headphone.png" />
+    <Resource Include="Images\NavigationMenu\house_go.png" />
+    <Resource Include="Images\NavigationMenu\bookshelf.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Invoice\InvoiceState\1.png" />
+    <Resource Include="Images\Invoice\InvoiceState\2.png" />
+    <Resource Include="Images\Invoice\InvoiceState\3.png" />
+    <Resource Include="Images\Invoice\InvoiceState\4.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Invoice\lockResource.png" />
+    <Resource Include="Images\Invoice\Filter\barcode.png" />
+    <Resource Include="Images\Invoice\Filter\user_suit.png" />
+    <Resource Include="Images\Invoice\Filter\house.png" />
+    <Resource Include="Images\Invoice\Filter\lightbulb.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\lorry.png" />
+    <Resource Include="Images\Contractor\user_green.png" />
+    <Resource Include="Images\Contractor\user_red.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\CategoryOptions\MoveDown_Red_16x16.png" />
+    <Resource Include="Images\CategoryOptions\pencil.png" />
+    <Resource Include="Images\CategoryOptions\MoveUp_16x16.png" />
+    <Resource Include="Images\CategoryOptions\Properties_16x16.png" />
+    <Resource Include="Images\CategoryOptions\Reset_16x16.png" />
+    <Resource Include="Images\CategoryOptions\Left_16x16.png" />
+    <Resource Include="Images\CategoryOptions\box.png" />
+    <Resource Include="Images\CategoryOptions\folder.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\error.png" />
+    <Resource Include="Images\Purchase\lorry_go.png" />
+    <Resource Include="Images\telemart_logo.png" />
+    <Resource Include="Images\warning.png" />
+    <Resource Include="Images\ok.png" />
+    <Resource Include="Images\error_32_32.png" />
+    <Resource Include="Images\information_32_32.png" />
+    <Resource Include="Images\warning_32_32.png" />
+    <Resource Include="Images\question_32_32.png" />
+    <Resource Include="Images\update_ready.png" />
+    <Resource Include="Images\update_ready_notification.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Purchase\cross_32_32.png" />
+    <Resource Include="Images\Purchase\delete_32_32.png" />
+    <Resource Include="Images\Purchase\house_32_32.png" />
+    <Resource Include="Images\Purchase\lorry_32_32.png" />
+    <Resource Include="Images\Purchases\user_green.png" />
+    <Resource Include="Images\Purchases\user_red.png" />
+    <Resource Include="Images\Common\bullet_green_16x16.png" />
+    <Resource Include="Images\Common\bullet_red_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Parser\cross_shiled_32_32.png" />
+    <Resource Include="Images\Parser\link_add_32_32.png" />
+    <Resource Include="Images\Parser\link_unchain_32_32.png" />
+    <Resource Include="Images\Parser\stopwatch_pause_32_32.png" />
+    <Resource Include="Images\Parser\anchor_32_32.png" />
+    <Resource Include="Images\Parser\arrow_down_16_16.png" />
+    <Resource Include="Images\Parser\arrow_up_16_16.png" />
+    <Resource Include="Images\Parser\database_delete_32_32.png" />
+    <Resource Include="Images\Parser\link_delete_32_32.png" />
+    <Resource Include="Images\Parser\excel_32_32.png" />
+    <Resource Include="Images\Parser\book_16_16.png" />
+    <Resource Include="Images\Parser\folders_16_16.png" />
+    <Resource Include="Images\Parser\cross_shiled_16_16.png" />
+    <Resource Include="Images\Parser\link_16_16.png" />
+    <Resource Include="Images\Parser\stopwatch_pause_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\MoneyIncome\lightning.png" />
+    <Resource Include="Images\NP_32_32.gif" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\MoneyIncome\ok.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Actions\hand.png" />
+    <Resource Include="Images\Order\Actions\lightbulb.png" />
+    <Resource Include="Images\Common\lightbulb_delete.png" />
+    <Resource Include="Images\Order\Actions\pencil.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\gear_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\nofelet_report_logo.png" />
+    <Resource Include="Images\telemart_report_logo.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Payment_g\payment1_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment2_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment3_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment4_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment5_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment6_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment7_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment8_g.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Bulk_add\bulk_add.png" />
+    <Resource Include="Images\Order\Bulk_add\error.png" />
+    <Resource Include="Images\Order\Bulk_add\tick.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\gift_add.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\add_from_template.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\information.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\lock.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\email_go.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\add_folder_32_32.png" />
+    <Resource Include="Images\Actions\delete_32_32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\CategoryOptions\lock.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\cart_remove.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Invoice\lock_open.png" />
+    <Resource Include="Images\Invoice\script_edit.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\box_open_32_32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\bin.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\user_suit.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\change_password_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Contractor\tick.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\delete_folder_32_32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\barcode_32_32.png" />
+    <Resource Include="Images\Actions\mail_yellow_32_32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\wait.gif" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Product\barcode.png" />
+    <Resource Include="Images\Product\money.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\lock.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\tick.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\page_copy_16x16.png" />
+    <Resource Include="Images\Order\tag_blue_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\toggle_16_16.png" />
+    <Resource Include="Images\Actions\toggle_expand_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\page_copy.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Actions\calculator.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\installer_box.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Arrows\down_green_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Arrows\up_red_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\baggage_cart_box_32x32.png" />
+    <Resource Include="Images\Common\calendar_edit.png" />
+    <Resource Include="Images\Order\magnifier.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\cart_full_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\page_np_32_32.png" />
+    <Resource Include="Images\Common\lorry_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Filter\time.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Priority\priority1.png" />
+    <Resource Include="Images\Priority\priority2.png" />
+    <Resource Include="Images\Priority\priority3.png" />
+    <Resource Include="Images\Priority\priority4.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Call\headphone_mic_32x32.png" />
+    <Resource Include="Images\Call\phone_sound_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Movement\State\1.png" />
+    <Resource Include="Images\Movement\State\2.png" />
+    <Resource Include="Images\Movement\State\3.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Call\toolbox.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\chart_organisation.png" />
+    <Resource Include="Images\Common\emoticon_unhappy.png" />
+    <Resource Include="Images\Common\lightbulb.png" />
+    <Resource Include="Images\Common\phone_handset_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\cheque.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\book_addresses.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\coins_in_hand.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\BillState\timeline.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\document_comments_16x16.png" />
+    <Resource Include="Images\Common\star_16x16.png" />
+    <Resource Include="Images\Common\user_16x16.png" />
+    <Resource Include="Images\Common\user_comment_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\house_go.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\setting_tools_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ServiceRequest\auction_hammer_gavel.png" />
+    <Resource Include="Images\ServiceRequest\user_comment.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ServiceRequest\np_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\user_red_16x16.png" />
+    <Resource Include="Images\Call\headphone_mic_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\user_delete_32_32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\eye_16x16.png" />
+    <Resource Include="Images\Common\lightning_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Actions\change_password_32_32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\report.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\wrench.png" />
+    <Resource Include="Images\Common\accordion_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\arrow_down_16x16.png" />
+    <Resource Include="Images\Common\arrow_up_16x16.png" />
+    <Resource Include="Images\Common\sort_ascending_16x16.png" />
+    <Resource Include="Images\Common\sort_descending_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\coins_16x16.png" />
+    <Resource Include="Images\Common\medal_award_gold_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\comments_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\user_detective_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Parser\link_break_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\cheque_wrench.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\database_table.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ServiceInvoice\ServiceInvoiceState\closed.png" />
+    <Resource Include="Images\ServiceInvoice\ServiceInvoiceState\new.png" />
+    <Resource Include="Images\ServiceInvoice\ServiceInvoiceState\received.png" />
+    <Resource Include="Images\ServiceInvoice\ServiceInvoiceState\sent.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ProductsCatalog\folder_table_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_green_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\wrench_orange.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\setting_tools_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\cart_full_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ServiceRequest\house_wrench_16x16.png" />
+    <Resource Include="Images\ServiceRequest\house_wrench_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\house_wrench_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ServiceRequest\page_wrench_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\house_back_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\cross.png" />
+    <Resource Include="Images\Common\lorry_go.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\arrow_redo_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\coins.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ProductsCatalog\table_edit_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ProductsCatalog\arrow_undo_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\filter_32x32.png" />
+    <Resource Include="Images\Common\filter_error_32x32.png" />
+    <Resource Include="Images\Common\filter_pencil_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\box_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\clock_history_frame_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\filter_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\package_delete_16x16.png" />
+    <Resource Include="Images\Order\lightbulb_back_16x16.png" />
+    <Resource Include="Images\Order\thumb_up_go_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\arrow_undo_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\tick_grey_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\bullet_yellow_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\table_gear.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\coins_add_16x16.png" />
+    <Resource Include="Images\Common\coins_delete_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\canceled.png" />
+    <Resource Include="Images\Refunds\RefundState\confirmed.png" />
+    <Resource Include="Images\Refunds\RefundState\done.png" />
+    <Resource Include="Images\Refunds\RefundState\new.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\package_green_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\delete_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\calculator_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\user_suit_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\mail_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Sms\mail_green_16x16.png" />
+    <Resource Include="Images\Sms\mail_red_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Invoice\InvoiceState\5.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\layout_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\newspaper_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\help_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\cart_full_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\coins_delete.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\coins_add.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_white.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\server_lightning.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\barcode_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\document_comment_below_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\house_table.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\house.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\b2b.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\accordion.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\bitrix24.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\comment.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Comment\question.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Comment\user_comment.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Comment\cross_shield.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Comment\lightbulb.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Comment\tick.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\calendar.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\user_green.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\folders_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\package.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\house.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\information.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\cross_shield_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\phone_sound_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\table_excel.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\thumb_down_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\thumb_up_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\cash_stack.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\calculator_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\hand_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\distr_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\android_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\star_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\emotion_sure_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Movement\State\4.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\text.png" />
+    <Resource Include="Images\NavigationMenu\images_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\house_bug.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\document_notes_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_white_get_16x16.png" />
+    <Resource Include="Images\Common\page_white_put_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\cog_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_box_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\lock_break.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_white_bug.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\hotline_favicon_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\folder.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\novaposhta.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\video.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\text_list_bullets.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\yandex_market_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\group_key.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\novaposhta_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="AppReadme\Compare-NET-Objects-Help.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\exclamation_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\comment_box_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\user_comment_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\table_excel_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\text_list_bullets_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\comment_edit_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\privat_16x16.png" />
+    <Resource Include="Images\Common\privat_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\privat.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\lightning_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\barcode.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\new_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\mask.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\group_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\receipt_invoice.png" />
+    <Resource Include="Images\Common\page_world_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\xml_exports_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\world_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\report_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\price_watch_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\bullet_add_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\folders_32x32.png" />
+    <Resource Include="Images\Common\text_replace_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\list_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\add_package.png" />
+    <Resource Include="Images\NavigationMenu\box_down.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\tick_red_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\control_pause_blue_16x16.png" />
+    <Resource Include="Images\Common\control_play_blue_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\stopwatch_pause_16_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\phone_green_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\sheduled_task.png" />
+    <Resource Include="Images\Common\view_fullscreen_view_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Refunds\RefundState\canceled.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\bug_fixing.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\cash_register_left_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\lightbulb_back_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\android_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\split_panel_vertical_16x16.png" />
+    <Resource Include="Images\NavigationMenu\thumb_down.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\house_go_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\tree_list_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\comments_facebook_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_green_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\bitrix24.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\building.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Arrows\bullet_arrow_down_16x16.png" />
+    <Resource Include="Images\Arrows\bullet_arrow_up_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Carry\carry12.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Carry\teks_16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\weighing_mashine.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\steering_wheel_racing.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\table_money.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\report_magnify_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\pci.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\users_4.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\tag_blue.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\from_web_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\cash_register_left.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\user_add_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\module.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\mouse_add.png" />
+    <Resource Include="Images\Common\plugin_add.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\computer.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\computer_add_16x16.png" />
+    <Resource Include="Images\Common\computer_edit_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\computer_link_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\computer_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Payment\payment9.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Payment_g\payment9_g.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Payment\payment10.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\Payment_g\payment10_g.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\shop.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\time_go_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Order\OrderState\8.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\money_dollar.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\money_bag_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\page_red_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\receipt_invoice_16х16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\points_small_16x16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Bonus\msi_dragon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\database_go.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\timeline.png" />
+    <Resource Include="Images\Common\toolbox.png" />
+    <Resource Include="Images\Common\logic_functions_16.png" />
+    <Resource Include="Images\Common\logic_functions_32.png" />
+    <Resource Include="Images\ServiceRequest\group_stroke.png" />
+    <Resource Include="Images\Comment\support_avatar.png" />
+    <Resource Include="Images\Comment\user_avatar.png" />
+    <Resource Include="Images\Comment\vendor_avatar.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\ServiceRequest\ungroup_stroke.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Icon.ico" />
+    <Resource Include="Images\Image.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\defect_32x32.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\NavigationMenu\google_map_satellite.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>$(MSBuildProjectName).Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Common\arrow_refresh.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="install.gif">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Images\Order\Payment_g\payment13_g.png" />
+    <Resource Include="Images\Order\Payment_g\payment13_g.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Images\Order\Subdivision\subdivision1.png" />
+    <Resource Include="Images\Order\Subdivision\subdivision1.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\TradeIn\ruby.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Reports\TradeIn\TradeInActReport.html" />
+    <Resource Include="Images\NavigationMenu\user_comment_16x16.png" />
+    <Resource Include="Images\NavigationMenu\account_functions.png" />
+    <Content Include="Reports\ServiceRequest\ServiceRequestIssuanceCertificateReport.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Remove="Reports\TradeIn\TradeInInnReport.html" />
+    <Content Include="Reports\TradeIn\TradeInInnReport.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Reports\TradeIn\TradeInActReport.html">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Images\CompanyStructure" />
+    <Folder Include="Images\Showcase\" />
+    <Folder Include="Reports\Assembly\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Style\Editors\EditorsTemplateSelector.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <XamlRuntime>Wpf</XamlRuntime>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Views\ModuleAnalytics\ModuleAnalyticsView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <XamlRuntime>Wpf</XamlRuntime>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <Target Name="CopyFiles" AfterTargets="Build">
+    <Copy SourceFiles="appsettings.$(EnvironmentName).$(Platform).json" DestinationFiles="$(OutDir)\appsettings.json" />
+    <Copy SourceFiles="Images\bug_fixing.ico" DestinationFiles="$(OutDir)\app.ico" />
+    <Copy SourceFiles="Images\IconStaging.ico" DestinationFiles="$(OutDir)\app.ico" Condition=" '$(EnvironmentName)' == 'Staging' " />
+    <Copy SourceFiles="Images\IconUat.ico" DestinationFiles="$(OutDir)\app.ico" Condition=" '$(EnvironmentName)' == 'Uat' " />
+    <Copy SourceFiles="Images\Icon.ico" DestinationFiles="$(OutDir)\app.ico" Condition=" '$(EnvironmentName)' == 'Production' " />
+  </Target>
+  <Target Name="CopyCustomContentOnPublish" AfterTargets="Publish">
+    <Copy SourceFiles="appsettings.$(EnvironmentName).$(Platform).json" DestinationFiles="$(PublishDir)\appsettings.json" />
+    <Copy SourceFiles="Images\bug_fixing.ico" DestinationFiles="$(PublishDir)\app.ico" />
+    <Copy SourceFiles="Images\IconStaging.ico" DestinationFiles="$(PublishDir)\app.ico" Condition=" '$(EnvironmentName)' == 'Staging' " />
+    <Copy SourceFiles="Images\IconUat.ico" DestinationFiles="$(PublishDir)\app.ico" Condition=" '$(EnvironmentName)' == 'Uat' " />
+    <Copy SourceFiles="Images\Icon.ico" DestinationFiles="$(PublishDir)\app.ico" Condition=" '$(EnvironmentName)' == 'Production' " />
+  </Target>
+  <Target Name="CreateSetup" AfterTargets="Publish">
+    <Exec Command="..\..\..\tools\nuget\nuget.exe pack ..\..\..\build_scripts\$(ApplicationId).nuspec -Version $(PackageVersion) -OutputDirectory $(PackPath) -BasePath $(PublishDir)" />
+    <Copy SourceFiles="install.gif" DestinationFiles="$(PackPath)\install.gif" />
+    <Copy SourceFiles="Images\bug_fixing.ico" DestinationFiles="$(PackPath)\app.ico" />
+    <Copy SourceFiles="Images\IconStaging.ico" DestinationFiles="$(PackPath)\app.ico" Condition=" '$(EnvironmentName)' == 'Staging' " />
+    <Copy SourceFiles="Images\IconUat.ico" DestinationFiles="$(PackPath)\app.ico" Condition=" '$(EnvironmentName)' == 'Uat' " />
+    <Copy SourceFiles="Images\Icon.ico" DestinationFiles="$(PackPath)\app.ico" Condition=" '$(EnvironmentName)' == 'Production' " />
+    <Exec Command="..\..\tools\Squirrel.Windows.1.9.1\Squirrel.exe --releasify $(ApplicationId).$(PackageVersion).nupkg --no-msi --setupIcon &quot;.\app.ico&quot; -g .\install.gif" WorkingDirectory="$(PackPath)" />
+  </Target>
+</Project>

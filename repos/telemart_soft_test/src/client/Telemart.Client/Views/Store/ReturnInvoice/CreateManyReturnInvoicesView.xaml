@@ -1,0 +1,223 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Store.ReturnInvoice.CreateManyReturnInvoicesView"
+                              x:Name="CurrentUserControl"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.ReturnInvoice"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              DataContext="{client:Container Type=viewModels:CreateManyReturnInvoicesViewModel}"
+                              mc:Ignorable="d"
+                              Width="850"
+                              Height="600"
+                              MinHeight="300"
+                              d:DataContext="{d:DesignInstance Type=viewModels:CreateManyReturnInvoicesViewModel, IsDesignTimeCreatable=True}"
+                              d:DesignHeight="600" d:DesignWidth="727">
+    <controls:TelemartUserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </controls:TelemartUserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutGroup Name="Bar"
+                              Orientation="Vertical"
+                              ItemSpace="0">
+                <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                    <dxb:BarButtonItem Content="Экспорт"
+                                       Glyph="../../../Images/Common/table_excel_16x16.png"
+                                       IsEnabled="{Binding IsLongOperationInProgress, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                                       Command="{Binding Path=ExportCommand, Mode=OneWay}"
+                                       CommandParameter="{Binding Mode=OneWay, ElementName=TableView}"/>
+                </dxb:ToolBarControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Grid">
+                        <dxg:GridControl x:Name="GridControl"
+                                         ItemsSource="{Binding Path=ManyInvoiceProducts, Mode=OneWay}"
+                                         CurrentItem="{Binding Path=SelectedInvoiceProduct, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalAlignment="Stretch"
+                                         HorizontalAlignment="Stretch"
+                                         SelectionMode="None"
+                                         AutoExpandAllGroups="True">
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Дата"
+                                                HeaderToolTip="Дата принятия накладной"
+                                                FieldName="DateArrive"
+                                                AllowResizing="False"
+                                                FixedWidth="True"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="90"
+                                                ReadOnly="True"
+                                                AllowMoving="True"
+                                                AllowEditing="False"
+                                                AllowColumnFiltering="False"
+                                                AllowGrouping="True"/>
+                                <dxg:GridColumn Header="Накладная"
+                                                HeaderToolTip="Накладная"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                FieldName="InvoiceId"
+                                                FixedWidth="True"
+                                                Width="70"
+                                                MinWidth="70"
+                                                AllowMoving="True"
+                                                AllowBestFit="True"
+                                                AllowResizing="False"
+                                                ReadOnly="True"
+                                                AllowColumnFiltering="True"
+                                                AllowGrouping="True"/>
+                                <dxg:GridColumn Header="Код"
+                                                HeaderToolTip="Код товара"
+                                                FieldName="ProductId"
+                                                ReadOnly="True"
+                                                AllowMoving="True"
+                                                Width="65"
+                                                AllowGrouping="False"
+                                                AllowColumnFiltering="True"/>
+                                <dxg:GridColumn Header="Артикул"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="ProductPn"
+                                                AllowMoving="True"
+                                                ReadOnly="True"
+                                                AllowGrouping="True"
+                                                AllowColumnFiltering="False"/>
+                                <dxg:GridColumn Header="Товар"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="DisplayProductFullName"
+                                                ReadOnly="True"
+                                                AllowMoving="True"
+                                                Width="130"
+                                                AllowGrouping="True"
+                                                AllowColumnFiltering="True"
+                                                GroupIndex="0"/>
+                                <dxg:GridColumn Header="Цена"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="Price"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                AllowMoving="False"
+                                                Width="72"
+                                                AllowEditing="True"
+                                                ReadOnly="True"
+                                                AllowGrouping="False"
+                                                AllowColumnFiltering="False"/>
+                                <dxg:GridColumn Header="Валюта"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="Currency"
+                                                ReadOnly="True"
+                                                AllowMoving="True"
+                                                Width="65"
+                                                SortMode="Custom"
+                                                AllowGrouping="True"
+                                                AllowColumnFiltering="True"/>
+                                <dxg:GridColumn Header="Доступно"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="MaxQuantity"
+                                                ReadOnly="True"
+                                                AllowMoving="False"
+                                                Width="65"
+                                                AllowGrouping="False"
+                                                AllowColumnFiltering="True"/>
+                                <dxg:GridColumn Header="Св. остаток"
+                                                HeaderToolTip="Свободный остаток"
+                                                FieldName="StockQuantity"
+                                                ReadOnly="True"
+                                                AllowMoving="False"
+                                                Width="65"
+                                                AllowSorting="True"
+                                                AllowGrouping="False"
+                                                AllowColumnFiltering="True"/>
+                                <dxg:GridColumn FieldName="OutQuantity"
+                                                Header="Вернуть"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="{StaticResource QuantityColumnWidth}"
+                                                MinWidth="{StaticResource MinQuantityColumnWidth}"
+                                                AllowEditing="True"
+                                                AllowResizing="False"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                AllowMoving="False"
+                                                FixedWidth="True"
+                                                AllowGrouping="False"
+                                                AllowColumnFiltering="False">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:SpinEditSettings HorizontalContentAlignment="Center"
+                                                              IsFloatValue="False"
+                                                              MinValue="0"
+                                                              MaxValue="9999"
+                                                              Increment="1">
+                                        </dxe:SpinEditSettings>
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="БН"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="BillsQuantity"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="65"
+                                                ReadOnly="True"
+                                                AllowMoving="False"
+                                                AllowGrouping="False"
+                                                AllowColumnFiltering="False"/>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView x:Name="TableView"
+                                               AllowResizing="False"
+                                               AllowPerPixelScrolling="True"
+                                               ShowGroupPanel="True"
+                                               AllowDrop="False"
+                                               AllowMoveColumnToDropArea="False"
+                                               ShowIndicator="False"
+                                               AutoWidth="True">
+                                    <dxmvvm:Interaction.Behaviors>
+                                        <dxmvvm:EventToCommand EventName="CellValueChanged"
+                                                               Command="{Binding Path=HandleOutQuantityChangedCommand, Mode=OneWay}"
+                                                               PassEventArgsToCommand="True" />
+                                    </dxmvvm:Interaction.Behaviors>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Bottom"
+                              VerticalAlignment="Bottom"
+                              Orientation="Horizontal">
+                <viewComponents:WaitImage x:Name="BusyIndicator"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=GridControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

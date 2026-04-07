@@ -1,0 +1,153 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Service.ServiceRequests.TakeServiceRequestView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRequests"
+                              DataContext="{client:Container Type=viewModels:TakeServiceRequestViewModel}"
+                              Width="400"
+                              Height="460"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:TakeServiceRequestViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                    <Style x:Key="TextAreaStyle"
+                           TargetType="{x:Type dxe:TextEdit}">
+                        <Setter Property="AcceptsReturn"
+                                Value="True" />
+                        <Setter Property="TextWrapping"
+                                Value="Wrap" />
+                        <Setter Property="VerticalContentAlignment"
+                                Value="Top" />
+                        <Setter Property="VerticalScrollBarVisibility"
+                                Value="Auto" />
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup x:Name="Center"
+                              Orientation="Vertical">
+                <dxlc:LayoutItem Label="Требование">
+                    <dxe:TextEdit EditValue="{Binding Path=RequirementSummary, Mode=OneWay}"
+                                  Style="{StaticResource ReadOnlyEditorStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Срок"
+                                 Visibility="{Binding Path=RepairDaysVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=RepairDaysCollection, Mode=OneWay}"
+                                      EditValue="{Binding Path=RepairDays, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name"
+                                      ValueMember="Id" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Дополнительно"
+                                 LabelVerticalAlignment="Top">
+                    <dxe:TextEdit EditValue="{Binding Path=RequirementComment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  Style="{StaticResource TextAreaStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Осмотр"
+                                 LabelVerticalAlignment="Top">
+                    <dxlc:LayoutGroup Orientation="Vertical"
+                                      VerticalAlignment="Top">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Inspections, Mode=OneWay}"
+                                          EditValue="{Binding Path=InspectionKind, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                          IsTextEditable="False" />
+                        <dxe:TextEdit EditValue="{Binding Path=InspectionDefect, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      IsEnabled="{Binding Path=InspectionDefectEnabled, Mode=OneWay}"/>
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Состояние"
+                                 LabelVerticalAlignment="Top">
+                    <dxlc:LayoutGroup Orientation="Vertical"
+                                      VerticalAlignment="Top">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Appearances, Mode=OneWay}"
+                                          EditValue="{Binding Path=AppearanceKind, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                          IsTextEditable="False" />
+                        <dxe:TextEdit EditValue="{Binding Path=Appearance, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Комплектация">
+                    <dxe:TextEdit EditValue="{Binding Path=CompletenessComment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="SN">
+                    <dxe:TextEdit EditValue="{Binding Path=SerialNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  NullText="{Binding Path=SerialNumberNullText, Mode=OneWay}"
+                                  CharacterCasing="Upper"
+                                  GotFocus="TextEditOnGotFocus" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Склад">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Warehouses, Mode=OneWay}"
+                                      EditValue="{Binding Path=WarehouseLocationId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name"
+                                      ValueMember="Id"
+                                      Style="{StaticResource SearchableComboBoxStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Комментарий"
+                                 LabelVerticalAlignment="Top"
+                                 VerticalAlignment="Stretch">
+                    <dxe:TextEdit EditValue="{Binding Path=Comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  Style="{StaticResource TextAreaStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Услуги сервиса"
+                                 Visibility="{Binding Path=PaidRepair, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                    <dxe:ComboBoxEdit EditValue="{Binding Path=SelectedProductAdditionalServiceIds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, Converter={converters:IntItemsConverter}}"
+                                      ItemsSource="{Binding Path=ProductAdditionalServices, Mode=OneWay}"
+                                      ValueMember="Id"
+                                      DisplayMember="DisplayValue"
+                                      Style="{StaticResource CheckedTokenComboBoxStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Способ оплаты"
+                                 Visibility="{Binding Path=PaidRepair, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Payments, Mode=OneWay}"
+                                      EditValue="{Binding Path=PaymentId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      ValueMember="Id"
+                                      DisplayMember="Name"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          HorizontalAlignment="Left"
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <Button Content="Принять"
+                        Command="{Binding Path=OkCommand, Mode=OneWay}"
+                        HorizontalAlignment="Right"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}" />
+                <Button Content="Отмена"
+                        HorizontalAlignment="Right"
+                        Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>

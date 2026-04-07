@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlsplit
 
-from config import settings
+from config import _ENV_FILE_PATH, settings
 
 
 BITBUCKET_REPO_PATTERNS = (
@@ -41,6 +43,27 @@ def parse_bitbucket_remote(remote_url: str) -> dict[str, str]:
             "repo_slug": str(path_parts[1] or "").removesuffix(".git").strip(),
         }
     return {"workspace": "", "repo_slug": ""}
+
+
+@lru_cache(maxsize=1)
+def _env_file_values() -> dict[str, str]:
+    path = Path(_ENV_FILE_PATH)
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    try:
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = str(raw_line or "").strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            normalized_key = str(key or "").strip()
+            if not normalized_key:
+                continue
+            values[normalized_key] = str(value or "").strip()
+    except OSError:
+        return {}
+    return values
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +205,8 @@ class BitbucketCredentialResolver:
             else:
                 env_name = f"{base_key}__{suffix}"
             value = str(os.getenv(env_name, "") or "").strip()
+            if not value:
+                value = str(_env_file_values().get(env_name, "") or "").strip()
             if value:
                 return value
         return ""

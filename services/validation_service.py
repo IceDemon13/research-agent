@@ -5,6 +5,7 @@ import re
 import os
 import shutil
 from pathlib import Path
+from typing import Any, Callable
 
 from config import settings
 from contracts.validation_contract import (
@@ -43,6 +44,29 @@ class ValidationService:
     def validation_runner_type(self) -> str:
         return self._repo_validation_service.runner_type()
 
+    @staticmethod
+    def _commands_are_runner_dotnet(commands: list[ValidationCommand] | None) -> bool:
+        normalized = list(commands or [])
+        return bool(normalized) and all(str(item.command or "").strip().startswith("dotnet ") for item in normalized)
+
+    @staticmethod
+    def _runner_only_repo_ids() -> set[str]:
+        return {"telemart_soft_test"}
+
+    def _should_block_local_runner_fallback(
+        self,
+        *,
+        repo_id: str,
+        commands: list[ValidationCommand] | None,
+        validation_runner_available: bool,
+    ) -> bool:
+        normalized_repo_id = str(repo_id or "").strip().lower()
+        return (
+            validation_runner_available
+            and normalized_repo_id in self._runner_only_repo_ids()
+            and self._commands_are_runner_dotnet(commands)
+        )
+
     def run_validation(
         self,
         repo_id: str,
@@ -52,6 +76,7 @@ class ValidationService:
         stop_on_failure: bool | None = None,
         output_max_chars: int | None = None,
         timeout_seconds: int | None = None,
+        progress_callback: Callable[[str, str], None] | None = None,
     ) -> ValidationResult:
         repo = self._registry_service.resolve_repo(repo_id=repo_id)
         repo_root = Path(repo.root_path).resolve()
@@ -86,8 +111,27 @@ class ValidationService:
         validation_runner_steps_count = 0
         validation_runner_result_shape: list[str] = []
         validation_runner_no_steps_reason = ""
+        validation_runner_raw_initial_response_body = ""
+        validation_runner_initial_payload_shape = ""
         local_fallback_triggered = False
         local_fallback_reason = ""
+        validation_execution_mode = "local_only"
+        validation_runner_used = False
+        local_build_fallback_triggered = False
+        local_build_fallback_reason = ""
+        build_command_source = ""
+        build_command_runtime = ""
+        expected_runner_runtime = validation_runner_type
+        actual_execution_runtime = "local"
+        validation_endpoint_url = ""
+        validation_endpoint_source = ""
+        validation_runner_mode = ""
+        validation_connection_attempted = False
+        validation_connection_refused = False
+        validation_target_reachable = False
+        working_host_validation_path = ""
+        official_pipeline_validation_path = ""
+        validation_path_match = False
 
         if not repo_root.exists() or not repo_root.is_dir():
             return ValidationResult(
@@ -117,6 +161,8 @@ class ValidationService:
             for item in list(command_list or [])
             if str(item.command or "").strip()
         ]
+        build_command_source = "validation_plan"
+        build_command_runtime = "dotnet" if self._commands_are_runner_dotnet(command_list) else "local_shell"
         if str(environment_setup.get("dependency_install_status", "") or "").strip() == "failed":
             setup_error = str(
                 environment_setup.get("error_message", "")
@@ -167,12 +213,26 @@ class ValidationService:
             )
 
         if validation_runner_available and self._repo_validation_service.can_handle(command_list):
+            validation_execution_mode = "runner_attempted"
+            validation_runner_used = True
+            expected_runner_runtime = validation_runner_type or expected_runner_runtime
+            actual_execution_runtime = validation_runner_type or "validation_runner"
             runner_payload = self._repo_validation_service.execute(
                 repo_id=repo_id,
                 repo_path=repo_root,
                 commands=command_list,
                 timeout_seconds=effective_timeout_seconds,
+                progress_callback=progress_callback,
             )
+            validation_endpoint_url = str(runner_payload.get("validation_endpoint_url", "") or "")
+            validation_endpoint_source = str(runner_payload.get("validation_endpoint_source", "") or "")
+            validation_runner_mode = str(runner_payload.get("validation_runner_mode", "") or "")
+            validation_connection_attempted = bool(runner_payload.get("validation_connection_attempted", False))
+            validation_connection_refused = bool(runner_payload.get("validation_connection_refused", False))
+            validation_target_reachable = bool(runner_payload.get("validation_target_reachable", False))
+            working_host_validation_path = str(runner_payload.get("working_host_validation_path", "") or "")
+            official_pipeline_validation_path = str(runner_payload.get("official_pipeline_validation_path", "") or "")
+            validation_path_match = bool(runner_payload.get("validation_path_match", False))
             steps = self._repo_validation_service.build_steps(runner_payload)
             runner_error = str(runner_payload.get("error", "") or "").strip()
             validation_runner_result_shape = sorted(str(key) for key in dict(runner_payload or {}).keys())
@@ -181,6 +241,26 @@ class ValidationService:
                 for step in list(steps or [])
             ]
             validation_runner_steps_count = len(validation_runner_steps_returned)
+            validation_runner_raw_initial_response_body = str(
+                runner_payload.get("validation_runner_raw_initial_response_body", "") or ""
+            )
+            validation_runner_initial_payload_shape = str(
+                runner_payload.get("validation_runner_initial_payload_shape", "") or ""
+            )
+            validation_poll_raw_response_body = str(runner_payload.get("validation_poll_raw_response_body", "") or "")
+            validation_poll_parsed_payload = dict(runner_payload.get("validation_poll_parsed_payload", {}) or {})
+            validation_poll_job_status_raw = str(runner_payload.get("validation_poll_job_status_raw", "") or "")
+            validation_poll_job_status_normalized = str(runner_payload.get("validation_poll_job_status_normalized", "") or "")
+            validation_poll_completed_predicate_result = bool(
+                runner_payload.get("validation_poll_completed_predicate_result", False)
+            )
+            validation_poll_completion_fields_present = list(
+                runner_payload.get("validation_poll_completion_fields_present", []) or []
+            )
+            validation_poll_final_payload_present = bool(
+                runner_payload.get("validation_poll_final_payload_present", False)
+            )
+            validation_poll_iteration_index = int(runner_payload.get("validation_poll_iteration_index", 0) or 0)
             if not validation_runner_steps_returned:
                 validation_runner_no_steps_reason = runner_error or (
                     "runner_ok_without_steps"
@@ -256,16 +336,37 @@ class ValidationService:
                     source_mapping_detected=bool(stage_diagnostics.get("source_mapping_detected", False)),
                     credential_provider_detected=bool(stage_diagnostics.get("credential_provider_detected", False)),
                     restore_used_configfile=str(stage_diagnostics.get("restore_used_configfile", "") or ""),
-                restore_used_sources_safe=list(stage_diagnostics.get("restore_used_sources_safe", []) or []),
-                restore_auth_mode_guess=str(stage_diagnostics.get("restore_auth_mode_guess", "") or ""),
-                restore_secret_redaction_applied=bool(stage_diagnostics.get("restore_secret_redaction_applied", False)),
-                failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
-                restore_attempted=bool(stage_diagnostics.get("restore_attempted", False)),
-                restore_command=str(stage_diagnostics.get("restore_command", "") or ""),
-                restore_exit_code=stage_diagnostics.get("restore_exit_code"),
-                unsupported_environment_reason=str(stage_diagnostics.get("unsupported_environment_reason", "") or ""),
-                validation_repo_family=str(stage_diagnostics.get("validation_repo_family", "") or ""),
-                required_sdk_or_runtime=str(stage_diagnostics.get("required_sdk_or_runtime", "") or ""),
+                    restore_used_sources_safe=list(stage_diagnostics.get("restore_used_sources_safe", []) or []),
+                    host_runner_nuget_config_path=str(stage_diagnostics.get("host_runner_nuget_config_path", "") or ""),
+                    host_runner_nuget_config_contents=str(stage_diagnostics.get("host_runner_nuget_config_contents", "") or ""),
+                    host_runner_restore_command_raw=str(stage_diagnostics.get("host_runner_restore_command_raw", "") or ""),
+                    host_runner_restore_command_args=list(stage_diagnostics.get("host_runner_restore_command_args", []) or []),
+                    host_runner_restore_configfile_arg=str(stage_diagnostics.get("host_runner_restore_configfile_arg", "") or ""),
+                    host_runner_public_feed_present_in_file=bool(stage_diagnostics.get("host_runner_public_feed_present_in_file", False)),
+                    host_runner_public_feed_present_in_command_target=bool(stage_diagnostics.get("host_runner_public_feed_present_in_command_target", False)),
+                    host_runner_config_used_by_restore_confirmed=bool(stage_diagnostics.get("host_runner_config_used_by_restore_confirmed", False)),
+                    host_runner_restore_guard_checked=bool(stage_diagnostics.get("host_runner_restore_guard_checked", False)),
+                    host_runner_restore_guard_passed=bool(stage_diagnostics.get("host_runner_restore_guard_passed", False)),
+                    host_runner_restore_guard_reason=str(stage_diagnostics.get("host_runner_restore_guard_reason", "") or ""),
+                    restore_subprocess_owner_function=str(stage_diagnostics.get("restore_subprocess_owner_function", "") or ""),
+                    restore_subprocess_command_raw=str(stage_diagnostics.get("restore_subprocess_command_raw", "") or ""),
+                    restore_subprocess_command_args=list(stage_diagnostics.get("restore_subprocess_command_args", []) or []),
+                    restore_subprocess_config_path=str(stage_diagnostics.get("restore_subprocess_config_path", "") or ""),
+                    restore_subprocess_config_contents=str(stage_diagnostics.get("restore_subprocess_config_contents", "") or ""),
+                    restore_subprocess_public_feed_present=bool(stage_diagnostics.get("restore_subprocess_public_feed_present", False)),
+                    restore_subprocess_private_feed_present=bool(stage_diagnostics.get("restore_subprocess_private_feed_present", False)),
+                    restore_subprocess_guard_ran_here=bool(stage_diagnostics.get("restore_subprocess_guard_ran_here", False)),
+                    restore_subprocess_guard_decision=str(stage_diagnostics.get("restore_subprocess_guard_decision", "") or ""),
+                    restore_subprocess_config_rewritten_after_guard=bool(stage_diagnostics.get("restore_subprocess_config_rewritten_after_guard", False)),
+                    restore_auth_mode_guess=str(stage_diagnostics.get("restore_auth_mode_guess", "") or ""),
+                    restore_secret_redaction_applied=bool(stage_diagnostics.get("restore_secret_redaction_applied", False)),
+                    failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
+                    restore_attempted=bool(stage_diagnostics.get("restore_attempted", False)),
+                    restore_command=str(stage_diagnostics.get("restore_command", "") or ""),
+                    restore_exit_code=stage_diagnostics.get("restore_exit_code"),
+                    unsupported_environment_reason=str(stage_diagnostics.get("unsupported_environment_reason", "") or ""),
+                    validation_repo_family=str(stage_diagnostics.get("validation_repo_family", "") or ""),
+                    required_sdk_or_runtime=str(stage_diagnostics.get("required_sdk_or_runtime", "") or ""),
                     runner_environment_summary=str(stage_diagnostics.get("runner_environment_summary", "") or ""),
                     validation_runner_available=True,
                     validation_runner_type=validation_runner_type,
@@ -275,8 +376,26 @@ class ValidationService:
                     validation_runner_steps_count=validation_runner_steps_count,
                     validation_runner_result_shape=validation_runner_result_shape,
                     validation_runner_no_steps_reason=validation_runner_no_steps_reason,
+                    validation_runner_raw_initial_response_body=validation_runner_raw_initial_response_body,
+                    validation_runner_initial_payload_shape=validation_runner_initial_payload_shape,
+                    validation_poll_raw_response_body=validation_poll_raw_response_body,
+                    validation_poll_parsed_payload=validation_poll_parsed_payload,
+                    validation_poll_job_status_raw=validation_poll_job_status_raw,
+                    validation_poll_job_status_normalized=validation_poll_job_status_normalized,
+                    validation_poll_completed_predicate_result=validation_poll_completed_predicate_result,
+                    validation_poll_completion_fields_present=validation_poll_completion_fields_present,
+                    validation_poll_final_payload_present=validation_poll_final_payload_present,
+                    validation_poll_iteration_index=validation_poll_iteration_index,
                     local_fallback_triggered=False,
                     local_fallback_reason="",
+                    validation_execution_mode="runner_backed",
+                    validation_runner_used=True,
+                    local_build_fallback_triggered=False,
+                    local_build_fallback_reason="",
+                    build_command_source="validation_runner_plan",
+                    build_command_runtime="validation_runner",
+                    expected_runner_runtime=validation_runner_type or expected_runner_runtime,
+                    actual_execution_runtime=validation_runner_type or "validation_runner",
                     restore_passed=bool(outcome_split.get("restore_passed", False)),
                     build_passed=bool(outcome_split.get("build_passed", False)),
                     targeted_test_attempted=bool(outcome_split.get("targeted_test_attempted", False)),
@@ -284,8 +403,95 @@ class ValidationService:
                     validation_outcome_split=str(outcome_split.get("validation_outcome_split", "") or ""),
                     repo_specific_test_environment_issue=bool(outcome_split.get("repo_specific_test_environment_issue", False)),
                     windowsdesktop_runtime_missing=bool(outcome_split.get("windowsdesktop_runtime_missing", False)),
+                    linux_dotnet_runtime_present=bool(runner_payload.get("linux_dotnet_runtime_present", False)),
+                    linux_dotnet_runtime_versions=list(runner_payload.get("linux_dotnet_runtime_versions", []) or []),
+                    linux_dotnet_runtime_arch=str(runner_payload.get("linux_dotnet_runtime_arch", "") or ""),
+                    testhost_runtime_resolution_ok=bool(runner_payload.get("testhost_runtime_resolution_ok", False)),
+                    old_missing_runtime_signature_present=bool(runner_payload.get("old_missing_runtime_signature_present", False)),
+                    validation_endpoint_url=validation_endpoint_url,
+                    validation_endpoint_source=validation_endpoint_source,
+                    validation_runner_mode=validation_runner_mode,
+                    validation_connection_attempted=validation_connection_attempted,
+                    validation_connection_refused=validation_connection_refused,
+                    validation_target_reachable=validation_target_reachable,
+                    working_host_validation_path=working_host_validation_path,
+                    official_pipeline_validation_path=official_pipeline_validation_path,
+                    validation_path_match=validation_path_match,
+                )
+            if self._should_block_local_runner_fallback(
+                repo_id=repo_id,
+                commands=command_list,
+                validation_runner_available=validation_runner_available,
+            ):
+                local_fallback_reason = runner_error or validation_runner_no_steps_reason or "runner_returned_empty_steps"
+                errors.append(f"Validation runner did not return executable steps: {local_fallback_reason}")
+                warnings.append("Validation remained runner-backed; local build fallback was disabled for this repo.")
+                return ValidationResult(
+                    repo_id=repo_id,
+                    overall_status="failed",
+                    steps=[],
+                    passed=False,
+                    outcome_type="validation_runner_no_steps",
+                    validation_scope=validation_scope,
+                    validation_profile_used=validation_profile_used,
+                    targeted_validation=targeted_validation,
+                    environment_related_failure=True,
+                    environment_prepared=bool(environment_setup.get("environment_prepared", False)),
+                    environment_setup_logs=str(environment_setup.get("environment_setup_logs", "") or "").strip(),
+                    dependency_install_status=str(environment_setup.get("dependency_install_status", "") or "").strip(),
+                    total_tests=0,
+                    passed_tests=0,
+                    failed_tests=0,
+                    failed_test_cases=[],
+                    stdout="",
+                    stderr="",
+                    errors=errors,
+                    warnings=warnings,
+                    validation_runner_available=True,
+                    validation_runner_type=validation_runner_type,
+                    validation_timeout_seconds=effective_timeout_seconds,
+                    validation_runner_commands_discovered=validation_runner_commands_discovered,
+                    validation_runner_steps_returned=validation_runner_steps_returned,
+                    validation_runner_steps_count=validation_runner_steps_count,
+                    validation_runner_result_shape=validation_runner_result_shape,
+                    validation_runner_no_steps_reason=validation_runner_no_steps_reason,
+                    validation_runner_raw_initial_response_body=validation_runner_raw_initial_response_body,
+                    validation_runner_initial_payload_shape=validation_runner_initial_payload_shape,
+                    validation_poll_raw_response_body=validation_poll_raw_response_body,
+                    validation_poll_parsed_payload=validation_poll_parsed_payload,
+                    validation_poll_job_status_raw=validation_poll_job_status_raw,
+                    validation_poll_job_status_normalized=validation_poll_job_status_normalized,
+                    validation_poll_completed_predicate_result=validation_poll_completed_predicate_result,
+                    validation_poll_completion_fields_present=validation_poll_completion_fields_present,
+                    validation_poll_final_payload_present=validation_poll_final_payload_present,
+                    validation_poll_iteration_index=validation_poll_iteration_index,
+                    local_fallback_triggered=False,
+                    local_fallback_reason="",
+                    validation_execution_mode="runner_only_failed",
+                    validation_runner_used=True,
+                    local_build_fallback_triggered=False,
+                    local_build_fallback_reason=local_fallback_reason,
+                    build_command_source="validation_runner_plan",
+                    build_command_runtime="validation_runner",
+                    expected_runner_runtime=validation_runner_type or expected_runner_runtime,
+                    actual_execution_runtime=validation_runner_type or "validation_runner",
+                    linux_dotnet_runtime_present=bool(runner_payload.get("linux_dotnet_runtime_present", False)),
+                    linux_dotnet_runtime_versions=list(runner_payload.get("linux_dotnet_runtime_versions", []) or []),
+                    linux_dotnet_runtime_arch=str(runner_payload.get("linux_dotnet_runtime_arch", "") or ""),
+                    testhost_runtime_resolution_ok=bool(runner_payload.get("testhost_runtime_resolution_ok", False)),
+                    old_missing_runtime_signature_present=bool(runner_payload.get("old_missing_runtime_signature_present", False)),
+                    validation_endpoint_url=validation_endpoint_url,
+                    validation_endpoint_source=validation_endpoint_source,
+                    validation_runner_mode=validation_runner_mode,
+                    validation_connection_attempted=validation_connection_attempted,
+                    validation_connection_refused=validation_connection_refused,
+                    validation_target_reachable=validation_target_reachable,
+                    working_host_validation_path=working_host_validation_path,
+                    official_pipeline_validation_path=official_pipeline_validation_path,
+                    validation_path_match=validation_path_match,
                 )
             local_fallback_triggered = True
+            local_build_fallback_triggered = True
             if runner_error:
                 local_fallback_reason = runner_error
                 warnings.append(
@@ -294,6 +500,11 @@ class ValidationService:
             else:
                 local_fallback_reason = validation_runner_no_steps_reason or "runner_returned_empty_steps"
                 warnings.append("Validation runner returned no executable steps; falling back to local validation.")
+            validation_execution_mode = "runner_then_local_fallback"
+            local_build_fallback_reason = local_fallback_reason
+            actual_execution_runtime = "local"
+            build_command_source = "local_fallback"
+            build_command_runtime = "local_shell"
 
         log_line(
             "VALIDATION START: "
@@ -395,6 +606,27 @@ class ValidationService:
             credential_provider_detected=bool(stage_diagnostics.get("credential_provider_detected", False)),
             restore_used_configfile=str(stage_diagnostics.get("restore_used_configfile", "") or ""),
             restore_used_sources_safe=list(stage_diagnostics.get("restore_used_sources_safe", []) or []),
+            host_runner_nuget_config_path=str(stage_diagnostics.get("host_runner_nuget_config_path", "") or ""),
+            host_runner_nuget_config_contents=str(stage_diagnostics.get("host_runner_nuget_config_contents", "") or ""),
+            host_runner_restore_command_raw=str(stage_diagnostics.get("host_runner_restore_command_raw", "") or ""),
+            host_runner_restore_command_args=list(stage_diagnostics.get("host_runner_restore_command_args", []) or []),
+            host_runner_restore_configfile_arg=str(stage_diagnostics.get("host_runner_restore_configfile_arg", "") or ""),
+            host_runner_public_feed_present_in_file=bool(stage_diagnostics.get("host_runner_public_feed_present_in_file", False)),
+            host_runner_public_feed_present_in_command_target=bool(stage_diagnostics.get("host_runner_public_feed_present_in_command_target", False)),
+            host_runner_config_used_by_restore_confirmed=bool(stage_diagnostics.get("host_runner_config_used_by_restore_confirmed", False)),
+            host_runner_restore_guard_checked=bool(stage_diagnostics.get("host_runner_restore_guard_checked", False)),
+            host_runner_restore_guard_passed=bool(stage_diagnostics.get("host_runner_restore_guard_passed", False)),
+            host_runner_restore_guard_reason=str(stage_diagnostics.get("host_runner_restore_guard_reason", "") or ""),
+            restore_subprocess_owner_function=str(stage_diagnostics.get("restore_subprocess_owner_function", "") or ""),
+            restore_subprocess_command_raw=str(stage_diagnostics.get("restore_subprocess_command_raw", "") or ""),
+            restore_subprocess_command_args=list(stage_diagnostics.get("restore_subprocess_command_args", []) or []),
+            restore_subprocess_config_path=str(stage_diagnostics.get("restore_subprocess_config_path", "") or ""),
+            restore_subprocess_config_contents=str(stage_diagnostics.get("restore_subprocess_config_contents", "") or ""),
+            restore_subprocess_public_feed_present=bool(stage_diagnostics.get("restore_subprocess_public_feed_present", False)),
+            restore_subprocess_private_feed_present=bool(stage_diagnostics.get("restore_subprocess_private_feed_present", False)),
+            restore_subprocess_guard_ran_here=bool(stage_diagnostics.get("restore_subprocess_guard_ran_here", False)),
+            restore_subprocess_guard_decision=str(stage_diagnostics.get("restore_subprocess_guard_decision", "") or ""),
+            restore_subprocess_config_rewritten_after_guard=bool(stage_diagnostics.get("restore_subprocess_config_rewritten_after_guard", False)),
             restore_auth_mode_guess=str(stage_diagnostics.get("restore_auth_mode_guess", "") or ""),
             restore_secret_redaction_applied=bool(stage_diagnostics.get("restore_secret_redaction_applied", False)),
             failure_reason_guess=str(stage_diagnostics.get("failure_reason_guess", "") or ""),
@@ -413,8 +645,18 @@ class ValidationService:
             validation_runner_steps_count=validation_runner_steps_count,
             validation_runner_result_shape=validation_runner_result_shape,
             validation_runner_no_steps_reason=validation_runner_no_steps_reason,
+            validation_runner_raw_initial_response_body=validation_runner_raw_initial_response_body,
+            validation_runner_initial_payload_shape=validation_runner_initial_payload_shape,
             local_fallback_triggered=local_fallback_triggered,
             local_fallback_reason=local_fallback_reason,
+            validation_execution_mode=validation_execution_mode or "local_only",
+            validation_runner_used=validation_runner_used,
+            local_build_fallback_triggered=local_build_fallback_triggered,
+            local_build_fallback_reason=local_build_fallback_reason,
+            build_command_source=build_command_source,
+            build_command_runtime=build_command_runtime,
+            expected_runner_runtime=expected_runner_runtime,
+            actual_execution_runtime=actual_execution_runtime,
             restore_passed=bool(outcome_split.get("restore_passed", False)),
             build_passed=bool(outcome_split.get("build_passed", False)),
             targeted_test_attempted=bool(outcome_split.get("targeted_test_attempted", False)),
@@ -422,6 +664,15 @@ class ValidationService:
             validation_outcome_split=str(outcome_split.get("validation_outcome_split", "") or ""),
             repo_specific_test_environment_issue=bool(outcome_split.get("repo_specific_test_environment_issue", False)),
             windowsdesktop_runtime_missing=bool(outcome_split.get("windowsdesktop_runtime_missing", False)),
+            validation_endpoint_url=validation_endpoint_url,
+            validation_endpoint_source=validation_endpoint_source,
+            validation_runner_mode=validation_runner_mode,
+            validation_connection_attempted=validation_connection_attempted,
+            validation_connection_refused=validation_connection_refused,
+            validation_target_reachable=validation_target_reachable,
+            working_host_validation_path=working_host_validation_path,
+            official_pipeline_validation_path=official_pipeline_validation_path,
+            validation_path_match=validation_path_match,
         )
 
     def _resolve_command_plan(
@@ -459,6 +710,51 @@ class ValidationService:
         lint_command = str(settings.runtime.validation_lint_command or "").strip()
         test_command = str(settings.runtime.validation_test_command or "").strip()
 
+        if test_command:
+            if build_command:
+                commands.append(ValidationCommand(name="build", command=build_command))
+            else:
+                commands.append(ValidationCommand(name="build", command=""))
+            if lint_command:
+                commands.append(ValidationCommand(name="lint", command=lint_command))
+            else:
+                commands.append(ValidationCommand(name="lint", command=""))
+            commands.append(ValidationCommand(name="test", command=test_command))
+            return commands, "repo", "configured", False
+
+        has_package_json = (repo_root / "package.json").exists()
+        has_python = self._looks_like_python_repo(repo_root)
+        dotnet_solution = self._find_dotnet_solution(repo_root)
+        dotnet_test_projects = self._find_dotnet_test_projects(repo_root)
+        targeted_python_files = [
+            item
+            for item in normalized_changed_files
+            if item.lower().endswith(".py") and (repo_root / item).exists()
+        ]
+        if dotnet_solution is not None:
+            solution_text = self._quote_validation_path(dotnet_solution)
+            commands.append(
+                ValidationCommand(
+                    name="restore",
+                    command=f"dotnet restore {solution_text} --nologo",
+                )
+            )
+            commands.append(
+                ValidationCommand(
+                    name="build",
+                    command=f"dotnet build {solution_text} --nologo",
+                )
+            )
+            for project_path in dotnet_test_projects:
+                project_text = self._quote_validation_path(project_path)
+                commands.append(
+                    ValidationCommand(
+                        name="test",
+                        command=f"dotnet test {project_text} --nologo --no-build",
+                    )
+                )
+            return commands, "repo", "dotnet_solution", False
+
         if build_command:
             commands.append(ValidationCommand(name="build", command=build_command))
         else:
@@ -472,18 +768,6 @@ class ValidationService:
             commands.append(
                 ValidationCommand(name="lint", command="")
             )
-
-        if test_command:
-            commands.append(ValidationCommand(name="test", command=test_command))
-            return commands, "repo", "configured", False
-
-        has_package_json = (repo_root / "package.json").exists()
-        has_python = self._looks_like_python_repo(repo_root)
-        targeted_python_files = [
-            item
-            for item in normalized_changed_files
-            if item.lower().endswith(".py") and (repo_root / item).exists()
-        ]
 
         if has_package_json:
             commands.append(ValidationCommand(name="test", command="npm test"))
@@ -725,9 +1009,40 @@ class ValidationService:
         return any(repo_root.rglob("*.py"))
 
     @staticmethod
+    def _find_dotnet_solution(repo_root: Path) -> Path | None:
+        direct_matches = sorted(repo_root.glob("*.sln"))
+        if direct_matches:
+            return direct_matches[0]
+        recursive_matches = sorted(repo_root.rglob("*.sln"))
+        if recursive_matches:
+            return recursive_matches[0]
+        return None
+
+    @staticmethod
+    def _find_dotnet_test_projects(repo_root: Path) -> list[Path]:
+        projects: list[Path] = []
+        for project in sorted(repo_root.rglob("*.csproj")):
+            lowered = project.name.lower()
+            relative_text = project.relative_to(repo_root).as_posix().lower()
+            if (
+                ".test" in lowered
+                or ".tests" in lowered
+                or lowered.endswith("test.csproj")
+                or lowered.endswith("tests.csproj")
+                or "/test/" in relative_text
+                or "/tests/" in relative_text
+            ):
+                projects.append(project)
+        return projects
+
+    @staticmethod
+    def _quote_validation_path(path: Path) -> str:
+        return f"\"{path.as_posix()}\""
+
+    @staticmethod
     def _normalize_step_name(value: str) -> str:
         normalized = str(value or "").strip().lower()
-        if normalized in {"build", "test", "lint"}:
+        if normalized in {"build", "test", "lint", "restore"}:
             return normalized
         return "custom"
 
@@ -913,6 +1228,27 @@ class ValidationService:
             "credential_provider_detected": bool(payload.get("credential_provider_detected", False)) if payload else False,
             "restore_used_configfile": str(payload.get("restore_used_configfile", "") or nuget_config_path) if payload else nuget_config_path,
             "restore_used_sources_safe": list(payload.get("restore_used_sources_safe", []) or []) if payload else [],
+            "host_runner_nuget_config_path": str(payload.get("host_runner_nuget_config_path", "") or "") if payload else "",
+            "host_runner_nuget_config_contents": str(payload.get("host_runner_nuget_config_contents", "") or "") if payload else "",
+            "host_runner_restore_command_raw": str(payload.get("host_runner_restore_command_raw", "") or "") if payload else "",
+            "host_runner_restore_command_args": list(payload.get("host_runner_restore_command_args", []) or []) if payload else [],
+            "host_runner_restore_configfile_arg": str(payload.get("host_runner_restore_configfile_arg", "") or "") if payload else "",
+            "host_runner_public_feed_present_in_file": bool(payload.get("host_runner_public_feed_present_in_file", False)) if payload else False,
+            "host_runner_public_feed_present_in_command_target": bool(payload.get("host_runner_public_feed_present_in_command_target", False)) if payload else False,
+            "host_runner_config_used_by_restore_confirmed": bool(payload.get("host_runner_config_used_by_restore_confirmed", False)) if payload else False,
+            "host_runner_restore_guard_checked": bool(payload.get("host_runner_restore_guard_checked", False)) if payload else False,
+            "host_runner_restore_guard_passed": bool(payload.get("host_runner_restore_guard_passed", False)) if payload else False,
+            "host_runner_restore_guard_reason": str(payload.get("host_runner_restore_guard_reason", "") or "") if payload else "",
+            "restore_subprocess_owner_function": str(payload.get("restore_subprocess_owner_function", "") or "") if payload else "",
+            "restore_subprocess_command_raw": str(payload.get("restore_subprocess_command_raw", "") or "") if payload else "",
+            "restore_subprocess_command_args": list(payload.get("restore_subprocess_command_args", []) or []) if payload else [],
+            "restore_subprocess_config_path": str(payload.get("restore_subprocess_config_path", "") or "") if payload else "",
+            "restore_subprocess_config_contents": str(payload.get("restore_subprocess_config_contents", "") or "") if payload else "",
+            "restore_subprocess_public_feed_present": bool(payload.get("restore_subprocess_public_feed_present", False)) if payload else False,
+            "restore_subprocess_private_feed_present": bool(payload.get("restore_subprocess_private_feed_present", False)) if payload else False,
+            "restore_subprocess_guard_ran_here": bool(payload.get("restore_subprocess_guard_ran_here", False)) if payload else False,
+            "restore_subprocess_guard_decision": str(payload.get("restore_subprocess_guard_decision", "") or "") if payload else "",
+            "restore_subprocess_config_rewritten_after_guard": bool(payload.get("restore_subprocess_config_rewritten_after_guard", False)) if payload else False,
             "restore_auth_mode_guess": str(payload.get("restore_auth_mode_guess", "") or ("config_without_credentials" if private_feed_detected else "anonymous_or_public")) if payload else ("config_without_credentials" if private_feed_detected else "anonymous_or_public"),
             "restore_secret_redaction_applied": bool(payload.get("restore_secret_redaction_applied", False)) if payload else False,
             "failure_reason_guess": failure_reason_guess,

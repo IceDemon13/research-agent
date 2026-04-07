@@ -109,11 +109,117 @@ class WebAppTests(unittest.TestCase):
             "acceptance_criteria": [f"{key} acceptance criteria"],
         }
 
+
+    class _FakeBulkRepoJobService:
+        def __init__(self) -> None:
+            self.latest_job = None
+            self.started = []
+            self.retried = []
+
+        def start_job(self, *, options, actor_id="", target_repo_ids=None, source_job_id=""):
+            if self.latest_job and self.latest_job.get("status") in {"pending", "running"}:
+                raise RuntimeError("A bulk repo onboarding job is already active.")
+            job = {
+                "job_id": "bulk-job-1",
+                "status": "running",
+                "created_at": "2026-04-07T10:00:00+00:00",
+                "started_at": "2026-04-07T10:00:01+00:00",
+                "finished_at": "",
+                "source_job_id": source_job_id,
+                "options": dict(options or {}),
+                "summary": {
+                    "total_repos": 2,
+                    "pending": 1,
+                    "running": 1,
+                    "succeeded": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                    "current_repo": "repo-a",
+                    "current_stage": "resolve_source",
+                    "percent_complete": 14,
+                },
+                "repos": [
+                    {
+                        "repo_id": "repo-a",
+                        "display_name": "Repo A",
+                        "status": "running",
+                        "current_stage": "resolve_source",
+                        "stage_status": "running",
+                        "started_at": "2026-04-07T10:00:01+00:00",
+                        "finished_at": "",
+                        "error_summary": "",
+                        "skipped_reason": "",
+                        "readiness": {},
+                        "stages": {},
+                    },
+                    {
+                        "repo_id": "repo-b",
+                        "display_name": "Repo B",
+                        "status": "pending",
+                        "current_stage": "",
+                        "stage_status": "pending",
+                        "started_at": "",
+                        "finished_at": "",
+                        "error_summary": "",
+                        "skipped_reason": "",
+                        "readiness": {},
+                        "stages": {},
+                    },
+                ],
+            }
+            self.started.append({"options": dict(options or {}), "actor_id": actor_id})
+            self.latest_job = job
+            return job
+
+        def get_latest_job(self):
+            return self.latest_job
+
+        def get_job(self, job_id: str):
+            if self.latest_job and self.latest_job.get("job_id") == job_id:
+                return self.latest_job
+            return None
+
+        def retry_failed_repos(self, job_id: str, *, actor_id=""):
+            self.retried.append({"job_id": job_id, "actor_id": actor_id})
+            return self.start_job(
+                options={"dry_run": False},
+                actor_id=actor_id,
+                target_repo_ids=["repo-b"],
+                source_job_id=job_id,
+            )
+
     def test_health_endpoint(self) -> None:
         response = self.client.get("/health")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
+
+    def test_health_config_reports_runtime_visibility_without_exposing_secrets(self) -> None:
+        with patch("web_app.resolve_llm_runtime_config") as mocked_runtime, patch(
+            "web_app.jira_auth_present",
+            return_value=False,
+        ):
+            mocked_runtime.return_value = type(
+                "Runtime",
+                (),
+                {"provider": "openrouter"},
+            )()
+            response = self.client.get("/health/config")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["config_source"], "repo_root_env_file")
+        self.assertIn(".env", payload["env_file_path"])
+        self.assertTrue("openrouter_key_present" in payload)
+        self.assertTrue("openai_key_present" in payload)
+        self.assertTrue("root_env_jira_email_present" in payload)
+        self.assertTrue("root_env_jira_api_token_present" in payload)
+        self.assertTrue("jira_mcp_email_present" in payload)
+        self.assertTrue("jira_mcp_api_token_present" in payload)
+        self.assertEqual(payload["jira_auth_source"], "jira_mcp_server_env")
+        self.assertTrue("llm_provider" in payload)
+        self.assertNotIn("sk-", json.dumps(payload))
 
     def test_run_detail_localizes_summary_by_requested_language(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
@@ -271,7 +377,8 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["request_input_text"], "TEL-404")
 
     def test_analyze_task_fails_closed_when_jira_auth_is_missing(self) -> None:
-        with patch(
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        with patch("web_app.RunService", return_value=service), patch(
             "web_app.load_jira_task",
             side_effect=web_app.JiraConfigurationError(
                 "Jira auth is missing; refusing to fetch live Jira content.",
@@ -294,11 +401,23 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["error"], "jira_auth_missing")
         self.assertFalse(payload["jira_auth_present"])
         self.assertEqual(payload["workflow_type"], "analyze_task")
+        self.assertTrue(str(payload.get("run_id", "")).strip())
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        run_record = service.load_run(payload["run_id"])
+        self.assertIsNotNone(run_record)
+        self.assertEqual(run_record.status, "failed")
+        detail = service.load_run_detail(payload["run_id"], run_record=run_record, log_path=run_record.log_path)
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail.status, "failed")
+        self.assertEqual(detail.mode, "spec")
+        self.assertEqual(detail.failure_code, "jira_auth_missing")
+        self.assertTrue(detail.jira_auth_present is False)
+        self.assertIn("Jira auth is missing", detail.final_result_summary)
 
     def test_analyze_task_fails_closed_when_llm_provider_is_unavailable(self) -> None:
         service = RunService(storage_dir=self.storage_dir, persist=True)
         with patch("web_app.RunService", return_value=service), patch(
-            "web_app.root_agent.run_root_agent",
+            "web_app.resolve_llm_runtime_config",
             side_effect=LLMConfigurationError(
                 "OPENROUTER_API_KEY is present but empty; refusing to fall back silently.",
                 provider="openrouter",
@@ -326,6 +445,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["error"], "llm_provider_unavailable")
         self.assertTrue(payload["run_invalid_due_to_provider"])
         self.assertEqual(payload["llm_failure_reason"], "openrouter_api_key_empty")
+        self.assertTrue(str(payload.get("run_id", "")).strip())
         runs = service.list_runs()
         self.assertEqual(len(runs), 1)
         detail = service.load_run_detail(runs[0].run_id, run_record=runs[0], log_path=runs[0].log_path)
@@ -333,6 +453,9 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(detail.run_invalid_due_to_provider)
         self.assertEqual(detail.llm_provider, "openrouter")
         self.assertEqual(detail.llm_failure_reason, "openrouter_api_key_empty")
+        self.assertEqual(detail.status, "failed")
+        self.assertEqual(detail.failure_code, "llm_provider_unavailable")
+        self.assertIn("OPENROUTER_API_KEY is present but empty", detail.final_result_summary)
 
     def test_implementation_plan_uses_gitnexus_payload_for_catalog_service(self) -> None:
         run_record = RunRecord(
@@ -569,6 +692,158 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Bonus response update", payload["technical_details"]["baseline_summary"])
         self.assertEqual(payload["technical_details"]["parsed_jira_sections"]["question_count"], 0)
         self.assertEqual(payload["technical_details"]["repo_routing_audit"][0]["provider_used"], "gitnexus_http")
+
+    def test_implementation_plan_can_be_seeded_from_analyze_task_without_repeating_fetches(self) -> None:
+        run_record = RunRecord(
+            run_id="impl-plan-seeded-1",
+            goal="Seeded implementation plan",
+            status="success",
+            started_at="2026-03-23T09:00:00+00:00",
+            finished_at="2026-03-23T09:01:00+00:00",
+            repo_id="telemart_soft_test",
+            actor_context=ActorContext(
+                actor_id="lead-1",
+                actor_type="user",
+                role="techlead",
+                source_channel="api",
+                display_name="Tech Lead",
+            ),
+        )
+        detail = RunDetail(
+            run_id="impl-plan-seeded-1",
+            mode="spec",
+            goal="Seeded implementation plan",
+            jira_ticket="TEL-13488",
+            repo_id="telemart_soft_test",
+            status="success",
+            repo_relevance_status="relevant",
+            repo_relevance_reason="Seeded from analyze_task.",
+            spec_result={"risks": []},
+            validation_result={},
+            repo_context_summary={},
+        )
+
+        seed_context = {
+            "final_workflow_input": "TEL-13488 receipt wording update with existing screenshots and acceptance criteria.",
+            "selected_repos": [{"repo_id": "telemart_soft_test", "score": 2.8}],
+            "top_candidate_files": [
+                {
+                    "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                    "confidence": 0.91,
+                    "reason": "exact historical jira match",
+                },
+                {
+                    "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                    "confidence": 0.9,
+                    "reason": "paired report resource file",
+                },
+            ],
+            "top_historical_matches": [
+                {
+                    "repo_id": "telemart_soft_test",
+                    "jira_key": "TEL-13508",
+                    "changed_files": [
+                        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                    ],
+                }
+            ],
+            "top_historical_changed_files": [
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+            ],
+            "candidate_files_count": 12,
+            "selected_files_count": 2,
+            "implementation_plan_preview": [
+                {
+                    "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                    "action": "modify",
+                    "reason": "Historical match points to the generated report template.",
+                    "likely_changes": "Adjust receipt wording while preserving the existing template shape.",
+                    "risk": "Designer and resource files can drift out of sync.",
+                },
+                {
+                    "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                    "action": "modify",
+                    "reason": "Localized strings likely live in the matching resource file.",
+                    "likely_changes": "Update resource strings used by the receipt template.",
+                    "risk": "Translations or resource keys can drift from the template.",
+                },
+            ],
+            "technical_details": {
+                "provider_used": "gitnexus_http",
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_reason": "GitNexus evidence already resolved during analyze_task.",
+                "final_merge_strategy": "repo_intelligence_first",
+                "jira_fetch_attempted": True,
+                "jira_fetch_succeeded": True,
+                "jira_auth_present": True,
+                "resolved_jira_title": "TEL-13488 receipt wording update",
+                "final_workflow_input": "TEL-13488 receipt wording update with existing screenshots and acceptance criteria.",
+                "acceptance_criteria_present": True,
+                "attachments_count": 1,
+            },
+            "recommendation": "Start from the report template and matching resource file.",
+        }
+
+        with patch("web_app._create_deterministic_implementation_plan_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            side_effect=AssertionError("seeded implementation plan should not re-fetch Jira"),
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            side_effect=AssertionError("seeded implementation plan should not re-run repo intelligence"),
+        ):
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={
+                    "jira_ticket": "TEL-13488",
+                    "repo_id": "telemart_soft_test",
+                    "seed_context": seed_context,
+                },
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertEqual(payload["selection_decision"], "seeded_from_analyze_task")
+        self.assertEqual(payload["selected_repos"][0]["repo_id"], "telemart_soft_test")
+        self.assertEqual(
+            payload["likely_files"],
+            [
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+            ],
+        )
+        self.assertEqual(payload["candidate_files_count"], 12)
+        self.assertEqual(payload["selected_files_count"], 2)
+        self.assertEqual(payload["change_actions"][0]["file"], "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs")
+        self.assertNotIn("src/fake/NotReal.cs", payload["likely_files"])
+        self.assertEqual(payload["technical_details"]["provider_used"], "gitnexus_http")
+        self.assertEqual(payload["technical_details"]["jira_fetch_succeeded"], True)
+
+    def test_workflow_page_exposes_open_implementation_plan_action(self) -> None:
+        response = self.client.get(
+            "/ui/workflow.html?type=analyze_task",
+            headers={
+                "X-Actor-Id": "lead-1",
+                "X-Actor-Role": "techlead",
+                "X-Source-Channel": "api",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("openImplementationPlanButton", response.text)
+        self.assertIn("Open Implementation Plan", response.text)
 
     def test_implementation_plan_preserves_selected_files_by_repo_in_technical_details(self) -> None:
         run_record = RunRecord(
@@ -1036,6 +1311,25 @@ class WebAppTests(unittest.TestCase):
         self.assertIn('await auth.fetchJson(configItem.endpoint', response.text)
         self.assertIn('Workflow form is still loading. Please wait a moment and try again.', response.text)
         self.assertIn('field.required && !value', response.text)
+        self.assertIn("autoDetectRepo: true", response.text)
+        self.assertIn("advancedOnly: true", response.text)
+        self.assertIn('details.id = "advancedFieldsPanel"', response.text)
+        self.assertIn("workflowRequestInFlight", response.text)
+        self.assertIn("if (workflowRequestInFlight)", response.text)
+        self.assertIn("setWorkflowLoadingState(true)", response.text)
+        self.assertIn("setWorkflowLoadingState(false)", response.text)
+        self.assertIn('id="workflowLoadingPanel"', response.text)
+        self.assertIn('id="workflowLoadingVideo"', response.text)
+        self.assertIn("Виконується...", response.text)
+        self.assertIn("aria-busy", response.text)
+
+    def test_workflow_page_includes_loader_asset_and_draft_patch_loading_ui(self) -> None:
+        response = self.client.get("/ui/workflow.html")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("./media/telemart-loader.mp4", response.text)
+        self.assertIn("Generate Draft Patch", response.text)
+        self.assertIn("loading-panel", response.text)
 
     def test_repos_endpoint_omits_gitnexus_open_url_when_external_ui_is_not_configured(self) -> None:
         repo = RepoMetadata(
@@ -1379,6 +1673,10 @@ class WebAppTests(unittest.TestCase):
         self.assertIn('id="repoForm"', response.text)
         self.assertIn("repo.page.empty_active", response.text)
         self.assertIn("data-delete", response.text)
+        self.assertIn("openBulkOnboardPanelButton", response.text)
+        self.assertIn("startBulkOnboardButton", response.text)
+        self.assertIn("bulkJobStatusCard", response.text)
+        self.assertIn("retryFailedBulkJobButton", response.text)
 
     def _create_admin_user(self, *, username: str = "admin", password: str = "StrongPass123A!") -> None:
         self.auth_service.create_user(
@@ -1396,6 +1694,15 @@ class WebAppTests(unittest.TestCase):
         response = self.client.post("/auth/login", json={"username": username, "password": password})
         self.assertEqual(response.status_code, 200)
         return response.json()
+
+    @staticmethod
+    def _machine_headers(*, token: str = "machine-token", role: str = "workflow_runner", actor: str = "codex-bot") -> dict[str, str]:
+        return {
+            "X-Automation-Actor": actor,
+            "X-Automation-Role": role,
+            "X-Automation-Token": token,
+            "X-Lang": "uk",
+        }
 
     def _insert_legacy_user(
         self,
@@ -1573,6 +1880,203 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload["display_name"], "")
         self.assertEqual(payload["role"], "")
         self.assertEqual(payload["capabilities"], [])
+        self._header_fallback_patch.start()
+
+    def test_machine_actor_can_call_analyze_task_when_enabled(self) -> None:
+        self._header_fallback_patch.stop()
+        run_record = RunRecord(
+            run_id="machine-analyze-1",
+            goal="Analyze task",
+            status="success",
+            started_at="2026-04-07T10:00:00+00:00",
+            actor_context=ActorContext(
+                actor_id="codex-bot",
+                actor_type="machine",
+                role="workflow_runner",
+                source_channel="automation",
+            ),
+        )
+        detail = RunDetail(run_id="machine-analyze-1", mode="spec", goal="Analyze task", status="success")
+        with patch("web_app._allow_automation_actor", return_value=True), patch(
+            "web_app._automation_actor_token",
+            return_value="machine-token",
+        ), patch("web_app._automation_allowed_roles", return_value=["workflow_runner"]), patch(
+            "web_app._automation_allowed_endpoints",
+            return_value=["/workflows/analyze-task", "/workflows/implementation-plan", "/workflows/generate-draft-patch", "/runs/"],
+        ), patch("web_app._resolve_jira_workflow_input", return_value={"final_workflow_input": "TEL-13508 body", "prompt_task_text": "TEL-13508 body", "acceptance_criteria": ["AC"]}), patch(
+            "web_app._ensure_workflow_llm_preflight",
+            return_value=None,
+        ), patch("web_app._create_deterministic_analyze_task_run", return_value=run_record), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app._persist_workflow_detail",
+            return_value=None,
+        ), patch(
+            "web_app._build_analyze_task_result",
+            return_value=web_app.AnalyzeTaskWorkflowResult(
+                task_quality_summary="Machine analyze ok.",
+                technical_details={},
+            ),
+        ), patch.object(web_app._automation_audit_logger, "info") as mocked_audit:
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13508", "repo_id": ""},
+                headers=self._machine_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("X-Auth-Mode"), "machine")
+        self.assertEqual(response.headers.get("X-Actor-Id"), "codex-bot")
+        payload = response.json()
+        self.assertEqual(payload["workflow"], "analyze_task")
+        self.assertEqual(payload["result"]["task_quality_summary"], "Machine analyze ok.")
+        mocked_audit.assert_called()
+        self._header_fallback_patch.start()
+
+    def test_machine_actor_can_call_implementation_plan_when_enabled(self) -> None:
+        self._header_fallback_patch.stop()
+        run_record = RunRecord(
+            run_id="machine-plan-1",
+            goal="Implementation plan",
+            status="success",
+            started_at="2026-04-07T10:00:00+00:00",
+            actor_context=ActorContext(
+                actor_id="codex-bot",
+                actor_type="machine",
+                role="workflow_runner",
+                source_channel="automation",
+            ),
+        )
+        detail = RunDetail(run_id="machine-plan-1", mode="spec", goal="Implementation plan", status="success")
+        with patch("web_app._allow_automation_actor", return_value=True), patch(
+            "web_app._automation_actor_token",
+            return_value="machine-token",
+        ), patch("web_app._automation_allowed_roles", return_value=["workflow_runner"]), patch(
+            "web_app._automation_allowed_endpoints",
+            return_value=["/workflows/analyze-task", "/workflows/implementation-plan", "/workflows/generate-draft-patch", "/runs/"],
+        ), patch("web_app._resolve_jira_workflow_input", return_value={"final_workflow_input": "TEL-13508 body", "prompt_task_text": "TEL-13508 body"}), patch(
+            "web_app._execute_tracked_api_run",
+            return_value=run_record,
+        ), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch(
+            "web_app._persist_workflow_detail",
+            return_value=None,
+        ), patch(
+            "web_app._build_implementation_plan_result",
+            return_value=web_app.ImplementationPlanWorkflowResult(recommendation="Plan ok."),
+        ):
+            response = self.client.post(
+                "/workflows/implementation-plan",
+                json={"jira_ticket": "TEL-13508", "repo_id": ""},
+                headers=self._machine_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("X-Auth-Mode"), "machine")
+        payload = response.json()
+        self.assertEqual(payload["workflow"], "implementation_plan")
+        self.assertEqual(payload["result"]["recommendation"], "Plan ok.")
+        self._header_fallback_patch.start()
+
+    def test_machine_actor_can_call_generate_draft_patch_when_enabled(self) -> None:
+        self._header_fallback_patch.stop()
+        with patch("web_app._allow_automation_actor", return_value=True), patch(
+            "web_app._automation_actor_token",
+            return_value="machine-token",
+        ), patch("web_app._automation_allowed_roles", return_value=["workflow_runner"]), patch(
+            "web_app._automation_allowed_endpoints",
+            return_value=["/workflows/analyze-task", "/workflows/implementation-plan", "/workflows/generate-draft-patch", "/runs/"],
+        ):
+            response = self.client.post(
+                "/workflows/generate-draft-patch",
+                json={
+                    "jira_ticket": "TEL-13508",
+                    "repo_id": "telemart_soft_test",
+                    "seed_context": {
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "top_candidate_files": [{"name": "src/report.cs", "confidence": 0.91, "reason": "history"}],
+                        "implementation_plan_preview": [
+                            {
+                                "file": "src/report.cs",
+                                "action": "modify",
+                                "reason": "history",
+                                "likely_changes": "adjust wording",
+                                "risk": "layout drift",
+                            }
+                        ],
+                        "repo_confidence": 90,
+                        "file_confidence": 85,
+                        "novelty_score": 20,
+                        "analysis_mode": "reuse",
+                        "selected_files_count": 1,
+                        "final_workflow_input": "Acceptance Criteria:\n- Adjust wording",
+                        "decision_questions": [],
+                    },
+                },
+                headers=self._machine_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("X-Auth-Mode"), "machine")
+        payload = response.json()
+        self.assertEqual(payload["workflow"], "generate_draft_patch")
+        self.assertTrue(payload["result"]["patch_generation_ready"])
+        self.assertFalse(payload["result"]["auto_apply"])
+        self.assertTrue(payload["result"]["review_required"])
+        self._header_fallback_patch.start()
+
+    def test_machine_actor_rejects_invalid_token(self) -> None:
+        self._header_fallback_patch.stop()
+        with patch("web_app._allow_automation_actor", return_value=True), patch(
+            "web_app._automation_actor_token",
+            return_value="machine-token",
+        ), patch("web_app._automation_allowed_roles", return_value=["workflow_runner"]), patch(
+            "web_app._automation_allowed_endpoints",
+            return_value=["/workflows/analyze-task", "/workflows/implementation-plan", "/workflows/generate-draft-patch", "/runs/"],
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13508", "repo_id": ""},
+                headers=self._machine_headers(token="wrong-token"),
+            )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"]["error"], "authentication_required")
+        self._header_fallback_patch.start()
+
+    def test_machine_actor_rejects_non_allowlisted_endpoint(self) -> None:
+        self._header_fallback_patch.stop()
+        with patch("web_app._allow_automation_actor", return_value=True), patch(
+            "web_app._automation_actor_token",
+            return_value="machine-token",
+        ), patch("web_app._automation_allowed_roles", return_value=["workflow_runner"]), patch(
+            "web_app._automation_allowed_endpoints",
+            return_value=["/workflows/analyze-task", "/workflows/implementation-plan", "/workflows/generate-draft-patch", "/runs/"],
+        ):
+            response = self.client.get(
+                "/repos",
+                headers=self._machine_headers(),
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["error"], "automation_endpoint_not_allowed")
+        self._header_fallback_patch.start()
+
+    def test_human_auth_still_works_when_machine_auth_feature_exists(self) -> None:
+        self._header_fallback_patch.stop()
+        self._create_admin_user()
+        with patch("web_app._allow_automation_actor", return_value=True):
+            login_response = self.client.post("/auth/login", json={"username": "admin", "password": "StrongPass123A!"})
+            self.assertEqual(login_response.status_code, 200)
+            self.assertEqual(login_response.json()["auth_mode"], "human")
+            me_response = self.client.get("/auth/me")
+
+        self.assertEqual(me_response.status_code, 200)
+        self.assertTrue(me_response.json()["authenticated"])
+        self.assertEqual(me_response.json()["auth_mode"], "human")
         self._header_fallback_patch.start()
 
     def test_change_password(self) -> None:
@@ -1876,6 +2380,83 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["action"], "backfill_all_active")
+
+    def test_start_bulk_repo_onboard_refresh_returns_job_payload(self) -> None:
+        fake_service = self._FakeBulkRepoJobService()
+        with patch.object(web_app, "_repo_bulk_job_service", fake_service):
+            response = self.client.post(
+                "/repos/bulk/onboard-refresh",
+                json={"dry_run": True},
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["job"]
+        self.assertEqual(payload["job_id"], "bulk-job-1")
+        self.assertTrue(fake_service.started[0]["options"]["dry_run"])
+
+    def test_start_bulk_repo_onboard_refresh_blocks_duplicate_job(self) -> None:
+        fake_service = self._FakeBulkRepoJobService()
+        fake_service.latest_job = {
+            "job_id": "existing",
+            "status": "running",
+        }
+        with patch.object(web_app, "_repo_bulk_job_service", fake_service):
+            response = self.client.post(
+                "/repos/bulk/onboard-refresh",
+                json={"dry_run": False},
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["error"], "bulk_repo_job_already_running")
+
+    def test_get_latest_bulk_repo_onboard_refresh_returns_persisted_job(self) -> None:
+        fake_service = self._FakeBulkRepoJobService()
+        fake_service.start_job(options={"dry_run": True}, actor_id="admin-1")
+        with patch.object(web_app, "_repo_bulk_job_service", fake_service):
+            response = self.client.get(
+                "/repos/bulk/onboard-refresh/latest",
+                headers={
+                    "X-Actor-Id": "dev-1",
+                    "X-Actor-Role": "developer",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+        self.assertEqual(response.json()["job"]["job_id"], "bulk-job-1")
+
+    def test_retry_failed_bulk_repo_onboard_refresh_starts_followup_job(self) -> None:
+        fake_service = self._FakeBulkRepoJobService()
+        fake_service.latest_job = {
+            "job_id": "bulk-job-1",
+            "status": "failed",
+            "summary": {"failed": 1},
+            "repos": [{"repo_id": "repo-b", "status": "failed"}],
+        }
+        with patch.object(web_app, "_repo_bulk_job_service", fake_service):
+            response = self.client.post(
+                "/repos/bulk/onboard-refresh/bulk-job-1/retry-failed",
+                headers={
+                    "X-Actor-Id": "admin-1",
+                    "X-Actor-Role": "admin",
+                    "X-Source-Channel": "api",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job"]["source_job_id"], "bulk-job-1")
+        self.assertEqual(fake_service.retried[0]["job_id"], "bulk-job-1")
 
     def test_learning_health_endpoint_returns_summary(self) -> None:
         with patch.object(web_app, "_repo_fleet_service") as mocked_fleet_service:
@@ -2320,6 +2901,75 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["run"]["run_id"], run.run_id)
 
+    def test_show_run_uses_persisted_analyze_task_summary_instead_of_generic_spec_fallback(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="telemart_soft_test",
+            detail_payload={
+                "run_outcome_type": "success",
+                "final_result_summary": "Historical Jira evidence points to telemart_soft_test; likely affected files include ServiceRequestReport.Designer.cs.",
+                "recommendation": "Start from the historically changed receipt files.",
+                "spec_result": {
+                    "workflow_debug": {
+                        "workflow_name": "analyze_task",
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "candidate_files_count": 12,
+                        "selected_files_count": 5,
+                    }
+                },
+            },
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=RunService(storage_dir=self.storage_dir, persist=True)):
+            response = self.client.get(
+                f"/runs/{run.run_id}",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["run"]
+        self.assertEqual(
+            payload["final_result_summary"],
+            "Historical Jira evidence points to telemart_soft_test; likely affected files include ServiceRequestReport.Designer.cs.",
+        )
+        self.assertEqual(payload["recommendation"], "Start from the historically changed receipt files.")
+        self.assertEqual(payload["run_outcome_type"], "success")
+        self.assertNotEqual(payload["final_result_summary"], "Specification generated.")
+
+    def test_show_run_keeps_generic_spec_summary_when_analyze_task_summary_is_absent(self) -> None:
+        run = self._create_persisted_run(
+            goal="Write spec",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "Spec",
+                },
+            },
+        )
+
+        with patch("web_app.root_agent.RunService", return_value=RunService(storage_dir=self.storage_dir, persist=True)):
+            response = self.client.get(
+                f"/runs/{run.run_id}",
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["run"]
+        self.assertNotIn("Historical Jira evidence points", payload["final_result_summary"])
+        self.assertTrue(payload["final_result_summary"])
+
     def test_analyze_task_workflow_endpoint_returns_product_result(self) -> None:
         run = self._create_persisted_run(
             goal="Analyze Jira task",
@@ -2341,7 +2991,11 @@ class WebAppTests(unittest.TestCase):
             },
         )
 
-        with patch("web_app._execute_tracked_api_run", return_value=run):
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"):
             response = self.client.post(
                 "/workflows/analyze-task",
                 json={"jira_ticket": "TEL-123", "repo_id": "sample"},
@@ -2356,15 +3010,1636 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["workflow"], "analyze_task")
-        self.assertEqual(payload["result"]["task_quality_summary"], "Task is usable but still needs a few clarifications.")
-        self.assertTrue(payload["result"]["missing_details"])
-        self.assertTrue(payload["result"]["concrete_questions"])
-        self.assertIn("What exact observable behavior should change for the user when this task is complete?", payload["result"]["concrete_questions"])
+        self.assertEqual(
+            payload["result"]["task_quality_summary"],
+            "Task is well specified enough for planning; use the existing Jira evidence to verify implementation boundaries.",
+        )
+        self.assertEqual(payload["result"]["missing_details"], [])
+        self.assertLessEqual(len(payload["result"]["concrete_questions"]), 3)
         self.assertTrue(payload["result"]["technical_details"]["jira_fetch_attempted"])
         self.assertTrue(payload["result"]["technical_details"]["jira_fetch_succeeded"])
         self.assertEqual(payload["result"]["technical_details"]["request_input_text"], "TEL-123")
         self.assertIn("Detailed description for TEL-123.", payload["result"]["technical_details"]["final_workflow_input"])
+        self.assertTrue(payload["result"]["technical_details"]["acceptance_criteria_present"])
         self.assertEqual(payload["result"]["technical_run"]["run_id"], run.run_id)
+
+    def test_analyze_task_surfaces_repo_history_signals(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="telemart_soft_test",
+            detail_payload={
+                "spec_result": {},
+                "repo_relevance_status": "",
+                "repo_relevance_reason": "",
+                "repo_relevance_confidence": 0.0,
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Service request receipt text update",
+                "summary": "Service request receipt text update",
+                "description": "Replace the printed receipt wording in the service request flow and keep the current print layout unchanged.",
+                "acceptance_criteria": [
+                    "The service request receipt uses the updated wording.",
+                    "The existing print layout and spacing stay unchanged.",
+                ],
+                "attachments": [{"name": "receipt.png", "mime_type": "image/png"}],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "native",
+                "provider_reason": "Workflow 'analyze_task' uses the native provider.",
+                "selection_decision": "workflow_analyze_task_stays_native",
+                "execution_mode": "plan_only",
+                "selected_repos": [
+                    {
+                        "repo_id": "telemart_soft_test",
+                        "score": 2.55,
+                        "top_historical_changed_files": [
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        ],
+                    }
+                ],
+                "top_historical_matches": [
+                    {
+                        "repo_id": "telemart_soft_test",
+                        "jira_key": "TEL-13508",
+                        "reasons": ["exact_jira_key", "historical_task_similarity"],
+                        "changed_files": [
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        ],
+                    }
+                ],
+                "top_historical_changed_files": [
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                ],
+                "candidate_files_count": 12,
+                "selected_files_count": 5,
+                "top_candidate_files": [
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                        "confidence": 0.91,
+                        "reason": "exact_jira_history",
+                    },
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        "confidence": 0.90,
+                        "reason": "exact_jira_history",
+                    },
+                ],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13508", "repo_id": "telemart_soft_test"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["repo_match"]["status"], "match")
+        self.assertEqual(payload["selected_repos"][0]["repo_id"], "telemart_soft_test")
+        self.assertEqual(payload["candidate_files_count"], 12)
+        self.assertEqual(payload["selected_files_count"], 5)
+        self.assertEqual(payload["top_historical_matches"][0]["jira_key"], "TEL-13508")
+        self.assertTrue(payload["implementation_plan_preview"])
+        preview_files = [item["file"] for item in payload["implementation_plan_preview"]]
+        self.assertIn("src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", preview_files)
+        self.assertIn("src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx", preview_files)
+        self.assertNotIn("src/fake/NotReal.cs", preview_files)
+        self.assertIn("ServiceRequestReport.Designer.cs", payload["task_quality_summary"])
+        self.assertNotEqual(payload["task_quality_summary"], "Task needs more detail before implementation.")
+        self.assertEqual(payload["technical_details"]["final_merge_strategy"], "repo_intelligence_first")
+        self.assertGreaterEqual(payload["quality_score"], 75)
+        self.assertIn(payload["quality_state"], {"reasonably_specified", "well_specified"})
+        self.assertEqual(payload["quality_breakdown"]["jira"], 35)
+        self.assertEqual(payload["quality_breakdown"]["repo"], 35)
+        self.assertLessEqual(payload["novelty_score"], 30)
+        self.assertEqual(payload["novelty_level"], "low")
+        self.assertGreaterEqual(payload["confidence_score"], 75)
+        self.assertLessEqual(payload["domain_novelty_score"], 35)
+        self.assertLessEqual(payload["repo_novelty_score"], 30)
+        self.assertGreaterEqual(payload["repo_confidence"], 75)
+        self.assertGreaterEqual(payload["file_confidence"], 75)
+        self.assertGreaterEqual(payload["task_confidence"], 75)
+        self.assertEqual(payload["analysis_mode"], "reuse")
+        self.assertLessEqual(len(payload["decision_questions"]), 3)
+        self.assertTrue(payload["patch_generation_ready"])
+        self.assertEqual(payload["patch_generation_blockers"], [])
+        self.assertTrue(payload["patch_generation_allowed_files"])
+        self.assertTrue(payload["implementation_plan_branches"])
+        self.assertLessEqual(len(payload["implementation_plan_branches"]), 2)
+        self.assertTrue(all(len(item["options"]) <= 2 for item in payload["implementation_plan_branches"]))
+
+    def test_analyze_task_with_acceptance_criteria_does_not_claim_missing_acceptance(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-13488 Receipt text update",
+                    "goal": "Update the printed receipt wording.",
+                    "context": "Users print a service receipt after submitting a request.",
+                    "requirements": ["Update the existing printed receipt template wording."],
+                    "acceptance_criteria": [
+                        "The printed receipt uses the new wording in the service request flow.",
+                        "Existing receipt formatting stays unchanged.",
+                    ],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(
+            all("Acceptance criteria" not in item for item in payload["missing_details"]),
+            payload["missing_details"],
+        )
+        self.assertNotEqual(payload["task_quality_summary"], "Task needs more detail before implementation.")
+
+    def test_analyze_task_dedicated_acceptance_criteria_are_included_in_workflow_input_and_debug(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {},
+                "recommendation": "",
+            },
+        )
+
+        jira_payload = {
+            "title": "TEL-13488 Receipt text update",
+            "summary": "TEL-13488 Receipt text update",
+            "description": "Update the printed receipt wording in the service request flow.",
+            "acceptance_criteria": [
+                "Printed receipt uses the new wording.",
+                "Existing layout remains unchanged.",
+            ],
+            "acceptance_criteria_source": "customfield_11145",
+            "acceptance_criteria_field_present": True,
+            "raw_jira_fields": {
+                "acceptance_criteria_field_id": "customfield_11145",
+                "acceptance_criteria_field_present": True,
+            },
+        }
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value=jira_payload,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        technical = payload["technical_details"]
+        self.assertTrue(technical["acceptance_criteria_present"])
+        self.assertEqual(technical["acceptance_criteria_count"], 2)
+        self.assertEqual(technical["acceptance_criteria_source"], "customfield_11145")
+        self.assertTrue(technical["acceptance_criteria_included_in_workflow_input"])
+        self.assertEqual(technical["raw_jira_fields"]["acceptance_criteria_field_id"], "customfield_11145")
+        self.assertIn("Acceptance Criteria:", technical["final_workflow_input"])
+        self.assertIn("Printed receipt uses the new wording.", technical["final_workflow_input"])
+        self.assertEqual(technical["parsed_jira_sections"]["acceptance_criteria_count"], 2)
+        self.assertTrue(
+            all("Acceptance criteria are missing" not in item for item in payload["missing_details"]),
+            payload["missing_details"],
+        )
+        self.assertNotEqual(payload["task_quality_summary"], "Task needs more detail before implementation.")
+
+    def test_analyze_task_with_attachments_mentions_visual_reference(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-13488 UI tweak",
+                    "goal": "Align the printed output with the attached design.",
+                    "context": "",
+                    "requirements": ["Update the printed UI layout to match the provided design."],
+                    "acceptance_criteria": ["Printed output matches the approved design."],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        jira_payload = {
+            "title": "TEL-13488 UI tweak",
+            "summary": "TEL-13488 UI tweak",
+            "description": "Align the printed output with the attached design.",
+            "acceptance_criteria": ["Printed output matches the approved design."],
+            "attachments": [{"name": "design.png", "mime_type": "image/png"}],
+        }
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value=jira_payload,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(
+            any("attached screenshots" in item for item in payload["suggested_additions"]),
+            payload["suggested_additions"],
+        )
+        self.assertFalse(
+            any("underspecified" in item.lower() or "недостатньо описан" in item.lower() for item in payload["suggested_additions"]),
+            payload["suggested_additions"],
+        )
+        self.assertTrue(
+            any("attached screenshots" in item for item in payload["concrete_questions"]),
+            payload["concrete_questions"],
+        )
+        self.assertEqual(payload["advisory_block_title"], "What to verify before implementation")
+        self.assertEqual(payload["quality_state"], "well_specified")
+        self.assertTrue(
+            any(item["source"] == "attachment" for item in payload["technical_details"]["advisory_suggestions_debug"]),
+            payload["technical_details"]["advisory_suggestions_debug"],
+        )
+
+    def test_analyze_task_with_strong_description_generates_specific_questions(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="telemart_soft_test",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-13488 Receipt wording",
+                    "goal": "Clarify report wording change.",
+                    "context": "Update the service request receipt template and preserve the current layout.",
+                    "requirements": ["Adjust the existing receipt/report wording in the service request print flow."],
+                    "acceptance_criteria": ["Receipt uses the new wording without changing the existing layout."],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "top_historical_changed_files": [
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                ],
+                "top_candidate_files": [
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                        "confidence": 0.91,
+                        "reason": "exact_jira_history",
+                    },
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        "confidence": 0.9,
+                        "reason": "exact_jira_history",
+                    },
+                ],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "telemart_soft_test"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(
+            any("existing print/report template" in item for item in payload["decision_questions"]),
+            payload["decision_questions"],
+        )
+        self.assertTrue(payload["concrete_questions"], payload["concrete_questions"])
+        self.assertEqual(payload["advisory_block_title"], "What to verify before implementation")
+        self.assertTrue(
+            any("existing print/report template" in item for item in payload["suggested_additions"]),
+            payload["suggested_additions"],
+        )
+        self.assertNotIn("Review the latest Jira comments before implementation in case PM clarifications narrow the exact behavior.", payload["suggested_additions"])
+        self.assertFalse(
+            any("underspecified" in item.lower() or "не позначайте задачу" in item.lower() for item in payload["suggested_additions"]),
+            payload["suggested_additions"],
+        )
+        debug_items = payload["technical_details"]["advisory_suggestions_debug"]
+        self.assertTrue(debug_items)
+        self.assertTrue(
+            all(item["source"] in {"repo", "attachment", "history", "description"} for item in debug_items),
+            debug_items,
+        )
+        self.assertEqual(
+            [item["text"] for item in debug_items],
+            payload["suggested_additions"],
+        )
+        concrete_lower = {item.lower() for item in payload["concrete_questions"]}
+        decision_lower = {item.lower() for item in payload["decision_questions"]}
+        self.assertFalse(concrete_lower & decision_lower, (payload["concrete_questions"], payload["decision_questions"]))
+        self.assertTrue(
+            all(
+                "should" not in item.lower() or " or " not in item.lower()
+                for item in payload["concrete_questions"]
+            ),
+            payload["concrete_questions"],
+        )
+        self.assertTrue(
+            any("should" in item.lower() or " or " in item.lower() for item in payload["decision_questions"]),
+            payload["decision_questions"],
+        )
+        self.assertTrue(payload["implementation_plan_branches"], payload["implementation_plan_branches"])
+        self.assertLessEqual(len(payload["implementation_plan_branches"]), 2)
+        first_branch = payload["implementation_plan_branches"][0]
+        self.assertEqual(first_branch["decision"], payload["decision_questions"][0])
+        self.assertEqual(len(first_branch["options"]), 2)
+        self.assertEqual(first_branch["options"][0]["option"], "A")
+        self.assertEqual(first_branch["options"][1]["option"], "B")
+        self.assertTrue(first_branch["options"][0]["plan"])
+
+    def test_analyze_task_without_details_still_falls_back_to_generic_questions(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-13488 Empty task",
+                    "goal": "",
+                    "context": "",
+                    "requirements": [],
+                    "acceptance_criteria": [],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "TEL-13488 Empty task",
+                "summary": "TEL-13488 Empty task",
+                "description": "",
+                "acceptance_criteria": [],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertIn(
+            "What exact observable behavior should change for the user when this task is complete?",
+            payload["concrete_questions"],
+        )
+        self.assertTrue(payload["missing_details"])
+        self.assertEqual(payload["advisory_block_title"], "What to add")
+        self.assertEqual(payload["quality_state"], "under_specified")
+        self.assertLess(payload["quality_score"], 40)
+
+    def test_analyze_task_partial_task_receives_mid_quality_score(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-20000 Partial task",
+                    "goal": "Adjust behavior.",
+                    "context": "Users should see the updated wording in the current flow.",
+                    "requirements": ["Update the existing wording in the screen."],
+                    "acceptance_criteria": ["Users see the updated wording."],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "TEL-20000 Partial task",
+                "summary": "TEL-20000 Partial task",
+                "description": "Users should see the updated wording in the current flow.",
+                "acceptance_criteria": ["Users see the updated wording."],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-20000", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertGreaterEqual(payload["quality_score"], 40)
+        self.assertLessEqual(payload["quality_score"], 75)
+        self.assertEqual(payload["quality_state"], "reasonably_specified")
+        self.assertEqual(payload["analysis_mode"], "guided")
+        self.assertTrue(payload["decision_questions"])
+
+    def test_analyze_task_novel_task_uses_exploration_mode_and_softer_language(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-30000 Novel workflow",
+                    "goal": "Investigate a new fulfillment experiment.",
+                    "context": "A new cross-module experiment may affect multiple entry points.",
+                    "requirements": [],
+                    "acceptance_criteria": ["The experiment path should be available for pilot users."],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "TEL-30000 Novel workflow",
+                "summary": "TEL-30000 Novel workflow",
+                "description": "A new cross-module experiment may affect multiple entry points.",
+                "acceptance_criteria": ["The experiment path should be available for pilot users."],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "selected_repos": [{"repo_id": "telemart_soft_test", "score": 1.1}],
+                "candidate_files_count": 9,
+                "selected_files_count": 0,
+                "top_candidate_files": [
+                    {"name": "src/Unknown/A.cs", "confidence": 0.31, "reason": "weak_overlap"},
+                    {"name": "src/Unknown/B.cs", "confidence": 0.28, "reason": "weak_overlap"},
+                    {"name": "src/Unknown/C.cs", "confidence": 0.26, "reason": "weak_overlap"},
+                ],
+                "top_historical_matches": [],
+                "top_historical_changed_files": [],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-30000", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertGreater(payload["novelty_score"], 70)
+        self.assertEqual(payload["novelty_level"], "high")
+        self.assertLess(payload["confidence_score"], 60)
+        self.assertGreater(payload["domain_novelty_score"], 70)
+        self.assertGreaterEqual(len(payload["decision_questions"]), 2)
+        self.assertEqual(payload["analysis_mode"], "exploration")
+        self.assertTrue(payload["decision_questions"])
+        self.assertIn("exploratory", payload["task_quality_summary"].lower())
+        self.assertFalse(payload["patch_generation_ready"])
+        self.assertTrue(payload["patch_generation_blockers"])
+
+    def test_analyze_task_cross_repo_novelty_expands_candidates_and_lowers_file_confidence(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-31000 Cross repo integration",
+                    "goal": "Explore a new integration path spanning several modules.",
+                    "context": "A new orchestration path may touch import, billing, and UI surfaces.",
+                    "requirements": ["Investigate how the new integration should be wired."],
+                    "acceptance_criteria": ["The integration path should support pilot execution."],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "TEL-31000 Cross repo integration",
+                "summary": "TEL-31000 Cross repo integration",
+                "description": "A new orchestration path may touch import, billing, and UI surfaces.",
+                "acceptance_criteria": ["The integration path should support pilot execution."],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "selected_repos": [{"repo_id": "telemart_soft_test", "score": 0.92}],
+                "candidate_files_count": 14,
+                "selected_files_count": 0,
+                "top_candidate_files": [
+                    {"name": "src/Import/A.cs", "confidence": 0.34, "reason": "weak_overlap"},
+                    {"name": "src/Billing/B.cs", "confidence": 0.31, "reason": "weak_overlap"},
+                    {"name": "src/UI/C.cs", "confidence": 0.29, "reason": "weak_overlap"},
+                    {"name": "src/Jobs/D.cs", "confidence": 0.27, "reason": "weak_overlap"},
+                    {"name": "src/Api/E.cs", "confidence": 0.25, "reason": "weak_overlap"},
+                    {"name": "src/Shared/F.cs", "confidence": 0.22, "reason": "weak_overlap"},
+                ],
+                "top_historical_matches": [],
+                "top_historical_changed_files": [],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-31000", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertGreater(payload["repo_novelty_score"], 70)
+        self.assertLess(payload["file_confidence"], 45)
+        self.assertEqual(payload["analysis_mode"], "exploration")
+        self.assertGreaterEqual(len(payload["top_candidate_files"]), 5)
+        self.assertIn("exploratory", payload["task_quality_summary"].lower())
+        self.assertFalse(payload["patch_generation_ready"])
+        self.assertIn("file confidence too low", payload["patch_generation_blockers"])
+
+    def test_analyze_task_comment_signal_does_not_reintroduce_legacy_advisory_for_well_specified_task(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="sample",
+            detail_payload={
+                "spec_result": {
+                    "title": "TEL-13488 Receipt text update",
+                    "goal": "Update the printed receipt wording.",
+                    "context": "Users print a service receipt after submitting a request.",
+                    "requirements": ["Update the existing printed receipt template wording."],
+                    "acceptance_criteria": ["Printed receipt uses the new wording without changing layout."],
+                    "risks": [],
+                },
+                "recommendation": "",
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        resolved_input_without_signal = {
+            "request_input_text": "TEL-13488",
+            "prompt_task_text": "Title: TEL-13488\nDescription:\nUpdate receipt wording.",
+            "final_workflow_input": "Title: TEL-13488\nDescription:\nUpdate receipt wording.",
+            "acceptance_criteria_present": True,
+            "comments_count": 2,
+            "comments_used_in_context": False,
+            "attachments_count": 0,
+            "attachment_image_summaries_count": 0,
+        }
+        resolved_input_with_signal = dict(resolved_input_without_signal)
+        resolved_input_with_signal["comments_used_in_context"] = True
+
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app._resolve_jira_workflow_input",
+            return_value=resolved_input_without_signal,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response_without_signal = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app._resolve_jira_workflow_input",
+            return_value=resolved_input_with_signal,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={},
+        ):
+            response_with_signal = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13488", "repo_id": "sample"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response_without_signal.status_code, 200)
+        self.assertEqual(response_with_signal.status_code, 200)
+        payload_without_signal = response_without_signal.json()["result"]
+        payload_with_signal = response_with_signal.json()["result"]
+        self.assertFalse(
+            any("clarifications captured from the Jira comments" in item for item in payload_without_signal["suggested_additions"]),
+            payload_without_signal["suggested_additions"],
+        )
+        self.assertFalse(
+            any("clarifications captured from the Jira comments" in item for item in payload_with_signal["suggested_additions"]),
+            payload_with_signal["suggested_additions"],
+        )
+        self.assertTrue(
+            all(item["source"] in {"repo", "attachment", "history", "description"} for item in payload_with_signal["technical_details"]["advisory_suggestions_debug"]),
+            payload_with_signal["technical_details"]["advisory_suggestions_debug"],
+        )
+
+    def test_analyze_task_uses_gitnexus_when_repo_signal_is_available(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="catalog_service",
+            detail_payload={
+                "spec_result": {},
+                "repo_relevance_status": "",
+                "repo_relevance_reason": "",
+                "repo_relevance_confidence": 0.0,
+            },
+        )
+
+        detail = self._load_persisted_run_detail(run)
+        with patch("web_app._create_deterministic_analyze_task_run", return_value=run), patch(
+            "web_app._load_run_detail_for_record",
+            return_value=detail,
+        ), patch("web_app._persist_workflow_detail"), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Bonus response update",
+                "summary": "Bonus response update",
+                "description": "Expose the updated bonus response in catalog service.",
+                "acceptance_criteria": [],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus evidence was used for analyze_task.",
+                "selection_decision": "selected_gitnexus_http",
+                "selected_repos": [{"repo_id": "catalog_service"}],
+                "top_historical_matches": [],
+                "top_historical_changed_files": ["src/Catalog.Api/Controllers/BonusController.cs"],
+                "candidate_files_count": 3,
+                "selected_files_count": 1,
+                "top_candidate_files": [
+                    {"name": "src/Catalog.Api/Controllers/BonusController.cs", "confidence": 0.91, "reason": "route match"}
+                ],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-1", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["technical_details"]["provider_used"], "gitnexus_http")
+        self.assertEqual(payload["technical_details"]["final_merge_strategy"], "repo_intelligence_first")
+        self.assertEqual(payload["repo_match"]["status"], "match")
+        self.assertEqual(payload["candidate_files_count"], 3)
+
+    def test_analyze_task_with_blank_repo_id_still_uses_repo_intelligence_routing(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="",
+            detail_payload={
+                "spec_result": {},
+                "repo_relevance_status": "",
+                "repo_relevance_reason": "",
+                "repo_relevance_confidence": 0.0,
+            },
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Service request receipt text update",
+                "summary": "Service request receipt text update",
+                "description": "Replace the printed receipt wording in the service request flow.",
+                "acceptance_criteria": [],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus evidence was used for analyze_task.",
+                "selection_decision": "selected_gitnexus_http",
+                "selected_repos": [
+                    {"repo_id": "telemart_soft_test", "score": 2.55}
+                ],
+                "top_historical_matches": [
+                    {
+                        "repo_id": "telemart_soft_test",
+                        "jira_key": "TEL-13508",
+                        "reasons": ["exact_jira_key"],
+                        "changed_files": [
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        ],
+                    }
+                ],
+                "top_historical_changed_files": [
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                ],
+                "candidate_files_count": 12,
+                "selected_files_count": 5,
+                "top_candidate_files": [
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                        "confidence": 0.91,
+                        "reason": "exact_jira_history",
+                    },
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        "confidence": 0.90,
+                        "reason": "exact_jira_history",
+                    },
+                ],
+            },
+        ) as mocked_query:
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13508", "repo_id": ""},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        mocked_query.assert_called_once()
+        self.assertEqual(mocked_query.call_args.args[0], "")
+        payload = response.json()["result"]
+        self.assertEqual(payload["technical_details"]["provider_used"], "gitnexus_http")
+        self.assertEqual(payload["technical_details"]["final_merge_strategy"], "repo_intelligence_first")
+        self.assertEqual(payload["selected_repos"][0]["repo_id"], "telemart_soft_test")
+        self.assertEqual(payload["candidate_files_count"], 12)
+        self.assertEqual(payload["selected_files_count"], 5)
+        self.assertEqual(payload["repo_match"]["status"], "match")
+        self.assertTrue(payload["implementation_plan_preview"])
+
+    def test_analyze_task_explicit_repo_override_still_reaches_backend(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="catalog_service",
+            detail_payload={
+                "spec_result": {},
+                "repo_relevance_status": "",
+                "repo_relevance_reason": "",
+                "repo_relevance_confidence": 0.0,
+            },
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Bonus response update",
+                "summary": "Bonus response update",
+                "description": "Expose the updated bonus response in catalog service.",
+                "acceptance_criteria": [],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus evidence was used for analyze_task.",
+                "selection_decision": "selected_gitnexus_http",
+                "selected_repos": [{"repo_id": "catalog_service"}],
+                "top_historical_matches": [],
+                "top_historical_changed_files": ["src/Catalog.Api/Controllers/BonusController.cs"],
+                "candidate_files_count": 3,
+                "selected_files_count": 1,
+                "top_candidate_files": [
+                    {"name": "src/Catalog.Api/Controllers/BonusController.cs", "confidence": 0.91, "reason": "route match"}
+                ],
+            },
+        ) as mocked_query:
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-1", "repo_id": "catalog_service"},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        mocked_query.assert_called_once()
+        self.assertEqual(mocked_query.call_args.args[0], "catalog_service")
+
+    def test_analyze_task_returns_empty_plan_preview_when_no_repo_signal_exists(self) -> None:
+        run = self._create_persisted_run(
+            goal="Analyze Jira task",
+            mode="spec",
+            repo_id="",
+            detail_payload={
+                "spec_result": {
+                    "goal": "Analyze task",
+                    "context": "Task context",
+                    "requirements": ["Clarify behavior."],
+                    "acceptance_criteria": ["Outcome is clear."],
+                    "risks": [],
+                },
+                "repo_relevance_status": "",
+                "repo_relevance_reason": "",
+                "repo_relevance_confidence": 0.0,
+            },
+        )
+
+        with patch("web_app._execute_tracked_api_run", return_value=run), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Generic task",
+                "summary": "Generic task",
+                "description": "Clarify a generic workflow task.",
+                "acceptance_criteria": ["Behavior is clarified."],
+            },
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "No repo signal surfaced for this analyze_task request.",
+                "selection_decision": "selected_gitnexus_http",
+                "selected_repos": [],
+                "top_historical_matches": [],
+                "top_historical_changed_files": [],
+                "candidate_files_count": 0,
+                "selected_files_count": 0,
+                "top_candidate_files": [],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-99999", "repo_id": ""},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["implementation_plan_preview"], [])
+        self.assertEqual(payload["implementation_plan_branches"], [])
+        self.assertFalse(payload["patch_generation_ready"])
+
+    def test_generate_draft_patch_ready_case_is_bounded_to_allowed_files(self) -> None:
+        response = self.client.post(
+            "/workflows/generate-draft-patch",
+            json={
+                "jira_ticket": "TEL-13488",
+                "repo_id": "telemart_soft_test",
+                "seed_context": {
+                    "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                    "top_candidate_files": [
+                        {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", "confidence": 0.91, "reason": "exact history"},
+                        {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx", "confidence": 0.9, "reason": "exact history"},
+                    ],
+                    "selected_files_count": 2,
+                    "implementation_plan_preview": [
+                        {
+                            "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            "action": "modify",
+                            "reason": "Historical match points to the generated report template.",
+                            "likely_changes": "Adjust receipt wording while preserving the existing template shape.",
+                            "risk": "Designer and resource files can drift out of sync.",
+                        },
+                        {
+                            "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                            "action": "modify",
+                            "reason": "Localized strings likely live in the matching resource file.",
+                            "likely_changes": "Update resource strings used by the receipt template.",
+                            "risk": "Translations or resource keys can drift from the template.",
+                        },
+                    ],
+                    "decision_questions": [
+                        "Does this change update the existing print/report template, or should it introduce a new variant for a separate scenario?"
+                    ],
+                    "repo_confidence": 90,
+                    "file_confidence": 82,
+                    "novelty_score": 28,
+                    "analysis_mode": "reuse",
+                    "final_workflow_input": "TEL-13488 receipt wording update with acceptance criteria.",
+                    "technical_details": {"request_input_text": "TEL-13488"},
+                },
+            },
+            headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertTrue(payload["patch_generation_ready"])
+        self.assertEqual(payload["patch_generation_blockers"], [])
+        self.assertEqual(payload["repo_id"], "telemart_soft_test")
+        self.assertEqual(
+            payload["allowed_files"],
+            [
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+            ],
+        )
+        self.assertIn("--- a/src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", payload["generated_diff"])
+        self.assertNotIn("src/fake/NotReal.cs", payload["generated_diff"])
+        self.assertTrue(payload["review_required"])
+        self.assertFalse(payload["auto_apply"])
+
+    def test_generate_draft_patch_blocks_on_unresolved_critical_decisions(self) -> None:
+        response = self.client.post(
+            "/workflows/generate-draft-patch",
+            json={
+                "jira_ticket": "TEL-31000",
+                "repo_id": "telemart_soft_test",
+                "seed_context": {
+                    "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                    "top_candidate_files": [{"name": "src/Import/A.cs", "confidence": 0.78, "reason": "weak overlap"}],
+                    "selected_files_count": 1,
+                    "implementation_plan_preview": [
+                        {"file": "src/Import/A.cs", "action": "modify", "reason": "Candidate file.", "likely_changes": "Explore integration entry point.", "risk": "Scope may expand."}
+                    ],
+                    "decision_questions": [
+                        "Is this a new module or bounded context, or should it extend an existing implementation path?"
+                    ],
+                    "repo_confidence": 88,
+                    "file_confidence": 80,
+                    "novelty_score": 35,
+                    "analysis_mode": "guided",
+                    "final_workflow_input": "Explore a new integration path.",
+                },
+            },
+            headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertFalse(payload["patch_generation_ready"])
+        self.assertIn("decision questions unresolved", payload["patch_generation_blockers"])
+        self.assertEqual(payload["generated_diff"], "")
+
+    def test_workflow_page_exposes_generate_draft_patch_action(self) -> None:
+        response = self.client.get(
+            "/ui/workflow.html?type=analyze_task",
+            headers={
+                "X-Actor-Id": "lead-1",
+                "X-Actor-Role": "techlead",
+                "X-Source-Channel": "api",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("generateDraftPatchButton", response.text)
+        self.assertIn("Draft Patch (Review Required)", response.text)
+        self.assertIn("approveDraftPatchButton", response.text)
+        self.assertIn("rejectDraftPatchButton", response.text)
+        self.assertIn("applyDraftPatchButton", response.text)
+        self.assertIn("/workflows/review-draft-patch", response.text)
+        self.assertIn("/workflows/apply-draft-patch", response.text)
+
+    def test_review_draft_patch_approval_marks_apply_ready_after_validation(self) -> None:
+        with patch.object(
+            web_app._draft_patch_review_service,
+            "record_review",
+            return_value={
+                "review_id": "review-1",
+                "decision": "approved",
+                "actor_id": "lead-1",
+            },
+        ), patch.object(
+            web_app._draft_patch_execution_service,
+            "execute_approved_draft",
+            return_value=web_app.DraftPatchExecutionResult(
+                execution_id="exec-1",
+                review_record_id="review-1",
+                jira_ticket="TEL-13488",
+                repo_id="telemart_soft_test",
+                allowed_files=["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"],
+                validated=True,
+                validation_status="passed",
+                validation_summary="Validation passed.",
+                repair_attempted=False,
+                repair_attempts=[],
+                repair_successful=False,
+                repaired=False,
+                generated_diff="--- a/src/file.cs\n+++ b/src/file.cs\n@@ -1 +1 @@\n-old\n+new",
+                diff_hash="validated-hash",
+                apply_input=web_app.ApplyInputPayload(
+                    repo_id="telemart_soft_test",
+                    operations=[
+                        web_app.ApplyOperationPayload(
+                            relative_path="src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            operation_type="update",
+                            new_content="// validated content",
+                            expected_hash="",
+                        )
+                    ],
+                    dry_run=True,
+                ),
+                apply_ready=True,
+                apply_blockers=[],
+                touched_files=["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"],
+                out_of_bounds_detected=False,
+                invariant_check_passed=True,
+            ),
+        ):
+            response = self.client.post(
+                "/workflows/review-draft-patch",
+                json={
+                    "jira_ticket": "TEL-13488",
+                    "repo_id": "telemart_soft_test",
+                    "decision": "approved",
+                    "seed_context": {
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "top_candidate_files": [
+                            {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", "confidence": 0.91, "reason": "exact history"},
+                            {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx", "confidence": 0.90, "reason": "exact history"},
+                        ],
+                        "selected_files_count": 2,
+                        "implementation_plan_preview": [
+                            {
+                                "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                                "action": "modify",
+                                "reason": "Historical match points to the generated report template.",
+                                "likely_changes": "Adjust receipt wording while preserving the existing template shape.",
+                                "risk": "Designer and resource files can drift out of sync.",
+                            },
+                            {
+                                "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                                "action": "modify",
+                                "reason": "Localized strings likely live in the matching resource file.",
+                                "likely_changes": "Update resource strings used by the receipt template.",
+                                "risk": "Translations or resource keys can drift from the template.",
+                            },
+                        ],
+                        "decision_questions": [],
+                        "repo_confidence": 90,
+                        "file_confidence": 82,
+                        "novelty_score": 28,
+                        "analysis_mode": "reuse",
+                        "final_workflow_input": "TEL-13488 receipt wording update with acceptance criteria.",
+                        "technical_details": {"request_input_text": "TEL-13488"},
+                    },
+                },
+                headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["review_state"], "approved")
+        self.assertEqual(payload["review_id"], "review-1")
+        self.assertEqual(payload["reviewed_by"], "lead-1")
+        self.assertTrue(payload["validated"])
+        self.assertEqual(payload["validation_status"], "passed")
+        self.assertTrue(payload["apply_ready"])
+        self.assertEqual(payload["apply_blockers"], [])
+
+    def test_review_draft_patch_approval_blocks_apply_when_validation_fails(self) -> None:
+        with patch.object(
+            web_app._draft_patch_review_service,
+            "record_review",
+            return_value={
+                "review_id": "review-1",
+                "decision": "approved",
+                "actor_id": "lead-1",
+            },
+        ), patch.object(
+            web_app._draft_patch_execution_service,
+            "execute_approved_draft",
+            return_value=web_app.DraftPatchExecutionResult(
+                execution_id="exec-2",
+                review_record_id="review-1",
+                jira_ticket="TEL-13488",
+                repo_id="telemart_soft_test",
+                allowed_files=["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"],
+                validated=False,
+                validation_status="failed",
+                validation_summary="Validation failed after bounded repair attempts.",
+                repair_attempted=True,
+                repair_attempts=[web_app.DraftPatchRepairAttemptRecord(attempt_index=1, status="failed")],
+                repair_successful=False,
+                repaired=False,
+                generated_diff="--- a/src/file.cs\n+++ b/src/file.cs",
+                diff_hash="blocked-hash",
+                apply_input=web_app.ApplyInputPayload(
+                    repo_id="telemart_soft_test",
+                    operations=[
+                        web_app.ApplyOperationPayload(
+                            relative_path="src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            operation_type="update",
+                            new_content="// blocked content",
+                            expected_hash="",
+                        )
+                    ],
+                    dry_run=True,
+                ),
+                apply_ready=False,
+                apply_blockers=["validation failed after bounded repair attempts"],
+                touched_files=["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"],
+                out_of_bounds_detected=False,
+                invariant_check_passed=True,
+            ),
+        ):
+            response = self.client.post(
+                "/workflows/review-draft-patch",
+                json={
+                    "jira_ticket": "TEL-13488",
+                    "repo_id": "telemart_soft_test",
+                    "decision": "approved",
+                    "seed_context": {
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "top_candidate_files": [
+                            {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", "confidence": 0.91, "reason": "exact history"},
+                        ],
+                        "selected_files_count": 1,
+                        "implementation_plan_preview": [
+                            {
+                                "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                                "action": "modify",
+                                "reason": "Historical match points to the generated report template.",
+                                "likely_changes": "Adjust receipt wording while preserving the existing template shape.",
+                                "risk": "Designer and resource files can drift out of sync.",
+                            }
+                        ],
+                        "decision_questions": [],
+                        "repo_confidence": 90,
+                        "file_confidence": 82,
+                        "novelty_score": 28,
+                        "analysis_mode": "reuse",
+                        "final_workflow_input": "TEL-13488 receipt wording update with acceptance criteria.",
+                        "technical_details": {"request_input_text": "TEL-13488"},
+                    },
+                },
+                headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["review_state"], "approved")
+        self.assertFalse(payload["validated"])
+        self.assertFalse(payload["apply_ready"])
+        self.assertIn("validation failed after bounded repair attempts", payload["apply_blockers"])
+
+    def test_apply_draft_patch_requires_validated_execution_artifact(self) -> None:
+        with patch.object(
+            web_app._draft_patch_review_service,
+            "load_review",
+            return_value={
+                "review_id": "review-2",
+                "decision": "rejected",
+                "actor_id": "lead-1",
+                "diff_hash": "some-hash",
+                "allowed_files": ["src/file.cs"],
+            },
+        ), patch.object(
+            web_app._draft_patch_execution_service,
+            "load_execution",
+            return_value=None,
+        ):
+            response = self.client.post(
+                "/workflows/apply-draft-patch",
+                json={
+                    "jira_ticket": "TEL-13488",
+                    "repo_id": "telemart_soft_test",
+                    "review_id": "review-2",
+                    "apply_mode": "dry_apply",
+                    "seed_context": {
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "top_candidate_files": [
+                            {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", "confidence": 0.91, "reason": "exact history"},
+                            {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx", "confidence": 0.90, "reason": "exact history"},
+                        ],
+                        "selected_files_count": 2,
+                        "implementation_plan_preview": [
+                            {
+                                "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                                "action": "modify",
+                                "reason": "Historical match points to the generated report template.",
+                                "likely_changes": "Adjust receipt wording while preserving the existing template shape.",
+                                "risk": "Designer and resource files can drift out of sync.",
+                            },
+                            {
+                                "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                                "action": "modify",
+                                "reason": "Localized strings likely live in the matching resource file.",
+                                "likely_changes": "Update resource strings used by the receipt template.",
+                                "risk": "Translations or resource keys can drift from the template.",
+                            },
+                        ],
+                        "decision_questions": [],
+                        "repo_confidence": 90,
+                        "file_confidence": 82,
+                        "novelty_score": 28,
+                        "analysis_mode": "reuse",
+                        "final_workflow_input": "TEL-13488 receipt wording update with acceptance criteria.",
+                        "technical_details": {"request_input_text": "TEL-13488"},
+                    },
+                },
+                headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["error"], "draft_patch_execution_missing")
+
+    def test_apply_draft_patch_uses_validated_execution_payload(self) -> None:
+        with patch.object(
+            web_app._draft_patch_review_service,
+            "load_review",
+            return_value={
+                "review_id": "review-3",
+                "decision": "approved",
+                "actor_id": "lead-1",
+                "diff_hash": "validated-hash",
+                "allowed_files": ["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"],
+            },
+        ), patch.object(
+            web_app._draft_patch_execution_service,
+            "load_execution",
+            return_value=web_app.DraftPatchExecutionResult(
+                execution_id="exec-3",
+                review_record_id="review-3",
+                jira_ticket="TEL-13488",
+                repo_id="telemart_soft_test",
+                allowed_files=["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"],
+                validated=True,
+                validation_status="passed",
+                validation_summary="Validation passed.",
+                repair_attempted=False,
+                repair_attempts=[],
+                repair_successful=False,
+                repaired=False,
+                generated_diff="--- a/src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs\n+++ b/src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                diff_hash="validated-hash",
+                apply_input=web_app.ApplyInputPayload(
+                    repo_id="telemart_soft_test",
+                    dry_run=True,
+                    operations=[
+                        web_app.ApplyOperationPayload(
+                            relative_path="src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            operation_type="update",
+                            new_content="// validated content",
+                            expected_hash="",
+                        )
+                    ],
+                ),
+                apply_ready=True,
+                apply_blockers=[],
+                touched_files=["src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"],
+                out_of_bounds_detected=False,
+                invariant_check_passed=True,
+            ),
+        ), patch.object(
+            web_app._draft_patch_review_service,
+            "apply_reviewed_patch",
+            return_value={
+                "apply_id": "apply-2",
+                "allow_apply": True,
+                "blockers": [],
+                "apply_mode": "dry_apply",
+                "apply_payload": {"apply_result": {"applied": False}, "commit_hash": ""},
+            },
+        ) as mocked_apply:
+            response = self.client.post(
+                "/workflows/apply-draft-patch",
+                json={
+                    "jira_ticket": "TEL-13488",
+                    "repo_id": "telemart_soft_test",
+                    "review_id": "review-3",
+                    "apply_mode": "dry_apply",
+                    "seed_context": {
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "top_candidate_files": [
+                            {"name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs", "confidence": 0.91, "reason": "exact history"},
+                        ],
+                        "selected_files_count": 1,
+                        "implementation_plan_preview": [
+                            {
+                                "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                                "action": "modify",
+                                "reason": "Historical match points to the generated report template.",
+                                "likely_changes": "Adjust receipt wording while preserving the existing template shape.",
+                                "risk": "Designer and resource files can drift out of sync.",
+                            }
+                        ],
+                        "decision_questions": [],
+                        "repo_confidence": 90,
+                        "file_confidence": 82,
+                        "novelty_score": 28,
+                        "analysis_mode": "reuse",
+                        "final_workflow_input": "TEL-13488 receipt wording update with acceptance criteria.",
+                        "technical_details": {"request_input_text": "TEL-13488"},
+                    },
+                },
+                headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        apply_input = mocked_apply.call_args.kwargs["apply_input"]
+        self.assertEqual(len(apply_input.operations), 1)
+        self.assertEqual(apply_input.operations[0].new_content, "// validated content")
+
+    def test_apply_draft_patch_blocks_when_execution_repo_mismatches_request_repo(self) -> None:
+        with patch.object(
+            web_app._draft_patch_review_service,
+            "load_review",
+            return_value={
+                "review_id": "review-4",
+                "decision": "approved",
+                "actor_id": "lead-1",
+                "diff_hash": "validated-hash",
+                "allowed_files": ["src/file.cs"],
+            },
+        ), patch.object(
+            web_app._draft_patch_execution_service,
+            "load_execution",
+            return_value=web_app.DraftPatchExecutionResult(
+                execution_id="exec-4",
+                review_record_id="review-4",
+                jira_ticket="TEL-13488",
+                repo_id="different_repo",
+                allowed_files=["src/file.cs"],
+                validated=True,
+                validation_status="passed",
+                validation_summary="Validation passed.",
+                repair_attempted=False,
+                repair_attempts=[],
+                repair_successful=False,
+                repaired=False,
+                generated_diff="--- a/src/file.cs\n+++ b/src/file.cs",
+                diff_hash="validated-hash",
+                apply_input=web_app.ApplyInputPayload(
+                    repo_id="different_repo",
+                    dry_run=True,
+                    operations=[
+                        web_app.ApplyOperationPayload(
+                            relative_path="src/file.cs",
+                            operation_type="update",
+                            new_content="// validated content",
+                            expected_hash="",
+                        )
+                    ],
+                ),
+                apply_ready=True,
+                apply_blockers=[],
+                touched_files=["src/file.cs"],
+                out_of_bounds_detected=False,
+                invariant_check_passed=True,
+            ),
+        ):
+            response = self.client.post(
+                "/workflows/apply-draft-patch",
+                json={
+                    "jira_ticket": "TEL-13488",
+                    "repo_id": "telemart_soft_test",
+                    "review_id": "review-4",
+                    "apply_mode": "dry_apply",
+                    "seed_context": {
+                        "selected_repos": [{"repo_id": "telemart_soft_test"}],
+                        "top_candidate_files": [{"name": "src/file.cs", "confidence": 0.9, "reason": "exact history"}],
+                        "selected_files_count": 1,
+                        "implementation_plan_preview": [{"file": "src/file.cs", "action": "modify", "reason": "history", "likely_changes": "change", "risk": "risk"}],
+                        "decision_questions": [],
+                        "repo_confidence": 90,
+                        "file_confidence": 82,
+                        "novelty_score": 28,
+                        "analysis_mode": "reuse",
+                        "final_workflow_input": "TEL-13488",
+                        "technical_details": {"request_input_text": "TEL-13488"},
+                    },
+                },
+                headers={"X-Actor-Id": "lead-1", "X-Actor-Role": "techlead", "X-Source-Channel": "api", "X-Lang": "en"},
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"]["error"], "draft_patch_repo_mismatch")
+
+    def test_analyze_task_live_route_bypasses_tracked_root_agent_and_uses_repo_intelligence(self) -> None:
+        service = RunService(storage_dir=self.storage_dir, persist=True)
+        with patch("web_app.RunService", return_value=service), patch(
+            "web_app._execute_tracked_api_run",
+            side_effect=AssertionError("tracked root agent path should not be used for analyze_task"),
+        ), patch(
+            "web_app.load_jira_task",
+            return_value={
+                "title": "Service request receipt text update",
+                "summary": "Service request receipt text update",
+                "description": "Replace the printed receipt wording in the service request flow.",
+                "acceptance_criteria": [],
+            },
+        ), patch(
+            "web_app.resolve_llm_runtime_config",
+            return_value=type("Runtime", (), {"provider": "openrouter", "model_name": "gpt-5.4"})(),
+        ), patch(
+            "web_app.jira_auth_present",
+            return_value=True,
+        ), patch(
+            "web_app._repo_intelligence_service.query_for_workflow",
+            return_value={
+                "configured_provider": "gitnexus_http",
+                "repo_metadata_provider": "gitnexus_http",
+                "provider_used": "gitnexus_http",
+                "provider_fallback": False,
+                "provider_reason": "GitNexus evidence was used for analyze_task.",
+                "selection_decision": "selected_gitnexus_http",
+                "selected_repos": [{"repo_id": "telemart_soft_test", "score": 2.55}],
+                "top_historical_matches": [
+                    {
+                        "repo_id": "telemart_soft_test",
+                        "jira_key": "TEL-13508",
+                        "reasons": ["exact_jira_key"],
+                        "changed_files": [
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                        ],
+                    }
+                ],
+                "top_historical_changed_files": [
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                ],
+                "candidate_files_count": 12,
+                "selected_files_count": 5,
+                "top_candidate_files": [
+                    {
+                        "name": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                        "confidence": 0.91,
+                        "reason": "exact_jira_history",
+                    }
+                ],
+            },
+        ):
+            response = self.client.post(
+                "/workflows/analyze-task",
+                json={"jira_ticket": "TEL-13508", "repo_id": ""},
+                headers={
+                    "X-Actor-Id": "lead-1",
+                    "X-Actor-Role": "techlead",
+                    "X-Source-Channel": "api",
+                    "X-Lang": "en",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["result"]
+        self.assertEqual(payload["technical_details"]["provider_used"], "gitnexus_http")
+        self.assertEqual(payload["technical_details"]["final_merge_strategy"], "repo_intelligence_first")
+        self.assertEqual(payload["selected_repos"][0]["repo_id"], "telemart_soft_test")
+        self.assertEqual(payload["candidate_files_count"], 12)
+        self.assertEqual(payload["selected_files_count"], 5)
+        self.assertEqual(payload["top_historical_matches"][0]["jira_key"], "TEL-13508")
 
     def test_structure_task_workflow_endpoint_returns_structured_result(self) -> None:
         response = self.client.post(

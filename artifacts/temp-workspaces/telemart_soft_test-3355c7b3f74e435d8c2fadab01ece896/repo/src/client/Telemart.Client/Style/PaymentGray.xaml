@@ -1,0 +1,117 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="MainStyle.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <BitmapImage x:Key="CashGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment1_g.png" />
+    <BitmapImage x:Key="BankGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment2_g.png" />
+    <BitmapImage x:Key="WmzGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment3_g.png" />
+    <BitmapImage x:Key="WmuGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment4_g.png" />
+    <BitmapImage x:Key="CashlessTaxGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment5_g.png" />
+    <BitmapImage x:Key="CashlessNoTaxGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment6_g.png" />
+    <BitmapImage x:Key="NoGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment7_g.png" />
+    <BitmapImage x:Key="BitcoinGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment8_g.png" />
+    <BitmapImage x:Key="CreditGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment9_g.png" />
+    <BitmapImage x:Key="LiqPayGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment10_g.png" />
+    <BitmapImage x:Key="MonobankGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment12_g.png" />
+    <BitmapImage x:Key="OschagGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment13_g.png" />
+    <BitmapImage x:Key="AlfabankGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment14_g.png" />
+    <BitmapImage x:Key="IdeabankGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment15_g.png" />
+    <BitmapImage x:Key="PaylaterGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment16_g.png" />
+    <BitmapImage x:Key="BonusesImage"
+                 UriSource="/Images/Order/Payment_g/payment18_g.png" />
+    <BitmapImage x:Key="NovaPayGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment20_g.png" />
+    <BitmapImage x:Key="PumbGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment21_g.png" />
+    <BitmapImage x:Key="ABankGrayImage"
+                 UriSource="/Images/Order/Payment_g/payment22_g.png" />
+
+    <dxmvvm:ObjectToObjectConverter x:Key="PaymentGrayImageConverter">
+        <dxmvvm:MapItem Source="1"
+                        Target="{StaticResource CashGrayImage}" />
+        <dxmvvm:MapItem Source="2"
+                        Target="{StaticResource BankGrayImage}" />
+        <dxmvvm:MapItem Source="3"
+                        Target="{StaticResource WmzGrayImage}" />
+        <dxmvvm:MapItem Source="4"
+                        Target="{StaticResource WmuGrayImage}" />
+        <dxmvvm:MapItem Source="5"
+                        Target="{StaticResource CashlessTaxGrayImage}" />
+        <dxmvvm:MapItem Source="6"
+                        Target="{StaticResource CashlessNoTaxGrayImage}" />
+        <dxmvvm:MapItem Source="7"
+                        Target="{StaticResource NoGrayImage}" />
+        <dxmvvm:MapItem Source="8"
+                        Target="{StaticResource BitcoinGrayImage}" />
+        <dxmvvm:MapItem Source="9"
+                        Target="{StaticResource CreditGrayImage}" />
+        <dxmvvm:MapItem Source="10"
+                        Target="{StaticResource LiqPayGrayImage}" />
+        <dxmvvm:MapItem Source="12"
+                        Target="{StaticResource MonobankGrayImage}" />
+        <dxmvvm:MapItem Source="13"
+                        Target="{StaticResource OschagGrayImage}" />
+        <dxmvvm:MapItem Source="14"
+                        Target="{StaticResource AlfabankGrayImage}" />
+        <dxmvvm:MapItem Source="15"
+                        Target="{StaticResource IdeabankGrayImage}" />
+        <dxmvvm:MapItem Source="16"
+                        Target="{StaticResource PaylaterGrayImage}" />
+        <dxmvvm:MapItem Source="17"
+                        Target="{StaticResource CreditGrayImage}" />
+        <dxmvvm:MapItem Source="18"
+                        Target="{StaticResource BonusesImage}" />
+        <dxmvvm:MapItem Source="19"
+                        Target="{StaticResource MonobankGrayImage}" />
+        <dxmvvm:MapItem Source="20"
+                        Target="{StaticResource NovaPayGrayImage}" />
+        <dxmvvm:MapItem Source="21"
+                        Target="{StaticResource PumbGrayImage}" />
+        <dxmvvm:MapItem Source="22"
+                        Target="{StaticResource ABankGrayImage}" />
+    </dxmvvm:ObjectToObjectConverter>
+
+    <DataTemplate x:Key="PaymentGrayComboBoxItemTemplate"
+                  DataType="{x:Type dictionaries:Payment}">
+        <StackPanel Orientation="Horizontal"
+                    Height="20">
+            <dx:DXImage Source="{Binding Path=Id, Mode=OneWay, Converter={StaticResource PaymentGrayImageConverter}}"
+                        Height="16"
+                        Width="16"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Left"
+                        Margin="5,0,0,0" />
+            <TextBlock Text="{Binding Path=Name, Mode=OneWay}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Left"
+                       Foreground="{StaticResource AltForeground}"
+                       Margin="5,0,0,0" />
+        </StackPanel>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="PaymentGrayColumnDisplayTemplate">
+        <ContentControl Content="{Binding Path=EditValue, RelativeSource={RelativeSource TemplatedParent}, UpdateSourceTrigger=PropertyChanged}"
+                        ContentTemplate="{StaticResource PaymentGrayComboBoxItemTemplate}" />
+    </ControlTemplate>
+
+</ResourceDictionary>

@@ -1,0 +1,89 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Dialogs.GroupMoveView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Dialogs"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             DataContext="{client:Container Type=viewModels:GroupMoveViewModel}"
+             Width="400"
+             Height="300"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:GroupMoveViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+        <dxlc:LayoutGroup Orientation="Vertical">
+            <dxlc:LayoutItem VerticalAlignment="Stretch">
+                <dxg:GridControl ItemsSource="{Binding Path=Groups, Mode=OneWay}"
+                                 CurrentItem="{Binding Path=SelectedGroup, Mode=TwoWay}"
+                                 AllowDrop="False"
+                                 SelectionMode="None"
+                                 AutoExpandAllGroups="True">
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:CopyCurrentCellToClipboardBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.Resources>
+                        <Style TargetType="dxg:GridColumn"
+                               BasedOn="{StaticResource GeneralGridColumnStyle}" />
+                    </dxg:GridControl.Resources>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Название"
+                                        HeaderToolTip="Название папки"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="DisplayValue"
+                                        FixedWidth="False">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TreeListView x:Name="TreeListView"
+                                          AllowBestFit="True"
+                                          AllowEditing="True"
+                                          AllowFilterEditor="False"
+                                          AllowColumnFiltering="False"
+                                          AllowColumnMoving="False"
+                                          AllowDrop="False"
+                                          AllowSorting="True"
+                                          AutoWidth="True"
+                                          ShowIndicator="False"
+                                          EditorShowMode="MouseDownFocused"
+                                          AllowMoveColumnToDropArea="False"
+                                          AutoExpandAllNodes="True"
+                                          KeyFieldName="Id"
+                                          NavigationStyle="Row"
+                                          ParentFieldName="ParentId"
+                                          TreeDerivationMode="Selfreference" />
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom"
+                          HorizontalAlignment="Right">
+            <Button Content="OK"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsTabStop="True" />
+            <Button Content="Отмена"
+                    IsTabStop="True"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

@@ -4,6 +4,7 @@ import logging
 import json
 import re
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from config import RepoIntelligenceSettings, settings
@@ -47,7 +48,22 @@ def _coerce_score(value: object, default: float = 0.0) -> float:
 
 
 def _repo_path(repo_meta: RepoMetadata) -> str:
-    return str(repo_meta.local_path or repo_meta.resolved_local_path or "").strip()
+    raw_path = str(repo_meta.local_path or repo_meta.resolved_local_path or "").strip()
+    if not raw_path:
+        return ""
+    normalized_repo_root = str(settings.repo_intelligence.gitnexus_repo_root or "").strip().replace("\\", "/").rstrip("/")
+    normalized_raw_path = raw_path.replace("\\", "/").strip()
+    if normalized_repo_root and normalized_raw_path.lower().startswith(normalized_repo_root.lower().rstrip("/") + "/"):
+        return raw_path
+    try:
+        host_clone_root = Path(settings.runtime.repo_clone_root).expanduser().resolve()
+        resolved_repo_path = Path(raw_path).expanduser().resolve()
+        relative_repo_path = resolved_repo_path.relative_to(host_clone_root)
+    except (OSError, ValueError):
+        return raw_path
+    if not normalized_repo_root:
+        return raw_path
+    return str(PurePosixPath(normalized_repo_root).joinpath(PurePosixPath(relative_repo_path.as_posix())))
 
 
 def _unique_strings(values: object) -> list[str]:
@@ -370,6 +386,10 @@ class GitNexusBridgeService:
     def last_tool_debug_snapshot(self) -> dict[str, Any]:
         return dict(self._last_tool_debug or {})
 
+    def _mark_progress(self, progress_callback: Any | None, substep: str, marker: str, **extra: Any) -> None:
+        if callable(progress_callback):
+            progress_callback(substep, marker, **extra)
+
     def repo_allowed(self, repo_id: str) -> bool:
         allowlist = {
             str(item or "").strip().lower()
@@ -401,14 +421,71 @@ class GitNexusBridgeService:
                 "message": _safe_text(exc) or "GitNexus MCP backend is unavailable.",
             }
 
-    def query(self, repo_meta: RepoMetadata, task_text: str) -> NormalizedRepoIntelligenceResult:
+    def query(
+        self,
+        repo_meta: RepoMetadata,
+        task_text: str,
+        *,
+        progress_callback: Any | None = None,
+    ) -> NormalizedRepoIntelligenceResult:
+        self._mark_progress(progress_callback, "gitnexus_bridge_build_focused_query", "started")
         focused_query = _build_focused_query(task_text)
-        payload = self._call_tool("query", self._query_argument_variants(repo_meta, focused_query))
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_bridge_build_focused_query",
+            "finished",
+            gitnexus_focused_query_length=len(focused_query),
+        )
+        self._mark_progress(progress_callback, "gitnexus_bridge_query_argument_variants", "started")
+        argument_variants = self._query_argument_variants(
+            repo_meta,
+            focused_query,
+            progress_callback=progress_callback,
+        )
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_bridge_query_argument_variants",
+            "finished",
+            gitnexus_query_variant_count=len(argument_variants),
+        )
+        self._mark_progress(progress_callback, "gitnexus_bridge_call_tool_query", "started")
+        payload = self._call_tool(
+            "query",
+            argument_variants,
+            progress_callback=progress_callback,
+        )
+        self._mark_progress(progress_callback, "gitnexus_bridge_call_tool_query", "finished")
+        self._mark_progress(progress_callback, "gitnexus_bridge_unwrap_payload", "started")
         unwrapped_payload = _unwrap_embedded_payload(payload)
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_bridge_unwrap_payload",
+            "finished",
+            gitnexus_unwrapped_payload_shape=_payload_shape(unwrapped_payload),
+        )
+        self._mark_progress(progress_callback, "gitnexus_bridge_normalize_hits", "started")
         files, file_stats = self._normalize_hits_with_stats(unwrapped_payload, "file")
         symbols, symbol_stats = self._normalize_hits_with_stats(unwrapped_payload, "symbol")
         processes, process_stats = self._normalize_hits_with_stats(unwrapped_payload, "process")
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_bridge_normalize_hits",
+            "finished",
+            gitnexus_normalized_file_count=len(files),
+            gitnexus_normalized_symbol_count=len(symbols),
+            gitnexus_normalized_process_count=len(processes),
+        )
+        self._mark_progress(progress_callback, "gitnexus_bridge_resolve_definition_evidence", "started")
         resolved = self._resolve_process_symbol_definition_evidence(unwrapped_payload)
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_bridge_resolve_definition_evidence",
+            "finished",
+            gitnexus_resolved_process_count=int(resolved["process_count"]),
+            gitnexus_resolved_symbol_count=int(resolved["symbol_count"]),
+            gitnexus_resolved_definition_count=int(resolved["definition_count"]),
+            gitnexus_resolved_file_count=int(resolved["file_count"]),
+        )
         files = _merge_query_hits(files, list(resolved["files"]), limit=8)
         symbols = _merge_query_hits(symbols, list(resolved["symbols"]), limit=6)
         processes = _merge_query_hits(list(resolved["processes"]), processes, limit=6)
@@ -465,10 +542,25 @@ class GitNexusBridgeService:
             fallback_reason=fallback_reason,
         )
 
-    def _tool_definition(self, tool_name: str) -> dict[str, Any]:
+    def _tool_definition(self, tool_name: str, *, progress_callback: Any | None = None) -> dict[str, Any]:
         try:
+            self._mark_progress(progress_callback, "gitnexus_bridge_list_tools", "started", gitnexus_tool_name=_safe_text(tool_name))
             tools = self._mcp_client.list_tools()
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_bridge_list_tools",
+                "finished",
+                gitnexus_tool_name=_safe_text(tool_name),
+                gitnexus_tools_count=len(list(tools or [])),
+            )
         except Exception:
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_bridge_list_tools",
+                "finished",
+                gitnexus_tool_name=_safe_text(tool_name),
+                gitnexus_timeout_reason="list_tools_failed",
+            )
             return {}
         for item in list(tools or []):
             if not isinstance(item, dict):
@@ -477,8 +569,8 @@ class GitNexusBridgeService:
                 return dict(item)
         return {}
 
-    def _tool_schema_properties(self, tool_name: str) -> set[str]:
-        tool_definition = self._tool_definition(tool_name)
+    def _tool_schema_properties(self, tool_name: str, *, progress_callback: Any | None = None) -> set[str]:
+        tool_definition = self._tool_definition(tool_name, progress_callback=progress_callback)
         schema = tool_definition.get("inputSchema", {}) if isinstance(tool_definition, dict) else {}
         if not isinstance(schema, dict):
             return set()
@@ -487,9 +579,15 @@ class GitNexusBridgeService:
             return set()
         return {str(key or "").strip() for key in properties.keys() if str(key or "").strip()}
 
-    def _query_argument_variants(self, repo_meta: RepoMetadata, focused_query: str) -> list[dict[str, Any]]:
+    def _query_argument_variants(
+        self,
+        repo_meta: RepoMetadata,
+        focused_query: str,
+        *,
+        progress_callback: Any | None = None,
+    ) -> list[dict[str, Any]]:
         repo_values = _repo_argument_values(repo_meta)
-        schema_properties = self._tool_schema_properties("query")
+        schema_properties = self._tool_schema_properties("query", progress_callback=progress_callback)
         preferred_query_keys = [key for key in ("query", "task_text", "taskText") if key in schema_properties]
         preferred_repo_keys = [key for key in ("repo_path", "repoPath", "path", "repo", "repo_id", "repoId") if key in schema_properties]
         if not preferred_query_keys:
@@ -603,13 +701,33 @@ class GitNexusBridgeService:
         )
         return self._normalize_changes(payload)
 
-    def _call_tool(self, tool_name: str, arguments: dict[str, Any] | list[dict[str, Any]]) -> dict[str, Any]:
+    def _call_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | list[dict[str, Any]],
+        *,
+        progress_callback: Any | None = None,
+    ) -> dict[str, Any]:
         variants = [dict(item or {}) for item in arguments] if isinstance(arguments, list) else [dict(arguments or {})]
         payload: Any = {}
         self._last_tool_debug = {"gitnexus_tool_name": tool_name, "gitnexus_tool_arguments_sent": {}}
         for index, candidate in enumerate(variants):
             try:
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_bridge_mcp_call_tool",
+                    "started",
+                    gitnexus_tool_name=_safe_text(tool_name),
+                    gitnexus_tool_variant_index=index,
+                )
                 payload = self._mcp_client.call_tool(tool_name, candidate)
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_bridge_mcp_call_tool",
+                    "finished",
+                    gitnexus_tool_name=_safe_text(tool_name),
+                    gitnexus_tool_variant_index=index,
+                )
                 contract_error = self._tool_contract_error(payload)
                 if contract_error:
                     self._last_tool_debug = {
@@ -631,6 +749,14 @@ class GitNexusBridgeService:
                 }
                 break
             except RuntimeError as exc:
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_bridge_mcp_call_tool",
+                    "finished",
+                    gitnexus_tool_name=_safe_text(tool_name),
+                    gitnexus_tool_variant_index=index,
+                    gitnexus_timeout_reason=_safe_text(exc),
+                )
                 if index < len(variants) - 1 and _is_http_400_error(exc):
                     logger.warning(
                         "GitNexus tool call rejected variant; retrying with alternate arguments. tool=%s variant=%s error=%s",

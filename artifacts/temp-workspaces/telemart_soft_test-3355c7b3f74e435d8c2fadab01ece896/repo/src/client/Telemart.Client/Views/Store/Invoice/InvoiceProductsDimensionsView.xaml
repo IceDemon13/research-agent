@@ -1,0 +1,144 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Store.Invoice.InvoiceProductsDimensionsView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:store="clr-namespace:Telemart.Client.ViewModels.Store.Invoice"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              xmlns:common1="clr-namespace:Telemart.Client.Common"
+                              DataContext="{client:Container Type=store:InvoiceProductsDimensionsViewModel}"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type store:InvoiceProductsDimensionsViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                            IsEnabled="{Binding Path=IsRecognitionInProgress, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+            <dxg:GridControl x:Name="GridControl"
+                             ItemsSource="{Binding Path=Dimensions, Mode=OneWay}"
+                             SelectionMode="None"
+                             ClipboardCopyMode="ExcludeHeader">
+                <dxmvvm:Interaction.Behaviors>
+                    <behaviors:CopyCurrentCellToClipboardBehavior />
+                    <behaviors:LayoutSerializationBehavior FileName="invoice_products_dimmensions.xml"/>
+                </dxmvvm:Interaction.Behaviors>
+                <dxg:GridControl.ShowLoadingPanel>
+                    <MultiBinding Converter="{converters:BooleanOrMultiValueConverter}">
+                        <Binding Path="OkCommand.IsExecuting" />
+                    </MultiBinding>
+                </dxg:GridControl.ShowLoadingPanel>
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn Header="Товар"
+                                    HeaderToolTip="Товар"
+                                    FieldName="Name"
+                                    FixedWidth="False" />
+                    <dxg:GridColumn Header="Вес (кг)"
+                                    HeaderToolTip="Вес (кг)"
+                                    FieldName="Weight"
+                                    FixedWidth="True"
+                                    Width="90">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:SpinEditSettings HorizontalContentAlignment="Left"
+                                                  Mask="F3"
+                                                  MaskType="Numeric"
+                                                  MaxLength="9"
+                                                  MaskUseAsDisplayFormat="True"/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Глубина (мм)"
+                                    HeaderToolTip="Глубина (мм)"
+                                    FieldName="Depth"
+                                    FixedWidth="True"
+                                    Width="90">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaxLength="{x:Static common1:Constants.ProductDimensionValueMaxLength}"
+                                                  HorizontalContentAlignment="Left" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Ширина (мм)"
+                                    HeaderToolTip="Ширина (мм)"
+                                    FieldName="Width"
+                                    FixedWidth="True"
+                                    Width="90">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaxLength="{x:Static common1:Constants.ProductDimensionValueMaxLength}"
+                                                  HorizontalContentAlignment="Left" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Высота (мм)"
+                                    HeaderToolTip="Высота (мм)"
+                                    FieldName="Height"
+                                    FixedWidth="True"
+                                    Width="90">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaxLength="{x:Static common1:Constants.ProductDimensionValueMaxLength}"
+                                                  HorizontalContentAlignment="Left" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView AllowResizing="False"
+                                   AllowSorting="True"
+                                   Style="{StaticResource ReadOnlyTableViewStyle}">
+                    </dxg:TableView>
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+            <dxlc:LayoutGroup VerticalAlignment="Bottom"
+                              dxlc:LayoutControl.AllowVerticalSizing="True">
+                <dxlc:LayoutGroup.MinHeight>
+                    <Binding Path="MinHeight"
+                             Mode="OneWay"
+                             ElementName="RecognizeBarcodeView" />
+                </dxlc:LayoutGroup.MinHeight>
+                <dxlc:LayoutGroup.Height>
+                    <Binding Path="MinHeight"
+                             Mode="OneWay"
+                             ElementName="RecognizeBarcodeView" />
+                </dxlc:LayoutGroup.Height>
+                <dxlc:LayoutGroup.MaxHeight>
+                    <MultiBinding Converter="{converters:ResizableLayoutGroupMaxDimensionConverter OppositeMinDimensionValue=160}">
+                        <Binding Path="ActualHeight"
+                                 RelativeSource="{RelativeSource AncestorType=dxlc:LayoutControl}" />
+                        <Binding Path="ItemSpace"
+                                 RelativeSource="{RelativeSource AncestorType=dxlc:LayoutControl}" />
+                        <Binding Path="Padding"
+                                 RelativeSource="{RelativeSource AncestorType=dxlc:LayoutControl}" />
+                    </MultiBinding>
+                </dxlc:LayoutGroup.MaxHeight>
+                <common:RecognizeBarcodeView x:Name="RecognizeBarcodeView"
+                                             DataContext="{Binding Path=RecognizeBarcodeViewModel, Mode=OneWay}"/>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup VerticalAlignment="Bottom"
+                              HorizontalAlignment="Right">
+                <Button Content="ОК"
+                        Command="{Binding Path=OkCommand, Mode=OneWay}" />
+                <Button Content="Отмена"
+                        Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

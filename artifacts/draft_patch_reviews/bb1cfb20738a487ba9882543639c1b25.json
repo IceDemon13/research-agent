@@ -1,0 +1,40 @@
+{
+  "review_id": "bb1cfb20738a487ba9882543639c1b25",
+  "decision": "approved",
+  "actor_id": "codex",
+  "actor_role": "workflow_runner",
+  "repo_id": "telemart_soft_test",
+  "jira_ticket": "TEL-13508",
+  "allowed_files": [
+    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+    "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+    "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+    "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/ChangeDecisionServiceProduct.cs"
+  ],
+  "diff_hash": "eedcd5ec0dbf581cc91ed4bd6fa2c0319ef74ac408ee770cee2609a1c75fcdd0",
+  "approved_at": "2026-04-07T02:18:33.198198+00:00",
+  "reviewed_at": "2026-04-07T02:18:33.198198+00:00",
+  "note": "Codex live bounded execution verification",
+  "confidence_score": 90,
+  "novelty_score": 30,
+  "patch_generation_ready": true,
+  "technical_details": {
+    "jira_ticket": "TEL-13508",
+    "repo_id": "telemart_soft_test",
+    "allowed_files": [
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+      "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+      "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+      "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/ChangeDecisionServiceProduct.cs"
+    ],
+    "selected_files_count": 5,
+    "analysis_mode": "reuse",
+    "repo_confidence": 90,
+    "file_confidence": 100,
+    "novelty_score": 30,
+    "critical_decision_questions": [],
+    "final_workflow_input_excerpt": "Title: Service request: change of text and printed form “Receipt” p.2\nDescription:\nПотреба:\nВ друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст\n“Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту"
+  }
+}

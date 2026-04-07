@@ -148,6 +148,67 @@ class MultiRepoRoutingServiceTests(unittest.TestCase):
         self.assertTrue(result["skipped_recompute_in_read_only_mode"])
         self.assertEqual(result["repos_missing_precomputed_history"], ["billing_service"])
 
+    def test_route_improves_after_bootstrap_from_artifact_history(self) -> None:
+        self.memory_service._save_json_state({"tasks": [], "changes": [], "hunks": [], "comments": []})
+        self.registry.update_repo_metadata("catalog_service", historical_change_count=0, historical_last_seen_at="")
+        (self.workspace_root / "artifacts" / "tel-7154.case.json").write_text(
+            """
+{
+  "jira_key": "TEL-7154",
+  "result": {
+    "goal": "Return accessories field in product card response",
+    "selected_repos": [
+      {
+        "repo_id": "catalog_service",
+        "top_historical_matches": [
+          {
+            "repo_id": "catalog_service",
+            "jira_key": "TEL-7154",
+            "commit_hash": "abc123",
+            "branch_name": "feature/TEL-7154-accessories",
+            "committed_at": "2026-03-25T10:00:00+00:00",
+            "changed_files": [
+              "src/Catalog/Product/QueryProductInfoHandler.cs"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+            """.strip(),
+            encoding="utf-8",
+        )
+        fresh_memory = HistoricalChangeMemoryService(
+            registry_service=self.registry,
+            storage_path=self.storage_path,
+        )
+        fresh_router = MultiRepoRoutingService(
+            registry_service=self.registry,
+            historical_memory_service=fresh_memory,
+        )
+
+        before = fresh_router.route(
+            workflow_name="implementation_plan",
+            task_text="Return accessories field in product card response",
+            jira_key="TEL-7154",
+            requested_repo_id="billing_service",
+            read_only=True,
+        )
+        with patch.object(fresh_memory, "_run_git_log", return_value=""):
+            fresh_memory.bootstrap_repo_history("catalog_service")
+        after = fresh_router.route(
+            workflow_name="implementation_plan",
+            task_text="Return accessories field in product card response",
+            jira_key="TEL-7154",
+            requested_repo_id="billing_service",
+            read_only=True,
+        )
+
+        self.assertEqual(before["selected_repos"][0]["repo_id"], "billing_service")
+        self.assertEqual(after["selected_repos"][0]["repo_id"], "catalog_service")
+        self.assertIn("src/Catalog/Product/QueryProductInfoHandler.cs", after["top_historical_changed_files"])
+
 
 if __name__ == "__main__":
     unittest.main()

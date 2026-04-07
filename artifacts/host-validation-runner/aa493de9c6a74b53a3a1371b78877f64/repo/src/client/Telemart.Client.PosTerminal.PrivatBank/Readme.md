@@ -1,0 +1,1 @@
+https://privatbank.ua/handbook/sumishennya_json

@@ -1,0 +1,679 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{F6880682-A9A3-4BA3-9903-338373A89655}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Telemart.Client.ReportDesigner</RootNamespace>
+    <AssemblyName>Telemart.Client.ReportDesigner</AssemblyName>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <OutputPath>bin\Release\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="DevExpress.Charts.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Data.Desktop.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Drawing.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Data.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.DataAccess.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Office.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Pdf.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.PivotGrid.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Printing.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.RichEdit.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.RichEdit.v24.2.Export, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Sparkline.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.Xpo.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a" />
+    <Reference Include="DevExpress.XtraCharts.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.XtraGauges.v24.2.Core, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="DevExpress.XtraReports.v24.2, Version=24.2.6.0, Culture=neutral, PublicKeyToken=b88d1754d700e49a, processorArchitecture=MSIL" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\AdditionalServiceProductMovementReport.cs">
+      <Link>AdditionalServiceProductMovementReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\AdditionalServiceProductMovementReport.Designer.cs">
+      <Link>AdditionalServiceProductMovementReport.Designer.cs</Link>
+      <DependentUpon>AdditionalServiceProductMovementReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssembledComputerRuleMovementReport.cs">
+      <Link>AssembledComputerRuleMovementReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssembledComputerRuleMovementReport.designer.cs">
+      <Link>AssembledComputerRuleMovementReport.designer.cs</Link>
+      <DependentUpon>AssembledComputerRuleMovementReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServiceBarcodeReportData.cs">
+      <Link>AssemblyServiceBarcodeReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServiceMovementReport.cs">
+      <Link>AssemblyServiceMovementReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServiceMovementReport.designer.cs">
+      <Link>AssemblyServiceMovementReport.designer.cs</Link>
+      <DependentUpon>AssemblyServiceMovementReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServiceMovementReportData.cs">
+      <Link>AssemblyServiceMovementReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServicePassportReport.cs">
+      <Link>AssemblyServicePassportReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServicePassportReport.designer.cs">
+      <Link>AssemblyServicePassportReport.designer.cs</Link>
+      <DependentUpon>AssemblyServicePassportReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServicePassportReportData.cs">
+      <Link>AssemblyServicePassportReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Common\StickerReport.cs">
+      <Link>StickerReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Common\StickerReport.designer.cs">
+      <Link>StickerReport.designer.cs</Link>
+      <DependentUpon>StickerReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Common\StickerReportData.cs">
+      <Link>StickerReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Common\StickerProductReport.cs">
+      <Link>StickerProductReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Common\StickerProductReport.designer.cs">
+      <Link>StickerProductReport.designer.cs</Link>
+      <DependentUpon>StickerProductReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Common\StickerProductReportData.cs">
+      <Link>StickerProductReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReportData.cs">
+      <Link>OrderAssemblyReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReportSimpleData.cs">
+      <Link>OrderAssemblyReportSimpleData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Assembly\OrderSingleAssemblyReportData.cs">
+      <Link>OrderSingleAssemblyReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyProductReportData.cs">
+      <Link>OrderAssemblyProductReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\AssemblyAdditionalServiceProductData.cs">
+      <Link>AssemblyAdditionalServiceProductData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Inventory\LeftoversCategoryReportData.cs">
+      <Link>LeftoversCategoryReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Inventory\LeftoversProductReportData.cs">
+      <Link>LeftoversProductReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Inventory\LeftoversReport.cs">
+      <Link>LeftoversReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Inventory\LeftoversReport.Designer.cs">
+      <DependentUpon>LeftoversReport.cs</DependentUpon>
+      <Link>LeftoversReport.Designer.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Inventory\LeftoversReportData.cs">
+      <Link>LeftoversReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementPlaceReport.cs">
+      <Link>Movement\MovementPlaceReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementPlaceReport.Designer.cs">
+      <DependentUpon>MovementPlaceReport.cs</DependentUpon>
+      <Link>Movement\MovementPlaceReport.Designer.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementPlaceReportData.cs">
+      <Link>Movement\MovementPlaceReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementProductGroupReportData.cs">
+      <Link>Movement\MovementProductGroupReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementProductReportData.cs">
+      <Link>Movement\MovementProductReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementReport.cs">
+      <Link>Movement\MovementReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementReport.Designer.cs">
+      <DependentUpon>MovementReport.cs</DependentUpon>
+      <Link>Movement\MovementReport.Designer.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Movement\MovementReportData.cs">
+      <Link>Movement\MovementReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\OrderPack\ScanSheetOrderReportData.cs">
+      <Link>ScanSheetOrderReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\OrderPack\ScanSheetReport.cs">
+      <Link>ScanSheetReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\OrderPack\ScanSheetReport.designer.cs">
+      <Link>ScanSheetReport.designer.cs</Link>
+      <DependentUpon>ScanSheetReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\OrderPack\ScanSheetReportData.cs">
+      <Link>ScanSheetReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderPackListReport.cs">
+      <Link>OrderPackListReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderPackListReport.designer.cs">
+      <Link>OrderPackListReport.designer.cs</Link>
+      <DependentUpon>OrderPackListReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderPackListReportData.cs">
+      <Link>OrderPackListReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\ActIncomeClientProductReport.cs">
+      <Link>ActIncomeClientProductReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\ActIncomeClientProductReport.Designer.cs">
+      <Link>ActIncomeClientProductReport.Designer.cs</Link>
+      <DependentUpon>ActIncomeClientProductReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\ActOutcomeClientProductReport.cs">
+      <Link>ActOutcomeClientProductReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\ActOutcomeClientProductReport.Designer.cs">
+      <Link>ActOutcomeClientProductReport.Designer.cs</Link>
+      <DependentUpon>ActOutcomeClientProductReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\AdditionalServiceProduct\AdditionalServiceProductClientProductsReportData.cs">
+      <Link>AdditionalServiceProductClientProductsReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderPackListProductReportData.cs">
+      <Link>OrderPackListProductReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderProductWarrantyCardReportData.cs">
+      <Link>Order\OrderProductWarrantyCardReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderReport.cs">
+      <Link>OrderReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderReport.designer.cs">
+      <Link>OrderReport.designer.cs</Link>
+      <DependentUpon>OrderReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderReportA5.cs">
+      <Link>OrderReportA5.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderReportA5.designer.cs">
+      <Link>OrderReportA5.designer.cs</Link>
+      <DependentUpon>OrderReportA5.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReport.cs">
+      <Link>OrderAssemblyReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReport.designer.cs">
+      <Link>OrderAssemblyReport.designer.cs</Link>
+      <DependentUpon>OrderAssemblyReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReportSimple.cs">
+      <Link>OrderAssemblyReportSimple.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReportSimple.designer.cs">
+      <Link>OrderAssemblyReportSimple.designer.cs</Link>
+      <DependentUpon>OrderAssemblyReportSimple.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Assembly\OrderSingleAssemblyReport.cs">
+      <Link>OrderSingleAssemblyReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Assembly\OrderSingleAssemblyReport.designer.cs">
+      <Link>OrderSingleAssemblyReport.designer.cs</Link>
+      <DependentUpon>OrderSingleAssemblyReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderReportData.cs">
+      <Link>OrderReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderTapeChequeReport.cs">
+      <Link>OrderTapeChequeReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderTapeChequeReport.designer.cs">
+      <Link>OrderTapeChequeReport.designer.cs</Link>
+      <DependentUpon>OrderTapeChequeReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderTapeReport.cs">
+      <Link>OrderTapeReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderTapeReport.designer.cs">
+      <Link>OrderTapeReport.designer.cs</Link>
+      <DependentUpon>OrderTapeReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardReport.cs">
+      <Link>Order\OrderWarrantyCardReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardReport.Designer.cs">
+      <DependentUpon>OrderWarrantyCardReport.cs</DependentUpon>
+      <Link>Order\OrderWarrantyCardReport.Designer.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardReportData.cs">
+      <Link>Order\OrderWarrantyCardReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\AssemblyReport.cs">
+      <Link>AssemblyReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\AssemblyReport.designer.cs">
+      <Link>AssemblyReport.designer.cs</Link>
+      <DependentUpon>AssemblyReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\Assembly\AssemblyReportData.cs">
+      <Link>AssemblyReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardTapeReport.cs">
+      <Link>OrderWarrantyCardTapeReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardTapeReport.designer.cs">
+      <Link>OrderWarrantyCardTapeReport.designer.cs</Link>
+      <DependentUpon>OrderWarrantyCardTapeReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\Product\BarcodeReportData.cs">
+      <Link>BarcodeReportData.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceAssemblyReport.cs">
+      <Link>ReturnInvoiceAssemblyReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceAssemblyReport.Designer.cs">
+      <DependentUpon>ReturnInvoiceAssemblyReport.cs</DependentUpon>
+      <Link>ReturnInvoiceAssemblyReport.Designer.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceAssemblyReportCategoryData.cs">
+      <Link>ReturnInvoiceAssemblyReportCategoryData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceAssemblyReportData.cs">
+      <Link>ReturnInvoiceAssemblyReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceAssemblyReportProductData.cs">
+      <Link>ReturnInvoiceAssemblyReportProductData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceSupplierReport.cs">
+      <Link>ReturnInvoiceSupplierReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceSupplierReport.designer.cs">
+      <Link>ReturnInvoiceSupplierReport.designer.cs</Link>
+      <DependentUpon>ReturnInvoiceSupplierReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceSupplierReportCategoryData.cs">
+      <Link>ReturnInvoiceSupplierReportCategoryData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceSupplierReportData.cs">
+      <Link>ReturnInvoiceSupplierReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceSupplierReportProductData.cs">
+      <Link>ReturnInvoiceSupplierReportProductData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReport.cs">
+      <Link>ServiceRequestReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReport.designer.cs">
+      <Link>ServiceRequestReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReportData.cs">
+      <Link>ServiceRequestReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocol14BaseReport.cs">
+      <Link>ServiceRequestReturnProtocol14BaseReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocol14BaseReport.designer.cs">
+      <Link>ServiceRequestReturnProtocol14BaseReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestReturnProtocol14BaseReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolBaseReport.cs">
+      <Link>ServiceRequestReturnProtocolBaseReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolBaseReport.designer.cs">
+      <Link>ServiceRequestReturnProtocolBaseReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestReturnProtocolBaseReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolReport.cs">
+      <Link>ServiceRequestReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolReport.Designer.cs">
+      <Link>ServiceRequestReturnProtocolReport.Designer.cs</Link>
+      <DependentUpon>ServiceRequestReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolReportData.cs">
+      <Link>ServiceRequestReturnProtocolReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolReportDataBase.cs">
+      <Link>ServiceRequestReturnProtocolReportDataBase.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnReport.cs">
+      <Link>ServiceRequestReturnReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnReport.Designer.cs">
+      <Link>ServiceRequestReturnReport.Designer.cs</Link>
+      <DependentUpon>ServiceRequestReturnReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnReportData.cs">
+      <Link>ServiceRequestReturnReportData.cs</Link>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestRudyakov14ReturnProtocolReport.cs">
+      <Link>ServiceRequestRudyakov14ReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestRudyakov14ReturnProtocolReport.designer.cs">
+      <Link>ServiceRequestRudyakov14ReturnProtocolReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestRudyakov14ReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestRudyakovReturnProtocolReport.cs">
+      <Link>ServiceRequestRudyakovReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestRudyakovReturnProtocolReport.designer.cs">
+      <Link>ServiceRequestRudyakovReturnProtocolReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestRudyakovReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTeleSvit14ReturnProtocolReport.cs">
+      <Link>ServiceRequestTeleSvit14ReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTeleSvit14ReturnProtocolReport.designer.cs">
+      <Link>ServiceRequestTeleSvit14ReturnProtocolReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestTeleSvit14ReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTeleSvitReturnProtocolReport.cs">
+      <Link>ServiceRequestTeleSvitReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTeleSvitReturnProtocolReport.designer.cs">
+      <Link>ServiceRequestTeleSvitReturnProtocolReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestTeleSvitReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTuzovskiy14ReturnProtocolReport.cs">
+      <Link>ServiceRequestTuzovskiy14ReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTuzovskiy14ReturnProtocolReport.designer.cs">
+      <Link>ServiceRequestTuzovskiy14ReturnProtocolReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestTuzovskiy14ReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTuzovskiyReturnProtocolReport.cs">
+      <Link>ServiceRequestTuzovskiyReturnProtocolReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTuzovskiyReturnProtocolReport.designer.cs">
+      <Link>ServiceRequestTuzovskiyReturnProtocolReport.designer.cs</Link>
+      <DependentUpon>ServiceRequestTuzovskiyReturnProtocolReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\TextReport\TextReport.cs">
+      <Link>TextReport.cs</Link>
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\TextReport\TextReport.Designer.cs">
+      <Link>TextReport.Designer.cs</Link>
+      <DependentUpon>TextReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="..\Telemart.Client\Reports\TextReport\TextReportData.cs">
+      <Link>TextReportData.cs</Link>
+    </Compile>
+    <Compile Include="AdditionalServiceProductMovementReportData.cs" />
+    <Compile Include="AssembledComputerRuleMovementReportData.cs" />
+    <Compile Include="OrderProductReportData.cs" />
+    <Compile Include="OrderProductWarrantyCardReportData.cs" />
+    <Compile Include="OrderPropertyReportData.cs" />
+    <Compile Include="OrderWarrantyCardReport.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="OrderWarrantyCardReport.Designer.cs">
+      <DependentUpon>OrderWarrantyCardReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="OrderWarrantyCardReportData.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ServiceRequestPaidRepairReport.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="ServiceRequestPaidRepairReport.designer.cs">
+      <DependentUpon>ServiceRequestPaidRepairReport.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TradeInActReport.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="TradeInActReport.Designer.cs">
+      <DependentUpon>TradeInActReport.cs</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\AdditionalServiceProduct\AdditionalServiceProductMovementReport.resx">
+      <Link>AdditionalServiceProductMovementReport.resx</Link>
+      <DependentUpon>AdditionalServiceProductMovementReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\AssemblyService\AssembledComputerRuleMovementReport.resx">
+      <Link>AssembledComputerRuleMovementReport.resx</Link>
+      <DependentUpon>AssembledComputerRuleMovementReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServiceMovementReport.resx">
+      <Link>AssemblyServiceMovementReport.resx</Link>
+      <DependentUpon>AssemblyServiceMovementReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\AssemblyService\AssemblyServicePassportReport.resx">
+      <Link>AssemblyServicePassportReport.resx</Link>
+      <DependentUpon>AssemblyServicePassportReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Common\StickerReport.resx">
+      <Link>StickerReport.resx</Link>
+      <DependentUpon>StickerReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Common\StickerProductReport.resx">
+      <Link>StickerProductReport.resx</Link>
+      <DependentUpon>StickerProductReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Inventory\LeftoversReport.resx">
+      <DependentUpon>LeftoversReport.cs</DependentUpon>
+      <Link>LeftoversReport.resx</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Movement\MovementPlaceReport.resx">
+      <DependentUpon>MovementPlaceReport.cs</DependentUpon>
+      <Link>Movement\MovementPlaceReport.resx</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Movement\MovementReport.resx">
+      <DependentUpon>MovementReport.cs</DependentUpon>
+      <Link>Movement\MovementReport.resx</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\OrderPack\ScanSheetReport.resx">
+      <Link>ScanSheetReport.resx</Link>
+      <DependentUpon>ScanSheetReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderPackListReport.resx">
+      <Link>OrderPackListReport.resx</Link>
+      <DependentUpon>OrderPackListReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\AdditionalServiceProduct\ActIncomeClientProductReport.resx">
+      <Link>ActIncomeClientProductReport.resx</Link>
+      <DependentUpon>ActIncomeClientProductReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\AdditionalServiceProduct\ActOutcomeClientProductReport.resx">
+      <Link>ActOutcomeClientProductReport.resx</Link>
+      <DependentUpon>ActOutcomeClientProductReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderReport.resx">
+      <Link>OrderReport.resx</Link>
+      <DependentUpon>OrderReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderReportA5.resx">
+      <Link>OrderReportA5.resx</Link>
+      <DependentUpon>OrderReportA5.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReport.resx">
+      <Link>OrderAssemblyReport.resx</Link>
+      <DependentUpon>OrderAssemblyReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\Assembly\OrderAssemblyReportSimple.resx">
+      <Link>OrderAssemblyReportSimple.resx</Link>
+      <DependentUpon>OrderAssemblyReportSimple.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Assembly\OrderSingleAssemblyReport.resx">
+      <Link>OrderSingleAssemblyReport.resx</Link>
+      <DependentUpon>OrderSingleAssemblyReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderTapeChequeReport.resx">
+      <Link>OrderTapeChequeReport.resx</Link>
+      <DependentUpon>OrderTapeChequeReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderTapeReport.resx">
+      <Link>OrderTapeReport.resx</Link>
+      <DependentUpon>OrderTapeReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardReport.resx">
+      <DependentUpon>OrderWarrantyCardReport.cs</DependentUpon>
+      <Link>Order\OrderWarrantyCardReport.resx</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\Assembly\AssemblyReport.resx">
+      <Link>AssemblyReport.resx</Link>
+      <DependentUpon>AssemblyReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\Order\OrderWarrantyCardTapeReport.resx">
+      <Link>OrderWarrantyCardTapeReport.resx</Link>
+      <DependentUpon>OrderWarrantyCardTapeReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceAssemblyReport.resx">
+      <DependentUpon>ReturnInvoiceAssemblyReport.cs</DependentUpon>
+      <Link>ReturnInvoiceAssemblyReport.resx</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ReturnInvoice\ReturnInvoiceSupplierReport.resx">
+      <Link>ReturnInvoiceSupplierReport.resx</Link>
+      <DependentUpon>ReturnInvoiceSupplierReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReport.resx">
+      <Link>ServiceRequestReport.resx</Link>
+      <DependentUpon>ServiceRequestReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocol14BaseReport.resx">
+      <Link>ServiceRequestReturnProtocol14BaseReport.resx</Link>
+      <DependentUpon>ServiceRequestReturnProtocol14BaseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolBaseReport.resx">
+      <Link>ServiceRequestReturnProtocolBaseReport.resx</Link>
+      <DependentUpon>ServiceRequestReturnProtocolBaseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnProtocolReport.resx">
+      <Link>ServiceRequestReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestReturnReport.resx">
+      <Link>ServiceRequestReturnReport.resx</Link>
+      <DependentUpon>ServiceRequestReturnReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestRudyakov14ReturnProtocolReport.resx">
+      <Link>ServiceRequestRudyakov14ReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestRudyakov14ReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestRudyakovReturnProtocolReport.resx">
+      <Link>ServiceRequestRudyakovReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestRudyakovReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTeleSvit14ReturnProtocolReport.resx">
+      <Link>ServiceRequestTeleSvit14ReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestTeleSvit14ReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTeleSvitReturnProtocolReport.resx">
+      <Link>ServiceRequestTeleSvitReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestTeleSvitReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTuzovskiy14ReturnProtocolReport.resx">
+      <Link>ServiceRequestTuzovskiy14ReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestTuzovskiy14ReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\ServiceRequest\ServiceRequestTuzovskiyReturnProtocolReport.resx">
+      <Link>ServiceRequestTuzovskiyReturnProtocolReport.resx</Link>
+      <DependentUpon>ServiceRequestTuzovskiyReturnProtocolReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Telemart.Client\Reports\TextReport\TextReport.resx">
+      <Link>TextReport.resx</Link>
+      <DependentUpon>TextReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="OrderWarrantyCardReport.resx">
+      <DependentUpon>OrderWarrantyCardReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\licenses.licx" />
+    <EmbeddedResource Include="ServiceRequestPaidRepairReport.resx">
+      <DependentUpon>ServiceRequestPaidRepairReport.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Telemart.Client.Core\Telemart.Client.Core.csproj">
+      <Project>{fd29b6b8-4bbd-4933-a23f-55bbd7c7be34}</Project>
+      <Name>Telemart.Client.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Telemart.Client.Dictionaries\Telemart.Client.Dictionaries.csproj">
+      <Project>{CF207DEE-ECE3-4B2A-B7FF-C6706968F44B}</Project>
+      <Name>Telemart.Client.Dictionaries</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Resources\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

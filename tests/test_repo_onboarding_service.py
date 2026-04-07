@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import unittest
@@ -398,6 +399,55 @@ class RepoOnboardingServiceTests(unittest.TestCase):
         repo = self.registry_service.get_repo("catalog_service")
         self.assertIsNotNone(repo)
         self.assertEqual(repo.intelligence_provider, "gitnexus_http")
+
+    def test_onboard_repo_bootstraps_historical_memory_from_artifacts(self) -> None:
+        (self.workspace_root / "artifacts" / "tel-13508.case.json").write_text(
+            json.dumps(
+                {
+                    "jira_key": "TEL-13508",
+                    "result": {
+                        "goal": "Update receipt wording for the service request print form.",
+                        "selected_repos": [
+                            {
+                                "repo_id": "telemart_soft_test",
+                                "top_historical_matches": [
+                                    {
+                                        "repo_id": "telemart_soft_test",
+                                        "jira_key": "TEL-13508",
+                                        "commit_hash": "abc123",
+                                        "committed_at": "2026-03-04T18:49:34+02:00",
+                                        "changed_files": [
+                                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with patch.object(self.service._historical_change_memory_service, "_run_git_log", return_value=""):
+            self.service.onboard_repo(
+                repo_id="telemart_soft_test",
+                display_name="Telemart Soft",
+                remote_url="https://bitbucket.org/acme/telemart_soft_test.git",
+                default_branch="main",
+            )
+
+        repo = self.registry_service.get_repo("telemart_soft_test")
+        self.assertIsNotNone(repo)
+        self.assertEqual(int(repo.historical_change_count), 1)
+        history = self.service._historical_change_memory_service.list_historical_changes()
+        self.assertEqual(
+            [item["jira_key"] for item in history if item["repo_id"] == "telemart_soft_test"],
+            ["TEL-13508"],
+        )
 
     def test_reindex_repo_returns_failed_state_when_rebuild_raises(self) -> None:
         self.service.onboard_repo(

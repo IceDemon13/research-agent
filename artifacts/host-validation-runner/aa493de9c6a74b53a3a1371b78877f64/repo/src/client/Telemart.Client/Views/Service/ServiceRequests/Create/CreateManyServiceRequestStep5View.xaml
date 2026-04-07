@@ -1,0 +1,138 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Service.ServiceRequests.Create.CreateManyServiceRequestStep5View"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxco="http://schemas.devexpress.com/winfx/2008/xaml/controls"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRequests.Create"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             DataContext="{client:Container Type=viewModels:CreateManyServiceRequestStep5ViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CreateManyServiceRequestStep5ViewModel}}"
+             d:DesignWidth="600"
+             d:DesignHeight="280">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <DockPanel>
+        <dx:DialogFooter>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          Visibility="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxco:WizardButton Content="Назад"
+                                   dxco:Wizard.IsButtonBack="True" />
+                <dxco:WizardButton Content="Далее"
+                                   dxco:Wizard.IsButtonNext="True">
+                    <dxco:WizardButton.IsEnabled>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                            <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                     Mode="OneWay"
+                                     ElementName="LayoutControl" />
+                            <Binding Path="IsLongOperationInProgress"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxco:WizardButton.IsEnabled>
+                </dxco:WizardButton>
+                <dxco:WizardButton Content="Отмена"
+                                   dxco:Wizard.IsButtonCancel="True" />
+            </StackPanel>
+        </dx:DialogFooter>
+        <ContentPresenter DockPanel.Dock="Top"
+                          Content="{Binding}"
+                          ContentTemplate="{StaticResource WizardHeaderTemplate}" />
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Horizontal"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            IsEnabled="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Stretch">
+                <dxlc:LayoutGroup Orientation="Vertical"
+                                  View="GroupBox"
+                                  Header="Получение"
+                                  VerticalAlignment="Stretch">
+                    <dxlc:LayoutItem Label="Доставка">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.CarryTypes, Mode=OneWay}"
+                                          EditValue="{Binding Path=Model.CarryInId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                          DisplayMember="Name"
+                                          ValueMember="Id"
+                                          AllowNullInput="True"
+                                          NullText="{StaticResource NullTextValue}"
+                                          NullValueButtonPlacement="EditBox">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="EditValueChanged"
+                                                       Command="{Binding Path=HandleCarryInChangedCommand, Mode=OneTime}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ComboBoxEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Склад">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.WarehousesByCarryType, Mode=OneWay}"
+                                          EditValue="{Binding Path=Model.WarehouseIn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                          DisplayMember="Name"
+                                          AllowNullInput="True"
+                                          NullText="{StaticResource NullTextValue}"
+                                          NullValueButtonPlacement="EditBox">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="EditValueChanged"
+                                                       Command="{Binding Path=HandleWarehouseChangedCommand, Mode=OneTime}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ComboBoxEdit>
+                    </dxlc:LayoutItem>
+                </dxlc:LayoutGroup >
+                <dxlc:LayoutGroup Orientation="Vertical"
+                                  View="GroupBox"
+                                  Header="Отправка"
+                                  VerticalAlignment="Stretch">
+                    <dxlc:LayoutItem Label="Доставка">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.CarryTypes, Mode=OneWay}"
+                                          EditValue="{Binding Path=Model.CarryOutId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                          DisplayMember="Name"
+                                          ValueMember="Id"
+                                          NullText="{StaticResource NullTextValue}"/>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Город">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.Cities, Mode=OneWay}"
+                                          EditValue="{Binding Path=Model.CityId, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMember="Name"
+                                          ValueMember="Id"
+                                          FilterCondition="StartsWith"
+                                          ImmediatePopup="True"
+                                          IncrementalFiltering="True"
+                                          ValidateOnTextInput="False"
+                                          IsTextEditable="True"
+                                          NullText="{StaticResource NullTextValue}">
+                        </dxe:ComboBoxEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Адрес">
+                        <dxe:ButtonEdit EditValue="{Binding Path=Model.DeliveryData, ValidatesOnDataErrors=True}"
+                                        IsTextEditable="False"
+                                        AllowDefaultButton="False">
+                            <dxe:ButtonInfo GlyphKind="Edit"
+                                            ToolTipService.ToolTip="Выбрать адрес"
+                                            Command="{Binding Path=SelectDeliveryAddressCommand, Mode=OneWay}" />
+                        </dxe:ButtonEdit>
+                    </dxlc:LayoutItem>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </DockPanel>
+
+</UserControl>

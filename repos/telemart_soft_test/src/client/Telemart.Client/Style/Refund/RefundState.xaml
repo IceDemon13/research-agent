@@ -1,0 +1,48 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries">
+    <BitmapImage x:Key="NewImage"
+                 UriSource="/Images/Refunds/RefundState/new.png" />
+    <BitmapImage x:Key="ConfirmedImage"
+                 UriSource="/Images/Refunds/RefundState/confirmed.png" />
+    <BitmapImage x:Key="DoneImage"
+                 UriSource="/Images/Refunds/RefundState/done.png" />
+    <BitmapImage x:Key="CancelImage"
+                 UriSource="/Images/Refunds/RefundState/canceled.png" />
+
+    <dxmvvm:ObjectToObjectConverter x:Key="RefundStateImageConverter"
+                                    DefaultTarget="StrikeThrough">
+        <dxmvvm:MapItem Source="1"
+                        Target="{StaticResource NewImage}" />
+        <dxmvvm:MapItem Source="2"
+                        Target="{StaticResource ConfirmedImage}" />
+        <dxmvvm:MapItem Source="3"
+                        Target="{StaticResource DoneImage}" />
+        <dxmvvm:MapItem Source="4"
+                        Target="{StaticResource CancelImage}" />
+    </dxmvvm:ObjectToObjectConverter>
+
+    <DataTemplate x:Key="RefundStateComboBoxItemTemplate"
+                  DataType="{x:Type dictionaries:RefundState}">
+        <StackPanel Orientation="Horizontal"
+                    Background="Transparent">
+            <dx:DXImage Source="{Binding Path=Id, Mode=OneWay, Converter={StaticResource RefundStateImageConverter}}"
+                        Height="16"
+                        Width="16"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Margin="5,0,0,0" />
+            <Label Content="{Binding Path=Name, Mode=OneWay}"
+                   Background="Transparent"
+                   Margin="5,0,0,0" />
+        </StackPanel>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="RefundStateColumnDisplayTemplate">
+        <ContentControl Content="{Binding Path=EditValue, RelativeSource={RelativeSource TemplatedParent}, UpdateSourceTrigger=PropertyChanged}"
+                        ContentTemplate="{StaticResource RefundStateComboBoxItemTemplate}" />
+    </ControlTemplate>
+
+</ResourceDictionary>

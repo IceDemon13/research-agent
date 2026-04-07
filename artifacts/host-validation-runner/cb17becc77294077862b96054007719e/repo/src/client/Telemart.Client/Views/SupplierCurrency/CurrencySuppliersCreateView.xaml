@@ -1,0 +1,289 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.SupplierCurrency.CurrencySuppliersCreateView"
+                              x:Name="CurrentUserControl"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.SupplierCurrency"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              DataContext="{client:Container Type=viewModels:CurrencySuppliersCreateViewModel}"
+                              d:DataContext="{d:DesignInstance Type=viewModels:CurrencySuppliersCreateViewModel, IsDesignTimeCreatable=True}"
+                              mc:Ignorable="d"
+                              Width="600"
+                              Height="600"
+                              MinHeight="300"
+                              d:DesignHeight="600" d:DesignWidth="600">
+    <controls:TelemartUserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </controls:TelemartUserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutGroup Name="Bar"
+                              Orientation="Vertical"
+                              ItemSpace="0">
+                <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                    <dxb:BarButtonItem Content="Добавить"
+                                       Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                       Command="{Binding Path=AddSupplierCurrencyCommand, Mode=OneWay}" />
+                    <dxb:BarButtonItem Content="Удалить из гриды"
+                                       Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                       Command="{Binding Path=DeleteSupplierCurrencyCommand, Mode=OneWay}" />
+                </dxb:ToolBarControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Grid">
+                <dxg:GridControl x:Name="SupplierCurrencyGridControl"
+                                 ItemsSource="{Binding Path=SupplierCurrencyCreateItems, Mode=OneWay}"
+                                 CurrentItem="{Binding Path=SelectedItem, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalAlignment="Stretch"
+                                 HorizontalAlignment="Stretch"
+                                 SelectionMode="None">
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn x:Name="IsChanged"
+                                        Header="И"
+                                        HeaderToolTip="Изменена"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        AllowResizing="False"
+                                        FixedWidth="True"
+                                        Width="26">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dx:DXImage Source="/Images/Order/Actions/pencil.png"
+                                                Height="16"
+                                                Width="16"
+                                                VerticalAlignment="Center"
+                                                HorizontalAlignment="Center"
+                                                Margin="5,0,0,0">
+                                        <dx:DXImage.Visibility>
+                                            <MultiBinding Mode="OneWay"
+                                                          Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                                                <Binding Path="RowData.Row.IsChanged"
+                                                         Mode="OneWay" />
+                                            </MultiBinding>
+                                        </dx:DXImage.Visibility>
+                                    </dx:DXImage>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Контрагент"
+                                        HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                        FieldName="SupplierId"
+                                        AllowResizing="True"
+                                        AllowGrouping="True"
+                                        AllowBestFit="True"
+                                        AllowSorting="True"
+                                        AllowColumnFiltering="True"
+                                        FilterPopupMode="CheckedList"
+                                        ColumnFilterMode="DisplayText"
+                                        SortOrder="Ascending"
+                                        SortIndex="0"
+                                        DefaultSortOrder="Ascending"
+                                        FixedWidth="False"
+                                        MinWidth="140"
+                                        Width="140"
+                                        AllowAutoFilter="True"
+                                        HorizontalHeaderContentAlignment="Left"
+                                        ReadOnly="{Binding IsNewLine, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Suppliers, Mode=OneWay}"
+                                                                      ValueMember="Id"
+                                                                      DisplayMember="Name"
+                                                                      IsTextEditable="True"
+                                                                      AutoComplete="True"
+                                                                      IncrementalFiltering="True"
+                                                                      ImmediatePopup="True"
+                                                                      FilterCondition="Contains"
+                                                                      ApplyItemTemplateToSelectedItem="True"
+                                                                      NullValueButtonPlacement="EditBox"
+                                                                      AllowNullInput="True"
+                                                                      AllowDefaultButton="{Binding Path=IsNewLine, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Валюта"
+                                        HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="CurrencyId"
+                                        Width="100"
+                                        FixedWidth="True"
+                                        FilterPopupMode="CheckedList"
+                                        ColumnFilterMode="DisplayText"
+                                        ReadOnly="{Binding IsNewLine, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Currencies}"
+                                                                      DisplayMember="Title"
+                                                                      ValueMember="Id"
+                                                                      HorizontalContentAlignment="Center"
+                                                                      ApplyItemTemplateToSelectedItem="True"
+                                                                      NullValueButtonPlacement="EditBox"
+                                                                      AllowNullInput="True"
+                                                                      AllowDefaultButton="{Binding Path=IsNewLine, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Новый курс"
+                                        HeaderToolTip="Новый курс валют"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="RateNew"
+                                        AllowResizing="False"
+                                        AllowGrouping="False"
+                                        AllowBestFit="True"
+                                        AllowColumnFiltering="False"
+                                        FixedWidth="True"
+                                        AllowAutoFilter="False"
+                                        MinWidth="70"
+                                        Width="70"
+                                        MaxWidth="160">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:SpinEditSettings MaskType="Numeric"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      Mask="C2"
+                                                      MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                                      MaskSaveLiteral="False"
+                                                      IsFloatValue="True"
+                                                      AllowDefaultButton="False"
+                                                      HorizontalContentAlignment="Right" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Старый курс"
+                                        HeaderToolTip="Старый курс валют"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="RateOld"
+                                        AllowResizing="False"
+                                        AllowGrouping="False"
+                                        AllowBestFit="True"
+                                        AllowColumnFiltering="False"
+                                        FixedWidth="True"
+                                        AllowAutoFilter="False"
+                                        MinWidth="70"
+                                        Width="70"
+                                        MaxWidth="160"
+                                        ReadOnly="True">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:SpinEditSettings MaskType="Numeric"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      Mask="C2"
+                                                      MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                                      MaskSaveLiteral="False"
+                                                      IsFloatValue="True"
+                                                      AllowDefaultButton="False"
+                                                      HorizontalContentAlignment="Right" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Рост,%"
+                                        HeaderToolTip="Рост относительно старого курса"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Deviation"
+                                        AllowResizing="False"
+                                        AllowGrouping="False"
+                                        AllowBestFit="True"
+                                        AllowColumnFiltering="False"
+                                        FixedWidth="True"
+                                        AllowAutoFilter="False"
+                                        MinWidth="80"
+                                        Width="120"
+                                        MaxWidth="160"
+                                        ReadOnly="True">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Stretch">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0"
+                                                    Orientation="Horizontal"
+                                                    HorizontalAlignment="Left">
+                                            <dx:DXImage Source="/Images/Arrows/up_red_16_16.png"
+                                                        Width="16"
+                                                        Height="16"
+                                                        Visibility="{Binding Path=RowData.Row.DeviationUp, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                                            <dx:DXImage Source="/Images/Arrows/down_green_16_16.png"
+                                                        Width="16"
+                                                        Height="16"
+                                                        Visibility="{Binding Path=RowData.Row.DeviationDown, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                                        </StackPanel>
+                                        <dxe:SpinEdit x:Name="PART_Editor"
+                                                      Grid.Column="1"
+                                                      MaskType="Numeric"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      MaskSaveLiteral="False"
+                                                      IsFloatValue="True"
+                                                      AllowDefaultButton="False"
+                                                      HorizontalContentAlignment="Right"
+                                                      Mask="##0.00"
+                                                      IsReadOnly="True"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView x:Name="TableView"
+                                       EnableImmediatePosting="True"
+                                       ShowGroupPanel="False"
+                                       AllowResizing="False"
+                                       AllowPerPixelScrolling="True"
+                                       AllowDrop="False"
+                                       AllowMoveColumnToDropArea="False"
+                                       ShowIndicator="False"
+                                       AutoWidth="True"
+                                       IsTotalSummaryMenuEnabled="False"
+                                       IsColumnMenuEnabled="False"
+                                       AllowCommitOnValidationAttributeError="True"
+                                       AllowGrouping="False"
+                                       AllowSorting="False">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="CellValueChanged"
+                                                       Command="{Binding Path=HandleSupplierChangedCommand, Mode=OneWay}"
+                                                       PassEventArgsToCommand="True" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Bottom"
+                              VerticalAlignment="Bottom"
+                              Orientation="Horizontal">
+                <viewComponents:WaitImage x:Name="BusyIndicator"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=SupplierCurrencyGridControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

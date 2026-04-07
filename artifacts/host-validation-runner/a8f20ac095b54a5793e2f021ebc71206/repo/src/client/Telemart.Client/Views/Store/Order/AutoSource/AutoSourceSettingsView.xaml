@@ -1,0 +1,736 @@
+<UserControl x:Class="Telemart.Client.Views.Store.Order.AutoSource.AutoSourceSettingsView"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Order.AutoSource"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:AutoSourceSettingsViewModel}"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:AutoSourceSettingsViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CarryType.xaml" />
+                <ResourceDictionary>
+                    <Style x:Key="SettingsGroupBoxViewStyle"
+                           TargetType="dxlc:GroupBox">
+                        <Setter Property="TitleVisibility"
+                                Value="Visible" />
+                        <Setter Property="BorderThickness"
+                                Value="1" />
+                        <Setter Property="Padding"
+                                Value="8,8,8,8" />
+                        <Setter Property="HeaderTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               FontWeight="DemiBold" />
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutGroup x:Name="AutoSourceControls"
+                              View="Tabs"
+                              VerticalAlignment="Stretch"
+                              TabsStyle="{StaticResource LayoutGroupTabsStyle}"
+                              TabStyle="{StaticResource LayoutGroupTabStyle}">
+                <dxlc:LayoutGroup Header="Общее"
+                                  Padding="10"
+                                  Orientation="Horizontal">
+                    <dxlc:LayoutGroup Orientation="Vertical">
+                        <dxlc:LayoutGroup Orientation="Horizontal"
+                                          MaxHeight="160">
+                            <dxlc:LayoutGroup Orientation="Vertical">
+                                <dxlc:LayoutGroup Header="Общее"
+                                                  Orientation="Vertical"
+                                                  View="GroupBox"
+                                                  GroupBoxStyle="{StaticResource SettingsGroupBoxViewStyle}"
+                                                  ItemLabelsAlignment="Local">
+                                    <dxlc:LayoutItem Label="{Binding SetSourceMaxQuantity.DisplayName, Mode=OneWay }"
+                                                     Visibility="{Binding SetSourceMaxQuantity.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                        <dxe:SpinEdit EditValue="{Binding SetSourceMaxQuantity.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                      Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                      ToolTip="{Binding SetSourceMaxQuantity.Description}"
+                                                      AllowNullInput="False"
+                                                      Mask="##"
+                                                      MaxValue="99"
+                                                      MinValue="1"
+                                                      MaskType="Numeric"
+                                                      InvalidValueBehavior="AllowLeaveEditor"
+                                                      EditValueType="{x:Type system:Int32}" />
+                                    </dxlc:LayoutItem>
+                                </dxlc:LayoutGroup>
+                                <dxlc:LayoutGroup Header="Склад заказа"
+                                                  Orientation="Vertical"
+                                                  View="GroupBox"
+                                                  GroupBoxStyle="{StaticResource SettingsGroupBoxViewStyle}"
+                                                  ItemLabelsAlignment="Local">
+                                    <dxlc:LayoutItem Label="{Binding CurrentWeightKoef.DisplayName, Mode=OneWay }"
+                                                     Visibility="{Binding CurrentWeightKoef.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                        <dxe:SpinEdit EditValue="{Binding CurrentWeightKoef.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                      Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                      ToolTip="{Binding CurrentWeightKoef.Description}"
+                                                      AllowNullInput="False"
+                                                      Mask="#0"
+                                                      MaxValue="99"
+                                                      MinValue="1"
+                                                      MaskType="Numeric"
+                                                      InvalidValueBehavior="AllowLeaveEditor"
+                                                      EditValueType="{x:Type system:Int32}" />
+                                    </dxlc:LayoutItem>
+                                    <dxlc:LayoutItem Label="{Binding WarehouseShowCase.DisplayName, Mode=OneWay}"
+                                                     Visibility="{Binding WarehouseShowCase.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                        <dxe:CheckEdit EditValue="{Binding Path=WarehouseShowCase.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                       IsThreeState="False"
+                                                       ToolTip="{Binding WarehouseShowCase.Description, Mode=OneWay}"/>
+                                    </dxlc:LayoutItem>
+                                </dxlc:LayoutGroup>
+                            </dxlc:LayoutGroup>
+                        </dxlc:LayoutGroup>
+                        <dxlc:LayoutGroup Header="Закупка"
+                                          Orientation="Vertical"
+                                          View="GroupBox"
+                                          GroupBoxStyle="{StaticResource SettingsGroupBoxViewStyle}">
+                            <dxlc:LayoutGroup Orientation="Vertical">
+                                <dxlc:LayoutItem Label="{Binding SupplierNoDocumentsExtraChargeMinusPercent.DisplayName, Mode=OneWay }"
+                                                 Visibility="{Binding SupplierNoDocumentsExtraChargeMinusPercent.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                    <dxe:SpinEdit EditValue="{Binding SupplierNoDocumentsExtraChargeMinusPercent.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                  Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                  ToolTip="{Binding SupplierNoDocumentsExtraChargeMinusPercent.Description}"
+                                                  AllowNullInput="False"
+                                                  Mask="#0.0"
+                                                  MaxValue="99"
+                                                  MinValue="1"
+                                                  MaskType="Numeric"
+                                                  InvalidValueBehavior="AllowLeaveEditor"
+                                                  EditValueType="{x:Type system:Decimal}" />
+                                </dxlc:LayoutItem>
+                                <dxlc:LayoutItem Label="{Binding SupplierBClassExtraChargeMinusPercent.DisplayName, Mode=OneWay }"
+                                                 Visibility="{Binding SupplierBClassExtraChargeMinusPercent.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                    <dxe:SpinEdit EditValue="{Binding SupplierBClassExtraChargeMinusPercent.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                  Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                  ToolTip="{Binding SupplierBClassExtraChargeMinusPercent.Description}"
+                                                  AllowNullInput="False"
+                                                  Mask="#0.0"
+                                                  MaxValue="99"
+                                                  MinValue="1"
+                                                  MaskType="Numeric"
+                                                  InvalidValueBehavior="AllowLeaveEditor"
+                                                  EditValueType="{x:Type system:Decimal}" />
+                                </dxlc:LayoutItem>
+                                <dxlc:LayoutItem Label="{Binding MinExtraChargePercent.DisplayName, Mode=OneWay }"
+                                                 Visibility="{Binding MinExtraChargePercent.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                    <dxe:SpinEdit EditValue="{Binding MinExtraChargePercent.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                  Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                  ToolTip="{Binding MinExtraChargePercent.Description}"
+                                                  AllowNullInput="False"
+                                                  Mask="#0"
+                                                  MaxValue="99"
+                                                  MinValue="1"
+                                                  MaskType="Numeric"
+                                                  InvalidValueBehavior="AllowLeaveEditor"
+                                                  EditValueType="{x:Type system:Int32}" />
+                                </dxlc:LayoutItem>
+                                <dxlc:LayoutItem Label="{Binding MaxPercentPurchasePrice.DisplayName, Mode=OneWay }"
+                                                 Visibility="{Binding MaxPercentPurchasePrice.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                    <dxe:SpinEdit EditValue="{Binding MaxPercentPurchasePrice.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                  Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                  ToolTip="{Binding MaxPercentPurchasePrice.Description}"
+                                                  AllowNullInput="False"
+                                                  Mask="#0"
+                                                  MaxValue="99"
+                                                  MinValue="1"
+                                                  MaskType="Numeric"
+                                                  InvalidValueBehavior="AllowLeaveEditor"
+                                                  EditValueType="{x:Type system:Int32}" />
+                                </dxlc:LayoutItem>
+                                <dxlc:LayoutItem Label="{Binding MaxInvoiceDaysArrive.DisplayName, Mode=OneWay }"
+                                                 Visibility="{Binding MaxInvoiceDaysArrive.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                    <dxe:SpinEdit EditValue="{Binding MaxInvoiceDaysArrive.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                  Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                  ToolTip="{Binding MaxInvoiceDaysArrive.Description}"
+                                                  AllowNullInput="False"
+                                                  Mask="#0"
+                                                  MaxValue="99"
+                                                  MinValue="1"
+                                                  MaskType="Numeric"
+                                                  InvalidValueBehavior="AllowLeaveEditor"
+                                                  EditValueType="{x:Type system:Int32}" />
+                                </dxlc:LayoutItem>
+                                <dxlc:LayoutGroup Orientation="Horizontal"
+                                                  ItemLabelsAlignment="Local">
+                                    <dxlc:LayoutItem Label="{Binding OptimizePurchaseSources.DisplayName, Mode=OneWay}"
+                                                     Visibility="{Binding OptimizePurchaseSources.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                        <dxe:CheckEdit EditValue="{Binding Path=OptimizePurchaseSources.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                       IsThreeState="False"
+                                                       ToolTip="{Binding OptimizePurchaseSources.Description, Mode=OneWay}"/>
+                                    </dxlc:LayoutItem>
+                                    <dxlc:LayoutItem Label="{Binding OptimizationMinProfitDiff.DisplayName, Mode=OneWay }"
+                                                     Visibility="{Binding OptimizationMinProfitDiff.Active, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True}}">
+                                        <dxe:SpinEdit EditValue="{Binding OptimizationMinProfitDiff.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                              Style="{StaticResource ReadOnlyConditionsStyle}"
+                                                              ToolTip="{Binding OptimizationMinProfitDiff.Description}"
+                                                              AllowNullInput="False"
+                                                              Mask="#0"
+                                                              MaxValue="99"
+                                                              MinValue="1"
+                                                              MaskType="Numeric"
+                                                              InvalidValueBehavior="AllowLeaveEditor"
+                                                              EditValueType="{x:Type system:Int32}"
+                                                              IsReadOnly="{Binding OptimizePurchaseSources.ValueBoolTrue, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"/>
+                                        </dxlc:LayoutItem>
+                                    </dxlc:LayoutGroup>
+                            </dxlc:LayoutGroup>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Header="Приоритеты"
+                                  Padding="10"
+                                  Orientation="Vertical">
+                    <dxb:ToolBarControl GlyphSize="Small"
+                                        BarItemDisplayMode="Default"
+                                        AllowCustomizationMenu="False"
+                                        AllowQuickCustomization="False">
+                        <dxb:BarButtonItem Content="Добавить"
+                                           Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                           Command="{Binding Path=AddOrderProductSourceSettingCommand, Mode=OneWay}" />
+                        <dxb:BarButtonItem Content="Редактировать"
+                                           Glyph="{dx:DXImage Image=Edit_16x16.png}"
+                                           Command="{Binding Path=EditOrderProductSourceSettingCommand, Mode=OneWay}"
+                                           CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=OrderProductSourceSettingGridControl}" />
+                        <dxb:BarButtonItem Content="Удалить"
+                                           Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                           Command="{Binding Path=RemoveOrderProductSourceSettingCommand, Mode=OneWay}"
+                                           CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=OrderProductSourceSettingGridControl}" />
+                    </dxb:ToolBarControl>
+                    <dxg:GridControl x:Name="OrderProductSourceSettingGridControl"
+                                     ItemsSource="{Binding OrderProductSourceSettingItems, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                     SelectionMode="None"
+                                     AutoExpandAllGroups="True"
+                                     VerticalAlignment="Stretch"
+                                     HorizontalAlignment="Stretch">
+                                    <dxg:GridControl.Columns>
+                                        <dxg:GridColumn AllowEditing="False"
+                                                        Header="Доставка"
+                                                        FieldName="CarryType"
+                                                        HorizontalHeaderContentAlignment="Left"
+                                                        AllowMoving="True"
+                                                        ReadOnly="True"
+                                                        MinWidth="100"
+                                                        MaxWidth="130"
+                                                        AllowResizing="False"
+                                                        AllowGrouping="True"
+                                                        GroupInterval="DisplayText"
+                                                        AllowColumnFiltering="True"
+                                                        GroupIndex="0"
+                                                        DisplayTemplate="{StaticResource CarryTypeColumnDisplayTemplate}">
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn Header="Источник"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        FilterPopupMode="CheckedList"
+                                                        ColumnFilterMode="DisplayText"
+                                                        AllowGrouping="True"
+                                                        GroupInterval="DisplayText"
+                                                        AllowMoving="True"
+                                                        AllowEditing="False"
+                                                        FixedWidth="True"
+                                                        MinWidth="100"
+                                                        MaxWidth="250"
+                                                        Width="150"
+                                                        FieldName="FullNameSource">
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="ProductType"
+                                                        Header="Товар"
+                                                        FixedWidth="True"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        GroupInterval="Default"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False"
+                                                        AllowEditing="True">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="ProductInAssemblyNotCollectType"
+                                                        Header="Товар в сборке и не должен собираться"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="ProductInAssemblyCollectType"
+                                                        Header="Товар в сборке и должен собираться"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="ProductInAssemblyCollectForconfigurationType"
+                                                        Header="Товар в сборке и должен собираться под конфигурацию"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="AccessoryType"
+                                                        Header="Аксесуар"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="ProductWithServiceType"
+                                                        Header="Товар на который оказывается услуга"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="ServiceCertificateType"
+                                                        Header="Услуга с сертификатом"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="CertificateType"
+                                                        Header="Сертификат"
+                                                        FixedWidth="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="AssemblyServiceType"
+                                                        Header="Услуга сборки"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="AssembledComputerRuleType"
+                                                        Header="Конфигурация"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="TradeInType"
+                                                        Header="Trade-In"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="DiscountType"
+                                                        Header="Уценка"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="RefType"
+                                                        Header="Ref"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="SecondHandType"
+                                                        Header="БУ"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                        <dxg:GridColumn FieldName="AdditionalServiceConsumableType"
+                                                        Header="Товар необходимый для оказания услуги"
+                                                        MinWidth="35"
+                                                        Width="80"
+                                                        MaxWidth="250"
+                                                        AllowMoving="True"
+                                                        AllowGrouping="True"
+                                                        HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}}"
+                                                        HorizontalHeaderContentAlignment="Center"
+                                                        AllowColumnFiltering="False"
+                                                        AllowSorting="False">
+                                            <dxg:GridColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                                  HorizontalContentAlignment="Center"
+                                                                  IsFloatValue="False"
+                                                                  MinValue="0"
+                                                                  MaxValue="999"
+                                                                  Increment="1"
+                                                                  Style="{StaticResource SpinEditReadOnlyConditionsStyle}"/>
+                                                </DataTemplate>
+                                            </dxg:GridColumn.CellTemplate>
+                                        </dxg:GridColumn>
+                                    </dxg:GridControl.Columns>
+                                    <dxg:GridControl.View>
+                                        <dxg:TableView AllowPerPixelScrolling="True"
+                                                       AllowResizing="True"
+                                                       ShowGroupPanel="True"
+                                                       AllowDrop="False"
+                                                       AllowMoveColumnToDropArea="False"
+                                                       ShowIndicator="False"
+                                                       AllowEditing="True"
+                                                       HorizontalScrollbarVisibility="Auto"
+                                                       VerticalScrollbarVisibility="Auto"
+                                                       CustomCellAppearance="TableView_OnCustomCellAppearance">
+                                            <dxg:TableView.FormatConditions>
+                                            <dxg:FormatCondition Expression="[ProductType] = 0"
+                                                                 FieldName="ProductType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}"/>
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[CertificateType] = 0"
+                                                                 FieldName="CertificateType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                                </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ServiceCertificateType] = 0"
+                                                                 FieldName="ServiceCertificateType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ServiceType] = 0"
+                                                                FieldName="ServiceType"
+                                                                ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[AssemblyServiceType] = 0"
+                                                                 FieldName="AssemblyServiceType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[AccessoryType] = 0"
+                                                                 FieldName="AccessoryType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ServiceAdditionalServiceType] = 0"
+                                                                 FieldName="ServiceAdditionalServiceType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ProductServiceType] = 0"
+                                                                 FieldName="ProductServiceType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[TradeInType] = 0"
+                                                                 FieldName="TradeInType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[AssembledComputerRuleType] = 0"
+                                                                 FieldName="AssembledComputerRuleType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ProductInAssemblyNotCollectType] = 0"
+                                                                 FieldName="ProductInAssemblyNotCollectType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ProductInAssemblyCollectType] = 0"
+                                                                 FieldName="ProductInAssemblyCollectType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ProductInAssemblyCollectForconfigurationType] = 0"
+                                                                 FieldName="ProductInAssemblyCollectForconfigurationType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[ProductWithServiceType] = 0"
+                                                                 FieldName="ProductWithServiceType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                            <dxg:FormatCondition Expression="[AdditionalServiceConsumableType] = 0"
+                                                                 FieldName="AdditionalServiceConsumableType"
+                                                                 ApplyToRow="False">
+                                                <dx:Format Foreground="{StaticResource RetroRedColor}" />
+                                            </dxg:FormatCondition>
+                                        </dxg:TableView.FormatConditions>
+                                        </dxg:TableView>
+                                    </dxg:GridControl.View>
+                                </dxg:GridControl>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Bottom"
+                              VerticalAlignment="Bottom"
+                              Orientation="Horizontal">
+                <viewComponents:WaitImage x:Name="BusyIndicator"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=AutoSourceControls, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

@@ -1,0 +1,361 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Warehouse.WarehouseRouteEditView"
+                              x:Name="CurrentUserControl"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Warehouse"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              xmlns:mvvmEnhancements="clr-namespace:Telemart.Client.Common.MvvmEnhancements"
+                              xmlns:telemartAnimatedGif="clr-namespace:TelemartAnimatedGif;assembly=TelemartAnimatedGif"
+                              DataContext="{client:Container Type=viewModels:WarehouseRouteEditViewModel}"
+                              Width="950"
+                              Height="500"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:WarehouseRouteEditViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemSpace="0"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutControl.IsEnabled>
+                <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                    <Binding Path="OkCommand.IsExecuting" />
+                </MultiBinding>
+            </dxlc:LayoutControl.IsEnabled>
+            <dxlc:LayoutItem Label="Вес">
+                <dxe:TextEdit EditValue="{Binding Path=Weight, Mode=TwoWay, ValidatesOnDataErrors=True, NotifyOnValidationError=True, UpdateSourceTrigger=PropertyChanged}"
+                              Width="100"
+                              HorizontalAlignment="Left"/>
+            </dxlc:LayoutItem>
+            <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                <dxb:BarButtonItem Content="Удалить"
+                                   Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                   Command="{Binding DeleteRouteTimeCommand, Mode=OneWay}"
+                                   CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=GridControl}" />
+            </dxb:ToolBarControl>
+            <dxg:GridControl x:Name="GridControl"
+                             ItemsSource="{Binding Path=WarehouseRouteTimes, Mode=OneWay}"
+                             CurrentItem="{Binding Path=SelectedWarehouseRouteTime, Mode=TwoWay}"
+                             SelectionMode="None">
+                <dxmvvm:Interaction.Behaviors>
+                    <behaviors:CopyCurrentCellToClipboardBehavior />
+                </dxmvvm:Interaction.Behaviors>
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn FieldName="TimeOut"
+                                    Header="Создание"
+                                    HeaderToolTip="Время создания"
+                                    FixedWidth="False"
+                                    EditFormVisibleIndex="1">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskType="DateTime"
+                                                  Mask="t" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn FieldName="TimeDeparture"
+                                    Header="Отправление"
+                                    HeaderToolTip="Время отправления"
+                                    FixedWidth="False"
+                                    EditFormVisibleIndex="2">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskType="DateTime"
+                                                  Mask="t" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn
+                        Binding="{Binding DaysOfWeekOut, Mode=TwoWay, Converter={converters:StringToDaysOfWeekConverter}}"
+                        Header="Дни (отпр.)"
+                        HeaderToolTip="День недели отправления"
+                        EditFormVisibleIndex="3"
+                        EditFormColumnSpan="5">
+                        <dxg:GridColumn.EditFormTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit
+                                    ItemsSource="{Binding Path=DataContext.DaysOfWeek, ElementName=CurrentUserControl}"
+                                    x:Name="PART_Editor"
+                                    DisplayMember="ShortName"
+                                    IsTextEditable="False"
+                                    Style="{StaticResource CheckedTokenComboBoxStyle}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.EditFormTemplate>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:TextEdit Background="Transparent"
+                                              ShowBorder="False"
+                                              IsReadOnly="True"
+                                              EditValue="{Binding RowData.Row.DaysOfWeekOut, ValidatesOnDataErrors=True}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn FieldName="CarryId"
+                                    Header="Способ доставки"
+                                    HeaderToolTip="Способ доставки"
+                                    EditFormStartNewRow="True"
+                                    EditFormColumnSpan="2"
+                                    EditFormVisibleIndex="7">
+                        <dxg:GridColumn.EditFormTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit
+                                    ItemsSource="{Binding Path=DataContext.CarryTypes, ElementName=CurrentUserControl}"
+                                    x:Name="PART_Editor"
+                                    NullValueButtonPlacement="EditBox"
+                                    DisplayMember="Name"
+                                    ValueMember="Id"
+                                    IsTextEditable="False" >
+                                    <dxmvvm:Interaction.Behaviors>
+                                        <mvvmEnhancements:UpdateFieldHelper TargetField="DeliveryType" />
+                                    </dxmvvm:Interaction.Behaviors>
+                                </dxe:ComboBoxEdit>
+                            </DataTemplate>
+                        </dxg:GridColumn.EditFormTemplate>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit
+                                    ItemsSource="{Binding Path=DataContext.CarryTypes, ElementName=CurrentUserControl}"
+                                    x:Name="PART_Editor"
+                                    DisplayMember="Name"
+                                    ValueMember="Id"
+                                    IsTextEditable="False">
+                                </dxe:ComboBoxEdit>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn FieldName="DeliveryType"
+                                    Header="Тип доставки"
+                                    HeaderToolTip="Тип доставки"
+                                    EditFormVisibleIndex="8"
+                                    EditFormColumnSpan="2"
+                                    Validate="OnValidateDeliveryType"
+                                    EditFormStartNewRow="True">
+                        <dxg:GridColumn.EditFormTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit
+                                    ItemsSource="{Binding Path=DataContext.DeliveryTypes, ElementName=CurrentUserControl}"
+                                    x:Name="PART_Editor"
+                                    DisplayMember="Name"
+                                    Loaded="PART_Editor_OnLoaded"
+                                    NullValueButtonPlacement="EditBox"
+                                    IsEnabled="{Binding Path=RowData.Row.DeliveryTypeEnabled, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                    IsTextEditable="False" />
+                            </DataTemplate>
+                        </dxg:GridColumn.EditFormTemplate>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit
+                                    ItemsSource="{Binding Path=DataContext.DeliveryTypes, ElementName=CurrentUserControl}"
+                                    x:Name="PART_Editor"
+                                    DisplayMember="Name"
+                                    IsTextEditable="False" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn FieldName="Days"
+                                    Header="В пути"
+                                    HeaderToolTip="Дни в пути"
+                                    EditFormVisibleIndex="9"
+                                    EditFormStartNewRow="True">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Left" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn FieldName="TimeArrive"
+                                    Header="Прибытие"
+                                    HeaderToolTip="Время прибытия"
+                                    EditFormVisibleIndex="4">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskType="DateTime"
+                                                  Mask="t" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn FieldName="TimeIn"
+                                    Header="Оприходование"
+                                    HeaderToolTip="Время оприходования"
+                                    EditFormVisibleIndex="5">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskUseAsDisplayFormat="True"
+                                                  MaskType="DateTime"
+                                                  Mask="t" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn
+                        Binding="{Binding DaysOfWeekIn, Mode=TwoWay, Converter={converters:StringToDaysOfWeekConverter}}"
+                        Header="Дни (получ.)"
+                        HeaderToolTip="День недели получения"
+                        EditFormVisibleIndex="6"
+                        EditFormColumnSpan="5">
+                        <dxg:GridColumn.EditFormTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit x:Name="PART_Editor"
+                                                  ItemsSource="{Binding Path=DataContext.DaysOfWeek, ElementName=CurrentUserControl}"
+                                                  DisplayMember="ShortName"
+                                                  IsTextEditable="False"
+                                                  Style="{StaticResource CheckedTokenComboBoxStyle}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.EditFormTemplate>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:TextEdit Background="Transparent"
+                                              ShowBorder="False"
+                                              IsReadOnly="True"
+                                              EditValue="{Binding RowData.Row.DaysOfWeekIn, ValidatesOnDataErrors=True}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn
+                        Binding="{Binding Purposes, Mode=TwoWay, ValidatesOnDataErrors=True}"
+                        Header="Назначение"
+                        HeaderToolTip="Назначение маршрута"
+                        EditFormVisibleIndex="7"
+                        EditFormColumnSpan="5">
+                        <dxg:GridColumn.EditFormTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit x:Name="PART_Editor"
+                                                  ItemsSource="{Binding Path=DataContext.Purposes, ElementName=CurrentUserControl}"
+                                                  DisplayMember="Name"
+                                                  IsTextEditable="False"
+                                                  Style="{StaticResource CheckedTokenComboBoxStyle}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.EditFormTemplate>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit
+                                    DisplayMember="Name"
+                                    IsTextEditable="False"
+                                    IsReadOnly="True"
+                                    IsEnabled="False"
+                                    ApplyItemTemplateToSelectedItem="False"
+                                    AllowLiveDataShaping="False"
+                                    AllowUpdateTwoWayBoundPropertiesOnSynchronization="False"
+                                    ItemsSource="{Binding Path=DataContext.Purposes, ElementName=CurrentUserControl}"
+                                    EditValue="{Binding Path=RowData.Row.Purposes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                    Style="{StaticResource GridCheckedTokenComboBoxStyle}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Автосоздание"
+                                    EditFormVisibleIndex="8"
+                                    EditFormColumnSpan="6"
+                                    HeaderToolTip="Автоматическое создание"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    FieldName="Auto"
+                                    FixedWidth="True"
+                                    Width="24"
+                                    MinWidth="24"
+                                    AllowBestFit="False"
+                                    AllowResizing="False"
+                                    AllowGrouping="False"
+                                    AllowAutoFilter="False">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dx:DXImage Source="../../Images/Common/android_16x16.png"
+                                            Width="16"
+                                            Height="16"
+                                            Visibility="{Binding Path=RowData.Row.Auto, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                        <dxg:GridColumn.EditFormTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit x:Name="PART_Editor"
+                                               IsEnabled="True"
+                                               IsThreeState="False">
+                                </dxe:CheckEdit>
+                            </DataTemplate>
+                        </dxg:GridColumn.EditFormTemplate>
+                    </dxg:GridColumn>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView x:Name="TableView"
+                                   ShowEditFormOnDoubleClick="True"
+                                   AllowPerPixelScrolling="True"
+                                   ShowTotalSummary="False"
+                                   ShowIndicator="False"
+                                   ShowFixedTotalSummary="False"
+                                   ShowAutoFilterRow="False"
+                                   ShowSearchPanelMode="Never"
+                                   ShowGroupPanel="False"
+                                   IsColumnMenuEnabled="False"
+                                   AutoWidth="True"
+                                   NavigationStyle="Row"
+                                   EditFormPostMode="Immediate"
+                                   AllowResizing="True"
+                                   AllowEditing="True"
+                                   AllowGrouping="False"
+                                   AllowColumnMoving="False"
+                                   AllowColumnFiltering="False"
+                                   AllowSorting="True"
+                                   AllowMoveColumnToDropArea="False"
+                                   AllowBestFit="True"
+                                   NewItemRowPosition="Top"
+                                   EditFormShowMode="Inline"
+                                   EditFormColumnCount="7">
+                        <dxmvvm:Interaction.Behaviors>
+                            <dxmvvm:EventToCommand EventName="InitNewRow"
+                                                   Command="{Binding Path=CreateRouteTimeCommand}"
+                                                   PassEventArgsToCommand="True" />
+                        </dxmvvm:Interaction.Behaviors>
+                    </dxg:TableView>
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              Padding="0,8,0,0">
+                <dxlc:LayoutGroup HorizontalAlignment="Left"
+                                  VerticalAlignment="Center">
+                    <dxlc:LayoutGroup.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxlc:LayoutGroup.Visibility>
+                    <Image telemartAnimatedGif:ImageBehavior.AnimatedSource="{StaticResource WaitImage}"
+                           Width="16"
+                           Height="16"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center" />
+                    <TextBlock Text="Обработка..." />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

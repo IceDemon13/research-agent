@@ -370,6 +370,121 @@ class HistoricalChangeMemoryServiceTests(unittest.TestCase):
         self.assertEqual(comments[0]["comment_id"], "c-1")
         self.assertEqual(comments[0]["metadata"]["class_hints"], ["ProductRepository"])
 
+    def test_bootstrap_repo_history_uses_case_artifact_when_git_history_is_unavailable(self) -> None:
+        repo_root = self.workspace_root / "telemart_soft_test"
+        repo_root.mkdir(parents=True, exist_ok=True)
+        self.registry.register_repo(
+            root_path=str(repo_root),
+            repo_id="telemart_soft_test",
+            display_name="Telemart Soft",
+            default_branch="main",
+        )
+        (self.workspace_root / "artifacts" / "tel-13508.case.json").write_text(
+            json.dumps(
+                {
+                    "jira_key": "TEL-13508",
+                    "result": {
+                        "goal": "Update receipt wording for the service request print form.",
+                        "selected_repos": [
+                            {
+                                "repo_id": "telemart_soft_test",
+                                "top_historical_matches": [
+                                    {
+                                        "repo_id": "telemart_soft_test",
+                                        "jira_key": "TEL-13508",
+                                        "commit_hash": "abc123",
+                                        "branch_name": "feature/TEL-13508",
+                                        "committed_at": "2026-03-04T18:49:34+02:00",
+                                        "changed_files": [
+                                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.service.bootstrap_repo_history("telemart_soft_test")
+
+        self.assertTrue(result["ingested"])
+        self.assertEqual(result["bootstrap_source"], "artifacts")
+        self.assertEqual(result["historical_change_count"], 1)
+        changes = [
+            item
+            for item in self.service.list_historical_changes()
+            if item["repo_id"] == "telemart_soft_test"
+        ]
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["jira_key"], "TEL-13508")
+        self.assertIn(
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+            changes[0]["changed_files"],
+        )
+        snapshot = self.service.get_task_snapshot("TEL-13508")
+        self.assertIsNotNone(snapshot)
+        self.assertIn("receipt wording", snapshot["task_snapshot_text"].lower())
+        refreshed = self.registry.get_repo("telemart_soft_test")
+        self.assertIsNotNone(refreshed)
+        self.assertEqual(int(refreshed.historical_change_count), 1)
+
+    def test_bootstrap_repo_history_from_artifacts_is_idempotent(self) -> None:
+        repo_root = self.workspace_root / "telemart_soft_test"
+        repo_root.mkdir(parents=True, exist_ok=True)
+        self.registry.register_repo(
+            root_path=str(repo_root),
+            repo_id="telemart_soft_test",
+            display_name="Telemart Soft",
+            default_branch="main",
+        )
+        (self.workspace_root / "artifacts" / "tel-13508.case.json").write_text(
+            json.dumps(
+                {
+                    "jira_key": "TEL-13508",
+                    "result": {
+                        "goal": "Update receipt wording for the service request print form.",
+                        "selected_repos": [
+                            {
+                                "repo_id": "telemart_soft_test",
+                                "top_historical_matches": [
+                                    {
+                                        "repo_id": "telemart_soft_test",
+                                        "jira_key": "TEL-13508",
+                                        "commit_hash": "abc123",
+                                        "committed_at": "2026-03-04T18:49:34+02:00",
+                                        "changed_files": [
+                                            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs"
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        first = self.service.bootstrap_repo_history("telemart_soft_test")
+        second = self.service.bootstrap_repo_history("telemart_soft_test")
+
+        self.assertEqual(first["historical_change_count"], 1)
+        self.assertEqual(second["bootstrap_source"], "existing_state")
+        changes = [
+            item
+            for item in self.service.list_historical_changes()
+            if item["repo_id"] == "telemart_soft_test"
+        ]
+        self.assertEqual(len(changes), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

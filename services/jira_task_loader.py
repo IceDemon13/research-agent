@@ -28,6 +28,12 @@ SECTION_LABELS = (
 
 BITRIX_LINK_FIELD_ID = "customfield_11131"
 ACCEPTANCE_CRITERIA_FIELD_ID = "customfield_11145"
+ACCEPTANCE_CRITERIA_FIELD_LABELS = {
+    "acceptance criteria",
+    "acceptance criterion",
+    "критерії приймання",
+    "критерії прийому",
+}
 
 
 class JiraConfigurationError(RuntimeError):
@@ -350,6 +356,24 @@ def _extract_acceptance_criteria_from_custom_field(value: Any) -> list[str]:
     return deduped
 
 
+def _normalize_field_label(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _find_acceptance_criteria_field(issue: dict[str, Any], fields: dict[str, Any]) -> tuple[str, Any, bool]:
+    if ACCEPTANCE_CRITERIA_FIELD_ID in fields:
+        return ACCEPTANCE_CRITERIA_FIELD_ID, fields.get(ACCEPTANCE_CRITERIA_FIELD_ID), True
+
+    names = dict(issue.get("names", {}) or {})
+    for field_id, label in names.items():
+        normalized_label = _normalize_field_label(label)
+        if normalized_label in ACCEPTANCE_CRITERIA_FIELD_LABELS and str(field_id or "").strip() in fields:
+            resolved_field_id = str(field_id or "").strip()
+            return resolved_field_id, fields.get(resolved_field_id), True
+
+    return "", None, False
+
+
 def _attachment_extension(file_name: str) -> str:
     suffix = Path(str(file_name or "").strip()).suffix.lower()
     return suffix[1:] if suffix.startswith(".") else suffix
@@ -504,7 +528,7 @@ def load_jira_task(issue_key: str) -> dict:
 
     comments = _normalize_issue_comments(fields)
 
-    acceptance_criteria_raw = fields.get(ACCEPTANCE_CRITERIA_FIELD_ID)
+    acceptance_criteria_field_id, acceptance_criteria_raw, acceptance_criteria_field_present = _find_acceptance_criteria_field(issue, fields)
     if acceptance_criteria_raw:
         acceptance_criteria = _extract_acceptance_criteria_from_custom_field(acceptance_criteria_raw)
     else:
@@ -521,6 +545,18 @@ def load_jira_task(issue_key: str) -> dict:
         "summary": summary,
         "description": description,
         "acceptance_criteria": acceptance_criteria,
+        "acceptance_criteria_source": acceptance_criteria_field_id or ("description" if acceptance_criteria else ""),
+        "acceptance_criteria_field_present": bool(acceptance_criteria_field_present or acceptance_criteria),
+        "raw_jira_fields": {
+            "acceptance_criteria_field_id": acceptance_criteria_field_id,
+            "acceptance_criteria_field_present": bool(acceptance_criteria_field_present),
+            "available_field_names": {
+                str(field_id or "").strip(): str(label or "").strip()
+                for field_id, label in dict(issue.get("names", {}) or {}).items()
+                if str(field_id or "").strip().startswith("customfield_")
+                and _normalize_field_label(label) in ACCEPTANCE_CRITERIA_FIELD_LABELS
+            },
+        },
         "status": status,
         "status_category_name": status_category_name,
         "status_category_key": status_category_key,

@@ -1,0 +1,135 @@
+<UserControl x:Class="Telemart.Client.Views.AssembledComputerRule.AssembledComputerRuleCopyView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:local="clr-namespace:Telemart.Client.Views.AssembledComputerRule"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.AssembledComputerRule"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:AssembledComputerRuleCopyViewModel}"
+             Width="300"
+             Height="150"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:AssembledComputerRuleCopyViewModel}, IsDesignTimeCreatable=True}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="AssembledComputerRuleCopyLayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup Orientation="Vertical">
+            <dxg:LookUpEdit x:Name="FilterCategoryLookUpEdit"
+                            ItemsSource="{Binding Path=AssembledComputerRules, Mode=OneWay}"
+                            EditValue="{Binding Path=SelectedAssembledComputerRule, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            DisplayMember="Name"
+                            AutoPopulateColumns="False"
+                            AutoComplete="False"
+                            IncrementalFiltering="True"
+                            FilterCondition="Like"
+                            FindMode="Always"
+                            ImmediatePopup="True"
+                            IsPopupAutoWidth="True"
+                            VerticalAlignment="Top"
+                            NullText="Выберите конфигурацию"
+                            NullValueButtonPlacement="EditBox">
+                        <dxg:LookUpEdit.StyleSettings>
+                            <dxg:SearchLookUpEditStyleSettings />
+                        </dxg:LookUpEdit.StyleSettings>
+                        <dxg:LookUpEdit.PopupContentTemplate>
+                            <ControlTemplate>
+                                <dxg:GridControl Name="PART_GridControl">
+                                    <dxg:GridControl.Resources>
+                                        <Style TargetType="dxg:GridColumn"
+                                               BasedOn="{StaticResource GeneralGridColumnStyle}">
+                                        </Style>
+                                    </dxg:GridControl.Resources>
+                                    <dxg:GridControl.Columns>
+                                        <dxg:GridColumn FieldName="Id"
+                                                        Header="Код"
+                                                        AllowResizing="False"
+                                                        FixedWidth="True"
+                                                        Width="30"/>
+                                        <dxg:GridColumn FieldName="Name"
+                                                        Header="Конфигурация"
+                                                        AllowResizing="False"
+                                                        FixedWidth="False" />
+                                    </dxg:GridControl.Columns>
+                                    <dxg:GridControl.View>
+                                        <dxg:TableView AllowPerPixelScrolling="True"
+                                                       ShowTotalSummary="False"
+                                                       ShowIndicator="False"
+                                                       ShowFixedTotalSummary="False"
+                                                       ShowAutoFilterRow="False"
+                                                       ShowSearchPanelMode="Never"
+                                                       ShowGroupPanel="False"
+                                                       IsColumnMenuEnabled="False"
+                                                       ShowColumnHeaders="True"
+                                                       AutoWidth="True"
+                                                       NavigationStyle="Cell"
+                                                       IsEnabled="True"
+                                                       AllowResizing="True"
+                                                       AllowEditing="False"
+                                                       AllowGrouping="False"
+                                                       AllowColumnMoving="False"
+                                                       AllowColumnFiltering="False"
+                                                       AllowSorting="True"
+                                                       EnableImmediatePosting="True"
+                                                       AllowMoveColumnToDropArea="False">
+                                        </dxg:TableView>
+                                    </dxg:GridControl.View>
+                                </dxg:GridControl>
+                            </ControlTemplate>
+                        </dxg:LookUpEdit.PopupContentTemplate>
+                    </dxg:LookUpEdit>
+                <dxe:CheckEdit Content="Категории"
+                               EditValue="{Binding Path=IsCopyCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center"
+                               Visibility="Visible" />
+                <dxe:CheckEdit Content="Товары"
+                               EditValue="{Binding Path=IsCopyProduct, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center"
+                               Visibility="Visible"
+                               IsEnabled="{Binding IsCopyCategory, Mode=OneWay}"/>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button x:Name="OkButton"
+                            Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}"/>
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

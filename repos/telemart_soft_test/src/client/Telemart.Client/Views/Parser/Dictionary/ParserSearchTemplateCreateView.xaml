@@ -1,0 +1,69 @@
+<UserControl x:Class="Telemart.Client.Views.Parser.Dictionary.ParserSearchTemplateCreateView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Parser.Dictionary"
+             DataContext="{client:Container Type=viewModels:ParserSearchTemplateCreateViewModel}"
+             mc:Ignorable="d"
+             Width="400"
+             Height="120"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type TypeName=viewModels:ParserSearchTemplateCreateViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}" OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            IsEnabled="True">
+            <dxlc:LayoutItem Label="Название">
+                <dxe:TextEdit EditValue="{Binding Path=NameTemplate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Категория">
+                    <dxe:ComboBoxEdit EditValue="{Binding SelectCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      ItemsSource="{Binding Path=Categories, Mode=OneWay}"
+                                      ValueMember="Id"
+                                      DisplayMember="FullName"
+                                      Style="{StaticResource LookUpReadOnlyConditionsStyle}">
+
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button x:Name="OkButton"
+                            Content="OK"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

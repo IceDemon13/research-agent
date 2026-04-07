@@ -1,0 +1,185 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Common.CrmInfoView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:business="clr-namespace:Telemart.Client.Business"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries"
+             Loaded="CrmInfoViewLoaded"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=common:CrmInfoView, IsDesignTimeCreatable=False}"
+             d:DesignHeight="300"
+             d:DesignWidth="300">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CallState.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/SmsState.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/EmailState.xaml" />
+                <ResourceDictionary>
+                    <dxmvvm:ObjectToObjectConverter x:Key="ClientContactTypeToImageConverter">
+                        <dxmvvm:MapItem Source="1"
+                                        Target="/Images/Call/headphone_mic_16x16.png" />
+                        <dxmvvm:MapItem Source="2"
+                                        Target="/Images/Common/mail_16x16.png" />
+                        <dxmvvm:MapItem Source="3"
+                                        Target="/Images/Common/sobaka_blue.png" />
+                        <dxmvvm:MapItem Source="4"
+                                        Target="/Images/Common/viber_16x16.png" />
+                    </dxmvvm:ObjectToObjectConverter>
+                    <DataTemplate DataType="{x:Type dictionaries:CallState}">
+                        <ContentPresenter Content="{Binding}"
+                                          ContentTemplate="{StaticResource CallStateComboBoxItemTemplate}"/>
+                    </DataTemplate>
+                    <DataTemplate DataType="{x:Type dictionaries:SmsState}">
+                        <ContentPresenter Content="{Binding}"
+                                          ContentTemplate="{StaticResource SmsStateComboBoxItemTemplate}"/>
+                    </DataTemplate>
+                    <DataTemplate DataType="{x:Type dictionaries:EmailState}">
+                        <ContentPresenter Content="{Binding}"
+                                          ContentTemplate="{StaticResource EmailStateComboBoxItemTemplate}"/>
+                    </DataTemplate>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid DataContext="{Binding ElementName=CurrentUserControl}">
+        <dxg:GridControl x:Name="CrmGridControl"
+                         ItemsSource="{Binding Path=ClientContacts, Mode=OneWay}"
+                         SelectedItem="{Binding Path=SelectedClientContact, Mode=TwoWay}"
+                         ShowLoadingPanel="{Binding Path=ShowLoadingPanel, Mode=OneWay}"
+                         SelectionMode="Row"
+                         ShowBorder="False">
+            <dxmvvm:Interaction.Behaviors>
+                <behaviors:CopyCurrentCellToClipboardBehavior />
+            </dxmvvm:Interaction.Behaviors>
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn FieldName="Date"
+                                Header="Дата"
+                                AllowMoving="False"
+                                AllowBestFit="True"
+                                AllowSorting="True"
+                                MinWidth="80"
+                                Width="90"
+                                FixedWidth="True"
+                                HorizontalHeaderContentAlignment="Center">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center"
+                                              NullText=""
+                                              MaskUseAsDisplayFormat="True"
+                                              Mask="{x:Static business:DateFormattingRules.FullDateTimeFormat}"
+                                              MaskType="DateTime">
+                        </dxe:DateEditSettings>
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Тип"
+                                HeaderToolTip="Тип"
+                                FieldName="Type"
+                                FixedWidth="True"
+                                MaxWidth="120"
+                                Width="80"
+                                MinWidth="26"
+                                AllowMoving="False"
+                                AllowBestFit="True"
+                                HorizontalHeaderContentAlignment="Center"
+                                FilterPopupMode="CheckedList"
+                                AllowSorting="True"
+                                AllowResizing="True"
+                                AllowGrouping="True">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel DataContext="{Binding Path=RowData.Row.Type}"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent">
+                                <dx:DXImage Source="{Binding Path=Id, Mode=OneWay, Converter={StaticResource ClientContactTypeToImageConverter}}"
+                                            Height="16"
+                                            Width="16"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            Margin="5,0,0,0" />
+                                <Label Content="{Binding Path=Name, Mode=OneWay}"
+                                       VerticalAlignment="Center"
+                                       Background="Transparent"
+                                       Margin="5,0,0,0" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn FieldName="Phone"
+                                Header="Телефон"
+                                AllowMoving="False"
+                                AllowBestFit="True"
+                                Width="100"
+                                FixedWidth="True"
+                                AllowResizing="True"
+                                AllowSorting="False"
+                                HorizontalHeaderContentAlignment="Left"/>
+                <dxg:GridColumn FieldName="Content"
+                                Header="Содержание"
+                                AllowMoving="False"
+                                AllowBestFit="True"
+                                MinWidth="150"
+                                FixedWidth="False"
+                                AllowResizing="True"
+                                AllowSorting="False"
+                                HorizontalHeaderContentAlignment="Left">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings TextWrapping="WrapWithOverflow" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="С"
+                                HeaderToolTip="Статус"
+                                FieldName="State"
+                                FixedWidth="True"
+                                Width="26"
+                                MinWidth="26"
+                                AllowMoving="False"
+                                AllowBestFit="False"
+                                HorizontalHeaderContentAlignment="Center"
+                                FilterPopupMode="CheckedList"
+                                AllowSorting="False"
+                                AllowResizing="True">
+                    <dxg:GridColumn.DisplayTemplate>
+                        <ControlTemplate>
+                            <ContentControl Content="{Binding Path=RowData.Row, Converter={common:ClientContactTypeConverter}}" />
+                        </ControlTemplate>
+                    </dxg:GridColumn.DisplayTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn FieldName="EmployeeName"
+                                Header="Создал"
+                                AllowBestFit="True"
+                                FixedWidth="True"
+                                AllowSorting="False"
+                                Width="150"
+                                MinWidth="80">
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TableView AllowColumnMoving="True"
+                               CustomCellAppearance="TableView_OnCustomCellAppearance"
+                               CustomRowAppearance="TableView_OnCustomRowAppearance"
+                               Style="{StaticResource ReadOnlyTableViewStyle}">
+                    <dxg:TableView.FormatConditions>
+                        <dxg:FormatCondition Expression="[InitiatedBy] != 1" FieldName="EmployeeName">
+                            <dx:Format Background="PaleGreen"
+                                       Foreground="Black"/>
+                        </dxg:FormatCondition>
+                    </dxg:TableView.FormatConditions>
+                </dxg:TableView>
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+    </Grid>
+
+</UserControl>

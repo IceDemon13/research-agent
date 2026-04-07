@@ -1,0 +1,241 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.RobotProperties.RobotCategoryPropertyView"
+                              x:Name="CurrentUserControl"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.RobotProperties"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:dxprg="http://schemas.devexpress.com/winfx/2008/xaml/propertygrid"
+                              xmlns:dxet="http://schemas.devexpress.com/winfx/2008/xaml/editors/themekeys"
+                              xmlns:dxcn="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              DataContext="{client:Container Type=viewModels:RobotCategoryPropertyViewModel}"
+                              d:DataContext="{d:DesignInstance Type=viewModels:RobotCategoryPropertyViewModel, IsDesignTimeCreatable=True}"
+                              mc:Ignorable="d"
+                              d:DesignHeight="600"
+                              d:DesignWidth="1000">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Editors/EditorsTemplateSelector.xaml" />
+                <ResourceDictionary >
+                    <dxe:MemoEditIconIndexConverter x:Key="MemoEditIconIndexConverter"/>
+                    <ControlTemplate x:Key="DescriptionMemoEditIconTemplate" TargetType="{x:Type dxe:MemoEdit}">
+                        <Grid x:Name="PART_Editor" 
+                              Background="Transparent" 
+                              Style="{dxcn:ThemeResource {dxet:MemoEditThemeKey ResourceKey=EditNonEditableIconInplaceTemplate, IsThemeIndependent=True}}">
+                            <TextBlock x:Name="HeightHolder" Text="">
+                            </TextBlock>
+                            <Border Background="{Binding Path=(dxe:BaseEdit.OwnerEdit).Background}"/>
+                            <dxcn:MultiContentControl x:Name="PART_Icon" VisibleChildIndex="{Binding Path=(dxe:BaseEdit.OwnerEdit).Text, Converter={StaticResource MemoEditIconIndexConverter}}">
+                                <dx:PixelSnapper HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <dx:DXImage x:Name="memoIconGrey" 
+                                                Width="15" Height="15" 
+                                                Source="../../../Images/Common/information.png" />
+                                </dx:PixelSnapper>
+                            </dxcn:MultiContentControl>
+                        </Grid>
+                    </ControlTemplate>
+                </ResourceDictionary>
+                <ResourceDictionary>
+                    <DataTemplate x:Key="RobotContentTemplate">
+                       <Grid>
+                           <Grid.RowDefinitions>
+                               <RowDefinition Height="50"/>
+                           </Grid.RowDefinitions>
+                           <Grid.ColumnDefinitions>
+                               <ColumnDefinition Width="20"/>
+                               <ColumnDefinition Width="20"/>
+                               <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="2*"/>
+                                <ColumnDefinition Width="2*"/>
+                                <ColumnDefinition Width="25"/>
+                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="100"/>
+                               <ColumnDefinition Width="25"/>
+                            </Grid.ColumnDefinitions>
+                           <Border Grid.Column="0" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="1" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="2" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="3" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="4" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="5" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="6" BorderBrush="LightGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <Border Grid.Column="7" BorderBrush="DarkGray" BorderThickness="0,0,1,0" Background="Transparent" />
+                           <dx:DXImage Grid.Column="0" Grid.Row="0"
+                                       Source="/Images/Order/Actions/pencil.png"
+                                       Height="16"
+                                       Width="16"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Margin="5,0,0,0">
+                               <dx:DXImage.Visibility>
+                                   <MultiBinding Mode="OneWay"
+                                                 Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                                       <Binding Path="Value.RobotCategoryValue.IsChanged"
+                                                Mode="OneWay" />
+                                       <Binding Path="Value.IsActiveChanged"
+                                                Mode="OneWay" />
+                                   </MultiBinding>
+                               </dx:DXImage.Visibility>
+                           </dx:DXImage>
+                           
+                           <dxe:MemoEdit Grid.Column="1" Grid.Row="0" 
+                                         EditValue="{Binding Value.PropertyDescription, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                         TextWrapping="Wrap"
+                                         IsReadOnly="True"
+                                         PopupMinWidth="200"
+                                         PopupMaxWidth="400"
+                                         AcceptsReturn="True"
+                                         AcceptsTab="True"
+                                         ShowTooltipForTrimmedText="False"
+                                         VerticalContentAlignment="Top"
+                                         MemoVerticalScrollBarVisibility="Auto"
+                                         MemoHorizontalScrollBarVisibility="Auto"
+                                         MemoTextWrapping="Wrap"
+                                         MaxHeight="60"
+                                         ShowSizeGrip="True"
+                                         Visibility="{Binding Path=Value.PropertyDescription, Mode=OneWay, Converter={converters:StringToVisibilityConverter}}"
+                                         ShowIcon="True"
+                                         ShowEditorButtons="False"
+                                         Template="{StaticResource DescriptionMemoEditIconTemplate}">
+                           </dxe:MemoEdit>
+                           
+                           
+                           <TextBlock Grid.Column="2" Grid.Row="0" 
+                                      Text="{Binding Value.RobotPropertyName}" 
+                                      HorizontalAlignment="Center" 
+                                      VerticalAlignment="Center" 
+                                      TextWrapping="Wrap"
+                                      Margin="5"/>
+                           <StackPanel  Grid.Column="3"  Grid.Row="0" >
+                               <TextBlock FontSize="8" Foreground="Gray" VerticalAlignment="Top" HorizontalAlignment="Center"
+                                          Text="Тек.значение" />
+                               <ContentControl
+                                               ToolTip="Тек.значение"
+                                               Content="{Binding Value.RobotCategoryValueOld, Mode=TwoWay}"
+                                               IsEnabled="True"
+                                               ContentTemplateSelector="{StaticResource EditorsTemplateSelector}"
+                                               Margin="5 0"/>
+                           </StackPanel>
+                           <StackPanel  Grid.Column="4"  Grid.Row="0" >
+                               <TextBlock FontSize="8" Foreground="Gray" VerticalAlignment="Top" HorizontalAlignment="Center"
+                                          Text="Нов.значение"/>
+                               <ContentControl ToolTip="Нов.значение"
+                                               Content="{Binding Value.RobotCategoryValue}"
+                                               ContentTemplateSelector="{StaticResource EditorsTemplateSelector}"
+                                               Margin="5 0"/>
+                           </StackPanel>
+                           <dxe:CheckEdit Grid.Column="5"  Grid.Row="0"
+                                          EditValue="{Binding Path=Value.ActiveNew, Mode=TwoWay}"
+                                          ToolTip="Активен"
+                                          IsReadOnly="{Binding Value.Required}"
+                                          IsThreeState="False"
+                                          HorizontalAlignment="Center"
+                                          Style="{StaticResource ReadOnlyConditionsStyle}"/>
+                           <StackPanel Grid.Row="0" Grid.Column="6" >
+                               <TextBlock FontSize="8"  Foreground="Gray" VerticalAlignment="Top" HorizontalAlignment="Center"
+                                          Text="Изменил" />
+                               <dxe:TextEdit  EditValue="{Binding Value.ModifiedByName, Mode=OneWay}"
+                                              HorizontalAlignment="Stretch"
+                                              TextWrapping="Wrap"
+                                              IsReadOnly="True"
+                                              ShowNullText="True"
+                                              NullText="не заполнено"
+                                              Style="{StaticResource ReadOnlyConditionsStyle}"
+                                              Margin="5 5"/>
+                           </StackPanel>
+                           <StackPanel Grid.Column="7"  Grid.Row="0">
+                               <TextBlock FontSize="8" Foreground="Gray" VerticalAlignment="Top" HorizontalAlignment="Center"
+                                          Text="Изменен"/>
+                               <dxe:DateEdit 
+                                   EditValue="{Binding Path=Value.ModifiedOn, Mode=OneWay}"
+                                   IsReadOnly="True"
+                                   HorizontalAlignment="Stretch"
+                                   ToolTip="Изменен"
+                                   MaskType="DateTime"
+                                   Mask="{x:Static business:DateFormattingRules.FullDateTimeFormat}"
+                                   Style="{StaticResource DateEditReadOnlyConditionsStyle}"
+                                   Margin="5 5"/>
+                           </StackPanel>
+                           <dx:DXImage Grid.Column="8" Grid.Row="0"  Source="../../Images/Common/tick.png"
+                                       Width="16"
+                                       Height="16"
+                                       ToolTip="Обязательный к заполнению"
+                                       Visibility="{Binding Path=Value.Required, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"/>
+
+                       </Grid>
+                    </DataTemplate>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutGroup View="GroupBox"
+                              Orientation="Vertical"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              GroupBoxStyle="{StaticResource GroupBoxViewStyle}">
+                <dxlc:LayoutItem Label="Тип товара">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=ProductTypes, Mode=OneWay}"
+                                      ValueMember="Id"
+                                      DisplayMember="DisplayValue"
+                                      EditValue="{Binding Path=ProductTypeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      Style="{StaticResource LookUpReadOnlyConditionsStyle}"/>
+                </dxlc:LayoutItem>
+                
+                <dxprg:PropertyGridControl x:Name="RobotPropertyGridControl"
+                                           ShowEditorButtons="False"
+                                           ShowMenuButtonInRows="False"
+                                           HeaderColumnWidth="*"
+                                           ValueColumnWidth="4*"
+                                           SelectedObject="{Binding PropertyGridSource}">
+                    <dxprg:PropertyDefinition Path="*"
+                                              ContentTemplate="{StaticResource RobotContentTemplate}"></dxprg:PropertyDefinition>
+                </dxprg:PropertyGridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Bottom"
+                              VerticalAlignment="Bottom"
+                              Orientation="Horizontal">
+                <viewComponents:WaitImage x:Name="BusyIndicator"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=RobotPropertyGridControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

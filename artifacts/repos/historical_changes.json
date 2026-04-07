@@ -1,5 +1,12 @@
 {
-  "tasks": [],
+  "tasks": [
+    {
+      "jira_key": "TEL-13508",
+      "normalized_task_text": "{ \"generation_contract_version\": \"2026-04-04.prompt-context-v1\", \"generation_flags_active\": { \"behavior_path_hardening_activated\": false, \"chosen_primary_behavior_method\": \"\", \"constructor_only_edit_detected\": false, \"force_non_empty_patch\": false, \"force_non_empty_patch_reason\": \"\", \"retry\": true, \"same_method_quality_hardening_activated\": false }, \"jira_key\": \"TEL-13508\", \"lightweight_draft\": { \"draft_status\": \"success\", \"draft_summary\": \"Lightweight draft for TEL-13508: focus on 1 bounded files in telemart_soft_test for report_generation changes.\", \"generation_latency_ms\": 0, \"meaningful_draft\": true, \"overall_implementation_sketch\": [ \"Stay inside the writable shortlist and update only repo-local report_generation logic.\", \"Start with the most task-aligned files for request, view.\", \"Keep the implementation draft bounded to targeted symbols and current contracts.\", \"Primary draft files: src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs.\" ], \"per_file_intent\": [ { \"draft_patch_outline\": [ \"Update report shaping/export logic for request, view.\", \"Preserve existing report format and downstream consumers.\" ], \"file\": \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\", \"likely_symbols\": [ \"CreateManyServiceRequestStep4ChangeView.xaml\" ], \"planned_change_type\": \"modify\", \"reason\": \"bounded dry-run writable scope\" } ], \"scope_safety_status\": { \"allowed\": true, \"attempted_out_of_scope_files\": [], \"blocked_out_of_scope_files\": [], \"readonly_files_referenced\": [], \"writable_files_referenced\": [ \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\" ] }, \"task_understanding_summary\": \"report_generation:6.60, dto_contract:3.60, ui_client:3.60, entities=request,view\", \"writable_files\": [ \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\" ], \"writable_repo_id\": \"telemart_soft_test\" }, \"primary_family\": \"\", \"readonly_files_by_repo\": {}, \"source_files\": [ { \"content\": \"﻿using System.Windows.Controls;\\n\\nnamespace Telemart.Client.Views.Service.ServiceRequests.Create\\n{\\n /// <summary>\\n /// Interaction logic for CreateManyServiceRequestStep4ChangeView.xaml\\n /// </summary>\\n public partial class CreateManyServiceRequestStep4ChangeView : UserControl\\n {\\n public CreateManyServiceRequestStep4ChangeView()\\n {\\n InitializeComponent();\\n }\\n }\\n}\", \"expected_hash\": \"9a5f77a9169f78344f44e94df9232cda2960f516ed2044ad06b290ea45cf908a\", \"file\": \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\" } ], \"task_text\": \"Service request: change of text and printed form “Receipt” p.2\\n\\nПотреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\\\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715\", \"writable_files\": [ \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\" ], \"writable_repo_id\": \"telemart_soft_test\" }",
+      "task_snapshot_text": "{\n  \"generation_contract_version\": \"2026-04-04.prompt-context-v1\",\n  \"generation_flags_active\": {\n    \"behavior_path_hardening_activated\": false,\n    \"chosen_primary_behavior_method\": \"\",\n    \"constructor_only_edit_detected\": false,\n    \"force_non_empty_patch\": false,\n    \"force_non_empty_patch_reason\": \"\",\n    \"retry\": true,\n    \"same_method_quality_hardening_activated\": false\n  },\n  \"jira_key\": \"TEL-13508\",\n  \"lightweight_draft\": {\n    \"draft_status\": \"success\",\n    \"draft_summary\": \"Lightweight draft for TEL-13508: focus on 1 bounded files in telemart_soft_test for report_generation changes.\",\n    \"generation_latency_ms\": 0,\n    \"meaningful_draft\": true,\n    \"overall_implementation_sketch\": [\n      \"Stay inside the writable shortlist and update only repo-local report_generation logic.\",\n      \"Start with the most task-aligned files for request, view.\",\n      \"Keep the implementation draft bounded to targeted symbols and current contracts.\",\n      \"Primary draft files: src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs.\"\n    ],\n    \"per_file_intent\": [\n      {\n        \"draft_patch_outline\": [\n          \"Update report shaping/export logic for request, view.\",\n          \"Preserve existing report format and downstream consumers.\"\n        ],\n        \"file\": \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\",\n        \"likely_symbols\": [\n          \"CreateManyServiceRequestStep4ChangeView.xaml\"\n        ],\n        \"planned_change_type\": \"modify\",\n        \"reason\": \"bounded dry-run writable scope\"\n      }\n    ],\n    \"scope_safety_status\": {\n      \"allowed\": true,\n      \"attempted_out_of_scope_files\": [],\n      \"blocked_out_of_scope_files\": [],\n      \"readonly_files_referenced\": [],\n      \"writable_files_referenced\": [\n        \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\"\n      ]\n    },\n    \"task_understanding_summary\": \"report_generation:6.60, dto_contract:3.60, ui_client:3.60, entities=request,view\",\n    \"writable_files\": [\n      \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\"\n    ],\n    \"writable_repo_id\": \"telemart_soft_test\"\n  },\n  \"primary_family\": \"\",\n  \"readonly_files_by_repo\": {},\n  \"source_files\": [\n    {\n      \"content\": \"﻿using System.Windows.Controls;\\n\\nnamespace Telemart.Client.Views.Service.ServiceRequests.Create\\n{\\n    /// <summary>\\n    /// Interaction logic for CreateManyServiceRequestStep4ChangeView.xaml\\n    /// </summary>\\n    public partial class CreateManyServiceRequestStep4ChangeView : UserControl\\n    {\\n        public CreateManyServiceRequestStep4ChangeView()\\n        {\\n            InitializeComponent();\\n        }\\n    }\\n}\",\n      \"expected_hash\": \"9a5f77a9169f78344f44e94df9232cda2960f516ed2044ad06b290ea45cf908a\",\n      \"file\": \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\"\n    }\n  ],\n  \"task_text\": \"Service request: change of text and printed form “Receipt” p.2\\n\\nПотреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\\\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715\",\n  \"writable_files\": [\n    \"src/client/Telemart.Client/Views/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeView.xaml.cs\"\n  ],\n  \"writable_repo_id\": \"telemart_soft_test\"\n}",
+      "updated_at": "2026-04-07T01:01:21.460345+00:00"
+    }
+  ],
   "changes": [
     {
       "change_id": "self:AGENT-2:4b60f260e4e9d4229697df06b1fa4db9e205dd9d",
@@ -30,6 +37,53 @@
         "telegram_bot.py",
         "test_jira_tool.py"
       ]
+    },
+    {
+      "change_id": "telemart_soft_test:TEL-13508:b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+      "jira_key": "TEL-13508",
+      "repo_id": "telemart_soft_test",
+      "commit_hash": "b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+      "branch_name": "",
+      "committed_at": "2026-03-04T18:49:34+02:00",
+      "changed_files": [
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"
+      ],
+      "subject": "TEL-13508",
+      "raw_refs": "TEL-13508",
+      "hunks": [],
+      "added_line_count": 0,
+      "removed_line_count": 0
+    },
+    {
+      "change_id": "telemart_soft_test:TEL-12695:1de87c50151fa115cefba1b88fc58bad2e692227",
+      "jira_key": "TEL-12695",
+      "repo_id": "telemart_soft_test",
+      "commit_hash": "1de87c50151fa115cefba1b88fc58bad2e692227",
+      "branch_name": "",
+      "committed_at": "2024-11-07T17:26:18+02:00",
+      "changed_files": [],
+      "subject": "TEL-12695",
+      "raw_refs": "TEL-12695",
+      "hunks": [],
+      "added_line_count": 0,
+      "removed_line_count": 0
+    },
+    {
+      "change_id": "telemart_soft_test:TEL-10585:87ed70ea081467567d4100bea4488cccc68c81fe",
+      "jira_key": "TEL-10585",
+      "repo_id": "telemart_soft_test",
+      "commit_hash": "87ed70ea081467567d4100bea4488cccc68c81fe",
+      "branch_name": "",
+      "committed_at": "2023-08-21T12:45:15+03:00",
+      "changed_files": [],
+      "subject": "TEL-10585",
+      "raw_refs": "TEL-10585",
+      "hunks": [],
+      "added_line_count": 0,
+      "removed_line_count": 0
     }
-  ]
+  ],
+  "hunks": [],
+  "comments": []
 }

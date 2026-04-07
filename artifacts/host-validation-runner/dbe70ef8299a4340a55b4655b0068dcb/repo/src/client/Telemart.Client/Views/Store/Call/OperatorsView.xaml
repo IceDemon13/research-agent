@@ -1,0 +1,215 @@
+<UserControl x:Class="Telemart.Client.Views.Store.Call.OperatorsView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:business="clr-namespace:Telemart.Client.Business"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Call"
+             DataContext="{client:Container Type=viewModels:OperatorsViewModel}"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:OperatorsViewModel}, IsDesignTimeCreatable=True}"
+             mc:Ignorable="d"
+             d:DesignHeight="600"
+             d:DesignWidth="1000">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutGroup Orientation="Vertical">
+                <dxb:ToolBarControl GlyphSize="Small"
+                                    BarItemDisplayMode="Default"
+                                    AllowCustomizationMenu="False"
+                                    AllowQuickCustomization="False">
+                    <dxb:BarButtonItem Content="Обновить"
+                                       Glyph="{dx:DXImage Image=Refresh_16x16.png}"
+                                       Command="{Binding Path=RefreshCommand, Mode=OneWay}" />
+                </dxb:ToolBarControl>
+                <dxg:GridControl x:Name="OperatorsGridControl"
+                                 ItemsSource="{Binding OperatorViewItems, Mode=OneWay}"
+                                 SelectedItem="{Binding SelectedOperatorViewItem, Mode=TwoWay}"
+                                 SelectionMode="Row">
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Сотрудник"
+                                        HeaderToolTip="Сотрудник"
+                                        FieldName="EmployeeId"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        Width="100"
+                                        MinWidth="60"
+                                        AllowBestFit="False"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowMoving="False"
+                                        AllowEditing="False"
+                                        AllowAutoFilter="False"
+                                        FixedWidth="False">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Employees}"
+                                                          ValueMember="Id"
+                                                          DisplayMember="DisplayValue"
+                                                          HorizontalContentAlignment="Left" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Должность"
+                                        HorizontalHeaderContentAlignment="Left"
+                                        FieldName="Position"
+                                        Width="100"
+                                        MinWidth="60"
+                                        MaxWidth="200"
+                                        AllowBestFit="False"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowColumnFiltering="True"
+                                        FilterPopupMode="CheckedList"
+                                        AllowEditing="False"
+                                        AllowAutoFilter="False"
+                                        FixedWidth="False">
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Статус"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Status"
+                                        Width="100"
+                                        MinWidth="60"
+                                        MaxWidth="200"
+                                        AllowBestFit="False"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowColumnFiltering="True"
+                                        FilterPopupMode="CheckedList"
+                                        AllowEditing="False"
+                                        AllowAutoFilter="False"
+                                        FixedWidth="False">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Left"/>
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Статус (Астериска)"
+                                        HeaderToolTip="Статус в астериске"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="AsteriskStatus"
+                                        Width="100"
+                                        MinWidth="60"
+                                        MaxWidth="200"
+                                        AllowBestFit="False"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowColumnFiltering="True"
+                                        FilterPopupMode="CheckedList"
+                                        AllowEditing="False"
+                                        AllowAutoFilter="False"
+                                        FixedWidth="False"
+                                        Visible="{Binding AsteriskStatusVisible, Mode=OneWay}">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Left"/>
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Изменен"
+                                        FieldName="LastModifiedOn"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        AllowBestFit="False"
+                                        AllowResizing="False"
+                                        FixedWidth="True"
+                                        AllowGrouping="False"
+                                        AllowSorting="True"
+                                        AllowColumnFiltering="False"
+                                        AllowEditing="False"
+                                        Width="100">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      Mask="{x:Static business:DateFormattingRules.FullDateTimeFormat}"
+                                                      MaskType="DateTime" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Макс.время занятости"
+                                        HeaderToolTip="Установленое максимально время занятости (чч:мм:сс)"
+                                        FieldName="MaxBusyTime"
+                                        Width="100"
+                                        AllowResizing="False"
+                                        FixedWidth="True"
+                                        AllowAutoFilter="True"
+                                        AllowColumnFiltering="False"
+                                        HorizontalHeaderContentAlignment="Left"
+                                        ReadOnly="False"
+                                        AllowEditing="{Binding IsEditingMaxBusyTime, Mode=OneWay}">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dxe:TextEdit x:Name="PART_Editor"
+                                                  HorizontalAlignment="Center"
+                                                  EditValue="{Binding Path=RowData.Row.MaxBusyTime, Mode=TwoWay, Converter={converters:TimeSpanWithSecondsToDateTimeConverter},  ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                                  Style="{StaticResource SmallTimeSpanTextEdit}" />
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView AllowPerPixelScrolling="True"
+                                       ShowTotalSummary="False"
+                                       ShowIndicator="False"
+                                       ShowFixedTotalSummary="False"
+                                       ShowAutoFilterRow="False"
+                                       ShowSearchPanelMode="Never"
+                                       ShowGroupPanel="False"
+                                       IsColumnMenuEnabled="False"
+                                       AutoWidth="True"
+                                       NavigationStyle="Cell"
+                                       AllowResizing="True"
+                                       AllowEditing="True"
+                                       AllowGrouping="False"
+                                       AllowColumnMoving="False"
+                                       AllowColumnFiltering="False"
+                                       AllowSorting="True"
+                                       AllowMoveColumnToDropArea="False"
+                                       AllowLeaveInvalidEditor="True"
+                                       EditFormPostMode="Immediate"
+                                       EnableImmediatePosting="True"/>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+                <dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Время фиксирования статуса 'Занят' после завершения звонка"
+                                     Visibility="{Binding IsEditingMaxBusyTime, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                        <dxe:SpinEdit EditValue="{Binding Path=QuantitySeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      EditValueType="{x:Type system:Int16}"
+                                      IsFloatValue="False"
+                                      Increment="1" />
+                    </dxlc:LayoutItem>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="Bottom"
+                              VerticalAlignment="Bottom"
+                              Orientation="Horizontal">
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="ОК"
+                            Command="{Binding Path=  OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=OperatorsGridControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

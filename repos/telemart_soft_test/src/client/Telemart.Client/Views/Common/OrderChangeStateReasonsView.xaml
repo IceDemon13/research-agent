@@ -1,0 +1,80 @@
+﻿<UserControl x:Name="CurrentUserControl"
+             x:Class="Telemart.Client.Views.Common.OrderChangeStateReasonsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             xmlns:store="clr-namespace:Telemart.Client.ViewModels.Store"
+             mc:Ignorable="d"
+             d:DesignHeight="300"
+             d:DesignWidth="200"
+             d:DataContext="{d:DesignInstance Type=common:CategoryTreeView, IsDesignTimeCreatable=False}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid DataContext="{Binding ElementName=CurrentUserControl}">
+        <dxg:GridControl ItemsSource="{Binding Path=Reasons, Mode=OneWay}"
+                         CurrentItem="{Binding Path=CurrentReason, Mode=TwoWay}"
+                         SelectionMode="None"
+                         DesignTimeDataObjectType="{x:Type store:OrderStateChangeReasonViewItem}">
+            <dxg:GridControl.Resources>
+                <Style TargetType="dxg:GridColumn"
+                       BasedOn="{StaticResource GeneralGridColumnStyle}" />
+            </dxg:GridControl.Resources>
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn FieldName="Name"
+                                Header="Название"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                SortOrder="Ascending"
+                                SortIndex="1"
+                                FixedWidth="False" />
+                <dxg:GridColumn FieldName="Position"
+                                SortOrder="Ascending"
+                                SortIndex="0"
+                                Visible="False" />
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TreeListView TreeDerivationMode="Selfreference"
+                                  KeyFieldName="Id"
+                                  ParentFieldName="ParentId"
+                                  ShowColumnHeaders="False"
+                                  ShowSelectionRectangle="True"
+                                  IsColumnChooserVisible="False"
+                                  NavigationStyle="Cell"
+                                  FilterMode="Extended"
+                                  ShowSearchPanelMode="Never"
+                                  AllowEditing="False"
+                                  AllowBestFit="True"
+                                  AllowSorting="False"
+                                  AllowDrop="False"
+                                  ShowVerticalLines="True"
+                                  ShowHorizontalLines="True"
+                                  ShowIndicator="False"
+                                  TreeLineStyle="None"
+                                  AutoWidth="True"
+                                  ShowExpandButtons="True"
+                                  UseEvenRowBackground="True"
+                                  AlternationCount="2"
+                                  ShowFilterPanelMode="Never"
+                                  CustomCellAppearance="TreeListViewOnCustomCellAppearance">
+                    <dxg:TreeListView.FormatConditions>
+                        <dxg:FormatCondition FieldName="Name"
+                                             Expression="[IsParent] = True">
+                            <dx:Format FontWeight="SemiBold" />
+                        </dxg:FormatCondition>
+                    </dxg:TreeListView.FormatConditions>
+                </dxg:TreeListView>
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+    </Grid>
+
+</UserControl>

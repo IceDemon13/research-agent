@@ -317,6 +317,140 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertTrue(result.targeted_validation)
         self.assertTrue(any("tests/test_smoke.py" in command for command in recorded_commands))
 
+    def test_validation_service_detects_dotnet_solution_restore_build_and_test(self) -> None:
+        dotnet_root = self.workspace_root / "dotnet-repo"
+        dotnet_root.mkdir(parents=True, exist_ok=True)
+        src_root = dotnet_root / "src"
+        tests_root = src_root / "client" / "Telemart.Client.Tests"
+        tests_root.mkdir(parents=True, exist_ok=True)
+        (src_root / "Telemart.sln").write_text("", encoding="utf-8")
+        (tests_root / "Telemart.Client.Tests.csproj").write_text("<Project />", encoding="utf-8")
+        self.registry_service.register_repo(
+            root_path=str(dotnet_root),
+            repo_id="dotnet_sample",
+            display_name="Dotnet Sample",
+        )
+
+        captured_commands: list[str] = []
+
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                nonlocal captured_commands
+                captured_commands = [item.command for item in list(kwargs.get("commands") or [])]
+                return {
+                    "ok": True,
+                    "steps": [
+                        {
+                            "name": "restore",
+                            "command": captured_commands[0],
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Restore succeeded.",
+                            "stderr": "",
+                            "duration": 0.2,
+                        },
+                        {
+                            "name": "build",
+                            "command": captured_commands[1],
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Build succeeded.",
+                            "stderr": "",
+                            "duration": 0.2,
+                        },
+                        {
+                            "name": "test",
+                            "command": captured_commands[2],
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "============================= test session starts =============================\ncollected 1 item\n\n=========================== 1 passed in 0.10s ===========================",
+                            "stderr": "",
+                            "duration": 0.2,
+                        },
+                    ],
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation("dotnet_sample")
+
+        self.assertEqual(result.overall_status, "success")
+        self.assertTrue(result.passed)
+        self.assertEqual(result.validation_profile_used, "dotnet_solution")
+        self.assertEqual([step.name for step in result.steps], ["restore", "build", "test"])
+        self.assertEqual(len(captured_commands), 3)
+        self.assertIn('dotnet restore "', captured_commands[0])
+        self.assertIn('/src/Telemart.sln"', captured_commands[0])
+        self.assertIn('dotnet build "', captured_commands[1])
+        self.assertIn('dotnet test "', captured_commands[2])
+        self.assertIn('Telemart.Client.Tests.csproj"', captured_commands[2])
+
+    def test_validation_service_marks_missing_dotnet_tests_as_not_validated_but_not_skipped(self) -> None:
+        dotnet_root = self.workspace_root / "dotnet-build-only"
+        dotnet_root.mkdir(parents=True, exist_ok=True)
+        src_root = dotnet_root / "src"
+        src_root.mkdir(parents=True, exist_ok=True)
+        (src_root / "Telemart.sln").write_text("", encoding="utf-8")
+        self.registry_service.register_repo(
+            root_path=str(dotnet_root),
+            repo_id="dotnet_build_only",
+            display_name="Dotnet Build Only",
+        )
+
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                commands = [item.command for item in list(kwargs.get("commands") or [])]
+                return {
+                    "ok": True,
+                    "steps": [
+                        {
+                            "name": "restore",
+                            "command": commands[0],
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Restore succeeded.",
+                            "stderr": "",
+                            "duration": 0.2,
+                        },
+                        {
+                            "name": "build",
+                            "command": commands[1],
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Build succeeded.",
+                            "stderr": "",
+                            "duration": 0.2,
+                        },
+                    ],
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation("dotnet_build_only")
+
+        self.assertEqual(result.overall_status, "success")
+        self.assertFalse(result.passed)
+        self.assertNotEqual(result.overall_status, "skipped")
+        self.assertEqual([step.name for step in result.steps], ["restore", "build"])
+
     def test_validation_service_uses_validation_runner_for_dotnet_commands(self) -> None:
         class _FakeRunner(RepoValidationService):
             def __init__(self) -> None:
@@ -525,6 +659,74 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertTrue(result.repo_specific_test_environment_issue)
         self.assertTrue(result.windowsdesktop_runtime_missing)
 
+    def test_validation_service_accepts_runner_testhost_runtime_diagnostics(self) -> None:
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": False,
+                    "steps": [
+                        {
+                            "name": "restore",
+                            "command": 'dotnet restore "/repos/sample/Sample.sln" --nologo',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Restore succeeded.",
+                            "stderr": "",
+                            "duration": 1.0,
+                        },
+                        {
+                            "name": "build",
+                            "command": 'dotnet build "/repos/sample/Sample.sln" --nologo',
+                            "exit_code": 0,
+                            "status": "success",
+                            "stdout": "Build succeeded.",
+                            "stderr": "",
+                            "duration": 1.0,
+                        },
+                        {
+                            "name": "test",
+                            "command": 'dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build',
+                            "exit_code": 1,
+                            "status": "failed",
+                            "stdout": "",
+                            "stderr": "Testhost failed.",
+                            "duration": 1.0,
+                        },
+                    ],
+                    "failure_reason_guess": "test_failure",
+                    "testhost_runtime_resolution_ok": True,
+                    "old_missing_runtime_signature_present": False,
+                    "linux_dotnet_runtime_present": True,
+                    "linux_dotnet_runtime_versions": ["8.0.25", "9.0.14"],
+                    "linux_dotnet_runtime_arch": "x64",
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+
+        result = self.validation_service.run_validation(
+            "sample",
+            commands=[
+                ValidationCommand(name="build", command='dotnet build "/repos/sample/Sample.sln" --nologo'),
+                ValidationCommand(name="test", command='dotnet test "/repos/sample/Sample.Tests.csproj" --nologo --no-build'),
+            ],
+        )
+
+        self.assertEqual(result.outcome_type, "test_failure")
+        self.assertTrue(result.testhost_runtime_resolution_ok)
+        self.assertFalse(result.old_missing_runtime_signature_present)
+        self.assertTrue(result.linux_dotnet_runtime_present)
+        self.assertEqual(result.linux_dotnet_runtime_versions, ["8.0.25", "9.0.14"])
+        self.assertEqual(result.linux_dotnet_runtime_arch, "x64")
+
     def test_validation_service_unrelated_repo_failure_classification_unchanged(self) -> None:
         class _FakeRunner(RepoValidationService):
             def __init__(self) -> None:
@@ -615,6 +817,55 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertIn("error", result.validation_runner_result_shape)
         self.assertEqual(result.validation_runner_no_steps_reason, "runner returned no steps")
         self.assertEqual(len(result.validation_runner_commands_discovered), 2)
+
+    def test_validation_service_keeps_telemart_soft_test_runner_backed_when_runner_returns_no_steps(self) -> None:
+        telemart_root = self.workspace_root / "telemart-soft-test"
+        telemart_root.mkdir(parents=True, exist_ok=True)
+        self.registry_service.register_repo(
+            root_path=str(telemart_root),
+            repo_id="telemart_soft_test",
+            display_name="Telemart Soft Test",
+        )
+
+        class _FakeRunner(RepoValidationService):
+            def __init__(self) -> None:
+                super().__init__(enabled=True, base_url="http://runner", requester=lambda *args, **kwargs: {})
+
+            def is_available(self) -> bool:
+                return True
+
+            def can_handle(self, commands) -> bool:
+                return True
+
+            def execute(self, **kwargs):
+                return {
+                    "ok": False,
+                    "error": "timed out",
+                    "steps": [],
+                }
+
+        self.validation_service._repo_validation_service = _FakeRunner()
+        with patch.object(self.validation_service, "_run_step") as run_step:
+            result = self.validation_service.run_validation(
+                "telemart_soft_test",
+                commands=[
+                    ValidationCommand(name="build", command='dotnet build "/app/artifacts/temp-workspaces/t/repo/src/Telemart.sln" --nologo'),
+                    ValidationCommand(name="test", command='dotnet test "/app/artifacts/temp-workspaces/t/repo/src/client/Telemart.Client.Tests/Telemart.Client.Tests.csproj" --nologo --no-build'),
+                ],
+            )
+
+        run_step.assert_not_called()
+        self.assertEqual(result.overall_status, "failed")
+        self.assertEqual(result.outcome_type, "validation_runner_no_steps")
+        self.assertEqual(result.validation_execution_mode, "runner_only_failed")
+        self.assertTrue(result.validation_runner_used)
+        self.assertFalse(result.local_fallback_triggered)
+        self.assertFalse(result.local_build_fallback_triggered)
+        self.assertEqual(result.local_build_fallback_reason, "timed out")
+        self.assertEqual(result.build_command_source, "validation_runner_plan")
+        self.assertEqual(result.build_command_runtime, "validation_runner")
+        self.assertEqual(result.expected_runner_runtime, "http_dotnet_sdk")
+        self.assertEqual(result.actual_execution_runtime, "http_dotnet_sdk")
 
 
 if __name__ == "__main__":

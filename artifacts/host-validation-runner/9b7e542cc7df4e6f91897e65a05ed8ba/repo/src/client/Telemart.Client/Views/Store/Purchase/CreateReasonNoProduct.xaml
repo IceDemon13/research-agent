@@ -1,0 +1,144 @@
+<UserControl x:Class="Telemart.Client.Views.Store.Purchase.CreateReasonNoProduct"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Purchase"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:CreateReasonNoProductModel}"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:CreateReasonNoProductModel}, IsDesignTimeCreatable=True}"
+             Width="400"
+             d:DesignHeight="280" 
+             d:DesignWidth="400">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutItem Label="Причина">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=NoProductReasonTypes}"
+                                  EditValue="{Binding Path=ReasonTypeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ValueMember="Id"
+                                  DisplayMember="Name"
+                                  NullValueButtonPlacement="EditBox"
+                                  Style="{StaticResource SearchableComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Цена"
+                             Visibility="{Binding VisibleCorrectPrice, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter}}">
+                <dxe:SpinEdit EditValue="{Binding Path=CorrectPrice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              ToolTip="Корретная цена"
+                              EditValueType="{x:Type system:Decimal}"
+                              HorizontalContentAlignment="Left"
+                              MaskType="Numeric"
+                              Mask="######"
+                              MaxLength="6"
+                              AllowNullInput="False"
+                              IsFloatValue="True"
+                              AllowDefaultButton="False" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Поставщик"
+                             Visibility="{Binding VisibleSuppliers, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter}}">
+                <dxe:ComboBoxEdit EditValue="{Binding Path=SelectSupplierId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path=Suppliers}"
+                                  DisplayMember="Name"
+                                  ValueMember="Id"
+                                  Style="{StaticResource SearchableComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Комментарий">
+                <dxe:TextEdit EditValue="{Binding Path=Comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              TextWrapping="Wrap"
+                              VerticalContentAlignment="Top"
+                              HorizontalContentAlignment="Left"
+                              VerticalScrollBarVisibility="Auto"
+                              AcceptsReturn="True"
+                              AcceptsTab="True"
+                              MaxLength="255"
+                              Height="70"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Альтернатива">
+                <dxe:ButtonEdit EditValue="{Binding UnavailableProductName, ValidatesOnDataErrors=True, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                AllowDefaultButton="False"
+                                TextWrapping="NoWrap"
+                                TextTrimming="WordEllipsis"
+                                IsReadOnly="True">
+                    <dxe:ButtonInfo ButtonKind="Simple"
+                                    GlyphKind="Cancel"
+                                    Command="{Binding Path=ClearUnavailableProductCommand, Mode=OneTime}" />
+                    <dxe:ButtonInfo Command="{Binding Path=SelectUnavailableProductCommand, Mode=OneWay}"
+                                    Content="..."
+                                    ToolTip="Выбор альтернативного товара"
+                                    Margin="1"/>
+                </dxe:ButtonEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Цена тек.товара"
+                             Visibility="{Binding VisibleUnavailableProductPrice, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter}}">
+                <dxe:SpinEdit EditValue="{Binding Path=OrderProductPrice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              ToolTip="Цена текущего товара"
+                              EditValueType="{x:Type system:Decimal}"
+                              HorizontalContentAlignment="Left"
+                              MaskType="Numeric"
+                              Mask="######.00"
+                              MaxLength="6"
+                              AllowNullInput="False"
+                              IsFloatValue="True"
+                              AllowDefaultButton="False"
+                              IsReadOnly="True"
+                              IsEnabled="True"
+                              Style="{StaticResource ReadOnlyConditionsStyle}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Цена альт.товара"
+                             Visibility="{Binding VisibleUnavailableProductPrice, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter}}">
+                <dxe:SpinEdit EditValue="{Binding Path=UnavailableProductPrice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              ToolTip="Цена альтернативного товара"
+                              EditValueType="{x:Type system:Decimal}"
+                              HorizontalContentAlignment="Left"
+                              MaskType="Numeric"
+                              Mask="######.00"
+                              MaxLength="6"
+                              AllowNullInput="False"
+                              IsFloatValue="True"
+                              AllowDefaultButton="False"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Создание..."
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter}}"/>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

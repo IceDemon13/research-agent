@@ -1,0 +1,264 @@
+{
+  "artifact_type": "canonical_single_repo_holdout_timeout_forensics",
+  "generated_at": "2026-04-04T21:44:06.137823+00:00",
+  "source_manifest_path": "c:\\work\\my repositories\\research-agent\\artifacts\\planning_audit\\canonical_single_repo_holdout_eval\\generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15\\manifest.json",
+  "source_final_merged_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/final_merged_20260404T213809Z.json",
+  "code_evidence": {
+    "parent_runner_timeout_source": "scripts/run_canonical_single_repo_holdout_eval.py:281-292",
+    "internal_full_dry_run_timeout_source": "services/dry_run_write_evaluation_service.py:682-687",
+    "note": "The holdout runner terminates the worker process after per_case_timeout_seconds+5, while full_dry_run internally extends the budget by validation_timeout_seconds+15. With a 90-second per-case budget, the parent kills the worker at about 95 seconds before the service can emit its own timeout_stage diagnostics at 225 seconds."
+  },
+  "per_ticket_rows": [
+    {
+      "jira_key": "TEL-13369",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13369.json"
+    },
+    {
+      "jira_key": "TEL-13379",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13379.json"
+    },
+    {
+      "jira_key": "TEL-13385",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13385.json"
+    },
+    {
+      "jira_key": "TEL-13389",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13389.json"
+    },
+    {
+      "jira_key": "TEL-13392",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13392.json"
+    },
+    {
+      "jira_key": "TEL-13409",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13409.json"
+    },
+    {
+      "jira_key": "TEL-13410",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13410.json"
+    },
+    {
+      "jira_key": "TEL-13441",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13441.json"
+    },
+    {
+      "jira_key": "TEL-13443",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13443.json"
+    },
+    {
+      "jira_key": "TEL-13475",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13475.json"
+    },
+    {
+      "jira_key": "TEL-13488",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13488.json"
+    },
+    {
+      "jira_key": "TEL-13496",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13496.json"
+    },
+    {
+      "jira_key": "TEL-13498",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13498.json"
+    },
+    {
+      "jira_key": "TEL-13507",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13507.json"
+    },
+    {
+      "jira_key": "TEL-13508",
+      "final_outcome": "timeout",
+      "exact_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+      "last_successful_stage_before_timeout": "worker_process_started_but_no_run_case_result_returned",
+      "bounded_generation_started": "unknown_not_persisted_before_parent_timeout",
+      "patch_generation_started": false,
+      "validation_started": false,
+      "runner_invoked": false,
+      "major_stage_wall_clock_seconds": {
+        "holdout_parent_budget_seconds": 90,
+        "effective_internal_full_dry_run_timeout_seconds": 225
+      },
+      "exact_final_timeout_reason": "Holdout runner timed out this case after 90 seconds.",
+      "per_ticket_artifact_path": "/app/artifacts/planning_audit/canonical_single_repo_holdout_eval/generated_cases_canonical_single_repo_mainline_2026_04_04_eval_holdout_20260404T194005Z_unseen_15/cases/tel-13508.json"
+    }
+  ],
+  "aggregate_timeout_breakdown": {
+    "total_cases": 15,
+    "dominant_timeout_stage": "holdout_runner_parent_timeout_before_run_case_return",
+    "count_per_timeout_stage": {
+      "holdout_runner_parent_timeout_before_run_case_return": 15
+    },
+    "same_stop_point_dominates_all_cases": true,
+    "median_observed_timeout_seconds": 90,
+    "max_observed_timeout_seconds": 90
+  },
+  "classification": "runner_timeout"
+}

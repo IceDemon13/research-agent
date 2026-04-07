@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import secrets
@@ -12,7 +14,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agents import root_agent
 from contracts.actor_contract import ActorContext
@@ -26,7 +28,12 @@ from contracts.user_contract import UserRecord
 from contracts.workflow_contract import (
     AnalyzeTaskWorkflowResult,
     AreaSuggestion,
+    DraftPatchFileRationale,
+    DraftPatchWorkflowResult,
     FileChangeAction,
+    ImplementationPlanBranch,
+    ImplementationPlanBranchOption,
+    ImplementationPlanPreviewItem,
     ImplementationPlanWorkflowResult,
     PreReviewWorkflowResult,
     RequiredFix,
@@ -41,11 +48,14 @@ from services.auth_service import AuthError, AuthService
 from services.benchmark_file_diagnostics_service import BenchmarkFileDiagnosticsService
 from services.benchmark_case_generation_service import BenchmarkCaseGenerationService
 from services.db_service import DatabaseService
+from services.draft_patch_execution_service import DraftPatchExecutionService
+from services.draft_patch_review_service import DraftPatchReviewService
 from services.i18n_service import DEFAULT_LOCALE, I18nService, SUPPORTED_LOCALES
 from services.jira_evidence_service import JiraEvidenceService
 from services.jira_task_loader import JiraConfigurationError, jira_auth_present, load_jira_task
 from services.permission_service import PermissionService
 from services.repo_fleet_service import RepoFleetService
+from services.repo_bulk_job_service import RepoBulkJobService
 from services.repo_index_service import RepositoryIndexService
 from services.repo_knowledge_pack_service import RepoKnowledgePackService
 from services.repo_registry import RepositoryRegistryService
@@ -54,18 +64,39 @@ from services.repo_onboarding_service import RepoOnboardingService
 from services.routing_benchmark_service import RoutingBenchmarkService
 from services.run_service import RunService
 from services.scm_service import ScmService
+from services.apply_service import ApplyService
+from contracts.apply_contract import ApplyInput, ApplyOperation
+from contracts.draft_patch_execution_contract import (
+    ApplyInputPayload,
+    ApplyOperationPayload,
+    DraftPatchExecutionHandoff,
+    DraftPatchExecutionResult,
+    DraftPatchRepairAttemptRecord,
+)
 from services.bitbucket_credentials import BitbucketCredentialResolver, parse_bitbucket_remote
-from llm_factory import LLMProviderError
+from llm_factory import LLMConfigurationError, LLMProviderError, resolve_llm_runtime_config
+from jira_mcp_server.config import settings as jira_mcp_settings
 
 
 app = FastAPI(title="Research Agent API", version="0.1.0")
+_automation_audit_logger = logging.getLogger("automation.audit")
 _failure_summary_service = RunService()
 _i18n_service = I18nService()
 _repo_index_service = RepositoryIndexService()
 _repo_knowledge_pack_service = RepoKnowledgePackService()
 _repo_intelligence_service = RepoIntelligenceService(index_service=_repo_index_service)
 _repo_scm_service = ScmService()
+_apply_service = ApplyService()
+_draft_patch_review_service = DraftPatchReviewService(
+    registry_service=RepositoryRegistryService(),
+    apply_service=_apply_service,
+    scm_service=_repo_scm_service,
+)
+_draft_patch_execution_service = DraftPatchExecutionService(
+    registry_service=RepositoryRegistryService(),
+)
 _repo_fleet_service = RepoFleetService()
+_repo_bulk_job_service = RepoBulkJobService()
 _routing_benchmark_service = RoutingBenchmarkService()
 _benchmark_file_diagnostics_service = BenchmarkFileDiagnosticsService()
 _benchmark_case_generation_service = BenchmarkCaseGenerationService()
@@ -151,6 +182,16 @@ class RepoCommentLearningRequest(BaseModel):
     rebuild_repo_knowledge: bool = False
 
 
+class RepoBulkOnboardRequest(BaseModel):
+    dry_run: bool = True
+    include_clone_or_sync: bool = True
+    include_register_if_missing: bool = True
+    include_gitnexus_reindex: bool = True
+    include_historical_bootstrap: bool = True
+    skip_already_ready: bool = True
+    force_refresh: bool = False
+
+
 class RunDecisionRequest(BaseModel):
     note: str = ""
 
@@ -173,8 +214,32 @@ class StructureTaskRequest(BaseModel):
 
 class ImplementationPlanRequest(BaseModel):
     jira_ticket: str
-    repo_id: str
+    repo_id: str = ""
     execution_mode: Literal["safe_top1_write", "dry_run_all_selected", "plan_only"] = "safe_top1_write"
+    seed_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class DraftPatchRequest(BaseModel):
+    jira_ticket: str
+    repo_id: str = ""
+    seed_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class DraftPatchReviewRequest(BaseModel):
+    jira_ticket: str
+    repo_id: str = ""
+    decision: Literal["approved", "rejected"]
+    note: str = ""
+    seed_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class DraftPatchApplyRequest(BaseModel):
+    jira_ticket: str
+    repo_id: str = ""
+    review_id: str
+    apply_mode: Literal["dry_apply", "local_apply", "branch_create"] = "dry_apply"
+    note: str = ""
+    seed_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class PreReviewRequest(BaseModel):
@@ -253,6 +318,156 @@ def _auth_service() -> AuthService:
 
 def _allow_header_actor_fallback() -> bool:
     return bool(getattr(settings.runtime, "allow_header_actor_fallback", False))
+
+
+def _allow_automation_actor() -> bool:
+    return bool(getattr(settings.runtime, "allow_automation_actor", False))
+
+
+def _automation_actor_token() -> str:
+    return str(getattr(settings.runtime, "automation_actor_token", "") or "").strip()
+
+
+def _automation_allowed_roles() -> list[str]:
+    raw = str(getattr(settings.runtime, "automation_allowed_roles", "") or "")
+    return [
+        str(item or "").strip().lower()
+        for item in raw.split(",")
+        if str(item or "").strip()
+    ]
+
+
+def _automation_allowed_endpoints() -> list[str]:
+    raw = str(getattr(settings.runtime, "automation_allowed_endpoints", "") or "")
+    return [
+        str(item or "").strip()
+        for item in raw.split(",")
+        if str(item or "").strip()
+    ]
+
+
+def _request_path(request: Request) -> str:
+    return str(getattr(getattr(request, "url", None), "path", "") or "").strip() or "/"
+
+
+def _automation_endpoint_allowed(path: str) -> bool:
+    resolved_path = str(path or "").strip() or "/"
+    for prefix in _automation_allowed_endpoints():
+        if resolved_path == prefix or resolved_path.startswith(prefix):
+            return True
+    return False
+
+
+def _request_payload_field(request: Request, field_name: str) -> str:
+    cached = getattr(request.state, "automation_payload", None)
+    if isinstance(cached, dict):
+        return str(cached.get(field_name, "") or "").strip()
+    return ""
+
+
+def _set_request_audit_context(request: Request, **values: object) -> None:
+    for key, value in values.items():
+        if value is None:
+            continue
+        setattr(request.state, key, value)
+
+
+def _machine_actor_context(request: Request) -> ActorContext | None:
+    headers = request.headers
+    token = str(headers.get("X-Automation-Token", "") or "").strip()
+    actor_id = str(headers.get("X-Automation-Actor", "") or "").strip()
+    actor_role = str(headers.get("X-Automation-Role", "") or "").strip().lower()
+    if not (token or actor_id or actor_role):
+        return None
+    locale = _locale_from_request(request)
+    if not _allow_automation_actor():
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "authentication_required", "message": _t(locale, "error.login_required")},
+        )
+    expected_token = _automation_actor_token()
+    if not token or not expected_token or not secrets.compare_digest(token, expected_token):
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "authentication_required", "message": _t(locale, "error.login_required")},
+        )
+    if not actor_id:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "authentication_required", "message": _t(locale, "error.login_required")},
+        )
+    allowed_roles = _automation_allowed_roles()
+    if actor_role not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "automation_role_not_allowed",
+                "message": f"Automation role '{actor_role or '-'}' is not allowed.",
+                "allowed_roles": allowed_roles,
+            },
+        )
+    path = _request_path(request)
+    if not _automation_endpoint_allowed(path):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "automation_endpoint_not_allowed",
+                "message": f"Automation actor cannot access '{path}'.",
+                "allowed_endpoints": _automation_allowed_endpoints(),
+            },
+        )
+    request.state.auth_mode = "machine"
+    request.state.actor_id = actor_id
+    request.state.actor_role = actor_role
+    request.state.actor_type = "machine"
+    return ActorContext(
+        actor_id=actor_id,
+        actor_type="machine",
+        role=actor_role,
+        source_channel="automation",
+        display_name=str(headers.get("X-Automation-Actor", "") or actor_id).strip(),
+    )
+
+
+@app.middleware("http")
+async def _automation_audit_middleware(request: Request, call_next):
+    request.state.request_id = secrets.token_hex(8)
+    request.state.auth_mode = getattr(request.state, "auth_mode", "anonymous")
+    request.state.actor_id = getattr(request.state, "actor_id", "")
+    request.state.actor_role = getattr(request.state, "actor_role", "")
+    request.state.automation_payload = {}
+    content_type = str(request.headers.get("content-type", "") or "").lower()
+    if request.method.upper() in {"POST", "PUT", "PATCH"} and "application/json" in content_type:
+        try:
+            payload = await request.json()
+            if isinstance(payload, dict):
+                request.state.automation_payload = payload
+        except Exception:
+            request.state.automation_payload = {}
+    response = None
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = int(getattr(response, "status_code", 200) or 200)
+        return response
+    finally:
+        if response is not None:
+            response.headers["X-Auth-Mode"] = str(getattr(request.state, "auth_mode", "anonymous") or "anonymous")
+            actor_id = str(getattr(request.state, "actor_id", "") or "").strip()
+            if actor_id:
+                response.headers["X-Actor-Id"] = actor_id
+        if str(getattr(request.state, "auth_mode", "") or "").strip() == "machine":
+            _automation_audit_logger.info(
+                "machine_auth_request actor_id=%s role=%s endpoint=%s jira_ticket=%s repo_id=%s status=%s request_id=%s timestamp=%s",
+                str(getattr(request.state, "actor_id", "") or "").strip(),
+                str(getattr(request.state, "actor_role", "") or "").strip(),
+                _request_path(request),
+                str(getattr(request.state, "jira_ticket", "") or _request_payload_field(request, "jira_ticket") or "").strip(),
+                str(getattr(request.state, "repo_id", "") or _request_payload_field(request, "repo_id") or "").strip(),
+                status_code,
+                str(getattr(request.state, "request_id", "") or "").strip(),
+                datetime.now(timezone.utc).isoformat(),
+            )
 
 
 def _normalize_locale(value: str | None) -> str:
@@ -384,12 +599,23 @@ def _build_actor_context(request: Request) -> ActorContext:
     session_user = _current_user(request)
     source_channel = str(request.headers.get("X-Source-Channel", "api") or "").strip() or "api"
     if session_user is not None:
+        request.state.auth_mode = "human"
+        request.state.actor_id = str(getattr(session_user, "user_id", "") or "").strip()
+        request.state.actor_role = str(getattr(session_user, "role_name", "") or "").strip().lower()
+        request.state.actor_type = "user"
         return _user_to_actor_context(session_user, source_channel=source_channel)
+    machine_actor = _machine_actor_context(request)
+    if machine_actor is not None:
+        return machine_actor
     if _allow_header_actor_fallback():
         headers = request.headers
         actor_id = str(headers.get("X-Actor-Id", "api.local") or "").strip() or "api.local"
         actor_role = str(headers.get("X-Actor-Role", "developer") or "").strip().lower() or "developer"
         display_name = str(headers.get("X-Display-Name", "Local API Developer") or "").strip()
+        request.state.auth_mode = "header_fallback"
+        request.state.actor_id = actor_id
+        request.state.actor_role = actor_role
+        request.state.actor_type = "api"
         return ActorContext(
             actor_id=actor_id,
             actor_type="api",
@@ -425,6 +651,10 @@ def _translate_final_result(payload: dict[str, Any], locale: str) -> tuple[str, 
     validation = dict(payload.get("validation_result", {}) or {})
     repeated_failure_detected = bool(payload.get("repeated_failure_detected", False))
     sync_status = str(payload.get("sync_status", "") or "").strip().lower()
+    workflow_debug = dict(dict(payload.get("spec_result", {}) or {}).get("workflow_debug", {}) or {})
+    workflow_name = str(workflow_debug.get("workflow_name", "") or "").strip().lower()
+    persisted_summary = str(payload.get("final_result_summary", "") or "").strip()
+    persisted_recommendation = str(payload.get("recommendation", "") or "").strip()
     if outcome == "failed_code":
         recommendation_key = "recommendation.failed_code_repeated" if repeated_failure_detected else "recommendation.failed_code"
         return _t(locale, "outcome.failed_code"), _t(locale, recommendation_key)
@@ -448,6 +678,13 @@ def _translate_final_result(payload: dict[str, Any], locale: str) -> tuple[str, 
         return _t(locale, "outcome.failed_environment"), _t(locale, "recommendation.failed_environment")
     if outcome == "partial_incomplete" and sync_status == "sync_unavailable":
         return _t(locale, "outcome.partial_incomplete"), _t(locale, "recommendation.sync_unavailable")
+    if (
+        workflow_name == "analyze_task"
+        and str(payload.get("mode", "") or "").strip().lower() == "spec"
+        and str(payload.get("status", "") or "").strip().lower() == "success"
+        and persisted_summary
+    ):
+        return persisted_summary, persisted_recommendation or _t(locale, "recommendation.spec")
     if str(payload.get("mode", "") or "").strip().lower() == "spec" and str(payload.get("status", "") or "").strip().lower() == "success":
         return _t(locale, "outcome.partial_incomplete"), _t(locale, "recommendation.spec")
     if str(payload.get("mode", "") or "").strip().lower() == "review" and str(payload.get("status", "") or "").strip().lower() == "success":
@@ -578,6 +815,7 @@ def _auth_state_payload(
     resolved_role = str(user_payload.get("role_name", "") or actor_payload.get("role", "") or "").strip()
     return {
         "authenticated": bool(authenticated),
+        "auth_mode": "human" if authenticated and actor_payload else "anonymous",
         "dev_fallback": bool(dev_fallback),
         "language": _normalize_locale(locale),
         "user_id": str(user_payload.get("user_id", "") or "").strip(),
@@ -761,6 +999,323 @@ def _specific_questions_for_task(spec: dict, repo_id: str, likely_files: list[st
     return questions[:6]
 
 
+def _build_contextual_analyze_task_feedback(
+    *,
+    task_text: str,
+    spec: dict[str, Any],
+    input_debug: dict[str, Any],
+    top_historical_matches: list[dict[str, Any]],
+    top_historical_changed_files: list[str],
+    top_candidate_files: list[SelectionCandidate],
+    repo_id: str,
+    likely_files: list[str],
+    locale: str = DEFAULT_LOCALE,
+) -> dict[str, Any]:
+    decision_markers = (
+        "should ",
+        "or should",
+        "or is it",
+        "or does it",
+        "чи потрібно",
+        "чи варто",
+        "чи це",
+        " або ",
+    )
+    stopwords = {
+        "the", "a", "an", "is", "are", "be", "to", "of", "for", "and", "or", "in", "on", "with", "this", "that",
+        "does", "do", "should", "it", "its", "how", "what", "which", "when", "can", "could", "would", "will",
+        "чи", "це", "або", "та", "і", "й", "до", "для", "в", "у", "на", "з", "по", "як", "який", "яка", "яке",
+        "потрібно", "варто", "має", "мають", "бути", "слід",
+    }
+
+    def _question_is_decision(text: str) -> bool:
+        lowered = str(text or "").strip().lower()
+        return any(marker in lowered for marker in decision_markers)
+
+    def _question_terms(text: str) -> set[str]:
+        normalized = re.sub(r"[^a-zA-Z0-9\u0400-\u04FF]+", " ", str(text or "").strip().lower())
+        return {token for token in normalized.split() if len(token) > 2 and token not in stopwords}
+
+    def _question_similarity(left: str, right: str) -> float:
+        left_terms = _question_terms(left)
+        right_terms = _question_terms(right)
+        if not left_terms or not right_terms:
+            return 0.0
+        return len(left_terms & right_terms) / max(1, len(left_terms | right_terms))
+
+    acceptance = [
+        _clean_user_text(item)
+        for item in list(spec.get("acceptance_criteria", []) or [])
+        if _clean_user_text(item)
+    ]
+    context_text = _clean_user_text(spec.get("context", "") or "")
+    requirements = [
+        _clean_user_text(item)
+        for item in list(spec.get("requirements", []) or [])
+        if _clean_user_text(item)
+    ]
+    attachments_count = int(input_debug.get("attachments_count", 0) or 0)
+    attachment_image_summaries_count = int(input_debug.get("attachment_image_summaries_count", 0) or 0)
+    comments_count = int(input_debug.get("comments_count", 0) or 0)
+    comments_used_in_context = bool(input_debug.get("comments_used_in_context", False))
+    has_visual_reference = attachments_count > 0 or attachment_image_summaries_count > 0
+    has_history = bool(top_historical_matches)
+    candidate_names = [str(item.name or "").strip() for item in list(top_candidate_files or []) if str(getattr(item, "name", "") or "").strip()]
+    lowered_task = str(task_text or "").strip().lower()
+
+    missing_details: list[str] = []
+    suggested_additions: list[str] = []
+    concrete_questions: list[str] = []
+    decision_questions: list[str] = []
+
+    if not acceptance:
+        missing_details.append(
+            "Acceptance criteria are missing, so the exact before/after user-visible result is still unclear."
+            if locale == "en"
+            else "У задачі немає acceptance criteria, тому точний user-visible результат після зміни ще не зафіксований."
+        )
+    elif len(acceptance) == 1 and len(acceptance[0].split()) < 7:
+        suggested_additions.append(
+            "The acceptance criteria exist, but they are terse; add one concrete before/after example to lock down scope."
+            if locale == "en"
+            else "Acceptance criteria уже є, але вони дуже короткі; додайте один конкретний before/after приклад, щоб зафіксувати scope."
+        )
+
+    if not context_text and not has_visual_reference:
+        missing_details.append(
+            "The Jira description does not clearly name the affected user flow or screen."
+            if locale == "en"
+            else "Опис Jira не називає достатньо чітко user flow або екран, який змінюється."
+        )
+
+    if not requirements and not candidate_names and not top_historical_changed_files:
+        missing_details.append(
+            "The task still does not point to a concrete module, file family, or API surface."
+            if locale == "en"
+            else "Задача все ще не вказує на конкретний module, file family або API surface."
+        )
+
+    if has_visual_reference:
+        suggested_additions.append(
+            "Verify the final text, spacing, line breaks, and layout against the attached screenshots."
+            if locale == "en"
+            else "До задачі додані візуальні референси; звірте фінальний текст і layout зі скріншотами, а не позначайте задачу як недостатньо описану."
+        )
+        concrete_questions.append(
+            "Should the final UI/printout match the attached screenshots exactly, including spacing and line breaks?"
+            if locale == "en"
+            else "Чи має фінальний UI/друк збігатися з прикріпленими скріншотами буквально, включно з відступами та переносами рядків?"
+        )
+
+    if has_history:
+        historical_key = str(top_historical_matches[0].get("jira_key", "") or "").strip()
+        suggested_additions.append(
+            f"Compare this request with historical Jira {historical_key} and confirm whether the same implementation path should be reused or adjusted."
+            if locale == "en"
+            else f"Порівняйте цю задачу з історичною Jira {historical_key} і підтвердьте, чи потрібно повторити той самий шлях реалізації, чи відхилитися від нього."
+        )
+
+    report_like = any(token in lowered_task for token in ("receipt", "report", "service request", "template", "квитан", "звіт", "друк"))
+    report_like = report_like or any(
+        any(token in str(path).lower() for token in ("report", "receipt", ".resx", ".designer.cs"))
+        for path in list(top_historical_changed_files or []) + candidate_names
+    )
+    if report_like:
+        decision_questions.append(
+            "Does this change update the existing print/report template, or should it introduce a new variant for a separate scenario?"
+            if locale == "en"
+            else "Це зміна існуючого шаблону друку/звіту чи створення нового варіанту для окремого сценарію?"
+        )
+        suggested_additions.append(
+            "Confirm that the change updates the existing print/report template instead of introducing a separate wording variant."
+            if locale == "en"
+            else "Підтвердьте, що зміна вноситься в існуючий шаблон друку/звіту, а не створює окремий варіант."
+        )
+        suggested_additions.append(
+            "Verify that the .Designer.cs and .resx artifacts stay synchronized for the same output."
+            if locale == "en"
+            else "Перевірте синхронність .Designer.cs і .resx для одного й того самого output."
+        )
+        concrete_questions.append(
+            "Does this change update the existing print/report template, or should it introduce a new wording variant for a separate flow?"
+            if locale == "en"
+            else "Чи змінює задача існуючий шаблон друку/звіту, чи потрібно ввести новий варіант тексту для окремого сценарію?"
+        )
+        concrete_questions.append(
+            "Should the .Designer.cs and .resx artifacts stay aligned for the same service-request output?"
+            if locale == "en"
+            else "Чи повинні .Designer.cs і .resx залишатися синхронними для одного й того самого service-request output?"
+        )
+
+    if context_text and any(token in context_text.lower() for token in ("format", "length", "size", "mask", "template", "layout", "формат", "довжин", "розмір", "шаблон")):
+        concrete_questions.append(
+            "Are the format and layout constraints in the description strict requirements or examples?"
+            if locale == "en"
+            else "Чи є форматні та layout-обмеження з опису жорсткими вимогами, чи лише прикладами?"
+        )
+
+    if context_text and any(token in context_text.lower() for token in ("format", "length", "size", "mask", "template", "layout")):
+        decision_questions.append(
+            "Should the new rules apply globally, or only inside the explicitly described flow?"
+            if locale == "en"
+            else "Нові правила мають діяти глобально чи лише в явно описаному сценарії?"
+        )
+
+    if comments_used_in_context and comments_count > 0 and not missing_details:
+        suggested_additions.append(
+            "Verify that the implementation still matches the concrete PM clarifications captured from the Jira comments."
+            if locale == "en"
+            else "Перед реалізацією перегляньте останні Jira-коментарі: там можуть бути уточнення PM, які звужують точну поведінку."
+        )
+
+    if len(top_historical_matches) > 1:
+        decision_questions.append(
+            "Do the historical Jira matches represent one implementation path, or multiple variants that need to stay separate?"
+            if locale == "en"
+            else "Історичні Jira-збіги ведуть до одного шляху реалізації чи до кількох варіантів, які потрібно розділити?"
+        )
+
+    if not requirements and (candidate_names or top_historical_changed_files):
+        decision_questions.append(
+            "Should implementation start from the historically changed files, or should ownership be re-checked before editing?"
+            if locale == "en"
+            else "Починати реалізацію з історично змінених файлів чи спершу ще раз перевірити ownership перед редагуванням?"
+        )
+
+    if not concrete_questions:
+        concrete_questions = _specific_questions_for_task(spec, repo_id, likely_files, locale=locale)
+
+    strong_spec_signal = bool(acceptance and (context_text or requirements) and (has_visual_reference or has_history or candidate_names or top_historical_changed_files))
+    minimal_spec_signal = bool(acceptance or context_text or requirements or has_visual_reference or has_history or candidate_names or top_historical_changed_files)
+    if strong_spec_signal:
+        quality_state = "well_specified"
+    elif missing_details and (len(missing_details) >= 2 or not minimal_spec_signal):
+        quality_state = "under_specified"
+    else:
+        quality_state = "reasonably_specified"
+
+    if quality_state == "well_specified":
+        task_quality_summary = (
+            "Task is well specified enough for planning; use the existing Jira evidence to verify implementation boundaries."
+            if locale == "en"
+            else "Задача вже достатньо конкретна для planning; використайте наявні Jira-сигнали, щоб звірити межі реалізації."
+        )
+        concrete_questions = _limit_items(concrete_questions, max_items=3)
+        suggested_additions = _limit_items(suggested_additions, max_items=3)
+    elif quality_state == "under_specified":
+        task_quality_summary = (
+            "Task has some concrete implementation signal, but a few gaps still need confirmation."
+            if locale == "en"
+            else "У задачі вже є конкретні сигнали для реалізації, але кілька прогалин усе ще варто підтвердити."
+        )
+        concrete_questions = _limit_items(concrete_questions, max_items=4)
+        suggested_additions = _limit_items(suggested_additions, max_items=4)
+    else:
+        task_quality_summary = (
+            "Task is usable for implementation planning."
+            if locale == "en"
+            else "Задачу вже можна передавати в implementation planning."
+        )
+        concrete_questions = _limit_items(concrete_questions, max_items=3)
+        suggested_additions = _limit_items(suggested_additions, max_items=3)
+
+    def _classify_advisory_source(text: str) -> str:
+        lowered = str(text or "").strip().lower()
+        if not lowered:
+            return ""
+        if any(marker in lowered for marker in ("screenshot", "line breaks", "spacing", "layout")):
+            return "attachment"
+        if "historical jira" in lowered or "compare this request" in lowered:
+            return "history"
+        if any(marker in lowered for marker in ("print/report template", ".designer.cs", ".resx", "synchronized")):
+            return "repo"
+        if any(marker in lowered for marker in ("description", "flow", "screen", "format", "requirements")):
+            return "description"
+        return ""
+
+    meta_markers = (
+        "underspecified",
+        "недостатньо описан",
+        "не позначайте задачу",
+    )
+    generic_markers = (
+        "acceptance criteria exist, but they are terse",
+        "add one concrete before/after example to lock down scope",
+    )
+    suggestion_records: list[dict[str, str]] = []
+    for item in suggested_additions:
+        normalized = str(item or "").strip()
+        if not normalized:
+            continue
+        lowered_item = normalized.lower()
+        if has_visual_reference and any(marker in lowered_item for marker in meta_markers):
+            normalized = (
+                "Verify the final text, spacing, line breaks, and layout against the attached screenshots."
+                if locale == "en"
+                else "Звірте фінальний текст, відступи, переноси та layout зі скріншотами."
+            )
+            lowered_item = normalized.lower()
+        source = _classify_advisory_source(normalized)
+        if quality_state in ("reasonably_specified", "well_specified"):
+            if any(marker in lowered_item for marker in meta_markers):
+                continue
+            if any(marker in lowered_item for marker in generic_markers):
+                continue
+            if source not in {"repo", "attachment", "history", "description"}:
+                continue
+        suggestion_records.append({"text": normalized, "source": source or "description"})
+
+    suggested_additions = [item["text"] for item in suggestion_records]
+    suggested_additions = _limit_items(list(dict.fromkeys(suggested_additions)), max_items=4)
+    decision_questions = list(
+        dict.fromkeys(
+            [item for item in decision_questions if str(item or "").strip()]
+            + [item for item in concrete_questions if _question_is_decision(item)]
+        )
+    )
+    filtered_concrete_questions: list[str] = []
+    for item in concrete_questions:
+        normalized_question = str(item or "").strip()
+        if not normalized_question:
+            continue
+        if _question_is_decision(normalized_question):
+            continue
+        if any(_question_similarity(normalized_question, candidate) >= 0.55 for candidate in decision_questions):
+            continue
+        filtered_concrete_questions.append(normalized_question)
+    concrete_questions = _limit_items(list(dict.fromkeys(filtered_concrete_questions)), max_items=4)
+    if not decision_questions and quality_state == "reasonably_specified":
+        decision_questions.append(
+            "Should this change stay inside the current flow, or should it be generalized for adjacent modules as well?"
+            if locale == "en"
+            else "Цю зміну потрібно залишити в межах поточного сценарію чи узагальнити і для суміжних модулів?"
+        )
+    if quality_state == "well_specified":
+        decision_questions = _limit_items(list(dict.fromkeys(decision_questions)), max_items=2)
+    else:
+        decision_questions = _limit_items(list(dict.fromkeys(decision_questions)), max_items=3)
+    advisory_block_title = (
+        "What to add"
+        if locale == "en" and quality_state == "under_specified"
+        else "What to verify before implementation"
+        if locale == "en"
+        else "Що варто додати"
+        if quality_state == "under_specified"
+        else "Що перевірити перед реалізацією"
+    )
+
+    return {
+        "task_quality_summary": task_quality_summary,
+        "quality_state": quality_state,
+        "advisory_block_title": advisory_block_title,
+        "missing_details": _limit_items(missing_details, max_items=4),
+        "suggested_additions": suggested_additions,
+        "suggested_additions_debug": suggestion_records,
+        "concrete_questions": concrete_questions,
+        "decision_questions": decision_questions,
+    }
+
+
 def _build_change_actions(spec: dict, likely_files: list[str], *, locale: str = DEFAULT_LOCALE) -> list[FileChangeAction]:
     requirements = _limit_items(spec.get("requirements", []) or [], max_items=8)
     if likely_files == _unknown_files_list(locale):
@@ -928,7 +1483,7 @@ def _compose_resolved_jira_text(issue_payload: dict[str, Any]) -> str:
         lines.append("Description:")
         lines.append(description)
     if acceptance:
-        lines.append("Acceptance criteria:")
+        lines.append("Acceptance Criteria:")
         lines.extend(f"- {item}" for item in acceptance[:12])
     return "\n".join(line for line in lines if line).strip()
 
@@ -996,6 +1551,16 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
     prompt_task_text = resolved_text
     if supplemental_text:
         prompt_task_text = f"{resolved_text}\n\nSupplemental Jira evidence:\n{supplemental_text}".strip()
+    acceptance_criteria = [
+        _clean_user_text(item)
+        for item in list(issue_payload.get("acceptance_criteria", []) or [])
+        if _clean_user_text(item)
+    ]
+    acceptance_criteria_present = bool(
+        issue_payload.get("acceptance_criteria_field_present", False)
+        or acceptance_criteria
+    )
+    raw_jira_fields = dict(issue_payload.get("raw_jira_fields", {}) or {})
     return {
         "workflow_type": workflow_type,
         "request_input_text": request_input_text,
@@ -1008,11 +1573,16 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
         "final_workflow_input": resolved_text,
         "final_workflow_input_hash": _hash_workflow_input(resolved_text),
         "prompt_task_text": prompt_task_text,
+        "acceptance_criteria": acceptance_criteria,
+        "acceptance_criteria_count": len(acceptance_criteria),
+        "acceptance_criteria_source": str(issue_payload.get("acceptance_criteria_source", "") or "").strip(),
+        "acceptance_criteria_included_in_workflow_input": "Acceptance Criteria:" in resolved_text,
+        "raw_jira_fields": raw_jira_fields,
         "supplemental_jira_evidence_text": supplemental_text,
         "supplemental_jira_evidence_text_length": len(supplemental_text),
         "jira_title_present": bool(_clean_user_text(issue_payload.get("title", "") or issue_payload.get("summary", "") or "")),
         "jira_description_present": bool(_clean_user_text(issue_payload.get("description", "") or "")),
-        "acceptance_criteria_present": bool(list(issue_payload.get("acceptance_criteria", []) or [])),
+        "acceptance_criteria_present": acceptance_criteria_present,
         "comments_count": int(evidence_bundle.get("comments_count", len(list(issue_payload.get("comments", []) or []))) or 0),
         "comments_used_in_context": bool(evidence_bundle.get("comments_used_in_context", False)),
         "attachments_count": int(evidence_bundle.get("attachments_count", len(list(issue_payload.get("attachments", []) or []))) or 0),
@@ -1050,6 +1620,11 @@ def _resolve_free_text_workflow_input(free_text: str, *, workflow_type: str) -> 
         "final_workflow_input": request_input_text,
         "final_workflow_input_hash": _hash_workflow_input(request_input_text),
         "prompt_task_text": request_input_text,
+        "acceptance_criteria": [],
+        "acceptance_criteria_count": 0,
+        "acceptance_criteria_source": "",
+        "acceptance_criteria_included_in_workflow_input": False,
+        "raw_jira_fields": {},
         "supplemental_jira_evidence_text": "",
         "supplemental_jira_evidence_text_length": 0,
         "jira_title_present": False,
@@ -1076,12 +1651,32 @@ def _parse_task_sections(raw_text: object) -> dict[str, Any]:
     bullets = [_clean_user_text(line.lstrip("-* ").strip()) for line in lines if line[:1] in {"-", "*"}]
     questions = [line for line in lines if "?" in line]
     jira_keys = re.findall(r"\b[A-Z][A-Z0-9]+-\d+\b", text)
+    acceptance_items: list[str] = []
+    in_acceptance_section = False
+    for line in lines:
+        lowered = line.strip().lower().rstrip(":")
+        if lowered == "acceptance criteria":
+            in_acceptance_section = True
+            continue
+        if in_acceptance_section:
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9 _/\-]{1,60}:", line.strip()):
+                break
+            if line.startswith("- "):
+                acceptance_items.append(_clean_user_text(line[2:].strip()))
+                continue
+            if re.match(r"^\d+[\.\)]\s+", line):
+                acceptance_items.append(_clean_user_text(re.sub(r"^\d+[\.\)]\s+", "", line).strip()))
+                continue
+            if acceptance_items:
+                acceptance_items.append(_clean_user_text(line))
     return {
         "line_count": len(lines),
         "bullet_count": len(bullets),
         "question_count": len(questions),
         "jira_keys": jira_keys[:5],
         "first_line": _clean_user_text(lines[0]) if lines else "",
+        "acceptance_criteria_count": len([item for item in acceptance_items if item]),
+        "has_acceptance_criteria_section": bool(acceptance_items),
     }
 
 
@@ -1135,6 +1730,10 @@ def _workflow_technical_details(
         "final_workflow_input": _clean_user_text(resolved_input.get("final_workflow_input", "") or normalized_task_text),
         "final_workflow_input_hash": str(resolved_input.get("final_workflow_input_hash", "") or _hash_workflow_input(normalized_task_text)).strip(),
         "prompt_task_text_length": len(_clean_user_text(resolved_input.get("prompt_task_text", "") or "")),
+        "acceptance_criteria_count": int(resolved_input.get("acceptance_criteria_count", 0) or 0),
+        "acceptance_criteria_source": str(resolved_input.get("acceptance_criteria_source", "") or "").strip(),
+        "acceptance_criteria_included_in_workflow_input": bool(resolved_input.get("acceptance_criteria_included_in_workflow_input", False)),
+        "raw_jira_fields": dict(resolved_input.get("raw_jira_fields", {}) or {}),
         "supplemental_jira_evidence_text": _clean_user_text(resolved_input.get("supplemental_jira_evidence_text", "") or ""),
         "supplemental_jira_evidence_text_length": int(resolved_input.get("supplemental_jira_evidence_text_length", 0) or 0),
         "jira_title_present": bool(resolved_input.get("jira_title_present", False)),
@@ -1536,20 +2135,37 @@ def _gitnexus_workflow_result(
     changed_files: list[str] | None = None,
     jira_key: str = "",
     execution_mode: str = "",
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
+    def _mark(substep: str, marker: str, **extra: Any) -> None:
+        if callable(progress_callback):
+            progress_callback(substep, marker, **extra)
+
+    _mark("gitnexus_workflow_result", "started")
+    _mark("gitnexus_input_assembly", "started")
     normalized_repo_id = str(repo_id or "").strip()
-    if not normalized_repo_id:
-        return {}
+    _mark(
+        "gitnexus_input_assembly",
+        "finished",
+        gitnexus_repo_id=normalized_repo_id,
+        gitnexus_workflow_name=str(workflow_name or "").strip(),
+    )
     try:
-        return _repo_intelligence_service.query_for_workflow(
+        _mark("gitnexus_repo_intelligence_query_for_workflow", "started", gitnexus_repo_id=normalized_repo_id)
+        payload = _repo_intelligence_service.query_for_workflow(
             normalized_repo_id,
             workflow_name,
             task_text,
             changed_files=list(changed_files or []),
             jira_key=str(jira_key or "").strip(),
             execution_mode=str(execution_mode or "").strip(),
+            progress_callback=progress_callback,
         )
+        _mark("gitnexus_repo_intelligence_query_for_workflow", "finished", gitnexus_repo_id=normalized_repo_id)
+        _mark("gitnexus_workflow_result", "finished")
+        return payload
     except Exception:
+        _mark("gitnexus_workflow_result", "finished", gitnexus_timeout_reason="repo_intelligence_query_failed")
         return {}
 
 
@@ -1851,6 +2467,342 @@ def _create_deterministic_structure_task_run(
             "sources": [],
             "repo_context_summary": None,
             "final_result_summary": str(request_body.goal or "").strip(),
+            "recommendation": "",
+            "run_outcome_type": "success",
+        },
+        log_path=finished_run.log_path,
+    )
+    return finished_run
+
+
+def _create_deterministic_analyze_task_run(
+    *,
+    request_body: RunCreateRequest,
+    actor_context: ActorContext,
+) -> RunRecord:
+    llm_provider = ""
+    llm_model = str(settings.llm.model_name or "").strip()
+    llm_runtime_available = False
+    llm_auth_present = False
+    try:
+        runtime = resolve_llm_runtime_config(model_name=llm_model)
+        llm_provider = str(runtime.provider or "").strip()
+        llm_model = str(getattr(runtime, "model", "") or getattr(runtime, "model_name", "") or llm_model).strip()
+        llm_runtime_available = True
+        llm_auth_present = True
+    except LLMConfigurationError as exc:
+        llm_provider = str(exc.provider or "").strip()
+
+    run_service = RunService(persist=True)
+    run_record = run_service.start_run(
+        str(request_body.goal or "").strip(),
+        repo_id=str(request_body.repo_id or "").strip(),
+        actor_context=actor_context,
+    )
+    run_service.start_step(run_record.run_id, "spec")
+    run_service.finish_step(
+        run_record.run_id,
+        "completed",
+        "Analyze-task routed directly to repo intelligence after Jira input resolution.",
+    )
+    finished_run = run_service.finish_run(run_record.run_id, "success")
+    run_service.persist_run_detail(
+        finished_run.run_id,
+        {
+            "mode": "spec",
+            "goal": str(request_body.goal or "").strip(),
+            "repo_id": str(request_body.repo_id or "").strip(),
+            "jira_ticket": str(request_body.jira_ticket or "").strip(),
+            "model_used": llm_model,
+            "routing_reason": "Analyze-task uses the lightweight workflow path and defers primary reasoning to repo intelligence.",
+            "was_escalated": False,
+            "source_stage": "deterministic",
+            "estimated_prompt_size": len(str(request_body.goal or "").strip()),
+            "provider_used": "",
+            "provider_fallback": False,
+            "provider_reason": "",
+            "llm_provider": llm_provider,
+            "llm_model": llm_model,
+            "llm_runtime_available": llm_runtime_available,
+            "llm_auth_present": llm_auth_present,
+            "jira_auth_present": bool(jira_auth_present()),
+            "llm_request_attempted": False,
+            "llm_request_succeeded": False,
+            "llm_failure_reason": "",
+            "spec_result": {"execution_mode_requested": "plan_only"},
+            "review_result": None,
+            "research_result": None,
+            "implementation_result": None,
+            "publication_result": None,
+            "validation_result": None,
+            "diff_result": _default_diff_payload("No diff produced for analyze_task."),
+            "review_comments": [],
+            "policy_decisions": [decision.to_dict() for decision in list(finished_run.policy_decisions)],
+            "sources": [],
+            "repo_context_summary": None,
+            "final_result_summary": "",
+            "recommendation": "",
+            "run_outcome_type": "success",
+        },
+        log_path=finished_run.log_path,
+    )
+    return finished_run
+
+
+def _normalize_selection_candidate_dicts(items: list[dict[str, Any]] | None, *, limit: int = 5) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in list(items or []):
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name", "") or raw.get("file", "") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        normalized.append(
+            {
+                "name": name,
+                "confidence": float(raw.get("confidence", 0.0) or 0.0),
+                "reason": _clean_user_text(raw.get("reason", "") or raw.get("likely_changes", "") or ""),
+            }
+        )
+        if len(normalized) >= max(1, int(limit or 5)):
+            break
+    return normalized
+
+
+def _normalize_implementation_plan_preview_items(items: list[dict[str, Any]] | None, *, limit: int = 5) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in list(items or []):
+        if not isinstance(raw, dict):
+            continue
+        file_path = str(raw.get("file", "") or "").strip()
+        if not file_path or file_path.lower() in seen:
+            continue
+        seen.add(file_path.lower())
+        normalized.append(
+            {
+                "file": file_path,
+                "action": str(raw.get("action", "") or "modify").strip() or "modify",
+                "reason": _clean_user_text(raw.get("reason", "") or ""),
+                "likely_changes": _clean_user_text(raw.get("likely_changes", "") or ""),
+                "risk": _clean_user_text(raw.get("risk", "") or ""),
+            }
+        )
+        if len(normalized) >= max(1, int(limit or 5)):
+            break
+    return normalized
+
+
+def _seeded_implementation_plan_input_debug(
+    jira_ticket: str,
+    seed_context: dict[str, Any],
+) -> dict[str, Any]:
+    technical_details = dict(seed_context.get("technical_details", {}) or {})
+    final_workflow_input = _clean_user_text(
+        seed_context.get("final_workflow_input", "")
+        or technical_details.get("final_workflow_input", "")
+        or ""
+    )
+    prompt_task_text = _clean_user_text(
+        seed_context.get("prompt_task_text", "")
+        or technical_details.get("prompt_task_text", "")
+        or final_workflow_input
+    )
+    selected_repos = list(seed_context.get("selected_repos", []) or [])
+    top_candidate_files = _normalize_selection_candidate_dicts(seed_context.get("top_candidate_files"), limit=5)
+    plan_preview = _normalize_implementation_plan_preview_items(seed_context.get("implementation_plan_preview"), limit=5)
+    top_historical_matches = [dict(item or {}) for item in list(seed_context.get("top_historical_matches", []) or []) if isinstance(item, dict)]
+    top_historical_changed_files = [
+        str(item).strip()
+        for item in list(seed_context.get("top_historical_changed_files", []) or [])
+        if str(item).strip()
+    ][:5]
+    return {
+        "workflow_type": "implementation_plan",
+        "request_input_text": str(jira_ticket or "").strip(),
+        "request_input_length": len(str(jira_ticket or "").strip()),
+        "jira_fetch_attempted": bool(technical_details.get("jira_fetch_attempted", False)),
+        "jira_fetch_succeeded": bool(technical_details.get("jira_fetch_succeeded", False)),
+        "jira_auth_present": bool(technical_details.get("jira_auth_present", False)),
+        "resolved_jira_title": _clean_user_text(technical_details.get("resolved_jira_title", "") or ""),
+        "resolved_jira_text_length": len(final_workflow_input),
+        "final_workflow_input": final_workflow_input,
+        "final_workflow_input_hash": _hash_workflow_input(final_workflow_input),
+        "prompt_task_text": prompt_task_text,
+        "supplemental_jira_evidence_text": _clean_user_text(technical_details.get("supplemental_jira_evidence_text", "") or ""),
+        "supplemental_jira_evidence_text_length": int(technical_details.get("supplemental_jira_evidence_text_length", 0) or 0),
+        "jira_title_present": bool(technical_details.get("jira_title_present", False)),
+        "jira_description_present": bool(technical_details.get("jira_description_present", False)),
+        "acceptance_criteria_present": bool(technical_details.get("acceptance_criteria_present", False)),
+        "comments_count": int(technical_details.get("comments_count", 0) or 0),
+        "comments_used_in_context": bool(technical_details.get("comments_used_in_context", False)),
+        "attachments_count": int(technical_details.get("attachments_count", 0) or 0),
+        "attachment_types": list(technical_details.get("attachment_types", []) or []),
+        "attachments_used_count": int(technical_details.get("attachments_used_count", 0) or 0),
+        "attachment_text_chars": int(technical_details.get("attachment_text_chars", 0) or 0),
+        "attachment_image_summaries_count": int(technical_details.get("attachment_image_summaries_count", 0) or 0),
+        "attachment_signal_used_in_planning": bool(technical_details.get("attachment_signal_used_in_planning", False)),
+        "attachment_signal_used_in_codegen": bool(technical_details.get("attachment_signal_used_in_codegen", False)),
+        "attachment_signal_used_in_routing": bool(technical_details.get("attachment_signal_used_in_routing", False)),
+        "attachment_signal_used_in_targeting": bool(technical_details.get("attachment_signal_used_in_targeting", False)),
+        "image_attachment_runtime_available": bool(technical_details.get("image_attachment_runtime_available", False)),
+        "precomputed_repo_context": {
+            "selected_repos": selected_repos,
+            "top_candidate_files": top_candidate_files,
+            "top_historical_matches": top_historical_matches,
+            "top_historical_changed_files": top_historical_changed_files,
+            "candidate_files_count": int(seed_context.get("candidate_files_count", 0) or len(top_candidate_files)),
+            "selected_files_count": int(seed_context.get("selected_files_count", 0) or len(top_candidate_files)),
+            "implementation_plan_preview": plan_preview,
+            "provider_used": str(seed_context.get("provider_used", "") or technical_details.get("provider_used", "") or "").strip(),
+            "configured_provider": str(seed_context.get("configured_provider", "") or technical_details.get("configured_provider", "") or "").strip(),
+            "repo_metadata_provider": str(seed_context.get("repo_metadata_provider", "") or technical_details.get("repo_metadata_provider", "") or "").strip(),
+            "provider_reason": _clean_user_text(seed_context.get("provider_reason", "") or technical_details.get("provider_reason", "") or ""),
+            "final_merge_strategy": str(seed_context.get("final_merge_strategy", "") or technical_details.get("final_merge_strategy", "") or "").strip(),
+        },
+    }
+
+
+def _seeded_implementation_plan_provider_payload(
+    *,
+    seed_context: dict[str, Any],
+    repo_id: str,
+    execution_mode: str,
+    locale: str = DEFAULT_LOCALE,
+) -> dict[str, Any]:
+    selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
+    candidate_files = _normalize_selection_candidate_dicts(seed_context.get("top_candidate_files"), limit=5)
+    historical_changed_files = [
+        str(item).strip()
+        for item in list(seed_context.get("top_historical_changed_files", []) or [])
+        if str(item).strip()
+    ][:5]
+    plan_preview = _normalize_implementation_plan_preview_items(seed_context.get("implementation_plan_preview"), limit=5)
+    likely_file_details = candidate_files[:5]
+    likely_files = [item["name"] for item in likely_file_details]
+    if not likely_files:
+        likely_files = historical_changed_files[:5]
+        likely_file_details = [
+            {
+                "name": path,
+                "confidence": 0.7,
+                "reason": "historical match reused from analyze_task",
+            }
+            for path in likely_files
+        ]
+    likely_file_set = {path.strip().lower() for path in likely_files if path.strip()}
+    change_actions = [
+        {
+            "file": item["file"],
+            "action": item["action"],
+            "description": _clean_user_text(item.get("likely_changes", "") or item.get("reason", "") or ""),
+        }
+        for item in plan_preview
+        if str(item.get("file", "") or "").strip().lower() in likely_file_set
+    ]
+    if not change_actions:
+        change_actions = [
+            {
+                "file": item["name"],
+                "action": "modify",
+                "description": _clean_user_text(item.get("reason", "") or "Promoted directly from analyze_task candidate files."),
+            }
+            for item in likely_file_details
+        ]
+    writable_repo_id = str(repo_id or (selected_repos[0].get("repo_id", "") if selected_repos else "")).strip()
+    selected_files_by_repo = {writable_repo_id: list(likely_files)} if writable_repo_id and likely_files else {}
+    return {
+        "configured_provider": str(seed_context.get("configured_provider", "") or "gitnexus_http").strip() or "gitnexus_http",
+        "repo_metadata_provider": str(seed_context.get("repo_metadata_provider", "") or "gitnexus_http").strip() or "gitnexus_http",
+        "provider_used": str(seed_context.get("provider_used", "") or "gitnexus_http").strip() or "gitnexus_http",
+        "provider_fallback": False,
+        "provider_reason": _clean_user_text(
+            seed_context.get("provider_reason", "")
+            or (
+                "Reused analyze_task repo-intelligence signals to seed implementation planning."
+                if locale == "en"
+                else "Використано сигнали repo-intelligence з analyze_task як seed для implementation planning."
+            )
+        ),
+        "selection_decision": "seeded_from_analyze_task",
+        "candidate_files_count": int(seed_context.get("candidate_files_count", 0) or len(candidate_files) or len(likely_files)),
+        "selected_files_count": int(seed_context.get("selected_files_count", 0) or len(likely_files)),
+        "selected_repos": selected_repos,
+        "top_candidate_files": candidate_files,
+        "likely_file_details": likely_file_details,
+        "change_actions": change_actions,
+        "execution_mode": str(execution_mode or "safe_top1_write").strip() or "safe_top1_write",
+        "selected_files_by_repo": selected_files_by_repo,
+        "writable_repo_id": writable_repo_id,
+        "writable_files": list(likely_files),
+        "readonly_repo_ids": [],
+        "readonly_files_by_repo": {},
+        "implementation_scope_summary": (
+            f"Seeded implementation plan from analyze_task evidence in {writable_repo_id}."
+            if locale == "en"
+            else f"План імплементації засіяно сигналами analyze_task у {writable_repo_id}."
+        ),
+        "scope_enforcement_reason": "",
+        "recommendation": _clean_user_text(
+            seed_context.get("recommendation", "")
+            or (
+                f"Start implementation from {', '.join(likely_files[:2])}."
+                if locale == "en" and likely_files
+                else "Почніть імплементацію з найсильніших кандидатних файлів."
+                if locale != "en"
+                else ""
+            )
+        ),
+    }
+
+
+def _create_deterministic_implementation_plan_run(
+    *,
+    request_body: RunCreateRequest,
+    actor_context: ActorContext,
+    execution_mode: str,
+) -> RunRecord:
+    run_service = RunService(persist=True)
+    run_record = run_service.start_run(
+        str(request_body.goal or "").strip(),
+        repo_id=str(request_body.repo_id or "").strip(),
+        actor_context=actor_context,
+    )
+    run_service.start_step(run_record.run_id, "spec")
+    run_service.finish_step(
+        run_record.run_id,
+        "completed",
+        "Implementation-plan reused precomputed analyze_task context.",
+    )
+    finished_run = run_service.finish_run(run_record.run_id, "success")
+    run_service.persist_run_detail(
+        finished_run.run_id,
+        {
+            "mode": "spec",
+            "goal": str(request_body.goal or "").strip(),
+            "repo_id": str(request_body.repo_id or "").strip(),
+            "jira_ticket": str(request_body.jira_ticket or "").strip(),
+            "routing_reason": "Implementation-plan reused analyze_task context and skipped redundant tracked spec execution.",
+            "was_escalated": False,
+            "source_stage": "deterministic_seeded",
+            "estimated_prompt_size": len(str(request_body.goal or "").strip()),
+            "provider_used": "",
+            "provider_fallback": False,
+            "provider_reason": "",
+            "spec_result": {"execution_mode_requested": str(execution_mode or "").strip() or "safe_top1_write"},
+            "review_result": None,
+            "research_result": None,
+            "implementation_result": None,
+            "publication_result": None,
+            "validation_result": None,
+            "diff_result": _default_diff_payload("No diff produced for implementation_plan."),
+            "review_comments": [],
+            "policy_decisions": [decision.to_dict() for decision in list(finished_run.policy_decisions)],
+            "sources": [],
+            "repo_context_summary": None,
+            "final_result_summary": "",
             "recommendation": "",
             "run_outcome_type": "success",
         },
@@ -2453,6 +3405,798 @@ def _is_repo_mismatch(detail: RunDetail) -> bool:
     return str(detail.repo_relevance_status or "").strip() == "repo_mismatch" or str(detail.status or "").strip() == "repo_mismatch"
 
 
+def _build_analyze_task_implementation_plan_preview(
+    *,
+    task_text: str,
+    top_candidate_files: list[SelectionCandidate],
+    top_historical_changed_files: list[str],
+    locale: str = DEFAULT_LOCALE,
+) -> list[ImplementationPlanPreviewItem]:
+    candidate_names = [
+        str(item.name or "").strip()
+        for item in list(top_candidate_files or [])
+        if str(getattr(item, "name", "") or "").strip()
+    ]
+    combined_files: list[str] = []
+    for file_path in list(top_historical_changed_files or []) + candidate_names:
+        normalized = str(file_path or "").strip()
+        if not normalized or normalized in combined_files:
+            continue
+        combined_files.append(normalized)
+        if len(combined_files) >= 5:
+            break
+    if not combined_files:
+        return []
+
+    lowered_task = str(task_text or "").strip().lower()
+    preview: list[ImplementationPlanPreviewItem] = []
+    for file_path in combined_files:
+        file_name = file_path.split("/")[-1]
+        if file_path in top_historical_changed_files and file_path in candidate_names:
+            reason = (
+                f"Historical Jira evidence and current file targeting both point to {file_name}."
+                if locale == "en"
+                else f"Історичні Jira-дані і поточне file targeting одночасно вказують на {file_name}."
+            )
+        elif file_path in top_historical_changed_files:
+            reason = (
+                f"Historical Jira evidence points to {file_name}."
+                if locale == "en"
+                else f"Історичні Jira-дані вказують на {file_name}."
+            )
+        else:
+            reason = (
+                f"Current file targeting ranks {file_name} as a likely edit point."
+                if locale == "en"
+                else f"Поточне file targeting виводить {file_name} як ймовірну точку змін."
+            )
+
+        if any(token in lowered_task for token in ("receipt", "report", "квитан", "service request")):
+            likely_changes = (
+                "Update the displayed wording, template text, or bound presentation fields tied to the task flow."
+                if locale == "en"
+                else "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+            )
+            risk = (
+                "Printed/output formatting could drift if template fields and generated assets fall out of sync."
+                if locale == "en"
+                else "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+            )
+        elif file_path.endswith(".resx"):
+            likely_changes = (
+                "Adjust localized resource strings referenced by the affected workflow."
+                if locale == "en"
+                else "Скоригувати локалізовані resource-рядки, які використовує цей сценарій."
+            )
+            risk = (
+                "Localized strings may diverge across cultures if only one resource branch is updated."
+                if locale == "en"
+                else "Локалізації можуть розійтися між culture-гілками, якщо оновити лише один ресурс."
+            )
+        elif file_path.endswith(".Designer.cs"):
+            likely_changes = (
+                "Review generated bindings or report-field declarations that mirror the task-specific text or layout."
+                if locale == "en"
+                else "Перевірити generated bindings або report-поля, що віддзеркалюють текст чи layout задачі."
+            )
+            risk = (
+                "Designer changes may need to stay aligned with the corresponding template/resource file."
+                if locale == "en"
+                else "Зміни в designer-файлі мають залишатися узгодженими з відповідним шаблоном або ресурсом."
+            )
+        else:
+            likely_changes = (
+                "Modify the task-relevant logic or presentation path in this file using the existing Jira/repo signals."
+                if locale == "en"
+                else "Змінити релевантну логіку або presentation-шлях у цьому файлі на основі поточних Jira/repo сигналів."
+            )
+            risk = (
+                "Behavior could shift in adjacent flows if the change touches shared logic."
+                if locale == "en"
+                else "Зміна може зачепити суміжні сценарії, якщо файл містить shared-логіку."
+            )
+        preview.append(
+            ImplementationPlanPreviewItem(
+                file=file_path,
+                action="modify",
+                reason=reason,
+                likely_changes=likely_changes,
+                risk=risk,
+            )
+        )
+    return preview
+
+
+def _build_analyze_task_implementation_plan_branches(
+    *,
+    decision_questions: list[str],
+    implementation_plan_preview: list[ImplementationPlanPreviewItem],
+    top_historical_changed_files: list[str],
+    locale: str = DEFAULT_LOCALE,
+) -> list[ImplementationPlanBranch]:
+    normalized_decisions = [str(item or "").strip() for item in list(decision_questions or []) if str(item or "").strip()]
+    if not normalized_decisions:
+        return []
+
+    preview_files = [str(item.file or "").strip() for item in list(implementation_plan_preview or []) if str(getattr(item, "file", "") or "").strip()]
+    fallback_files = [str(item or "").strip() for item in list(top_historical_changed_files or []) if str(item or "").strip()]
+    branch_files = list(dict.fromkeys((preview_files or fallback_files)[:3]))
+    if not branch_files:
+        return []
+
+    def _plan_lines(branch_type: str, file_path: str) -> list[str]:
+        file_name = file_path.split("/")[-1]
+        if branch_type == "reuse":
+            return [
+                (
+                    f"Start from {file_name} and reuse the existing implementation path already implied by history."
+                    if locale == "en"
+                    else f"Почніть з {file_name} і перевикористайте наявний шлях реалізації, який уже підказує історія."
+                ),
+                (
+                    f"Apply the required wording or behavior update in {file_name} without creating a parallel variant."
+                    if locale == "en"
+                    else f"Внесіть потрібну зміну тексту або поведінки в {file_name} без створення паралельного варіанту."
+                ),
+                (
+                    "Verify that adjacent generated/resource artifacts stay synchronized after the targeted update."
+                    if locale == "en"
+                    else "Перевірте, що суміжні generated/resource-артефакти залишаються синхронними після точкової зміни."
+                ),
+            ]
+        return [
+            (
+                f"Use {file_name} as the seed location, but isolate the new variant or scenario behind a separate path."
+                if locale == "en"
+                else f"Використайте {file_name} як стартову точку, але ізолюйте новий варіант або сценарій окремим шляхом."
+            ),
+            (
+                "Introduce the new branch with explicit boundaries so the existing flow stays unchanged."
+                if locale == "en"
+                else "Додайте нову гілку з явними межами, щоб поточний сценарій не змінився побічно."
+            ),
+            (
+                "Validate which supporting files/resources need a dedicated companion update for the new branch."
+                if locale == "en"
+                else "Перевірте, які допоміжні файли/ресурси потребують окремого оновлення для нової гілки."
+            ),
+        ]
+
+    branches: list[ImplementationPlanBranch] = []
+    for decision in normalized_decisions[:2]:
+        primary_file = branch_files[min(len(branches), len(branch_files) - 1)]
+        branches.append(
+            ImplementationPlanBranch(
+                decision=decision,
+                options=[
+                    ImplementationPlanBranchOption(
+                        option="A",
+                        plan=_plan_lines("reuse", primary_file),
+                    ),
+                    ImplementationPlanBranchOption(
+                        option="B",
+                        plan=_plan_lines("variant", primary_file),
+                    ),
+                ],
+            )
+        )
+    return branches
+
+
+def _critical_patch_decision_questions(decision_questions: list[str], *, locale: str = DEFAULT_LOCALE) -> list[str]:
+    critical_markers = (
+        "new module",
+        "bounded context",
+        "cross-repository",
+        "cross-repo",
+        "new entry point",
+        "generalized for adjacent modules",
+        "новий модуль",
+        "bounded context",
+        "cross-repo",
+        "новий entry point",
+        "суміжних модулів",
+    )
+    critical: list[str] = []
+    for item in list(decision_questions or []):
+        normalized = str(item or "").strip()
+        lowered = normalized.lower()
+        if normalized and any(marker in lowered for marker in critical_markers):
+            critical.append(normalized)
+    return list(dict.fromkeys(critical))
+
+
+def _allowed_patch_files_from_signals(
+    implementation_plan_preview: list[ImplementationPlanPreviewItem],
+    top_candidate_files: list[SelectionCandidate],
+) -> list[str]:
+    allowed: list[str] = []
+    for item in list(implementation_plan_preview or []):
+        file_path = str(getattr(item, "file", "") or "").strip()
+        if file_path and file_path not in allowed and not Path(file_path).is_absolute() and ".." not in Path(file_path).parts:
+            allowed.append(file_path)
+    if not allowed:
+        for item in list(top_candidate_files or []):
+            file_path = str(getattr(item, "name", "") or "").strip()
+            if file_path and file_path not in allowed and not Path(file_path).is_absolute() and ".." not in Path(file_path).parts:
+                allowed.append(file_path)
+    return allowed[:5]
+
+
+def _compute_patch_generation_gate(
+    *,
+    repo_id: str,
+    repo_confidence: int,
+    file_confidence: int,
+    novelty_score: int,
+    selected_files_count: int,
+    analysis_mode: str,
+    decision_questions: list[str],
+    implementation_plan_preview: list[ImplementationPlanPreviewItem],
+    top_candidate_files: list[SelectionCandidate],
+    locale: str = DEFAULT_LOCALE,
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    normalized_repo = str(repo_id or "").strip()
+    allowed_files = _allowed_patch_files_from_signals(implementation_plan_preview, top_candidate_files)
+    critical_decisions = _critical_patch_decision_questions(decision_questions, locale=locale)
+    if repo_confidence < 75:
+        blockers.append("repo confidence too low")
+    if file_confidence < 70:
+        blockers.append("file confidence too low")
+    if novelty_score > 45:
+        blockers.append("novelty too high")
+    if selected_files_count <= 0:
+        blockers.append("no grounded selected files")
+    if str(analysis_mode or "").strip() == "exploration":
+        blockers.append("analysis mode is exploration")
+    if critical_decisions:
+        blockers.append("decision questions unresolved")
+    if not normalized_repo:
+        blockers.append("detected repo missing")
+    if not list(implementation_plan_preview or []):
+        blockers.append("implementation plan preview missing")
+    if not allowed_files:
+        blockers.append("no bounded allowed files")
+    return {
+        "patch_generation_ready": not blockers,
+        "patch_generation_blockers": list(dict.fromkeys(blockers)),
+        "patch_generation_allowed_files": allowed_files,
+        "critical_decision_questions": critical_decisions,
+    }
+
+
+def _draft_patch_comment_lines(
+    *,
+    file_path: str,
+    rationale: str,
+    expected_effect: str,
+) -> list[str]:
+    suffix = Path(file_path).suffix.lower()
+    if suffix in {".cs", ".ts", ".tsx", ".js", ".jsx", ".java", ".kt", ".kts", ".c", ".cpp", ".h", ".hpp"}:
+        return [
+            f"// DRAFT PATCH REVIEW REQUIRED: {rationale}",
+            f"// Expected effect: {expected_effect}",
+        ]
+    if suffix in {".py", ".rb", ".sh", ".yml", ".yaml"}:
+        return [
+            f"# DRAFT PATCH REVIEW REQUIRED: {rationale}",
+            f"# Expected effect: {expected_effect}",
+        ]
+    if suffix in {".xml", ".resx", ".xaml", ".html", ".svg"}:
+        return [
+            f"<!-- DRAFT PATCH REVIEW REQUIRED: {rationale} -->",
+            f"<!-- Expected effect: {expected_effect} -->",
+        ]
+    if suffix in {".sql"}:
+        return [
+            f"-- DRAFT PATCH REVIEW REQUIRED: {rationale}",
+            f"-- Expected effect: {expected_effect}",
+        ]
+    return [
+        f"// DRAFT PATCH REVIEW REQUIRED: {rationale}",
+        f"// Expected effect: {expected_effect}",
+    ]
+
+
+def _draft_patch_diff_hash(diff_text: str) -> str:
+    return hashlib.sha256(str(diff_text or "").encode("utf-8")).hexdigest()
+
+
+def _draft_patch_apply_modes() -> list[str]:
+    return ["dry_apply", "local_apply"]
+
+
+def _build_draft_patch_apply_input(
+    *,
+    repo_id: str,
+    allowed_files: list[str],
+    file_rationales: list[DraftPatchFileRationale],
+) -> ApplyInput:
+    repo = RepositoryRegistryService().resolve_repo(repo_id=repo_id)
+    repo_root = Path(repo.resolved_local_path).resolve()
+    rationale_by_file = {
+        str(item.file or "").strip(): item
+        for item in list(file_rationales or [])
+        if str(item.file or "").strip()
+    }
+    operations: list[ApplyOperation] = []
+    for file_path in list(allowed_files or []):
+        normalized = str(file_path or "").strip()
+        if not normalized:
+            continue
+        rationale = rationale_by_file.get(normalized)
+        why = str(getattr(rationale, "why", "") or "Grounded analyze_task evidence selected this file.").strip()
+        expected_effect = str(getattr(rationale, "expected_effect", "") or "Apply the requested task behavior in this bounded file.").strip()
+        target_path = (repo_root / normalized).resolve()
+        existing_content = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
+        new_content = _insert_draft_patch_block(
+            file_path=normalized,
+            current_content=existing_content,
+            rationale=why,
+            expected_effect=expected_effect,
+        )
+        operations.append(
+            ApplyOperation(
+                relative_path=normalized,
+                operation_type="update" if target_path.exists() else "create",
+                new_content=new_content,
+                expected_hash=ApplyService._read_hash(target_path) if target_path.exists() else "",
+            )
+        )
+    return ApplyInput(repo_id=repo_id, operations=operations, dry_run=True)
+
+
+def _insert_draft_patch_block(
+    *,
+    file_path: str,
+    current_content: str,
+    rationale: str,
+    expected_effect: str,
+) -> str:
+    block = "\n".join(_draft_patch_comment_lines(file_path=file_path, rationale=rationale, expected_effect=expected_effect)).strip()
+    current = str(current_content or "")
+    if not block:
+        return current
+    if block in current:
+        return current
+    suffix = Path(file_path).suffix.lower()
+    if suffix in {".xml", ".resx", ".xaml"} and current.startswith("<?xml"):
+        first_break = current.find("\n")
+        if first_break != -1:
+            head = current[: first_break + 1]
+            tail = current[first_break + 1 :]
+            return f"{head}{block}\n{tail}"
+    if not current:
+        return f"{block}\n"
+    return f"{block}\n{current}"
+
+
+def _build_draft_patch_result(
+    *,
+    jira_ticket: str,
+    repo_id: str,
+    implementation_plan_preview: list[ImplementationPlanPreviewItem],
+    top_candidate_files: list[SelectionCandidate],
+    decision_questions: list[str],
+    repo_confidence: int,
+    file_confidence: int,
+    novelty_score: int,
+    analysis_mode: str,
+    selected_files_count: int,
+    final_workflow_input: str,
+    locale: str = DEFAULT_LOCALE,
+) -> DraftPatchWorkflowResult:
+    gate = _compute_patch_generation_gate(
+        repo_id=repo_id,
+        repo_confidence=repo_confidence,
+        file_confidence=file_confidence,
+        novelty_score=novelty_score,
+        selected_files_count=selected_files_count,
+        analysis_mode=analysis_mode,
+        decision_questions=decision_questions,
+        implementation_plan_preview=implementation_plan_preview,
+        top_candidate_files=top_candidate_files,
+        locale=locale,
+    )
+    allowed_files = list(gate.get("patch_generation_allowed_files", []) or [])
+    preview_by_file = {
+        str(item.file or "").strip(): item
+        for item in list(implementation_plan_preview or [])
+        if str(getattr(item, "file", "") or "").strip()
+    }
+    rationales: list[DraftPatchFileRationale] = []
+    diff_parts: list[str] = []
+    for file_path in allowed_files:
+        preview_item = preview_by_file.get(file_path)
+        why = str(getattr(preview_item, "reason", "") or "Grounded analyze_task evidence selected this file.").strip()
+        expected_effect = str(getattr(preview_item, "likely_changes", "") or "Apply the requested task behavior in this bounded file.").strip()
+        rationales.append(
+            DraftPatchFileRationale(
+                file=file_path,
+                why=why,
+                expected_effect=expected_effect,
+            )
+        )
+        if not gate["patch_generation_ready"]:
+            continue
+        comment_lines = _draft_patch_comment_lines(file_path=file_path, rationale=why, expected_effect=expected_effect)
+        diff_parts.append(f"--- a/{file_path}")
+        diff_parts.append(f"+++ b/{file_path}")
+        diff_parts.append("@@ -1,0 +1,2 @@")
+        diff_parts.extend(f"+{line}" for line in comment_lines)
+        diff_parts.append("")
+
+    validation_plan = [
+        (
+            f"Build the detected repository {repo_id} after manually reviewing the draft diff."
+            if locale == "en"
+            else f"Зберіть виявлений репозиторій {repo_id} після ручного перегляду draft diff."
+        )
+    ]
+    if any(path.endswith(".Designer.cs") for path in allowed_files) and any(path.endswith(".resx") for path in allowed_files):
+        validation_plan.append(
+            "Verify that .Designer.cs and .resx remain synchronized after the manual edit."
+            if locale == "en"
+            else "Перевірте, що .Designer.cs і .resx залишаються синхронними після ручного редагування."
+        )
+    if any(path.endswith(".xaml") or path.endswith(".resx") for path in allowed_files):
+        validation_plan.append(
+            "Compare the final UI/text output against screenshots or visual references."
+            if locale == "en"
+            else "Звірте фінальний UI/текстовий результат зі скріншотами або візуальними референсами."
+        )
+    validation_plan = _limit_items(validation_plan, max_items=4)
+
+    patch_summary = (
+        f"Draft patch is {'ready' if gate['patch_generation_ready'] else 'blocked'} for {repo_id}; bounded files: {', '.join(allowed_files) or '-'}."
+        if locale == "en"
+        else f"Draft patch {'готовий' if gate['patch_generation_ready'] else 'заблокований'} для {repo_id}; обмежені файли: {', '.join(allowed_files) or '-'}."
+    )
+    technical_details = {
+        "jira_ticket": str(jira_ticket or "").strip(),
+        "repo_id": str(repo_id or "").strip(),
+        "allowed_files": allowed_files,
+        "selected_files_count": int(selected_files_count or 0),
+        "analysis_mode": str(analysis_mode or "").strip(),
+        "repo_confidence": int(repo_confidence or 0),
+        "file_confidence": int(file_confidence or 0),
+        "novelty_score": int(novelty_score or 0),
+        "critical_decision_questions": list(gate.get("critical_decision_questions", []) or []),
+        "final_workflow_input_excerpt": str(final_workflow_input or "").strip()[:400],
+    }
+    generated_diff = "\n".join(diff_parts).strip()
+    return DraftPatchWorkflowResult(
+        repo_id=str(repo_id or "").strip(),
+        patch_generation_ready=bool(gate["patch_generation_ready"]),
+        patch_generation_blockers=list(gate["patch_generation_blockers"]),
+        allowed_files=allowed_files,
+        generated_diff=generated_diff,
+        diff_hash=_draft_patch_diff_hash(generated_diff),
+        file_rationales=rationales,
+        patch_summary=patch_summary,
+        validation_plan=validation_plan,
+        review_required=True,
+        review_state="pending",
+        confidence_score=min(int(repo_confidence or 0), int(file_confidence or 0)),
+        novelty_score=int(novelty_score or 0),
+        apply_ready=False,
+        apply_blockers=["draft patch must be approved before apply"],
+        apply_modes_supported=_draft_patch_apply_modes(),
+        auto_apply=False,
+        technical_details=technical_details,
+    )
+
+
+def _draft_patch_result_from_seed(
+    *,
+    jira_ticket: str,
+    repo_id: str,
+    seed_context: dict[str, Any],
+    locale: str,
+) -> DraftPatchWorkflowResult:
+    technical_details = dict(seed_context.get("technical_details", {}) or {})
+    top_candidate_files = [
+        SelectionCandidate(
+            name=str(item.get("name", "") or "").strip(),
+            confidence=float(item.get("confidence", 0.0) or 0.0),
+            reason=str(item.get("reason", "") or "").strip(),
+        )
+        for item in _normalize_selection_candidate_dicts(seed_context.get("top_candidate_files"), limit=5)
+    ]
+    implementation_plan_preview = [
+        ImplementationPlanPreviewItem(
+            file=str(item.get("file", "") or "").strip(),
+            action=str(item.get("action", "") or "modify").strip() or "modify",
+            reason=str(item.get("reason", "") or "").strip(),
+            likely_changes=str(item.get("likely_changes", "") or "").strip(),
+            risk=str(item.get("risk", "") or "").strip(),
+        )
+        for item in _normalize_implementation_plan_preview_items(seed_context.get("implementation_plan_preview"), limit=5)
+    ]
+    return _build_draft_patch_result(
+        jira_ticket=str(jira_ticket or "").strip(),
+        repo_id=str(repo_id or "").strip(),
+        implementation_plan_preview=implementation_plan_preview,
+        top_candidate_files=top_candidate_files,
+        decision_questions=[str(item or "").strip() for item in list(seed_context.get("decision_questions", []) or []) if str(item or "").strip()],
+        repo_confidence=int(seed_context.get("repo_confidence", 0) or technical_details.get("repo_confidence", 0) or 0),
+        file_confidence=int(seed_context.get("file_confidence", 0) or technical_details.get("file_confidence", 0) or 0),
+        novelty_score=int(seed_context.get("novelty_score", 0) or technical_details.get("novelty_score", 0) or 0),
+        analysis_mode=str(seed_context.get("analysis_mode", "") or technical_details.get("analysis_mode", "") or "").strip(),
+        selected_files_count=int(seed_context.get("selected_files_count", 0) or technical_details.get("selected_files_count", 0) or 0),
+        final_workflow_input=str(seed_context.get("final_workflow_input", "") or technical_details.get("final_workflow_input", "") or "").strip(),
+        locale=locale,
+    )
+
+
+def _apply_blockers_for_draft_result(
+    *,
+    result: DraftPatchWorkflowResult,
+    review_record: dict[str, Any] | None = None,
+    apply_mode: str = "",
+    execution_record: DraftPatchExecutionResult | dict[str, Any] | None = None,
+) -> list[str]:
+    blockers = list(result.patch_generation_blockers or [])
+    if not bool(result.patch_generation_ready):
+        blockers.append("patch generation is not ready")
+    review_decision = str((review_record or {}).get("decision", "") or "").strip().lower()
+    if review_decision != "approved":
+        blockers.append("draft patch is not approved")
+    if review_decision == "approved":
+        execution_payload = (
+            execution_record.model_dump()
+            if isinstance(execution_record, DraftPatchExecutionResult)
+            else dict(execution_record or {})
+        )
+        if not bool(execution_payload.get("validated", False)):
+            blockers.append("draft patch is not validated")
+        blockers.extend(list(execution_payload.get("apply_blockers", []) or []))
+    if str(apply_mode or "").strip().lower() == "branch_create":
+        blockers.append("branch_create is not enabled yet")
+    return list(dict.fromkeys([item for item in blockers if str(item or "").strip()]))
+
+
+def _apply_input_from_payload(payload: ApplyInputPayload | dict[str, Any] | None) -> ApplyInput:
+    data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload or {})
+    operations = [
+        ApplyOperation(
+            relative_path=str(item.get("relative_path", "") or "").strip(),
+            operation_type=str(item.get("operation_type", "") or "").strip(),
+            new_content=str(item.get("new_content", "") or ""),
+            expected_hash=str(item.get("expected_hash", "") or "").strip(),
+        )
+        for item in list(data.get("operations", []) or [])
+        if isinstance(item, dict)
+    ]
+    return ApplyInput(
+        repo_id=str(data.get("repo_id", "") or "").strip(),
+        operations=operations,
+        dry_run=bool(data.get("dry_run", True)),
+    )
+
+
+def _overlay_draft_patch_execution_result(
+    *,
+    result: DraftPatchWorkflowResult,
+    execution_record: DraftPatchExecutionResult | dict[str, Any] | None,
+) -> DraftPatchWorkflowResult:
+    if execution_record is None:
+        return result
+    record = execution_record if isinstance(execution_record, DraftPatchExecutionResult) else DraftPatchExecutionResult.model_validate(dict(execution_record or {}))
+    result.execution_id = str(record.execution_id or "").strip()
+    result.validated = bool(record.validated)
+    result.validation_status = str(record.validation_status or "").strip()
+    result.validation_summary = str(record.validation_summary or "").strip()
+    result.repaired = bool(record.repaired)
+    result.repair_attempts = list(record.repair_attempts or [])
+    if str(record.generated_diff or "").strip():
+        result.generated_diff = str(record.generated_diff or "").strip()
+        result.diff_hash = str(record.diff_hash or "").strip()
+    technical_details = dict(result.technical_details or {})
+    technical_details["draft_patch_execution"] = {
+        "execution_id": result.execution_id,
+        "validated": bool(result.validated),
+        "validation_status": result.validation_status,
+        "repair_attempts_count": len(result.repair_attempts or []),
+        "repaired": bool(result.repaired),
+        "contract_version": str(record.contract_version or "").strip(),
+        "invariant_check_passed": bool(record.invariant_check_passed),
+        "out_of_bounds_detected": bool(record.out_of_bounds_detected),
+    }
+    result.technical_details = technical_details
+    return result
+
+def _compute_analyze_task_quality_score(
+    *,
+    task_text: str,
+    spec: dict[str, Any],
+    input_debug: dict[str, Any],
+    quality_state: str,
+    repo_match: dict | None,
+    top_historical_matches: list[dict[str, Any]],
+    top_candidate_files: list[SelectionCandidate],
+    candidate_files_count: int,
+    selected_files_count: int,
+) -> dict[str, Any]:
+    decision_markers = (
+        "should ",
+        "or should",
+        "or is it",
+        "or does it",
+        "чи потрібно",
+        "чи варто",
+        "чи це",
+        " або ",
+    )
+    stopwords = {
+        "the", "a", "an", "is", "are", "be", "to", "of", "for", "and", "or", "in", "on", "with", "this", "that",
+        "does", "do", "should", "it", "its", "how", "what", "which", "when", "can", "could", "would", "will",
+        "чи", "це", "або", "та", "і", "й", "до", "для", "в", "у", "на", "з", "по", "як", "який", "яка", "яке",
+        "потрібно", "варто", "має", "мають", "бути", "слід",
+    }
+
+    def _question_is_decision(text: str) -> bool:
+        lowered = str(text or "").strip().lower()
+        return any(marker in lowered for marker in decision_markers)
+
+    def _question_terms(text: str) -> set[str]:
+        normalized = re.sub(r"[^a-zA-Z0-9\u0400-\u04FF]+", " ", str(text or "").strip().lower())
+        return {token for token in normalized.split() if len(token) > 2 and token not in stopwords}
+
+    def _question_similarity(left: str, right: str) -> float:
+        left_terms = _question_terms(left)
+        right_terms = _question_terms(right)
+        if not left_terms or not right_terms:
+            return 0.0
+        return len(left_terms & right_terms) / max(1, len(left_terms | right_terms))
+
+    acceptance = [
+        _clean_user_text(item)
+        for item in list(spec.get("acceptance_criteria", []) or [])
+        if _clean_user_text(item)
+    ]
+    context_text = _clean_user_text(spec.get("context", "") or "")
+    requirements = [
+        _clean_user_text(item)
+        for item in list(spec.get("requirements", []) or [])
+        if _clean_user_text(item)
+    ]
+    lowered_text = " ".join([str(task_text or ""), context_text, " ".join(requirements)]).lower()
+    attachments_count = int(input_debug.get("attachments_count", 0) or 0)
+    attachment_image_summaries_count = int(input_debug.get("attachment_image_summaries_count", 0) or 0)
+    comments_used_in_context = bool(input_debug.get("comments_used_in_context", False))
+
+    jira_score = 0
+    if acceptance:
+        jira_score += 20
+    if context_text and requirements:
+        jira_score += 15
+    if any(token in lowered_text for token in ("format", "length", "size", "mask", "template", "layout", "constraint", "rule", "формат", "довжин", "розмір", "шаблон", "правил")):
+        jira_score += 15
+
+    supporting_score = 0
+    if attachments_count > 0 or attachment_image_summaries_count > 0:
+        supporting_score += 10
+    if comments_used_in_context:
+        supporting_score += 5
+
+    repo_score = 0
+    repo_status = str((repo_match or {}).get("status", "") or "").strip().lower()
+    repo_confidence = float((repo_match or {}).get("confidence", 0.0) or 0.0)
+    if repo_status == "match" and repo_confidence >= 0.7:
+        repo_score += 15
+    elif repo_status == "match":
+        repo_score += 10
+    if top_historical_matches:
+        repo_score += 10
+    max_candidate_confidence = max((float(getattr(item, "confidence", 0.0) or 0.0) for item in list(top_candidate_files or [])), default=0.0)
+    if max_candidate_confidence >= 0.75 or selected_files_count > 0:
+        repo_score += 10
+    elif candidate_files_count > 0:
+        repo_score += 5
+
+    raw_score = jira_score + supporting_score + repo_score
+    min_score, max_score = {
+        "under_specified": (0, 40),
+        "reasonably_specified": (40, 75),
+        "well_specified": (75, 100),
+    }.get(str(quality_state or "").strip(), (0, 100))
+    quality_score = max(min_score, min(max_score, raw_score))
+
+    return {
+        "quality_score": int(quality_score),
+        "quality_breakdown": {
+            "jira": int(jira_score),
+            "attachments": int(supporting_score),
+            "repo": int(repo_score),
+        },
+    }
+
+
+def _compute_analyze_task_novelty_and_confidence(
+    *,
+    task_text: str,
+    quality_state: str,
+    repo_match: dict | None,
+    top_historical_matches: list[dict[str, Any]],
+    top_historical_changed_files: list[str],
+    top_candidate_files: list[SelectionCandidate],
+    candidate_files_count: int,
+    selected_files_count: int,
+) -> dict[str, Any]:
+    lowered_task = str(task_text or "").strip().lower()
+    repo_confidence = float((repo_match or {}).get("confidence", 0.0) or 0.0)
+    has_exact_history = any(
+        "exact_jira_key" in [str(reason).strip().lower() for reason in list(item.get("reasons", []) or [])]
+        for item in list(top_historical_matches or [])
+        if isinstance(item, dict)
+    )
+    historical_strength = 55 if has_exact_history else 25 if top_historical_matches else 0
+    same_files_strength = 30 if top_historical_changed_files and selected_files_count > 0 else 15 if top_historical_changed_files or selected_files_count > 0 else 0
+    entropy_penalty = 20 if candidate_files_count >= 8 and selected_files_count <= 2 else 10 if candidate_files_count >= 4 and selected_files_count <= 2 else 0
+    domain_bonus = 10 if any(token in lowered_task for token in ("receipt", "report", "service request", "template", "квитан", "звіт", "друк")) else 0
+    max_candidate_confidence = max((float(getattr(item, "confidence", 0.0) or 0.0) for item in list(top_candidate_files or [])), default=0.0)
+    repo_strength = 25 if repo_confidence >= 0.75 else 12 if repo_confidence >= 0.5 else 0
+    candidate_strength = 20 if max_candidate_confidence >= 0.8 else 10 if max_candidate_confidence >= 0.55 else 0
+
+    domain_support = historical_strength + domain_bonus
+    repo_support = same_files_strength + repo_strength + candidate_strength - entropy_penalty
+    domain_novelty_score = max(0, min(100, 100 - min(100, domain_support)))
+    repo_novelty_score = max(0, min(100, 100 - min(100, max(0, repo_support))))
+    novelty_score = int(round((domain_novelty_score * 0.45) + (repo_novelty_score * 0.55)))
+    if quality_state == "reasonably_specified":
+        novelty_score = min(novelty_score, 70)
+    elif quality_state == "under_specified" and not top_historical_matches:
+        novelty_score = max(novelty_score, 75)
+    novelty_score = max(0, min(100, int(novelty_score)))
+    novelty_level = "low" if novelty_score <= 30 else "medium" if novelty_score <= 70 else "high"
+
+    repo_confidence_score = int(max(0, min(100, (repo_confidence * 100))))
+    file_confidence_score = int(
+        max(
+            0,
+            min(
+                100,
+                (max_candidate_confidence * 70)
+                + (20 if selected_files_count > 0 else 10 if candidate_files_count > 0 else 0)
+                + (10 if top_historical_changed_files else 0),
+            ),
+        )
+    )
+    task_confidence_score = int(
+        max(
+            0,
+            min(
+                100,
+                (35 if has_exact_history else 20 if top_historical_matches else 0)
+                + (25 if domain_bonus else 10 if lowered_task else 0)
+                + (20 if candidate_files_count > 0 else 0),
+            ),
+        )
+    )
+    confidence_score = int(round((repo_confidence_score * 0.35) + (file_confidence_score * 0.35) + (task_confidence_score * 0.30)))
+    if novelty_level == "high":
+        confidence_score = max(0, confidence_score - 30)
+    if quality_state == "well_specified" and novelty_level != "high":
+        confidence_score = max(confidence_score, 75)
+    elif quality_state == "under_specified":
+        confidence_score = min(confidence_score, 45)
+
+    analysis_mode = "reuse" if novelty_level == "low" else "guided" if novelty_level == "medium" else "exploration"
+    return {
+        "novelty_score": novelty_score,
+        "novelty_level": novelty_level,
+        "confidence_score": confidence_score,
+        "domain_novelty_score": int(domain_novelty_score),
+        "repo_novelty_score": int(repo_novelty_score),
+        "repo_confidence": int(repo_confidence_score),
+        "file_confidence": int(file_confidence_score),
+        "task_confidence": int(task_confidence_score),
+        "analysis_mode": analysis_mode,
+    }
+
+
 def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> AnalyzeTaskWorkflowResult:
     spec = dict(detail.spec_result or {})
     requested_execution_mode = str(spec.get("execution_mode_requested", "") or "").strip()
@@ -2467,7 +4211,32 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
         execution_mode=requested_execution_mode,
     )
     _apply_provider_metadata(detail, "analyze_task", provider_payload)
+    selected_repos = [dict(item) for item in list(provider_payload.get("selected_repos", []) or []) if isinstance(item, dict)]
+    top_historical_matches = [dict(item) for item in list(provider_payload.get("top_historical_matches", []) or []) if isinstance(item, dict)]
+    top_historical_changed_files = [
+        str(item).strip()
+        for item in list(provider_payload.get("top_historical_changed_files", []) or [])
+        if str(item).strip()
+    ]
+    all_top_candidate_files = _selection_candidates_from_provider(provider_payload.get("top_candidate_files"))
+    top_candidate_files = all_top_candidate_files[:3]
+    candidate_files_count = int(provider_payload.get("candidate_files_count", 0) or 0)
+    selected_files_count = int(provider_payload.get("selected_files_count", 0) or 0)
     baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="analyze_task", locale=locale)
+    repo_signal_present = bool(selected_repos or top_historical_matches or top_historical_changed_files or top_candidate_files or candidate_files_count or selected_files_count)
+    final_merge_strategy = "repo_intelligence_first" if repo_signal_present else "baseline_only"
+    exact_jira_key = str(detail.jira_ticket or "").strip().lower()
+    exact_historical_match = next(
+        (
+            item
+            for item in top_historical_matches
+            if str(item.get("jira_key", "") or "").strip().lower() == exact_jira_key
+            or "exact_jira_key" in [str(reason).strip().lower() for reason in list(item.get("reasons", []) or [])]
+        ),
+        None,
+    )
+    primary_repo = dict(selected_repos[0]) if selected_repos else {}
+    primary_repo_id = str(primary_repo.get("repo_id", "") or run_record.repo_id or detail.repo_id or "").strip()
     missing_details: list[str] = []
     if not list(spec.get("acceptance_criteria", []) or []):
         missing_details.append(
@@ -2513,17 +4282,193 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
             if locale == "en"
             else "Вкажіть імовірну зону repo, файл або owning module."
         )
-    recommendation = str(detail.recommendation or "").strip() or (
-        ("Clarify the missing details before moving to implementation planning." if locale == "en" else "Уточніть відсутні деталі перед переходом до планування імплементації.")
-        if missing_details
-        else ("Proceed to implementation planning." if locale == "en" else "Переходьте до плану імплементації.")
+    quality_feedback = _build_contextual_analyze_task_feedback(
+        task_text=task_text,
+        spec=spec,
+        input_debug=input_debug,
+        top_historical_matches=top_historical_matches,
+        top_historical_changed_files=top_historical_changed_files,
+        top_candidate_files=top_candidate_files,
+        repo_id=str(detail.repo_id or "").strip(),
+        likely_files=likely_files,
+        locale=locale,
     )
+    missing_details = list(quality_feedback.get("missing_details", []) or [])
+    suggested_additions = list(quality_feedback.get("suggested_additions", []) or [])
+    concrete_questions = list(quality_feedback.get("concrete_questions", []) or [])
+    decision_questions = list(quality_feedback.get("decision_questions", []) or [])
+    quality_state = str(quality_feedback.get("quality_state", "") or "")
+    advisory_block_title = str(quality_feedback.get("advisory_block_title", "") or "")
+    task_quality_summary = (
+        task_quality_summary
+        if exact_historical_match or _is_repo_mismatch(detail) or provider_payload.get("repo_match") == "mismatch"
+        else str(quality_feedback.get("task_quality_summary", "") or "").strip() or task_quality_summary
+    )
+    recommendation = str(detail.recommendation or "").strip() or (
+        "Clarify the missing details before moving to implementation planning."
+        if locale == "en" and missing_details
+        else "Proceed to implementation planning."
+        if locale == "en"
+        else "Уточніть відсутні деталі перед переходом до планування імплементації."
+        if missing_details
+        else "Переходьте до плану імплементації."
+    )
+    repo_match = _repo_match_payload(detail, include_unknown=bool(detail.repo_id))
+    if selected_repos:
+        repo_match = {
+            "status": "match",
+            "confidence": float(detail.repo_relevance_confidence or (0.9 if exact_historical_match else 0.75)),
+            "reason": (
+                f"Historical Jira match {str(exact_historical_match.get('jira_key', '') or '').strip()} points to {primary_repo_id} with files like {', '.join(top_historical_changed_files[:2])}."
+                if exact_historical_match and top_historical_changed_files and locale == "en"
+                else f"Selected repository {primary_repo_id} has historical evidence for this task family."
+                if locale == "en"
+                else f"Вибраний репозиторій {primary_repo_id} має історичні сигнали для цієї сім'ї задач."
+            ),
+        }
+    if exact_historical_match:
+        changed_file_summary = ", ".join(top_historical_changed_files[:2])
+        task_quality_summary = (
+            f"Historical Jira evidence points to {primary_repo_id}; likely affected files include {changed_file_summary}."
+            if locale == "en"
+            else f"Історичні Jira-дані вказують на {primary_repo_id}; ймовірні файли змін: {changed_file_summary}."
+        )
+        recommendation = (
+            f"Start review from {changed_file_summary} and verify the receipt wording flow in {primary_repo_id}."
+            if locale == "en"
+            else f"Почніть перевірку з {changed_file_summary} і звірте сценарій друку квитанції в {primary_repo_id}."
+        )
     if provider_payload.get("repo_match") == "mismatch" and not _is_repo_mismatch(detail):
         task_quality_summary = "Task does not appear to match the selected repository." if locale == "en" else "Задача, ймовірно, не відповідає вибраному repo."
         recommendation = str(provider_payload.get("recommendation", "") or recommendation).strip()
     if _is_repo_mismatch(detail):
         task_quality_summary = "Task does not appear to match the selected repository." if locale == "en" else "Задача, ймовірно, не відповідає вибраному repo."
         recommendation = str(detail.repo_relevance_next_action or detail.recommendation or "").strip()
+    quality_feedback = _build_contextual_analyze_task_feedback(
+        task_text=task_text,
+        spec=spec,
+        input_debug=input_debug,
+        top_historical_matches=top_historical_matches,
+        top_historical_changed_files=top_historical_changed_files,
+        top_candidate_files=top_candidate_files,
+        repo_id=str(detail.repo_id or "").strip(),
+        likely_files=likely_files,
+        locale=locale,
+    )
+    missing_details = list(quality_feedback.get("missing_details", []) or [])
+    suggested_additions = list(quality_feedback.get("suggested_additions", []) or [])
+    concrete_questions = list(quality_feedback.get("concrete_questions", []) or [])
+    decision_questions = list(quality_feedback.get("decision_questions", []) or decision_questions)
+    quality_state = str(quality_feedback.get("quality_state", "") or quality_state)
+    advisory_block_title = str(quality_feedback.get("advisory_block_title", "") or advisory_block_title)
+    task_quality_summary = task_quality_summary
+    recommendation = recommendation
+    quality_score_payload = _compute_analyze_task_quality_score(
+        task_text=task_text,
+        spec=spec,
+        input_debug=input_debug,
+        quality_state=quality_state,
+        repo_match=repo_match,
+        top_historical_matches=top_historical_matches,
+        top_candidate_files=top_candidate_files,
+        candidate_files_count=candidate_files_count,
+        selected_files_count=selected_files_count,
+    )
+    novelty_payload = _compute_analyze_task_novelty_and_confidence(
+        task_text=task_text,
+        quality_state=quality_state,
+        repo_match=repo_match,
+        top_historical_matches=top_historical_matches,
+        top_historical_changed_files=top_historical_changed_files,
+        top_candidate_files=top_candidate_files,
+        candidate_files_count=candidate_files_count,
+        selected_files_count=selected_files_count,
+    )
+    domain_novelty_score = int(novelty_payload.get("domain_novelty_score", 0) or 0)
+    repo_novelty_score = int(novelty_payload.get("repo_novelty_score", 0) or 0)
+    repo_confidence_score = int(novelty_payload.get("repo_confidence", 0) or 0)
+    file_confidence_score = int(novelty_payload.get("file_confidence", 0) or 0)
+    task_confidence_score = int(novelty_payload.get("task_confidence", 0) or 0)
+    analysis_mode = str(novelty_payload.get("analysis_mode", "") or "")
+    if repo_novelty_score >= 70 and len(all_top_candidate_files) > len(top_candidate_files):
+        top_candidate_files = all_top_candidate_files[:5]
+    if domain_novelty_score >= 70:
+        decision_questions = _limit_items(
+            list(
+                dict.fromkeys(
+                    [
+                        *decision_questions,
+                        (
+                            "Is this a new module or bounded context, or should it extend an existing implementation path?"
+                            if locale == "en"
+                            else "Це новий модуль або bounded context, чи розширення наявного шляху реалізації?"
+                        ),
+                        (
+                            "Should this behavior stay inside the detected repository, or is it likely a cross-repository change?"
+                            if locale == "en"
+                            else "Ця зміна має залишитися в межах виявленого репозиторію чи, ймовірно, потребує cross-repo реалізації?"
+                        ),
+                        (
+                            "Does the task need a new entry point or workflow, or should it reuse the current user flow with targeted changes?"
+                            if locale == "en"
+                            else "Потрібен новий entry point або workflow, чи слід перевикористати поточний сценарій із точковими змінами?"
+                        ),
+                    ]
+                )
+            ),
+            max_items=4,
+        )
+    if analysis_mode == "exploration":
+        task_quality_summary = (
+            f"Task is plausible but still exploratory; likely areas include {', '.join(top_historical_changed_files[:2] or [primary_repo_id or 'current repo'])}."
+            if locale == "en"
+            else f"Задача виглядає правдоподібною, але потребує дослідження; ймовірні зони змін: {', '.join(top_historical_changed_files[:2] or [primary_repo_id or 'поточний repo'])}."
+        )
+        recommendation = (
+            "Treat the suggested files as exploratory leads and confirm the implementation path before editing."
+            if locale == "en"
+            else "Сприймайте запропоновані файли як exploratory-орієнтири та підтвердьте шлях реалізації перед редагуванням."
+        )
+    elif file_confidence_score < 45:
+        tentative_targets = [
+            item.get("name", "")
+            for item in top_candidate_files[:2]
+            if isinstance(item, dict) and str(item.get("name", "")).strip()
+        ]
+        task_quality_summary = (
+            f"File suggestions are tentative; verify the implementation path before committing to {', '.join(tentative_targets or [primary_repo_id or 'this repository'])}."
+            if locale == "en"
+            else f"Прив’язка до файлів поки що попередня; перевірте шлях реалізації перед змінами в {', '.join(tentative_targets or [primary_repo_id or 'цьому репозиторії'])}."
+        )
+        recommendation = (
+            "Use the suggested files as leads, then confirm the exact ownership and implementation path before editing."
+            if locale == "en"
+            else "Використовуйте запропоновані файли як орієнтири, але спочатку підтвердьте точну зону відповідальності та шлях реалізації."
+        )
+    implementation_plan_preview = _build_analyze_task_implementation_plan_preview(
+        task_text=task_text,
+        top_candidate_files=top_candidate_files,
+        top_historical_changed_files=top_historical_changed_files,
+        locale=locale,
+    )
+    implementation_plan_branches = _build_analyze_task_implementation_plan_branches(
+        decision_questions=decision_questions,
+        implementation_plan_preview=implementation_plan_preview,
+        top_historical_changed_files=top_historical_changed_files,
+        locale=locale,
+    )
+    patch_gate = _compute_patch_generation_gate(
+        repo_id=primary_repo_id,
+        repo_confidence=repo_confidence_score,
+        file_confidence=file_confidence_score,
+        novelty_score=int(novelty_payload.get("novelty_score", 0) or 0),
+        selected_files_count=selected_files_count,
+        analysis_mode=analysis_mode,
+        decision_questions=decision_questions,
+        implementation_plan_preview=implementation_plan_preview,
+        top_candidate_files=top_candidate_files,
+        locale=locale,
+    )
     technical_details = _workflow_technical_details(
         workflow_name="analyze_task",
         task_text=task_text,
@@ -2531,17 +4476,57 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
         provider_payload=provider_payload,
         input_debug=input_debug,
         baseline_summary=baseline_summary,
-        final_merge_strategy="baseline_only",
+        final_merge_strategy=final_merge_strategy,
         dropped_candidates_reasons=[],
     )
+    technical_details["quality_score"] = int(quality_score_payload.get("quality_score", 0) or 0)
+    technical_details["quality_breakdown"] = dict(quality_score_payload.get("quality_breakdown", {}) or {})
+    technical_details["confidence_score"] = int(novelty_payload.get("confidence_score", 0) or 0)
+    technical_details["novelty_score"] = int(novelty_payload.get("novelty_score", 0) or 0)
+    technical_details["domain_novelty_score"] = domain_novelty_score
+    technical_details["repo_novelty_score"] = repo_novelty_score
+    technical_details["repo_confidence"] = repo_confidence_score
+    technical_details["file_confidence"] = file_confidence_score
+    technical_details["task_confidence"] = task_confidence_score
+    technical_details["novelty_level"] = str(novelty_payload.get("novelty_level", "") or "")
+    technical_details["analysis_mode"] = analysis_mode
+    technical_details["patch_generation_ready"] = bool(patch_gate.get("patch_generation_ready", False))
+    technical_details["patch_generation_blockers"] = list(patch_gate.get("patch_generation_blockers", []) or [])
+    technical_details["patch_generation_allowed_files"] = list(patch_gate.get("patch_generation_allowed_files", []) or [])
+    technical_details["advisory_suggestions_debug"] = list(quality_feedback.get("suggested_additions_debug", []) or [])
     _attach_workflow_technical_details(detail, technical_details, workflow_name="analyze_task")
     return AnalyzeTaskWorkflowResult(
         task_quality_summary=task_quality_summary,
+        quality_score=int(quality_score_payload.get("quality_score", 0) or 0),
+        confidence_score=int(novelty_payload.get("confidence_score", 0) or 0),
+        novelty_score=int(novelty_payload.get("novelty_score", 0) or 0),
+        domain_novelty_score=domain_novelty_score,
+        repo_novelty_score=repo_novelty_score,
+        repo_confidence=repo_confidence_score,
+        file_confidence=file_confidence_score,
+        task_confidence=task_confidence_score,
+        quality_state=quality_state,
+        quality_breakdown=dict(quality_score_payload.get("quality_breakdown", {}) or {}),
+        novelty_level=str(novelty_payload.get("novelty_level", "") or ""),
+        analysis_mode=analysis_mode,
+        advisory_block_title=advisory_block_title,
         missing_details=missing_details,
         risks=_limit_items(provider_payload.get("risks", []) or spec.get("risks", []) or []),
         suggested_additions=suggested_additions,
-        concrete_questions=_specific_questions_for_task(spec, str(detail.repo_id or "").strip(), likely_files, locale=locale),
-        repo_match=_repo_match_payload(detail, include_unknown=bool(detail.repo_id)),
+        concrete_questions=concrete_questions,
+        decision_questions=decision_questions,
+        repo_match=repo_match,
+        selected_repos=selected_repos,
+        top_historical_matches=top_historical_matches,
+        top_historical_changed_files=top_historical_changed_files,
+        candidate_files_count=candidate_files_count,
+        selected_files_count=selected_files_count,
+        top_candidate_files=top_candidate_files,
+        implementation_plan_preview=implementation_plan_preview,
+        implementation_plan_branches=implementation_plan_branches,
+        patch_generation_ready=bool(patch_gate.get("patch_generation_ready", False)),
+        patch_generation_blockers=list(patch_gate.get("patch_generation_blockers", []) or []),
+        patch_generation_allowed_files=list(patch_gate.get("patch_generation_allowed_files", []) or []),
         recommendation=recommendation,
         technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
@@ -2592,19 +4577,46 @@ def _build_structure_task_result(run_record: RunRecord, detail: RunDetail, sourc
     )
 
 
-def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> ImplementationPlanWorkflowResult:
+def _build_implementation_plan_result(
+    run_record: RunRecord,
+    detail: RunDetail,
+    *,
+    locale: str = DEFAULT_LOCALE,
+    progress_callback: Any | None = None,
+) -> ImplementationPlanWorkflowResult:
+    def _mark(subcall_name: str, marker: str, **extra: Any) -> None:
+        if callable(progress_callback):
+            progress_callback(subcall_name, marker, **extra)
+
+    _mark("build_implementation_plan_result", "started")
     spec = dict(detail.spec_result or {})
     requested_execution_mode = str(spec.get("execution_mode_requested", "") or "").strip()
+    _mark("workflow_input_debug", "started")
     input_debug = _workflow_input_debug(detail, workflow_name="implementation_plan")
+    _mark("workflow_input_debug", "finished")
+    seeded_repo_context = dict(input_debug.get("precomputed_repo_context", {}) or {})
     task_text = str(input_debug.get("final_workflow_input", "") or detail.jira_ticket or run_record.goal).strip()
+    _mark("baseline_task_summary", "started")
     baseline_summary = _baseline_task_summary(task_text, spec, workflow_name="implementation_plan", locale=locale)
+    _mark("baseline_task_summary", "finished")
+    _mark("build_likely_file_details", "started")
     likely_file_details = _build_likely_file_details(detail)
+    _mark("build_likely_file_details", "finished")
     likely_files = [item.name for item in likely_file_details] if likely_file_details else []
+    _mark("build_likely_module_details", "started")
     likely_module_details = _build_likely_module_details(detail)
+    _mark("build_likely_module_details", "finished")
     likely_modules = [item.name for item in likely_module_details]
+    _mark("build_closest_areas", "started")
     closest_areas = _build_closest_areas(detail)
+    _mark("build_closest_areas", "finished")
+    _mark("is_repo_mismatch", "started")
     if _is_repo_mismatch(detail):
+        _mark("is_repo_mismatch", "finished")
+        _mark("apply_provider_metadata_repo_mismatch", "started")
         _apply_provider_metadata(detail, "implementation_plan")
+        _mark("apply_provider_metadata_repo_mismatch", "finished")
+        _mark("build_implementation_plan_result", "finished")
         return ImplementationPlanWorkflowResult(
             repo_match="mismatch",
             repo_match_reason=str(detail.repo_relevance_reason or ("Repository mismatch detected." if locale == "en" else "Виявлено repo mismatch.")).strip(),
@@ -2633,14 +4645,29 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             top_closest_areas=closest_areas[:3],
             technical_run=_technical_run_link(run_record, detail),
         )
-    provider_payload = _gitnexus_workflow_result(
-        run_record.repo_id,
-        "implementation_plan",
-        str(run_record.goal or detail.goal or "").strip(),
-        jira_key=str(detail.jira_ticket or "").strip(),
-        execution_mode=requested_execution_mode,
-    )
+    _mark("is_repo_mismatch", "finished")
+    _mark("gitnexus_workflow_result", "started")
+    if seeded_repo_context:
+        provider_payload = _seeded_implementation_plan_provider_payload(
+            seed_context=seeded_repo_context,
+            repo_id=str(run_record.repo_id or detail.repo_id or "").strip(),
+            execution_mode=requested_execution_mode,
+            locale=locale,
+        )
+    else:
+        provider_payload = _gitnexus_workflow_result(
+            run_record.repo_id,
+            "implementation_plan",
+            str(run_record.goal or detail.goal or "").strip(),
+            jira_key=str(detail.jira_ticket or "").strip(),
+            execution_mode=requested_execution_mode,
+            progress_callback=progress_callback,
+        )
+    _mark("gitnexus_workflow_result", "finished")
+    _mark("apply_provider_metadata", "started")
     _apply_provider_metadata(detail, "implementation_plan", provider_payload)
+    _mark("apply_provider_metadata", "finished")
+    _mark("provider_selection_transforms", "started")
     provider_file_details = _selection_candidates_from_provider(provider_payload.get("likely_file_details"))
     provider_module_details = _selection_candidates_from_provider(provider_payload.get("likely_module_details"))
     provider_closest_areas = _area_suggestions_from_provider(provider_payload.get("closest_areas"))
@@ -2648,6 +4675,7 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
     provider_top_candidate_symbols = _selection_candidates_from_provider(provider_payload.get("top_candidate_symbols"))
     provider_top_closest_areas = _area_suggestions_from_provider(provider_payload.get("top_closest_areas"))
     provider_change_actions = _change_actions_from_provider(provider_payload.get("change_actions"))
+    _mark("provider_selection_transforms", "finished")
     provider_used = str(provider_payload.get("provider_used", "") or detail.provider_used or "native").strip() or "native"
     provider_fallback = bool(provider_payload.get("provider_fallback", False) or detail.provider_fallback)
     provider_reason = _clean_user_text(
@@ -2663,7 +4691,9 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
     selection_decision = str(provider_payload.get("selection_decision", "") or "").strip()
     candidate_files_count = int(provider_payload.get("candidate_files_count", 0) or 0)
     selected_files_count = int(provider_payload.get("selected_files_count", 0) or 0)
+    _mark("scope_result_fields", "started")
     scope_fields = _scope_result_fields(provider_payload)
+    _mark("scope_result_fields", "finished")
     scope_blocked = bool(provider_payload.get("scope_blocked", False))
     provider_repo_match = str(provider_payload.get("repo_match", "") or "").strip().lower()
     if provider_file_details or provider_module_details or provider_closest_areas:
@@ -2842,6 +4872,7 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
             f"{recommendation} {str(scope_fields.get('scope_enforcement_reason', '') or '').strip()}".strip()
         )
 
+    _mark("workflow_technical_details", "started")
     technical_details = _workflow_technical_details(
         workflow_name="implementation_plan",
         task_text=task_text,
@@ -2852,8 +4883,12 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
         final_merge_strategy=final_merge_strategy,
         dropped_candidates_reasons=dropped_candidates_reasons,
     )
+    _mark("workflow_technical_details", "finished")
+    _mark("attach_workflow_technical_details", "started")
     _attach_workflow_technical_details(detail, technical_details, workflow_name="implementation_plan")
-    return ImplementationPlanWorkflowResult(
+    _mark("attach_workflow_technical_details", "finished")
+    _mark("implementation_plan_result_object", "started")
+    result = ImplementationPlanWorkflowResult(
         repo_match=repo_match,
         repo_match_reason=repo_match_reason,
         likely_files=likely_files,
@@ -2891,6 +4926,9 @@ def _build_implementation_plan_result(run_record: RunRecord, detail: RunDetail, 
         technical_details=technical_details,
         technical_run=_technical_run_link(run_record, detail),
     )
+    _mark("implementation_plan_result_object", "finished")
+    _mark("build_implementation_plan_result", "finished")
+    return result
 def _build_pre_review_result(run_record: RunRecord, detail: RunDetail, *, locale: str = DEFAULT_LOCALE) -> PreReviewWorkflowResult:
     review = dict(detail.review_result or {})
     requested_execution_mode = str(review.get("execution_mode_requested", "") or "").strip()
@@ -3494,6 +5532,13 @@ def _persist_failed_tracked_run_detail(
     failure_payload: dict[str, Any] | None = None,
 ) -> None:
     payload = dict(failure_payload or {})
+    root_cause_summary = str(payload.get("root_cause_summary", "") or payload.get("message", "") or "").strip()
+    failure_code = str(payload.get("error", "") or payload.get("failure_code", "") or "").strip()
+    recommendation = str(payload.get("recommendation", "") or "").strip()
+    if not recommendation and failure_code == "jira_auth_missing":
+        recommendation = "Jira auth is not configured on this web instance."
+    if not recommendation and failure_code in {"llm_provider_unavailable", "missing_api_key", "openrouter_api_key_empty", "openai_api_key_empty"}:
+        recommendation = "LLM auth/config is not configured on this web instance."
     run_service.persist_run_detail(
         run_record.run_id,
         {
@@ -3501,6 +5546,12 @@ def _persist_failed_tracked_run_detail(
             "goal": run_record.goal,
             "repo_id": run_record.repo_id,
             "jira_ticket": str(request_body.jira_ticket or "").strip(),
+            "failure_code": failure_code,
+            "failure_reason": root_cause_summary,
+            "root_cause_summary": root_cause_summary,
+            "final_result_summary": root_cause_summary,
+            "recommendation": recommendation,
+            "run_outcome_type": str(payload.get("run_outcome_type", "") or "failed_preflight").strip(),
             "spec_result": None,
             "review_result": None,
             "research_result": None,
@@ -3513,6 +5564,7 @@ def _persist_failed_tracked_run_detail(
             "llm_model": str(payload.get("llm_model", "") or "").strip(),
             "llm_runtime_available": bool(payload.get("llm_runtime_available", False)),
             "llm_auth_present": bool(payload.get("llm_auth_present", False)),
+            "jira_auth_present": bool(payload.get("jira_auth_present", False)),
             "llm_request_attempted": bool(payload.get("llm_request_attempted", False)),
             "llm_request_succeeded": bool(payload.get("llm_request_succeeded", False)),
             "llm_failure_reason": str(payload.get("llm_failure_reason", "") or "").strip(),
@@ -3523,9 +5575,80 @@ def _persist_failed_tracked_run_detail(
             "policy_decisions": [decision.to_dict() for decision in list(run_record.policy_decisions)],
             "sources": [],
             "repo_context_summary": None,
+            "source_stage": str(payload.get("source_stage", "") or "api_preflight").strip(),
+            "routing_reason": str(payload.get("routing_reason", "") or "Workflow failed during API preflight before tracked execution.").strip(),
         },
         log_path=run_record.log_path,
     )
+
+
+def _create_failed_tracked_api_run(
+    *,
+    request_body: RunCreateRequest,
+    actor_context: ActorContext,
+    failure_payload: dict[str, Any] | None = None,
+) -> RunRecord:
+    run_service = RunService(persist=True)
+    run_record = run_service.start_run(
+        _join_run_goal(request_body.goal, request_body.jira_ticket),
+        repo_id=str(request_body.repo_id or "").strip(),
+        actor_context=actor_context,
+    )
+    run_id = run_record.run_id
+    step_name = str(request_body.mode or "").strip().lower() or "research"
+    run_service.start_step(run_id, step_name)
+    payload = dict(failure_payload or {})
+    message = str(payload.get("message", "") or payload.get("root_cause_summary", "") or "Workflow preflight failed.").strip()
+    error_code = str(payload.get("error", "") or payload.get("failure_code", "") or "preflight_failed").strip()
+    run_service.fail_step(
+        run_id,
+        ExecutionError(
+            type=error_code,
+            message=message,
+            step=step_name,
+            details=payload,
+        ),
+    )
+    finished_run = run_service.finish_run(run_id, "failed")
+    _persist_failed_tracked_run_detail(
+        run_service=run_service,
+        run_record=finished_run,
+        request_body=request_body,
+        failure_payload=payload,
+    )
+    return finished_run
+
+
+def _ensure_workflow_llm_preflight(
+    *,
+    request_body: RunCreateRequest,
+    actor_context: ActorContext,
+    workflow_name: str,
+) -> None:
+    try:
+        resolve_llm_runtime_config()
+    except LLMConfigurationError as exc:
+        failure_payload = {
+            "error": "llm_provider_unavailable",
+            "message": str(exc),
+            "workflow_type": workflow_name,
+            "source_stage": "api_preflight",
+            "routing_reason": "Workflow failed before tracked execution because LLM auth/config is unavailable.",
+            "run_outcome_type": "failed_preflight",
+            **exc.telemetry(),
+        }
+        finished_run = _create_failed_tracked_api_run(
+            request_body=request_body,
+            actor_context=actor_context,
+            failure_payload=failure_payload,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                **failure_payload,
+                "run_id": finished_run.run_id,
+            },
+        ) from exc
 
 
 def _serialize_repo(repo: RepoMetadata) -> dict[str, Any]:
@@ -4055,6 +6178,39 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/config")
+def health_config() -> dict[str, Any]:
+    llm_provider = ""
+    llm_runtime_available = False
+    llm_failure_reason = ""
+    try:
+        runtime = resolve_llm_runtime_config(model_name=str(settings.llm.model_name or "").strip())
+        llm_provider = str(runtime.provider or "").strip()
+        llm_runtime_available = True
+    except LLMConfigurationError as exc:
+        llm_provider = str(exc.provider or "").strip()
+        llm_failure_reason = str(exc.llm_failure_reason or "").strip()
+
+    return {
+        "status": "ok",
+        "config_source": "repo_root_env_file",
+        "env_file_path": str((Path(__file__).resolve().parent / ".env").resolve()),
+        "env_file_exists": (Path(__file__).resolve().parent / ".env").exists(),
+        "openrouter_key_present": bool(str(settings.llm.openrouter_api_key or "").strip()),
+        "openai_key_present": bool(str(settings.llm.openai_api_key or "").strip()),
+        "root_env_jira_email_present": bool(str(settings.runtime.jira_email or "").strip()),
+        "root_env_jira_api_token_present": bool(str(settings.runtime.jira_api_token or "").strip()),
+        "jira_mcp_email_present": bool(str(jira_mcp_settings.jira_email or "").strip()),
+        "jira_mcp_api_token_present": bool(str(jira_mcp_settings.jira_api_token or "").strip()),
+        "jira_auth_source": "jira_mcp_server_env",
+        "jira_auth_present": bool(jira_auth_present()),
+        "llm_provider": llm_provider,
+        "llm_runtime_available": llm_runtime_available,
+        "llm_failure_reason": llm_failure_reason,
+        "repo_intelligence_provider": str(settings.repo_intelligence.provider or "").strip(),
+    }
+
+
 @app.get("/")
 def root() -> RedirectResponse:
     return RedirectResponse(url="/ui/index.html", status_code=307)
@@ -4201,6 +6357,96 @@ def bulk_backfill_repos(request: Request) -> dict[str, Any]:
     if not decision.allowed:
         raise _permission_denied(decision)
     return _repo_fleet_service.bulk_backfill_active_repos()
+
+
+@app.post("/repos/bulk/onboard-refresh")
+def start_bulk_repo_onboard_refresh(payload: RepoBulkOnboardRequest, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    try:
+        job = _repo_bulk_job_service.start_job(
+            options=payload.model_dump(),
+            actor_id=actor_context.actor_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "bulk_repo_job_already_running",
+                "message": str(exc),
+                "latest_job": _repo_bulk_job_service.get_latest_job(),
+            },
+        ) from exc
+    return {"job": job}
+
+
+@app.get("/repos/bulk/onboard-refresh/latest")
+def get_latest_bulk_repo_onboard_refresh(request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    latest = _repo_bulk_job_service.get_latest_job()
+    return {"available": latest is not None, "job": latest}
+
+
+@app.get("/repos/bulk/onboard-refresh/{job_id}")
+def get_bulk_repo_onboard_refresh_job(job_id: str, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "repo.context.read",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    job = _repo_bulk_job_service.get_job(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "bulk_repo_job_not_found", "message": f"Unknown job_id: {job_id}"},
+        )
+    return {"job": job}
+
+
+@app.post("/repos/bulk/onboard-refresh/{job_id}/retry-failed")
+def retry_failed_bulk_repo_onboard_refresh(job_id: str, request: Request) -> dict[str, Any]:
+    actor_context = _build_actor_context(request)
+    decision = PermissionService().evaluate(
+        actor_context,
+        "integration.manage",
+        scope=PermissionScope(source_channel=actor_context.source_channel),
+    )
+    if not decision.allowed:
+        raise _permission_denied(decision)
+    try:
+        job = _repo_bulk_job_service.retry_failed_repos(job_id, actor_id=actor_context.actor_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "bulk_repo_job_not_found", "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "bulk_repo_job_retry_invalid", "message": str(exc)},
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "bulk_repo_job_already_running", "message": str(exc)},
+        ) from exc
+    return {"job": job}
 
 
 @app.post("/repos/bulk/hydrate-jira-snapshots")
@@ -4791,23 +7037,58 @@ def update_admin_policy(role_name: str, payload: AdminPolicyRequest, request: Re
 def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any]:
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
-    input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="analyze_task")
-    run_record = _execute_tracked_api_run(
-        request_body=_workflow_run_request(
-            workflow_name="analyze_task",
-            jira_ticket=payload.jira_ticket,
-            repo_id=payload.repo_id,
-            resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
-        ),
+    _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
+    input_debug: dict[str, Any]
+    try:
+        input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="analyze_task")
+    except HTTPException as exc:
+        detail = dict(exc.detail or {}) if isinstance(exc.detail, dict) else {"message": str(exc.detail or exc)}
+        if int(exc.status_code or 0) >= 424:
+            request_body = _workflow_run_request(
+                workflow_name="analyze_task",
+                jira_ticket=payload.jira_ticket,
+                repo_id=payload.repo_id,
+                resolved_input_text="",
+            )
+            finished_run = _create_failed_tracked_api_run(
+                request_body=request_body,
+                actor_context=actor_context,
+                failure_payload={
+                    **detail,
+                    "source_stage": "workflow_input_resolution",
+                    "routing_reason": "Workflow failed before tracked execution because Jira-backed input resolution did not complete.",
+                    "run_outcome_type": "failed_preflight",
+                },
+            )
+            detail["run_id"] = finished_run.run_id
+            raise HTTPException(status_code=exc.status_code, detail=detail) from exc
+        raise
+    request_body = _workflow_run_request(
+        workflow_name="analyze_task",
+        jira_ticket=payload.jira_ticket,
+        repo_id=payload.repo_id,
+        resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
+    )
+    _ensure_workflow_llm_preflight(
+        request_body=request_body,
         actor_context=actor_context,
         workflow_name="analyze_task",
+    )
+    run_record = _create_deterministic_analyze_task_run(
+        request_body=request_body,
+        actor_context=actor_context,
     )
     detail = _load_run_detail_for_record(run_record)
     spec_payload = dict(detail.spec_result or {})
     spec_payload["execution_mode_requested"] = str(payload.execution_mode or "").strip() or "plan_only"
+    if not list(spec_payload.get("acceptance_criteria", []) or []):
+        spec_payload["acceptance_criteria"] = list(input_debug.get("acceptance_criteria", []) or [])
     detail.spec_result = spec_payload
     _attach_workflow_input_debug(detail, input_debug, workflow_name="analyze_task")
     result = _build_analyze_task_result(run_record, detail, locale=locale)
+    detail.final_result_summary = str(result.task_quality_summary or "").strip()
+    detail.recommendation = str(result.recommendation or "").strip()
+    detail.run_outcome_type = "success"
     _persist_workflow_detail(run_record, detail)
     return {
         "workflow": "analyze_task",
@@ -4844,16 +7125,33 @@ def structure_task(payload: StructureTaskRequest, request: Request) -> dict[str,
 def implementation_plan(payload: ImplementationPlanRequest, request: Request) -> dict[str, Any]:
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
-    input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="implementation_plan")
-    run_record = _execute_tracked_api_run(
-        request_body=_workflow_run_request(
-            workflow_name="implementation_plan",
-            jira_ticket=payload.jira_ticket,
-            repo_id=payload.repo_id,
-            resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
-        ),
-        actor_context=actor_context,
+    _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
+    seed_context = dict(payload.seed_context or {})
+    input_debug = (
+        _seeded_implementation_plan_input_debug(payload.jira_ticket, seed_context)
+        if seed_context
+        else _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="implementation_plan")
+    )
+    selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
+    resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
+    request_body = _workflow_run_request(
         workflow_name="implementation_plan",
+        jira_ticket=payload.jira_ticket,
+        repo_id=resolved_repo_id,
+        resolved_input_text=str(input_debug.get("prompt_task_text", "") or input_debug.get("final_workflow_input", "") or ""),
+    )
+    run_record = (
+        _create_deterministic_implementation_plan_run(
+            request_body=request_body,
+            actor_context=actor_context,
+            execution_mode=str(payload.execution_mode or "").strip() or "safe_top1_write",
+        )
+        if seed_context
+        else _execute_tracked_api_run(
+            request_body=request_body,
+            actor_context=actor_context,
+            workflow_name="implementation_plan",
+        )
     )
     detail = _load_run_detail_for_record(run_record)
     spec_payload = dict(detail.spec_result or {})
@@ -4866,6 +7164,168 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
         "workflow": "implementation_plan",
         "run_id": run_record.run_id,
         "result": result.to_dict(),
+    }
+
+
+@app.post("/workflows/generate-draft-patch")
+def generate_draft_patch(payload: DraftPatchRequest, request: Request) -> dict[str, Any]:
+    locale = _locale_from_request(request)
+    _build_actor_context(request)
+    _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
+    seed_context = dict(payload.seed_context or {})
+    selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
+    resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
+    result = _draft_patch_result_from_seed(
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        seed_context=seed_context,
+        locale=locale,
+    )
+    return {
+        "workflow": "generate_draft_patch",
+        "result": result.to_dict(),
+    }
+
+
+@app.post("/workflows/review-draft-patch")
+def review_draft_patch(payload: DraftPatchReviewRequest, request: Request) -> dict[str, Any]:
+    locale = _locale_from_request(request)
+    actor_context = _build_actor_context(request)
+    _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
+    seed_context = dict(payload.seed_context or {})
+    selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
+    resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
+    result = _draft_patch_result_from_seed(
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        seed_context=seed_context,
+        locale=locale,
+    )
+    review_record = _draft_patch_review_service.record_review(
+        actor_id=actor_context.actor_id,
+        actor_role=actor_context.role,
+        repo_id=resolved_repo_id,
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        diff_text=result.generated_diff,
+        allowed_files=list(result.allowed_files or []),
+        confidence_score=int(result.confidence_score or 0),
+        novelty_score=int(result.novelty_score or 0),
+        patch_generation_ready=bool(result.patch_generation_ready),
+        decision=str(payload.decision or "").strip(),
+        note=str(payload.note or "").strip(),
+        technical_details=dict(result.technical_details or {}),
+    )
+    result.review_id = str(review_record.get("review_id", "") or "").strip()
+    result.review_state = str(review_record.get("decision", "") or "pending").strip()
+    result.reviewed_by = str(review_record.get("actor_id", "") or "").strip()
+    execution_record: DraftPatchExecutionResult | None = None
+    if result.review_state == "approved":
+        try:
+            handoff = DraftPatchExecutionHandoff(
+                review_record_id=str(review_record.get("review_id", "") or "").strip(),
+                jira_ticket=str(payload.jira_ticket or "").strip(),
+                repo_id=resolved_repo_id,
+                allowed_files=list(result.allowed_files or []),
+                file_rationales=[item.to_dict() if hasattr(item, "to_dict") else dict(item or {}) for item in list(result.file_rationales or [])],
+                validation_plan=list(result.validation_plan or []),
+                initial_apply_input=ApplyInputPayload.model_validate(
+                    _build_draft_patch_apply_input(
+                        repo_id=resolved_repo_id,
+                        allowed_files=list(result.allowed_files or []),
+                        file_rationales=list(result.file_rationales or []),
+                    ).to_dict()
+                ),
+                initial_diff_text=result.generated_diff,
+                seed_context=seed_context,
+                diff_hash=str(result.diff_hash or "").strip(),
+                review_state=result.review_state,
+            )
+            execution_record = _draft_patch_execution_service.execute_approved_draft(
+                handoff,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail={"error": "draft_patch_validation_failed", "message": str(exc)}) from exc
+        result = _overlay_draft_patch_execution_result(result=result, execution_record=execution_record)
+    result.apply_blockers = _apply_blockers_for_draft_result(result=result, review_record=review_record, execution_record=execution_record)
+    result.apply_ready = not bool(result.apply_blockers)
+    return {
+        "workflow": "review_draft_patch",
+        "result": result.to_dict(),
+        "review": review_record,
+        "execution": execution_record,
+    }
+
+
+@app.post("/workflows/apply-draft-patch")
+def apply_draft_patch(payload: DraftPatchApplyRequest, request: Request) -> dict[str, Any]:
+    locale = _locale_from_request(request)
+    actor_context = _build_actor_context(request)
+    _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
+    seed_context = dict(payload.seed_context or {})
+    selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
+    resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
+    result = _draft_patch_result_from_seed(
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        seed_context=seed_context,
+        locale=locale,
+    )
+    review_record = _draft_patch_review_service.load_review(str(payload.review_id or "").strip())
+    if not review_record:
+        raise HTTPException(status_code=404, detail={"error": "draft_patch_review_not_found", "message": "Draft patch review record was not found."})
+    execution_record = _draft_patch_execution_service.load_execution(str(payload.review_id or "").strip())
+    if not execution_record:
+        raise HTTPException(status_code=409, detail={"error": "draft_patch_execution_missing", "message": "Draft patch apply requires a persisted validated execution artifact."})
+    if str(execution_record.repo_id or "").strip() != str(resolved_repo_id or "").strip():
+        raise HTTPException(status_code=409, detail={"error": "draft_patch_repo_mismatch", "message": "Draft patch execution artifact repo_id does not match the apply request repo_id."})
+    if not bool(execution_record.validated):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "draft_patch_not_validated",
+                "message": "Draft patch apply is blocked because the execution artifact is not validated.",
+                "blockers": list(execution_record.apply_blockers or []),
+            },
+        )
+    result = _overlay_draft_patch_execution_result(result=result, execution_record=execution_record)
+    if str(execution_record.diff_hash or "").strip() != str(result.diff_hash or "").strip():
+        raise HTTPException(status_code=409, detail={"error": "draft_patch_diff_changed", "message": "Draft patch content changed after approval; review the validated diff before apply."})
+    apply_blockers = _apply_blockers_for_draft_result(
+        result=result,
+        review_record=review_record,
+        apply_mode=str(payload.apply_mode or "").strip(),
+        execution_record=execution_record,
+    )
+    apply_input = _apply_input_from_payload(execution_record.apply_input)
+    try:
+        apply_record = _draft_patch_review_service.apply_reviewed_patch(
+            review_record=review_record,
+            repo_id=resolved_repo_id,
+            jira_ticket=str(payload.jira_ticket or "").strip(),
+            diff_text=result.generated_diff,
+            apply_input=apply_input,
+            apply_mode=str(payload.apply_mode or "").strip(),
+            actor_id=actor_context.actor_id,
+            actor_role=actor_context.role,
+            allow_apply=not bool(apply_blockers),
+            blockers=apply_blockers,
+            validation_plan=list(result.validation_plan or []),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error": "draft_patch_apply_failed", "message": str(exc)}) from exc
+    result.review_id = str(review_record.get("review_id", "") or "").strip()
+    result.review_state = str(review_record.get("decision", "") or "pending").strip()
+    result.reviewed_by = str(review_record.get("actor_id", "") or "").strip()
+    result.apply_blockers = list(apply_record.get("blockers", []) or [])
+    result.apply_ready = not bool(result.apply_blockers)
+    result.apply_mode = str(apply_record.get("apply_mode", "") or "").strip()
+    result.applied = bool(apply_record.get("allow_apply", False)) and bool(apply_record.get("apply_payload", {}).get("apply_result", {}).get("applied", False))
+    result.apply_artifact_path = (Path("artifacts") / "draft_patch_applies" / f"{apply_record.get('apply_id', '')}.json").as_posix()
+    result.commit_hash = str(apply_record.get("apply_payload", {}).get("commit_hash", "") or "").strip()
+    return {
+        "workflow": "apply_draft_patch",
+        "result": result.to_dict(),
+        "apply": apply_record,
     }
 
 

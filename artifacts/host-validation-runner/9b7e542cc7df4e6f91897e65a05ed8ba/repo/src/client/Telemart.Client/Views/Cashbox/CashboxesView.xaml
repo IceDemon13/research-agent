@@ -1,0 +1,172 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Cashbox.CashboxesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Cashbox"
+             xmlns:controls="clr-namespace:Telemart.Client.Controls"
+             DataContext="{client:Container Type=viewModels:CashboxesViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:CashboxesViewModel, IsDesignTimeCreatable=True}"
+             d:DesignWidth="1024"
+             d:DesignHeight="768">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Subdivision.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl x:Name="LayoutRoot"
+                        Orientation="Vertical"
+                        Padding="0"
+                        ItemSpace="0">
+        <dxb:BarManager VerticalAlignment="Top">
+            <dxb:ToolBarControl IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, ElementName=GridControl, Converter={dxmvvm:BooleanNegationConverter}}">
+                <dxb:BarButtonItem Content="Обновить"
+                                   ToolTip="Обновить (F5)"
+                                   Glyph="{dx:DXImage Image=Refresh_16x16.png}"
+                                   LargeGlyph="{dx:DXImage Image=Refresh_32x32.png}"
+                                   Command="{Binding Path=RefreshCommand, Mode=OneTime}" />
+                <dxb:BarButtonItem Content="Колонки"
+                                   ToolTip="Колонки (F6)"
+                                   Glyph="{dx:DXImage Image=Columns_16x16.png}"
+                                   LargeGlyph="{dx:DXImage Image=Columns_32x32.png}"
+                                   Command="{x:Static dxg:GridCommands.ShowColumnChooser}"
+                                   CommandTarget="{Binding Path=View, Mode=OneWay, ElementName=GridControl}" />
+                <dxb:BarItemSeparator />
+                <dxb:BarButtonItem Content="Создать"
+                                   ToolTip="Создать (Insert)"
+                                   LargeGlyph="{dx:DXImage Image=Add_32x32.png}"
+                                   Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                   Command="{Binding Path=AddCommand, Mode=OneTime}"
+                                   IsVisible="{Binding Path=CanCreate, Mode=OneWay}" />
+                <dxb:BarButtonItem Content="Изменить"
+                                   ToolTip="Изменить (F2)"
+                                   Glyph="{dx:DXImage Image=Edit_16x16.png}"
+                                   LargeGlyph="{dx:DXImage Image=Edit_32x32.png}"
+                                   Command="{Binding Path=EditCommand, Mode=OneTime}" />
+                <dxb:BarItemSeparator />
+                <controls:WikiBarButtonItem />
+            </dxb:ToolBarControl>
+        </dxb:BarManager>
+        <dxlc:LayerSeparator Height="1"
+                             Kind="Horizontal" />
+        <dxg:GridControl x:Name="GridControl"
+                         ItemsSource="{Binding Path=Cashboxes, Mode=OneWay}"
+                         CurrentItem="{Binding Path=SelectedCashbox, Mode=TwoWay}"
+                         ShowBorder="False"
+                         SelectionMode="None"
+                         ShowLoadingPanel="{Binding Path=RefreshCommand.IsExecuting, Mode=OneWay}">
+            <dxmvvm:Interaction.Behaviors>
+                <behaviors:LayoutSerializationBehavior FileName="cashboxes_1.xml" />
+                <behaviors:CopyCurrentCellToClipboardBehavior />
+            </dxmvvm:Interaction.Behaviors>
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn Header="Код"
+                                HeaderToolTip="Код кассы"
+                                FieldName="Id"
+                                FixedWidth="True"
+                                AllowColumnFiltering="False"
+                                AllowGrouping="False"
+                                HorizontalHeaderContentAlignment="Center">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Тип"
+                                HeaderToolTip="Тип кассы"
+                                FieldName="TypeId"
+                                FixedWidth="True"
+                                FilterPopupMode="CheckedList"
+                                ColumnFilterMode="DisplayText">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Types}"
+                                                  DisplayMember="Name"
+                                                  ValueMember="Id" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Название"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                FieldName="Name"
+                                AllowColumnFiltering="False"
+                                AllowGrouping="False" />
+                <dxg:GridColumn Header="Валюта"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                HorizontalHeaderContentAlignment="Center"
+                                FieldName="CurrencyId"
+                                Width="36"
+                                FixedWidth="True"
+                                FilterPopupMode="CheckedList"
+                                ColumnFilterMode="DisplayText">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Currencies}"
+                                                  DisplayMember="Title"
+                                                  ValueMember="Id"
+                                                  HorizontalContentAlignment="Center" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Ответственный"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                HorizontalHeaderContentAlignment="Left"
+                                FilterPopupMode="CheckedList"
+                                ColumnFilterMode="DisplayText"
+                                FieldName="Employee">
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Активен"
+                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                HorizontalHeaderContentAlignment="Center"
+                                FieldName="IsActive"
+                                Width="24"
+                                FilterPopupMode="CheckedList"
+                                FixedWidth="True"
+                                DisplayTemplate="{StaticResource BooleanTickColumnDisplayTemplate}">
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TableView AutoWidth="True"
+                               AllowEditing="False"
+                               NavigationStyle="Cell"
+                               ShowIndicator="False"
+                               ShowAutoFilterRow="False"
+                               ShowFixedTotalSummary="False"
+                               IsTotalSummaryMenuEnabled="False"
+                               ShowTotalSummary="False"
+                               AllowSorting="True"
+                               AllowGrouping="True"
+                               AllowColumnFiltering="True"
+                               AllowColumnMoving="True"
+                               AllowResizing="True"
+                               AllowBestFit="True"
+                               IsColumnChooserVisible="{Binding Path=IsColumnChooserVisible, Mode=TwoWay}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                               Command="{Binding Path=EditCommand, Mode=OneWay}" />
+                    </dxmvvm:Interaction.Behaviors>
+                </dxg:TableView>
+            </dxg:GridControl.View>
+            <dxg:GridControl.GroupSummary>
+                <dxg:GridSummaryItem SummaryType="Count"
+                                     Alignment="Right"
+                                     Visible="True" />
+            </dxg:GridControl.GroupSummary>
+        </dxg:GridControl>
+    </dxlc:LayoutControl>
+
+</UserControl>

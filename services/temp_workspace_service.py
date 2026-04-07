@@ -29,9 +29,12 @@ class TempWorkspaceService:
     def create_workspace(self, repo_id: str) -> TempWorkspaceContext:
         repo = self._registry_service.resolve_repo(repo_id=repo_id)
         source_root = Path(repo.root_path).resolve()
+        workspace_creation_mode = "copytree_ignore_dotgit"
+        workspace_git_identity_expected = "copied_files_only_non_git"
+        workspace_is_git_checkout = False
         temp_workspaces_root = self._artifacts_root / "temp-workspaces"
         temp_workspaces_root.mkdir(parents=True, exist_ok=True)
-        workspace_root = (temp_workspaces_root / f"{repo.repo_id}-{uuid.uuid4().hex}").resolve()
+        workspace_root = (temp_workspaces_root / self._workspace_dir_name(repo.repo_id)).resolve()
         workspace_root.mkdir(parents=True, exist_ok=False)
         workspace_repo_root = workspace_root / "repo"
         registry_path = workspace_root / "artifacts" / "repos" / "registry.json"
@@ -53,6 +56,9 @@ class TempWorkspaceService:
             repo_id=repo.repo_id,
             display_name=f"{repo.display_name} Temp Workspace",
             default_branch=repo.default_branch,
+            workspace_creation_mode=workspace_creation_mode,
+            workspace_git_identity_expected=workspace_git_identity_expected,
+            workspace_is_git_checkout=workspace_is_git_checkout,
         )
         return TempWorkspaceContext(
             repo_id=repo.repo_id,
@@ -60,7 +66,16 @@ class TempWorkspaceService:
             workspace_root_path=workspace_root.as_posix(),
             workspace_repo_root=workspace_repo_root.as_posix(),
             registry_path=registry_path.as_posix(),
+            workspace_creation_mode=workspace_creation_mode,
+            workspace_git_identity_expected=workspace_git_identity_expected,
+            workspace_is_git_checkout=workspace_is_git_checkout,
         )
+
+    @staticmethod
+    def _workspace_dir_name(repo_id: str) -> str:
+        normalized_repo_id = str(repo_id or "").strip().lower() or "repo"
+        safe_repo_id = "".join(ch for ch in normalized_repo_id if ch.isalnum())[:10] or "repo"
+        return f"{safe_repo_id}-{uuid.uuid4().hex[:8]}"
 
     def cleanup_workspace(self, context: TempWorkspaceContext) -> list[str]:
         warnings: list[str] = []

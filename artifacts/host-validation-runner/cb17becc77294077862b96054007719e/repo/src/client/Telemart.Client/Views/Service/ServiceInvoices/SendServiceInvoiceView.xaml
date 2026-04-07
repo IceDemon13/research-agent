@@ -1,0 +1,139 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Service.ServiceInvoices.SendServiceInvoiceView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:serviceInvoices="clr-namespace:Telemart.Client.ViewModels.Service.ServiceInvoices"
+                              mc:Ignorable="d"
+                              x:Name="CurrentUserControl"
+                              DataContext="{client:Container Type=serviceInvoices:SendServiceInvoiceViewModel}"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type serviceInvoices:SendServiceInvoiceViewModel}}"
+                              Loaded="SendServiceInvoiceViewLoaded"
+                              Width="300"
+                              MinWidth="300"
+                              MinHeight="100"
+                              Height="136">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup Name="Center"
+                              Orientation="Vertical"
+                              Visibility="{Binding Path=NeedEmployeeCarrier, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                <dxlc:LayoutItem Label="Водитель">
+                    <dxe:ComboBoxEdit x:Name="EmployeeCarrierComboBox"
+                                      ItemsSource="{Binding Path=Employees, Mode=OneWay}"
+                                      EditValue="{Binding Path=SelectedEmployeeCarrierId, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                      Style="{StaticResource LookupComboBoxStyle}"
+                                      ValueMember="Id"
+                                      DisplayMember="Name"
+                                      AllowNullInput="True"
+                                      NullValue="{x:Null}"
+                                      NullValueButtonPlacement="EditBox" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="ТТН">
+                    <dxe:ButtonEdit EditValue="{Binding Path=TrackNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                    AllowDefaultButton="False">
+                        <dxe:ButtonInfo GlyphKind="Plus"
+                                        ToolTipService.ToolTip="Создать ТТН"
+                                        Command="{Binding Path=CreateTrackNumberCommand, Mode=OneTime}" />
+                    </dxe:ButtonEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Юр. лицо">
+                    <dxlc:LayoutItem.Style>
+                        <Style TargetType="dxlc:LayoutItem">
+                            <Setter Property="Visibility"
+                                    Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Value="True"
+                                             Binding="{Binding Path=ServiceCenter.Edrpou, Mode=OneWay, Converter={dxmvvm:ObjectToBooleanConverter Inverse=False}}">
+                                    <Setter Property="Visibility"
+                                            Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </dxlc:LayoutItem.Style>
+                    <CheckBox IsChecked="{Binding Path=SendToLegal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              HorizontalAlignment="Left" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem>
+                    <dxlc:LayoutItem.Style>
+                        <Style TargetType="dxlc:LayoutItem">
+                            <Setter Property="Visibility"
+                                    Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Value="True"
+                                             Binding="{Binding Path=ServiceCenter.Edrpou, Mode=OneWay, Converter={dxmvvm:ObjectToBooleanConverter Inverse=True}}">
+                                    <Setter Property="Visibility"
+                                            Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </dxlc:LayoutItem.Style>
+                    <TextBlock Text="ТТН будет создана на физ. лицо"
+                               Foreground="Red"
+                               HorizontalAlignment="Left" />
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Stretch"
+                              Visibility="{Binding Path=NeedEmployeeCarrier, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}">
+                <dxlc:LayoutGroup Orientation="Horizontal">
+                    <Image Source="../../../Images/question_32_32.png"
+                           Width="32"
+                           Height="32"
+                           Margin="30 0 0 0"
+                           VerticalAlignment="Stretch" />
+                    <TextBlock Text="Вы уверены?" HorizontalAlignment="Center"/>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Bottom">
+                <Button Content="OK"
+                        Width="90"
+                        IsTabStop="True"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}"
+                        Command="{Binding Path=OkCommand, Mode=OneWay}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:FocusBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                </Button>
+                <Button Content="Отмена"
+                        IsTabStop="True"
+                        Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>

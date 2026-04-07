@@ -1,0 +1,65 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                    xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                    xmlns:editors="clr-namespace:Telemart.Client.Style.Editors">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+        <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+    
+    <DataTemplate x:Key="ComboBoxTemplate">
+        <dxe:ComboBoxEdit EditValue="{Binding SelectedValue, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                          ItemsSource="{Binding AvailValues, Mode=OneWay, Converter={converters:TransparentConverter}}"
+                          DisplayMember="DisplayValue"
+                          AllowNullInput="True"
+                          ShowEditorButtons="True"
+                          NullValueButtonPlacement="EditBox"
+                          NullText="Значение не задано"
+                          IsReadOnly="{Binding IsReadOnly}"
+                          Style="{StaticResource LookUpReadOnlyConditionsStyle}"/>
+    </DataTemplate>
+    <DataTemplate x:Key="MultiComboBoxTemplate">
+        <dxe:ComboBoxEdit EditValue="{Binding SelectedValues, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                          ItemsSource="{Binding AvailValues, Mode=OneWay, Converter={converters:TransparentConverter}}"
+                          DisplayMember="DisplayValue"
+                          IsReadOnly="{Binding IsReadOnly}"
+                          Style="{StaticResource CheckedTokenComboBoxReadOnlyConditionsStyle}"
+                          NullText="Значение не задано">
+        </dxe:ComboBoxEdit>
+    </DataTemplate>
+    <DataTemplate x:Key="CheckTemplate">
+        <dxe:CheckEdit EditValue="{Binding Path=Value, Mode=TwoWay, Converter={converters:TransparentConverter}, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                       IsThreeState="False"
+                       HorizontalAlignment="Center"
+                       Margin="2 0 0 0"
+                       IsReadOnly="{Binding IsReadOnly}"
+                       Style="{StaticResource ReadOnlyConditionsStyle}">
+            <dxe:CheckEdit.Template>
+                <ControlTemplate>
+                    <WrapPanel Orientation="Horizontal">
+                        <dxe:EditorControl x:Name="PART_Content"
+                                           Template="{Binding Path=(dxe:BaseEdit.OwnerEdit).ActualEditorControlTemplate, RelativeSource={RelativeSource TemplatedParent}}" />
+                        <dxe:ErrorControl x:Name="PART_ErrorPresenter" />
+                    </WrapPanel>
+                </ControlTemplate>
+            </dxe:CheckEdit.Template>
+        </dxe:CheckEdit>
+    </DataTemplate>
+    <DataTemplate x:Key="TextTemplate">
+        <dxe:TextEdit EditValue="{Binding Path=Value, Mode=TwoWay, Converter={converters:TransparentConverter}, UpdateSourceTrigger=PropertyChanged,  ValidatesOnDataErrors=True}"
+                      HorizontalContentAlignment="Left"
+                      VerticalContentAlignment="Center"
+                      InvalidValueBehavior="AllowLeaveEditor"
+                      ShowNullText="True"
+                      NullText="не заполнено"
+                      IsReadOnly="{Binding IsReadOnly}"
+                      Style="{StaticResource ReadOnlyConditionsStyle}"/>
+    </DataTemplate>
+   
+    <editors:EditorsTemplateSelector x:Key="EditorsTemplateSelector"
+                                     ComboBox="{StaticResource ComboBoxTemplate}"
+                                     MultiComboBox="{StaticResource MultiComboBoxTemplate}"
+                                     Check="{StaticResource CheckTemplate}"
+                                     Default="{StaticResource TextTemplate}"/>
+</ResourceDictionary>

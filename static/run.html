@@ -427,7 +427,22 @@
 
     function renderRepoContext(run) {
       const box = document.getElementById("repoContextBox");
-      const summary = run?.repo_context_summary;
+      const workflowDebug = run?.spec_result?.workflow_debug || {};
+      const summary = {
+        ...(run?.repo_context_summary || {}),
+        candidate_files_count: workflowDebug.candidate_files_count ?? run?.repo_context_summary?.candidate_files_count ?? 0,
+        selected_files_count: workflowDebug.selected_files_count ?? run?.repo_context_summary?.selected_files_count ?? 0,
+        candidate_files: Array.isArray(workflowDebug.top_candidate_files)
+          ? workflowDebug.top_candidate_files.map((item) => item?.name || "").filter(Boolean)
+          : (run?.repo_context_summary?.candidate_files || []),
+        resolved_target_files: Array.isArray(workflowDebug.top_historical_changed_files) && workflowDebug.top_historical_changed_files.length
+          ? workflowDebug.top_historical_changed_files
+          : (run?.repo_context_summary?.resolved_target_files || []),
+        files_used: Array.isArray(workflowDebug.top_historical_changed_files) && workflowDebug.top_historical_changed_files.length
+          ? workflowDebug.top_historical_changed_files
+          : (run?.repo_context_summary?.files_used || []),
+        chunk_count: run?.repo_context_summary?.chunk_count ?? 0,
+      };
       if (!summary) {
         box.textContent = "No repo context summary.";
         return;

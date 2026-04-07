@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>TelemartClientTest</id>
+    <title>Telemart.Client.Test</title>
+    <version>1.0.0</version>
+	<iconUrl>https://test-files.telemart.ua/Icon.ico</iconUrl>
+    <authors>Telemart.Client.Test</authors>
+    <description>Telemart.Client.Test</description>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <copyright>© Telemart. All right reserved.</copyright>
+    <dependencies />
+  </metadata>
+  <files>
+    <file src="**" target="lib\net45\" exclude="*.nupkg;*.vshost.*"/>
+  </files>
+</package>

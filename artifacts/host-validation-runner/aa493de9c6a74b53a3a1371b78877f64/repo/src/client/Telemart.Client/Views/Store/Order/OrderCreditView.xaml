@@ -1,0 +1,116 @@
+<UserControl x:Class="Telemart.Client.Views.Store.Order.OrderCreditView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Order"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              DataContext="{client:Container Type=viewModels:OrderCreditViewModel}"
+                              Width="490"
+                              Height="255"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:OrderCreditViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        Orientation="Vertical"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+        <dxlc:LayoutGroup Orientation="Vertical"
+                          VerticalAlignment="Top">
+            <dxlc:LayoutItem Label="Способ оплаты">
+                <dxe:ComboBoxEdit EditValue="{Binding Path=SelectedCreditPayment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path=CreditPayments, Mode=OneWay}"
+                                  DisplayMember="Name"
+                                  IsEnabled="True"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Номер договора"
+                             Visibility="{Binding Path=ContractNumberVisible, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                <dxe:TextEdit EditValue="{Binding Path=ContractNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              IsEnabled="{Binding Path=ReadOnlyMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}}"
+                              IsReadOnly="{Binding Path=ReadOnlyMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Предложение">
+                <dxe:ComboBoxEdit EditValue="{Binding Path=SelectedCreditOffer, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ItemsSource="{Binding Path=CreditOffers, Mode=OneWay}"
+                                  DisplayMember="Name"
+                                  IsEnabled="{Binding Path=CreditOffersEnabled, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                  IsReadOnly="{Binding Path=ReadOnlyMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Дата договора"
+                             Visibility="{Binding Path=ContractDateVisible, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                <dxe:DateEdit EditValue="{Binding Path=ContractDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError = True}"
+                              MaskType="DateTime"
+                              Mask="{x:Static business:DateFormattingRules.DateFormat}"
+                              MaskUseAsDisplayFormat="True"
+                              IsTextEditable="False"
+                              IsEnabled="{Binding Path=ReadOnlyMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}}"
+                              IsReadOnly="{Binding Path=ReadOnlyMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                              EditValuePostMode="Immediate"
+                              ValidateOnTextInput="True"
+                              AllowRoundOutOfRangeValue="True">
+                </dxe:DateEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Сумма">
+                <dxe:TextEdit EditValue="{Binding Path=ContractAmount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskType="Numeric"
+                              MaskUseAsDisplayFormat="True"
+                              Mask="C2"
+                              MaskSaveLiteral="False"
+                              IsEnabled="{Binding Path=ReadOnlyContractAmount, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}}"
+                              IsReadOnly="{Binding Path=ReadOnlyContractAmount, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Кол-во платежей"
+                             VerticalAlignment="Stretch">
+                <dxe:TextEdit EditValue="{Binding Path=CreditPartCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              IsReadOnly="True"
+                              Style="{StaticResource ReadOnlyEditorStyle}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Сумма платежа"
+                             VerticalAlignment="Stretch">
+                <dxe:TextEdit EditValue="{Binding Path=CreditPartCountAmount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              IsReadOnly="True"
+                              Style="{StaticResource ReadOnlyEditorStyle}"/>
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom">
+            <dxlc:LayoutGroup x:Name="InfoLayoutGroup"
+                          Orientation="Horizontal"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Bottom">
+                <TextBlock Text="{Binding Path=Info}" FontStyle="Italic" FontWeight="Light" />
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom"
+                          HorizontalAlignment="Right">
+                <Button Content="{Binding Path=OkButtonContent, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsTabStop="True"
+                    Visibility="{Binding Path=ReadOnlyMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=ValidationContainer, Converter={dxmvvm:BooleanNegationConverter}}" />
+                <Button Content="Отмена"
+                    IsTabStop="True"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

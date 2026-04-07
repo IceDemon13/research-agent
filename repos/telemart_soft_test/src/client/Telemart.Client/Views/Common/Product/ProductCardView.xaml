@@ -1,0 +1,782 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Common.Product.ProductCardView"
+                              x:Name="CurrentUserControl"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:common="clr-namespace:Telemart.Client.Common"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Common.Product"
+                              xmlns:productInformation="clr-namespace:Telemart.Client.Views.Store.Order.ProductInformation"
+                              mc:Ignorable="d"
+                              DataContext="{client:Container Type=viewModels:ProductCardViewModel}"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:ProductCardViewModel}}"
+                              d:DesignHeight="420"
+                              d:DesignWidth="430">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CommonImages.xaml" />
+                <ResourceDictionary>
+                    <Style x:Key="LayoutItemConditions"
+                           BasedOn="{StaticResource LayoutItemStyle}"
+                           TargetType="dxlc:LayoutItem">
+                        <Setter Property="IsEnabled"
+                                Value="False" />
+                        <Style.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Mode="OneWay"
+                                                  Converter="{converters:BooleanOrMultiValueConverter}">
+                                        <Binding Path="IsAdmin"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsWarehouse"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsProduct"
+                                                 Mode="OneWay" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter Property="IsEnabled"
+                                        Value="True" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+
+                    <Style x:Key="DimensionsEditorsReadOnlyConditionsStyle"
+                           TargetType="dxe:BaseEdit">
+                        <Setter Property="IsReadOnly"
+                                Value="True" />
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Style.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Mode="OneWay"
+                                                  Converter="{converters:BooleanOrMultiValueConverter}">
+                                        <Binding Path="IsAdmin"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsWarehouse"
+                                                 Mode="OneWay" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter Property="IsReadOnly"
+                                        Value="False" />
+                                <Setter Property="Opacity"
+                                        Value="{StaticResource EnabledElementOpacity}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+
+                    <Style x:Key="LayoutItemConditionsActive"
+                           BasedOn="{StaticResource LayoutItemStyle}"
+                           TargetType="dxlc:LayoutItem">
+                        <Setter Property="IsEnabled"
+                                Value="False" />
+                        <Style.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Mode="OneWay"
+                                                  Converter="{converters:BooleanOrMultiValueConverter}">
+                                        <Binding Path="IsAdmin"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsProduct"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsContent"
+                                                 Mode="OneWay" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter Property="IsEnabled"
+                                        Value="True" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+
+                    <Style x:Key="ProductDayLayoutItemConditionsActive"
+                           BasedOn="{StaticResource LayoutItemStyle}"
+                           TargetType="dxlc:LayoutItem">
+                        <Setter Property="IsEnabled"
+                                Value="False" />
+                        <Style.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Mode="OneWay"
+                                                  Converter="{converters:BooleanOrMultiValueConverter}">
+                                        <Binding Path="IsAdmin"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsProduct"
+                                                 Mode="OneWay" />
+                                        <Binding Path="IsMarketer"
+                                                 Mode="OneWay" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter Property="IsEnabled"
+                                        Value="True" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                    <Style x:Key="ProductDayComboBoxStyle"
+                           TargetType="dxe:ComboBoxEdit">
+                        <Setter Property="NullValueButtonPlacement"
+                                Value="None" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Path=ProductCard.ProductDayCategoryId, Mode=OneWay, Converter={dxmvvm:ObjectToBooleanConverter}}"
+                                         Value="True">
+                                <Setter Property="NullValueButtonPlacement"
+                                        Value="EditBox" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                    <Style x:Key="ProductDayGroupBoxStyle"
+                           BasedOn="{StaticResource GroupBoxWithNoPaddingStyle}"
+                           TargetType="dxlc:GroupBox">
+                        <Setter Property="BorderThickness"
+                                Value="1" />
+                        <Setter Property="Padding"
+                                Value="5" />
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+P"
+                             Command="{Binding Path=PrintOurBarcodeCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Delete"
+                             Command="{Binding Path=RemoveBarcodeCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator OwnerLock="LoadingContent"
+                         IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutControl.IsEnabled>
+                <MultiBinding Mode="OneWay"
+                              Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                    <Binding Path="RemoveBarcodeCommand.IsExecuting"
+                             Mode="OneWay" />
+                </MultiBinding>
+            </dxlc:LayoutControl.IsEnabled>
+            <dxlc:LayoutGroup Orientation="Vertical">
+                <dxlc:LayoutItem Label="Название">
+                    <dxe:TextEdit Text="{Binding Path=ProductCard.Name, Mode=OneWay}"
+                                  IsReadOnly="True"
+                                  Opacity="{StaticResource DisabledElementOpacity}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutGroup x:Name="TabsLayoutGroup"
+                                  View="Tabs"
+                                  VerticalAlignment="Stretch"
+                                  TabsStyle="{StaticResource LayoutGroupTabsStyle}"
+                                  TabStyle="{StaticResource LayoutGroupTabStyle}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand EventName="SelectedTabChildChanged"
+                                               Command="{Binding Path=HandleSelectionChangedCommand, Mode=OneWay}"
+                                               PassEventArgsToCommand="True" />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxlc:LayoutGroup x:Name="Tab0"
+                                      Header="Параметры"
+                                      Orientation="Horizontal"
+                                      Margin="8">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../../Images/Common/gear_16x16.png" />
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxlc:LayoutGroup Orientation="Vertical">
+                            <dxlc:LayoutGroup x:Name="AttributesRoot"
+                                              Orientation="Vertical"
+                                              VerticalAlignment="Top"
+                                              ItemSpace="4">
+                                <dxlc:LayoutGroup View="GroupBox"
+                                                  Header="Товар дня"
+                                                  Orientation="Vertical"
+                                                  GroupBoxStyle="{StaticResource ProductDayGroupBoxStyle}">
+                                    <dxlc:LayoutItem Label="Категория"
+                                                     Style="{StaticResource ProductDayLayoutItemConditionsActive}">
+                                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=ProductDayCategories, Mode=OneWay}"
+                                                          EditValue="{Binding Path=ProductCard.ProductDayCategoryId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                          DisplayMember="DisplayValue"
+                                                          ValueMember="Id"
+                                                          Style="{StaticResource ProductDayComboBoxStyle}" />
+                                    </dxlc:LayoutItem>
+                                    <dxlc:LayoutItem Label="Позиция"
+                                                     Style="{StaticResource ProductDayLayoutItemConditionsActive}">
+                                        <dxe:SpinEdit EditValue="{Binding Path=ProductCard.ProductDayPosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                      AllowNullInput="True"
+                                                      NullValue="{x:Null}"
+                                                      EditValueType="{x:Type system:Int32}"
+                                                      IsFloatValue="False"
+                                                      MaskType="Numeric"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      InvalidValueBehavior="AllowLeaveEditor"
+                                                      NullValueButtonPlacement="EditBox"
+                                                      Mask="d"
+                                                      MaskSaveLiteral="False"
+                                                      MaxValue="99"
+                                                      MinValue="1"
+                                                      MaxLength="2"
+                                                      HorizontalContentAlignment="Left"
+                                                      IsEnabled="{Binding Path=ProductCard.ProductDayCategoryId, Mode=OneWay, Converter={dxmvvm:ObjectToBooleanConverter}}" />
+                                    </dxlc:LayoutItem>
+                                </dxlc:LayoutGroup>
+                                <dxlc:LayoutGroup View="GroupBox"
+                                                  Header="Прочее"
+                                                  Orientation="Vertical"
+                                                  GroupBoxStyle="{StaticResource ProductDayGroupBoxStyle}">
+                                    <dxlc:LayoutItem Label="Тип"
+                                                     Style="{StaticResource LayoutItemConditionsActive}">
+                                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Types, Mode=OneWay}"
+                                                          EditValue="{Binding Path=ProductCard.TypeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                          ValueMember="Id"
+                                                          DisplayMember="Name" />
+                                    </dxlc:LayoutItem>
+                                    <dxlc:LayoutItem Label="Виден"
+                                                     Style="{StaticResource LayoutItemConditionsActive}">
+                                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=ActiveValues, Mode=OneWay}"
+                                                          EditValue="{Binding Path=SelectedActiveValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                          DisplayMember="Name" />
+                                    </dxlc:LayoutItem>
+                                    <dxlc:LayoutItem Label="Родитель">
+                                        <dxe:ButtonEdit EditValue="{Binding Path=ProductCard.Category.NameFull, Mode=OneWay}"
+                                                        IsReadOnly="True"
+                                                        AllowDefaultButton="{Binding Path=CanMove, Mode=OneWay}">
+                                            <dxmvvm:Interaction.Behaviors>
+                                                <dxmvvm:EventToCommand EventName="DefaultButtonClick"
+                                                                       Command="{Binding Path=MoveCommand, Mode=OneWay}" />
+                                            </dxmvvm:Interaction.Behaviors>
+                                        </dxe:ButtonEdit>
+                                    </dxlc:LayoutItem>
+                                </dxlc:LayoutGroup>
+                            </dxlc:LayoutGroup>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="Tab1"
+                                      Header="{Binding Path=ProductCard.Barcodes.Count, Mode=OneWay}"
+                                      Orientation="Vertical"
+                                      ItemSpace="0">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../../Images/Product/barcode.png" />
+                                    <TextBlock Text="{Binding Mode=OneWay, StringFormat=ШК ({0})}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxb:ToolBarControl VerticalAlignment="Top"
+                                            Style="{StaticResource SmallToolBarStyle}">
+                            <dxb:BarButtonItem Content="Добавить"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                               Command="{Binding Path=CreateBarcodeCommand, Mode=OneWay}"
+                                               LargeGlyph="{dx:DXImage Image=Add_32x32.png}">
+                            </dxb:BarButtonItem>
+                            <dxb:BarButtonItem Content="Удалить (Delete)"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                               Command="{Binding Path=RemoveBarcodeCommand, Mode=OneWay}">
+                            </dxb:BarButtonItem>
+                            <dxb:ToolBarControl.IsEnabled>
+                                <MultiBinding Mode="OneWay"
+                                              Converter="{converters:BooleanOrMultiValueConverter}">
+                                    <Binding Path="IsAdmin"
+                                             Mode="OneWay" />
+                                    <Binding Path="IsWarehouse"
+                                             Mode="OneWay" />
+                                </MultiBinding>
+                            </dxb:ToolBarControl.IsEnabled>
+                        </dxb:ToolBarControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxg:GridControl ItemsSource="{Binding Path=ProductCard.Barcodes, Mode=OneWay}"
+                                         SelectedItem="{Binding Path=SelectedBarcode, Mode=TwoWay}"
+                                         ShowBorder="False"
+                                         SelectionMode="None">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Штрих-код"
+                                                FieldName="Barcode" />
+                                <dxg:GridColumn FieldName="Active"
+                                                Header="А"
+                                                HeaderToolTip="Активний"
+                                                FixedWidth="True"
+                                                Width="25"
+                                                AllowResizing="False"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                AllowColumnFiltering="False"
+                                                ReadOnly="{Binding Path=AllowBarcodeActive, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}}"
+                                                AllowSorting="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox x:Name="PART_Editor"
+                                                      IsEnabled="{Binding Path=DataContext.AllowBarcodeActive, ElementName=LayoutControl, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center"
+                                                      Margin="5,0,0,0"
+                                                      IsChecked="{Binding RowData.Row.Active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="FiscalRegistrar"
+                                                Header="РРО"
+                                                HeaderToolTip="РРО"
+                                                FixedWidth="True"
+                                                Width="25"
+                                                AllowResizing="False"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                AllowColumnFiltering="False"
+                                                ReadOnly="False"
+                                                AllowSorting="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox x:Name="PART_Editor"
+                                                      IsEnabled="True"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center"
+                                                      Margin="5,0,0,0"
+                                                      IsChecked="{Binding RowData.Row.FiscalRegistrar, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Создал"
+                                                FieldName="CreatedBy">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Employees, Mode=OneWay}"
+                                                                  DisplayMember="DisplayValue"
+                                                                  ValueMember="Id" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Создано"
+                                                HeaderToolTip="Дата добавления"
+                                                FieldName="CreatedOn"
+                                                FixedWidth="True"
+                                                MinWidth="70"
+                                                Width="90"
+                                                HorizontalHeaderContentAlignment="Center">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                                              NullText=""
+                                                              MaskUseAsDisplayFormat="True"
+                                                              Mask="dd.MM.yy HH:mm"
+                                                              MaskType="DateTime">
+                                            <dxe:DateEditSettings.NullValue>
+                                                <system:DateTime>1/1/0001</system:DateTime>
+                                            </dxe:DateEditSettings.NullValue>
+                                        </dxe:DateEditSettings>
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Изменил"
+                                                FieldName="ModifiedBy">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Employees, Mode=OneWay}"
+                                                                  DisplayMember="DisplayValue"
+                                                                  ValueMember="Id" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Изменено"
+                                                HeaderToolTip="Дата изменения"
+                                                FieldName="ModifiedOn"
+                                                FixedWidth="True"
+                                                MinWidth="70"
+                                                Width="90"
+                                                HorizontalHeaderContentAlignment="Center">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                                              NullText=""
+                                                              MaskUseAsDisplayFormat="True"
+                                                              Mask="dd.MM.yy HH:mm"
+                                                              MaskType="DateTime">
+                                            <dxe:DateEditSettings.NullValue>
+                                                <system:DateTime>1/1/0001</system:DateTime>
+                                            </dxe:DateEditSettings.NullValue>
+                                        </dxe:DateEditSettings>
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView AllowResizing="False"
+                                               AllowSorting="False"
+                                               Style="{StaticResource ReadOnlyTableViewStyle}">
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxlc:LayoutGroup Header="Справка"
+                                          Orientation="Vertical"
+                                          View="GroupBox"
+                                          VerticalAlignment="Top"
+                                          GroupBoxStyle="{StaticResource GroupBoxNoBorderStyle}">
+                            <TextBlock TextWrapping="Wrap"
+                                       VerticalAlignment="Bottom">
+                                Данные в этой таблице сохраняются автоматически без нажатия кнопки <Span FontWeight="Bold">OK</Span>
+                            </TextBlock>
+                        </dxlc:LayoutGroup>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxlc:LayoutGroup Orientation="Horizontal"
+                                          Padding="5">
+                            <dx:SimpleButton Content="Печать нашего ШК"
+                                             Glyph="{dx:DXImage Image=Printer_16x16.png}"
+                                             Command="{Binding Path=PrintOurBarcodeCommand, Mode=OneWay}"
+                                             VerticalAlignment="Top"
+                                             Width="150">
+                            </dx:SimpleButton>
+                            <dxlc:LayoutItem Label="Наш ШК"
+                                             Style="{StaticResource LayoutItemConditions}">
+                                <dxlc:LayoutGroup Orientation="Horizontal">
+                                    <dxe:CheckEdit EditValue="{Binding Path=ProductCard.SelfBarcode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                   HorizontalAlignment="Left">
+                                    </dxe:CheckEdit>
+                                </dxlc:LayoutGroup>
+                            </dxlc:LayoutItem>
+                            <dx:SimpleButton Content="Печать имп.стикера"
+                                             Glyph="{dx:DXImage Image=Printer_16x16.png}"
+                                             Command="{Binding Path=PrintImportStickerCommand, Mode=OneWay}"
+                                             VerticalAlignment="Top"
+                                             Width="160">
+                            </dx:SimpleButton>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="Tab6"
+                                      Header="{Binding Path=ProductCard.SerialNumberLength.Count, Mode=OneWay}"
+                                      Orientation="Vertical"
+                                      ItemSpace="0">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../../Images/Common/page.png" />
+                                    <TextBlock Text="{Binding Mode=OneWay, StringFormat=SN ({0})}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxb:ToolBarControl VerticalAlignment="Top"
+                                            Style="{StaticResource SmallToolBarStyle}">
+                            <dxb:BarButtonItem Content="Добавить по образцу"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="../../../Images/Common/document_notes_16x16.png"
+                                               Command="{Binding Path=AddSerialNumberLengthByScanCommand, Mode=OneWay}"/>
+                            <dxb:BarButtonItem Content="Добавить"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                               Command="{Binding Path=AddSerialNumberLengthCommand, Mode=OneWay}"
+                                               LargeGlyph="{dx:DXImage Image=Add_32x32.png}"/>
+                            <dxb:BarButtonItem Content="Удалить"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                               Command="{Binding Path=RemoveSerialNumberLengthCommand, Mode=OneWay}"/>
+                        </dxb:ToolBarControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxg:GridControl ItemsSource="{Binding Path=ProductCard.SerialNumberLength, Mode=OneWay}"
+                                         SelectedItem="{Binding Path=SelectedSerialNumberLength, Mode=TwoWay}"
+                                         ShowBorder="False"
+                                         SelectionMode="Row">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Длина"
+                                                FieldName="Length" >
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:TextEditSettings HorizontalContentAlignment="Left" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Создал"
+                                                FieldName="CreatedBy">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Employees, Mode=OneWay}"
+                                                                  DisplayMember="DisplayValue"
+                                                                  ValueMember="Id" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Дата"
+                                                HeaderToolTip="Дата добавления"
+                                                FieldName="CreatedOn"
+                                                FixedWidth="True"
+                                                MinWidth="130"
+                                                Width="130"
+                                                HorizontalHeaderContentAlignment="Center">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                                              NullText=""
+                                                              MaskUseAsDisplayFormat="True"
+                                                              Mask="dd.MM.yy HH:mm"
+                                                              MaskType="DateTime">
+                                        </dxe:DateEditSettings>
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView AllowResizing="False"
+                                               AllowSorting="False"
+                                               Style="{StaticResource ReadOnlyTableViewStyle}">
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxlc:LayoutGroup Orientation="Vertical"
+                                          Margin="8">
+                            <dxlc:LayoutGroup>
+                                <dxlc:LayoutItem Label="Вести SN"
+                                                 Style="{StaticResource LayoutItemConditions}"
+                                                 HorizontalAlignment="Left">
+                                    <dxe:CheckEdit EditValue="{Binding Path=ProductCard.KeepSerial, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                   HorizontalAlignment="Left"
+                                                   IsReadOnly="{Binding Path=CanEditKeepSerial, Converter={dxmvvm:BooleanNegationConverter}}">
+                                    </dxe:CheckEdit>
+                                </dxlc:LayoutItem>
+                            </dxlc:LayoutGroup>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="Tab3"
+                                      Header="{Binding Path=ProductCard.Barcodes.Count, Mode=OneWay}"
+                                      Orientation="Vertical"
+                                      ItemSpace="0">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="/Telemart.Client;component/Images/Parser/link_16_16.png" />
+                                    <TextBlock Text="{Binding Mode=OneWay, StringFormat=Сопоставления}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxb:ToolBarControl VerticalAlignment="Top"
+                                            Style="{StaticResource SmallToolBarStyle}">
+                            <dxb:ToolBarControl.IsEnabled>
+                                <MultiBinding Converter="{converters:BooleanAndMultiValueConverter}">
+                                    <Binding Path="ShowLoadingPanel"
+                                             Converter="{dxmvvm:BooleanNegationConverter}"
+                                             ElementName="GridControl"/>
+                                    <Binding Path="IsAdminOrProduct"/>
+                                </MultiBinding>
+                            </dxb:ToolBarControl.IsEnabled>
+                            <dxb:BarButtonItem Content="Обновить"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="{dx:DXImage Image=Refresh_16x16.png}"
+                                               Command="{Binding Path=RefreshParserAliasesCommand, Mode=OneWay}">
+                            </dxb:BarButtonItem>
+                            <dxb:BarItemLinkSeparator />
+                            <dxb:BarButtonItem Content="Разорвать связь"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="/Telemart.Client;component/Images/Parser/link_break_16x16.png"
+                                               Command="{Binding Path=UnchainParserAliasCommand, Mode=OneWay}"
+                                               CommandParameter="{Binding Path=SelectedParserAlias, Mode=OneWay}">
+                            </dxb:BarButtonItem>
+                            <dxb:BarButtonItem Content="Удалить"
+                                               ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                               Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                               Command="{Binding Path=RemoveParserAliasCommand, Mode=OneWay}"
+                                               CommandParameter="{Binding Path=SelectedParserAlias, Mode=OneWay}">
+                            </dxb:BarButtonItem>
+                        </dxb:ToolBarControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxg:GridControl x:Name="GridControl"
+                                         ItemsSource="{Binding Path=ParserAliases, Mode=OneWay}"
+                                         SelectedItem="{Binding Path=SelectedParserAlias, Mode=TwoWay}"
+                                         ShowBorder="False"
+                                         SelectionMode="None">
+                            <dxg:GridControl.ShowLoadingPanel>
+                                <MultiBinding Mode="OneWay"
+                                              Converter="{converters:BooleanOrMultiValueConverter}">
+                                    <Binding Path="RefreshParserAliasesCommand.IsExecuting"
+                                             Mode="OneWay" />
+                                    <Binding Path="UnchainParserAliasCommand.IsExecuting"
+                                             Mode="OneWay" />
+                                    <Binding Path="RemoveParserAliasCommand.IsExecuting"
+                                             Mode="OneWay" />
+                                </MultiBinding>
+                            </dxg:GridControl.ShowLoadingPanel>
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Алиас"
+                                                FieldName="Name"
+                                                Width="200" />
+                                <dxg:GridColumn Header="Артикул"
+                                                FieldName="PartNumber"
+                                                Width="80" />
+                                <dxg:GridColumn Header="Сопоставил"
+                                                FieldName="ModifiedByDisplayString" />
+                                <dxg:GridColumn Header="Контрагенты"
+                                                FieldName="Contractors" />
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView AllowSorting="True"
+                                               Style="{StaticResource ReadOnlyTableViewStyle}">
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxlc:LayoutGroup Header="Справка"
+                                  Orientation="Vertical"
+                                  View="GroupBox"
+                                  VerticalAlignment="Top"
+                                          GroupBoxStyle="{StaticResource GroupBoxNoBorderStyle}"
+                                  Visibility="{Binding Path=IsHelpVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                            <TextBlock TextWrapping="Wrap"
+                               VerticalAlignment="Bottom">
+                        Данные в этой вкладке сохраняются автоматически без нажатия кнопки <Span FontWeight="Bold">OK</Span>
+                            </TextBlock>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="Tab5"
+                                      Header="ВГХ"
+                                      Orientation="Horizontal"
+                                      Margin="8">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../../Images/Common/weighing_mashine.png" />
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxlc:LayoutGroup x:Name="DimensionsRoot"
+                                          Orientation="Vertical"
+                                          Header="Габариты">
+                            <dxlc:LayoutItem Label="Вес (кг)">
+                                <dxe:SpinEdit EditValue="{Binding Path=ProductCard.Weight, Mode=TwoWay, TargetNullValue={StaticResource NullTextValue}, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                              HorizontalContentAlignment="Left"
+                                              ShowEditorButtons="False"
+                                              Mask="#######0.0"
+                                              MaskType="Numeric"
+                                              IsFloatValue="True"
+                                              AllowNullInput="True"
+                                              MaskUseAsDisplayFormat="True"
+                                              NullText="{StaticResource NullTextValue}"
+                                              Style="{StaticResource DimensionsEditorsReadOnlyConditionsStyle}" />
+                            </dxlc:LayoutItem>
+                            <dxlc:LayoutItem Label="Глубина (мм)"
+                                             Name="DepthEdit">
+                                <dxe:TextEdit EditValue="{Binding Path=ProductCard.Depth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                              NullText="{StaticResource NullTextValue}"
+                                              MaxLength="{x:Static common:Constants.ProductDimensionValueMaxLength}"
+                                              Style="{StaticResource DimensionsEditorsReadOnlyConditionsStyle}" />
+                            </dxlc:LayoutItem>
+                            <dxlc:LayoutItem Label="Ширина (мм)">
+                                <dxe:TextEdit EditValue="{Binding Path=ProductCard.Width, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                              NullText="{StaticResource NullTextValue}"
+                                              MaxLength="{x:Static common:Constants.ProductDimensionValueMaxLength}"
+                                              Style="{StaticResource DimensionsEditorsReadOnlyConditionsStyle}" />
+                            </dxlc:LayoutItem>
+                            <dxlc:LayoutItem Label="Высота (мм)">
+                                <dxe:TextEdit EditValue="{Binding Path=ProductCard.Height, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                              NullText="{StaticResource NullTextValue}"
+                                              MaxLength="{x:Static common:Constants.ProductDimensionValueMaxLength}"
+                                              Style="{StaticResource DimensionsEditorsReadOnlyConditionsStyle}" />
+                            </dxlc:LayoutItem>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="Tab4"
+                                      Header="Инфо"
+                                      Orientation="Horizontal">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="/Images/Common/information.png" />
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <productInformation:ProductInformation DataContext="{Binding Path=ProductInformation, Mode=OneWay}"
+                                                               BorderThickness="0"
+                                                               dxmvvm:ViewModelExtensions.ParentViewModel="{Binding Path=DataContext, Mode=OneWay, ElementName=CurrentUserControl}" />
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutGroup>
+
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxlc:LayoutGroup VerticalAlignment="Center"
+                                  HorizontalAlignment="Left">
+                    <Button Content="Очистить кеш"
+                            Visibility="{Binding Path=IsVisibleClearCash, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                            Command="{Binding ClearCashCommand, Mode=OneWay}"/>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup VerticalAlignment="Center"
+                                  HorizontalAlignment="Right">
+                    <Button x:Name="OkButton"
+                                    Content="OK"
+                                    Command="{Binding Path=OkCommand, Mode=OneWay}">
+                    <Button.Style>
+                        <Style TargetType="{x:Type Button}"
+                               BasedOn="{StaticResource {x:Type Button}}">
+                            <Setter Property="IsEnabled"
+                                    Value="False" />
+                            <Style.Triggers>
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                                 ElementName="LayoutControl"
+                                                 Mode="OneWay"
+                                                 UpdateSourceTrigger="PropertyChanged"
+                                                 Converter="{dxmvvm:BooleanNegationConverter}" />
+                                    </DataTrigger.Binding>
+                                    <Setter Property="IsEnabled"
+                                            Value="True" />
+                                </DataTrigger>
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Mode="OneWay"
+                                                      Converter="{converters:BooleanAndMultiValueConverter}">
+                                            <Binding Path="IsAdmin"
+                                                     Mode="OneWay"
+                                                     UpdateSourceTrigger="PropertyChanged"
+                                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            <Binding Path="IsWarehouse"
+                                                     Mode="OneWay"
+                                                     UpdateSourceTrigger="PropertyChanged"
+                                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            <Binding Path="IsProduct"
+                                                     Mode="OneWay"
+                                                     UpdateSourceTrigger="PropertyChanged"
+                                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            <Binding Path="IsContent"
+                                                     Mode="OneWay"
+                                                     UpdateSourceTrigger="PropertyChanged"
+                                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            <Binding Path="IsMarketer"
+                                                     Mode="OneWay"
+                                                     UpdateSourceTrigger="PropertyChanged"
+                                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter Property="IsEnabled"
+                                            Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>

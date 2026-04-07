@@ -1,0 +1,81 @@
+<UserControl x:Class="Telemart.Client.Views.Common.RequisitesView"
+             x:Name="RequisitesViewUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:helpers="clr-namespace:Telemart.Client.Helpers"
+             xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxlc:LayoutControl x:Name="RequisitesViewLayoutControl"
+                        Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}"
+                        dxe:ValidationService.IsValidationContainer="True">
+        <dxlc:LayoutGroup Orientation="Vertical"
+                          Header="Реквизиты"
+                          View="GroupBox"
+                          IsVisibleChanged="RequisitesView_OnIsVisibleChanged"
+                          DataContext="{Binding ElementName=RequisitesViewUserControl}">
+            <dxlc:LayoutGroup.Visibility>
+                <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                    <Binding Path="Model.Visible"
+                             Mode="OneWay"/>
+                </MultiBinding>
+            </dxlc:LayoutGroup.Visibility>
+            <dxlc:LayoutItem Label="Фамилия">
+                <dxe:TextEdit
+                    IsReadOnly="{Binding Model.Enabled, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                    Style="{StaticResource ReadOnlyConditionsStyle}"
+                    EditValue="{Binding Path=Model.LastName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Имя">
+                <dxe:TextEdit
+                    IsReadOnly="{Binding Model.Enabled, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                    Style="{StaticResource ReadOnlyConditionsStyle}"
+                    EditValue="{Binding Path=Model.FirstName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Отчество">
+                <dxe:TextEdit
+                    IsReadOnly="{Binding Model.Enabled, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                    Style="{StaticResource ReadOnlyConditionsStyle}"
+                    EditValue="{Binding Path=Model.MiddleName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="ИНН">
+                <controls:InnTextEdit
+                    IsReadOnly="{Binding Model.Enabled, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                    Style="{StaticResource ReadOnlyConditionsStyle}"
+                    EditValue="{Binding Path=Model.Inn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="IBAN">
+                <controls:IbanTextEdit
+                    IsReadOnly="{Binding Model.Enabled, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                    Style="{StaticResource ReadOnlyConditionsStyle}"
+                    EditValue="{Binding Path=Model.Iban, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Номер карты">
+                <controls:CardNumberTextEdit
+                    IsReadOnly="{Binding Model.Enabled, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                    Style="{StaticResource ReadOnlyConditionsStyle}"
+                    EditValue="{Binding Path=Model.CardNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+            </dxlc:LayoutItem>
+            <Button Name="IsValidButton"
+                    Visibility="Collapsed"
+                    IsEnabledChanged="IsValidButton_OnIsEnabledChanged"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=RequisitesViewLayoutControl, Converter={dxmvvm:BooleanNegationConverter}}"/>
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+
+</UserControl>

@@ -1,0 +1,352 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Store.Purchase.SetInvoiceSourceView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:purchase="clr-namespace:Telemart.Client.ViewModels.Store.Purchase"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:commonViews="clr-namespace:Telemart.Client.Views.Common"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              DataContext="{client:Container Type=purchase:SetInvoiceSourceViewModel}"
+                              Loaded="OnLoaded"
+                              mc:Ignorable="d"
+                              d:DesignWidth="600"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type purchase:SetInvoiceSourceViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/InvoiceState.xaml" />
+                <ResourceDictionary>
+                    <dxg:GridColumnWidth x:Key="DateTimeColumnWidth">90</dxg:GridColumnWidth>
+                    <system:Double x:Key="MinDateTimeColumnWidth">90</system:Double>
+                    <Style TargetType="dxg:GridColumn">
+                        <Setter Property="AllowSorting"
+                                Value="True" />
+                        <Setter Property="AllowGrouping"
+                                Value="False" />
+                        <Setter Property="AllowMoving"
+                                Value="True" />
+                        <Setter Property="AllowResizing"
+                                Value="False" />
+                        <Setter Property="AllowAutoFilter"
+                                Value="False" />
+                        <Setter Property="AllowColumnFiltering"
+                                Value="False" />
+                        <Setter Property="AllowBestFit"
+                                Value="True" />
+                        <Setter Property="AllowCellMerge"
+                                Value="False" />
+                        <Setter Property="AllowEditing"
+                                Value="False" />
+                        <Setter Property="HeaderTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               FontWeight="Bold"
+                                               Width="{TemplateBinding Width}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:EventToCommand EventName="PreviewKeyDown"
+                               Command="{Binding Path=HandlePreviewKeyDownCommand, Mode=OneTime}"
+                               PassEventArgsToCommand="True" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            IsEnabled="{Binding Path=IsVisible, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}, ElementName=WaitImage}">
+            <dxlc:LayoutGroup Orientation="Vertical">
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  Height="106">
+                    <dxlc:LayoutGroup Orientation="Vertical">
+                        <Border BorderBrush="DarkGray"
+                                BorderThickness="1"
+                                UseLayoutRounding="True"
+                                VerticalAlignment="Stretch">
+                            <dxe:TextEdit EditValue="{Binding Path=Data.ProductName, Mode=OneWay}"
+                                          IsPrintingMode="True"
+                                          Margin="10,0,0,0">
+                            </dxe:TextEdit>
+                        </Border>
+                        <dxlc:LayoutGroup Orientation="Vertical"
+                                          View="GroupBox"
+                                          Header="Поставщик">
+                            <dxlc:LayoutItem>
+                                <dxe:ComboBoxEdit x:Name="SuppliersComboBox"
+                                                  ItemsSource="{Binding Path=Suppliers, Mode=OneWay}"
+                                                  EditValue="{Binding Path=SelectedSupplier, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  DisplayMember="Name"
+                                                  IsTextEditable="True"
+                                                  ImmediatePopup="True"
+                                                  IncrementalFiltering="True"
+                                                  ValidateOnTextInput="False">
+                                    <dxmvvm:Interaction.Behaviors>
+                                        <dxmvvm:EventToCommand EventName="EditValueChanged"
+                                                               Command="{Binding Path=SelectSupplierCommand, Mode=OneWay}"
+                                                               PassEventArgsToCommand="True" />
+                                    </dxmvvm:Interaction.Behaviors>
+                                </dxe:ComboBoxEdit>
+                            </dxlc:LayoutItem>
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutGroup>
+                    <commonViews:SummaryItemsView SummaryItems="{Binding Path=SummaryItems, Mode=OneWay}"
+                                                  LabelColumnWidth="1*"
+                                                  ContentColumnWidth="4*"
+                                                  Width="250"
+                                                  IsTabStop="False" />
+                </dxlc:LayoutGroup>
+                <dxg:GridControl x:Name="GridControl"
+                                 ItemsSource="{Binding Path=InvoiceSources, Mode=OneWay}"
+                                 SelectedItem="{Binding Path=SelectedInvoiceSource, Mode=TwoWay}"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Stretch"
+                                 SelectionMode="None"
+                                 ItemsSourceChanged="GridControlOnItemsSourceChanged"
+                                 DesignTimeDataSourceRowCount="5"
+                                 DesignTimeDataObjectType="{x:Type purchase:SetInvoiceSourceViewItem}">
+                    <dxg:GridControl.ShowLoadingPanel>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter}">
+                            <Binding Path="SelectSupplierCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="CreateInvoiceCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxg:GridControl.ShowLoadingPanel>
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:LayoutSerializationBehavior FileName="set_invoice_source_items.xml" />
+                        <behaviors:CopyCurrentCellToClipboardBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn FieldName="CarryType.Name"
+                                        Header="Доставка"
+                                        HeaderToolTip="Доставка"
+                                        FixedWidth="False"
+                                        MinWidth="24" />
+                        <dxg:GridColumn FieldName="SupplierWarehouseName"
+                                        Header="Склад пост."
+                                        HeaderToolTip="Склад поставщика"
+                                        FixedWidth="False"
+                                        MinWidth="24" />
+                        <dxg:GridColumn FieldName="WarehouseId"
+                                        Header="Склад"
+                                        HeaderToolTip="Склад получения"
+                                        FixedWidth="False"
+                                        MinWidth="24">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=DataContext.Warehouses, Mode=OneWay, ElementName=LayoutControl}"
+                                                          DisplayMember="Name"
+                                                          ValueMember="Id"
+                                                          HorizontalContentAlignment="Left">
+                                </dxe:ComboBoxEditSettings>
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="DateClose"
+                                        Header="Закрытие"
+                                        HeaderToolTip="Дата закрытия"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FixedWidth="True"
+                                        MinWidth="{StaticResource MinDateTimeColumnWidth}"
+                                        Width="{StaticResource DateTimeColumnWidth}">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:DateEditSettings Mask="{x:Static business:DateFormattingRules.ShortDateTimeFormat}"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="DateGet"
+                                        Header="Поступление"
+                                        HeaderToolTip="Дата поступления"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FixedWidth="True"
+                                        MinWidth="{StaticResource MinDateTimeColumnWidth}"
+                                        Width="{StaticResource DateTimeColumnWidth}">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:DateEditSettings Mask="{x:Static business:DateFormattingRules.ShortDateTimeFormat}"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="DeliveryDateTime"
+                                        Header="Дата Х"
+                                        HeaderToolTip="Дата Х"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FixedWidth="True"
+                                        MinWidth="86"
+                                        Width="86">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Stretch"
+                                                Visibility="{Binding Path=RowData.Row.IsNewRow, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter Invert=True}}">
+                                        <dx:DXImage Source="{Binding Path=RowData.Row.SucceedInTimeState, Mode=OneWay, Converter={converters:EnumToImageSourceConverter}}"
+                                                    ToolTip="{Binding Path=RowData.Row.SucceedInTimeState, Mode=OneWay, Converter={converters:EnumToDisplayTextConverter}}"
+                                                    Width="16"
+                                                    Height="16" />
+                                        <dxe:DateEdit x:Name="PART_Editor"
+                                                      Mask="{x:Static business:DateFormattingRules.ShortDateTimeFormat}"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      HorizontalContentAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="AvailableQuantity"
+                                        Header="Шт."
+                                        HeaderToolTip="Свободно товаров"
+                                        FixedWidth="True"
+                                        MinWidth="60"
+                                        Width="60">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Stretch">
+                                        <StackPanel Orientation="Horizontal"
+                                                    Visibility="{Binding Path=RowData.Row.InvoiceExists, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                                            <dx:DXImage Source="{StaticResource BulletGreenImageSource}"
+                                                        Width="16"
+                                                        Height="16"
+                                                        ToolTip="Все ОК"
+                                                        Visibility="{Binding Path=RowData.Row.SuccedsByQuantity, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                                            <dx:DXImage Source="{StaticResource BulletRedImageSource}"
+                                                        Width="16"
+                                                        Height="16"
+                                                        ToolTip="Недостаточно товара в свободном остатке"
+                                                        Visibility="{Binding Path=RowData.Row.SuccedsByQuantity, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}" />
+                                        </StackPanel>
+                                        <dxe:TextEdit Name="PART_Editor"
+                                                      HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="InvoiceId"
+                                        Header="Номер"
+                                        HeaderToolTip="Номер накладной"
+                                        FixedWidth="True"
+                                        Width="85"
+                                        MinWidth="85"
+                                        AllowSorting="False">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Stretch">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Stretch"
+                                                    Visibility="{Binding Path=RowData.Row.InvoiceExists, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                                    Margin="3,0,0,0">
+                                            <dx:DXImage Source="{Binding Path=RowData.Row.State.Id, Mode=OneWay, Converter={StaticResource InvoiceStateImageConverter}}"
+                                                        ToolTip="{Binding Path=RowData.Row.State.Name, Mode=OneWay}"
+                                                        Height="16"
+                                                        Width="16"
+                                                        HorizontalAlignment="Left" />
+                                            <Label Content="{Binding Path=RowData.Row.InvoiceId, Mode=OneWay}"
+                                                   HorizontalAlignment="Right"
+                                                   HorizontalContentAlignment="Right"
+                                                   Margin="4,0,0,0" />
+                                        </StackPanel>
+                                        <Button Visibility="{Binding Path=RowData.Row.InvoiceExists, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                                                VerticalAlignment="Center"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left"
+                                                ToolTip="Создать (Insert)"
+                                                Style="{StaticResource NoBordersButton}"
+                                                Command="{Binding Path=DataContext.CreateInvoiceCommand, Mode=OneWay, ElementName=LayoutControl}"
+                                                CommandParameter="{Binding Path=RowData.Row, Mode=OneWay}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <dx:DXImage Source="{dx:DXImage Image=Add_16x16.png}" />
+                                                <TextBlock Text="Создать"
+                                                           Margin="4,0,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView x:Name="TableView"
+                                       ShowTotalSummary="False"
+                                       ShowGroupPanel="False"
+                                       ShowIndicator="False"
+                                       ShowGroupFooters="False"
+                                       ShowFixedTotalSummary="False"
+                                       ShowAutoFilterRow="False"
+                                       ShowSearchPanelMode="Never"
+                                       AllowResizing="False"
+                                       AllowMoveColumnToDropArea="False"
+                                       IsColumnMenuEnabled="False"
+                                       AllowPerPixelScrolling="True"
+                                       AutoWidth="True"
+                                       AllowEditing="False"
+                                       NavigationStyle="Row"
+                                       AllowRowFixing="Top"
+                                       ShowFixRowButton="Never"
+                                       FixedTopRows="{Binding Path=FixedInvoiceSources, Mode=OneWay}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                                       Command="{Binding Path=OkCommand, Mode=OneTime}" />
+                                <dxmvvm:FocusBehavior SourceName="LayoutControl"
+                                                      PropertyName="IsEnabled" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage x:Name="WaitImage"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="CreateInvoiceCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <Button x:Name="OkButton"
+                        Content="ОК"
+                        IsTabStop="True"
+                        HorizontalAlignment="Right"
+                        Command="{Binding Path=OkCommand, Mode=OneTime}" />
+                <Button Content="Отмена"
+                        IsTabStop="True"
+                        HorizontalAlignment="Right"
+                        Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>
+

@@ -1,0 +1,65 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Service.ServiceProducts.GetServiceProductWarehouseView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceProducts"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              DataContext="{client:Container Type=viewModels:GetServiceProductWarehouseViewModel}"
+                              Width="400"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:GetServiceProductWarehouseViewModel}}">
+    <controls:TelemartUserControl.Style>
+        <Style TargetType="controls:TelemartUserControl">
+            <Setter Property="Height">
+                <Setter.Value>
+                    <system:Double>90</system:Double>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </controls:TelemartUserControl.Style>
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="{Binding Path=SelectKey, Mode=OneWay}"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        Orientation="Vertical"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+        <dxlc:LayoutGroup Orientation="Vertical">
+            <dxlc:LayoutItem Label="Склад">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Warehouses, Mode=OneWay}"
+                                                  EditValue="{Binding Path=SelectedWarehouseId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                                  ValueMember="Id"
+                                                  DisplayMember="DisplayValue"   />
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom"
+                          HorizontalAlignment="Right">
+            <Button Content="OK"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsTabStop="True"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=ValidationContainer, Converter={dxmvvm:BooleanNegationConverter}}" />
+            <Button Content="Отмена"
+                    IsTabStop="True"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+    </controls:TelemartUserControl>

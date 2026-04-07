@@ -5,6 +5,7 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from time import perf_counter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -806,6 +807,38 @@ class DryRunWriteEvaluationServiceTests(unittest.TestCase):
                 "compile_pass": False,
                 "selected_codegen_targets": ["src/Repositories/ProductRepository.cs"],
                 "writable_files": ["src/Repositories/ProductRepository.cs"],
+                "bounded_prompt_text": "prompt text",
+                "bounded_prompt_hash": "prompt-hash",
+                "bounded_prompt_length": 11,
+                "bounded_build_context_payload": "{\"task\":\"text\"}",
+                "bounded_context_hash": "context-hash",
+                "bounded_context_length": 15,
+                "comparison_context_hash": "comparison-context-hash",
+                "comparison_context_normalized_fields": ["lightweight_draft.generation_latency_ms"],
+                "excluded_comparison_noise_fields": ["lightweight_draft.generation_latency_ms"],
+                "bounded_model_name": "gpt-5.4",
+                "bounded_provider_name": "openrouter",
+                "generation_contract_version": "2026-04-04.prompt-context-v1",
+                "bounded_generation_flags_active": {"retry": False, "same_method_quality_hardening_activated": True},
+                "bounded_generation_lane_id": "tel_13491_computed_validation_retry_v1",
+                "lane_frozen_for_comparison": True,
+                "comparison_mode_active": False,
+                "mutation_points_frozen": False,
+                "compile_hardening_retry_allowed": False,
+                "compile_hardening_retry_applied": False,
+                "initial_lane_reason": "computed_validation_property_same_method",
+                "final_post_activation_lane_reason": "computed_validation_property_same_method",
+                "post_activation_payload_frozen": True,
+                "post_activation_prompt_hash": "post-prompt-hash",
+                "post_activation_context_hash": "post-context-hash",
+                "post_activation_flags_hash": "post-flags-hash",
+                "payload_mutation_points": ["compile_hardening_retry"],
+                "payload_mutation_count": 1,
+                "computed_validation_prompt_symbol_names_resolved": True,
+                "computed_validation_prompt_property_name": "IsValid",
+                "computed_validation_prompt_source_name": "ErrorText",
+                "computed_validation_prompt_helper_names": ["TryAddWarehouseCell"],
+                "computed_validation_prompt_used_concrete_symbols": True,
                 "target_gate_status": "blocked",
                 "target_gate_reason": "Top writable file lacked a strong exact anchor, so bounded code generation was downgraded to draft-only.",
                 "scope_validation_status": "passed",
@@ -827,6 +860,53 @@ class DryRunWriteEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(result["bounded_primary_target"], "src/Repositories/ProductRepository.cs")
         self.assertEqual(result["bounded_target_gate_status"], "blocked")
         self.assertEqual(result["bounded_downgraded_to_draft_reason"], "weak_top1_anchor")
+        self.assertEqual(result["bounded_prompt_text"], "prompt text")
+        self.assertEqual(result["bounded_prompt_hash"], "prompt-hash")
+        self.assertEqual(result["bounded_context_hash"], "context-hash")
+        self.assertEqual(result["comparison_context_hash"], "comparison-context-hash")
+        self.assertEqual(result["comparison_context_normalized_fields"], ["lightweight_draft.generation_latency_ms"])
+        self.assertEqual(result["excluded_comparison_noise_fields"], ["lightweight_draft.generation_latency_ms"])
+        self.assertEqual(result["bounded_model_name"], "gpt-5.4")
+        self.assertEqual(result["bounded_provider_name"], "openrouter")
+        self.assertEqual(result["generation_contract_version"], "2026-04-04.prompt-context-v1")
+        self.assertFalse(result["bounded_generation_flags_active"]["retry"])
+        self.assertEqual(result["bounded_generation_lane_id"], "tel_13491_computed_validation_retry_v1")
+        self.assertTrue(result["lane_frozen_for_comparison"])
+        self.assertFalse(result["comparison_mode_active"])
+        self.assertFalse(result["mutation_points_frozen"])
+        self.assertFalse(result["compile_hardening_retry_allowed"])
+        self.assertFalse(result["compile_hardening_retry_applied"])
+        self.assertEqual(result["initial_lane_reason"], "computed_validation_property_same_method")
+        self.assertEqual(result["final_post_activation_lane_reason"], "computed_validation_property_same_method")
+        self.assertEqual(result["post_activation_prompt_hash"], "post-prompt-hash")
+        self.assertEqual(result["payload_mutation_points"], ["compile_hardening_retry"])
+
+    def test_bounded_generation_lane_override_is_narrow_for_tel_13491(self) -> None:
+        override = self.service._bounded_generation_lane_override(
+            case={"jira_key": "TEL-13491"},
+            writable_repo_id="telemart_soft_test",
+            writable_files=["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"],
+            selected_class="OrderPackCellViewModel",
+            selected_method="OrderPackCellViewModel",
+        )
+
+        self.assertEqual(override["lane_id"], "tel_13491_computed_validation_retry_v1")
+        self.assertTrue(override["comparison_mode_active"])
+        self.assertTrue(override["lane_frozen_for_comparison"])
+        self.assertTrue(override["mutation_points_frozen"])
+        self.assertTrue(override["force_non_empty_patch"])
+        self.assertEqual(override["force_non_empty_patch_reason"], "computed_validation_property_same_method")
+        self.assertTrue(override["compile_hardening_retry_allowed"])
+        self.assertEqual(override["chosen_primary_behavior_method"], "RecognizeBarcodeViewModelOnFinished")
+
+        other = self.service._bounded_generation_lane_override(
+            case={"jira_key": "TEL-99999"},
+            writable_repo_id="telemart_soft_test",
+            writable_files=["src/client/Telemart.Client/ViewModels/Store/Order/OrderPackCellViewModel.cs"],
+            selected_class="OrderPackCellViewModel",
+            selected_method="OrderPackCellViewModel",
+        )
+        self.assertEqual(other, {})
 
     def test_canonical_execution_input_falls_back_only_when_canonical_planning_payload_absent(self) -> None:
         case = {
@@ -911,6 +991,55 @@ class DryRunWriteEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(saved["dry_run_success_rate"], 1.0)
         self.assertEqual(saved["draft_success_rate"], 1.0)
         self.assertEqual(result["artifact_path"], output_path.as_posix())
+
+    def test_write_run_case_progress_persists_bounded_provider_request_fields(self) -> None:
+        stage_state = {
+            "last_internal_stage_reached": "bounded_generation_started",
+            "planning_substage_last_reached": "canonical_execution_input_finished",
+            "stage_elapsed_ms": {},
+            "planning_substage_elapsed_ms": {},
+            "implementation_plan_substage_elapsed_ms": {},
+            "workflow_eval_request_elapsed_ms": {},
+            "gitnexus_substep_elapsed_ms": {},
+            "provider_metadata_substep_elapsed_ms": {},
+            "resolve_provider_substep_elapsed_ms": {},
+            "repo_visibility_debug_substep_elapsed_ms": {},
+            "gitnexus_lifecycle_step_elapsed_ms": {},
+            "bounded_generation_substep_elapsed_ms": {},
+            "bounded_generation_current_substep": "bounded_provider_request_send",
+            "bounded_generation_last_substep_reached": "bounded_provider_request_send_started",
+            "bounded_generation_timeout_reason": "",
+            "bounded_provider_request_current_step": "http_request_opened",
+            "bounded_provider_request_last_step_reached": "http_request_opened",
+            "bounded_provider_request_elapsed_ms": 1234,
+            "bounded_provider_first_response_byte_started": True,
+            "bounded_provider_first_response_byte_finished": False,
+            "bounded_provider_response_received": False,
+            "bounded_provider_response_parsed": False,
+            "bounded_provider_timeout_reason": "provider request still waiting",
+            "post_materialization_substep_elapsed_ms": {},
+            "post_diff_substep_elapsed_ms": {},
+            "validation_runner_step_elapsed_ms": {},
+            "final_tail_step_elapsed_ms": {},
+        }
+
+        self.service._write_run_case_progress(
+            jira_key="TEL-13392",
+            execution_mode="full_dry_run",
+            stage_state=stage_state,
+            started_perf=perf_counter(),
+        )
+
+        progress_path = self.artifacts_root / "run_case_progress" / "tel-13392.json"
+        payload = json.loads(progress_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["bounded_provider_request_current_step"], "http_request_opened")
+        self.assertEqual(payload["bounded_provider_request_last_step_reached"], "http_request_opened")
+        self.assertEqual(payload["bounded_provider_request_elapsed_ms"], 1234)
+        self.assertTrue(payload["bounded_provider_first_response_byte_started"])
+        self.assertFalse(payload["bounded_provider_first_response_byte_finished"])
+        self.assertFalse(payload["bounded_provider_response_received"])
+        self.assertFalse(payload["bounded_provider_response_parsed"])
+        self.assertEqual(payload["bounded_provider_timeout_reason"], "provider request still waiting")
 
 
 if __name__ == "__main__":

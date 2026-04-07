@@ -33,8 +33,17 @@ class DiffService:
         warnings: list[str] = []
         diff_files: list[DiffFile] = []
         result_by_path = self._result_by_path(apply_result)
-        git_available = self._can_use_git(repo_root) and not apply_input.dry_run and apply_result is not None
+        git_capability = self._can_use_git(repo)
+        if isinstance(git_capability, tuple):
+            git_available, git_diagnostics = git_capability
+        else:
+            git_available, git_diagnostics = bool(git_capability), {}
+        git_available = git_available and not apply_input.dry_run and apply_result is not None
         seen_paths: set[str] = set()
+        if git_diagnostics.get("scm_git_detection_skipped", False):
+            skip_reason = str(git_diagnostics.get("scm_git_detection_skip_reason", "") or "").strip()
+            if skip_reason:
+                warnings.append(f"Git diff skipped: {skip_reason}")
 
         log_line(
             "DIFF SERVICE START: "
@@ -179,8 +188,25 @@ class DiffService:
             if str(item.relative_path or "").strip()
         }
 
-    def _can_use_git(self, repo_root: Path) -> bool:
-        return self._scm_service.detect_git_repo(repo_root)
+    def _can_use_git(self, repo: object) -> tuple[bool, dict[str, object]]:
+        repo_root = Path(str(getattr(repo, "root_path", "") or "")).resolve()
+        workspace_is_git_checkout = bool(getattr(repo, "workspace_is_git_checkout", True))
+        workspace_creation_mode = str(getattr(repo, "workspace_creation_mode", "") or "").strip()
+        if not workspace_is_git_checkout:
+            return False, {
+                "workspace_creation_mode": workspace_creation_mode,
+                "workspace_git_identity_expected": str(getattr(repo, "workspace_git_identity_expected", "") or "").strip(),
+                "workspace_is_git_checkout": False,
+                "scm_git_detection_skipped": True,
+                "scm_git_detection_skip_reason": "workspace marked as copied non-git workspace",
+            }
+        return self._scm_service.detect_git_repo(repo_root), {
+            "workspace_creation_mode": workspace_creation_mode,
+            "workspace_git_identity_expected": str(getattr(repo, "workspace_git_identity_expected", "") or "").strip(),
+            "workspace_is_git_checkout": True,
+            "scm_git_detection_skipped": False,
+            "scm_git_detection_skip_reason": "",
+        }
 
     def _git_diff(self, repo_root: Path, relative_path: str) -> str:
         result = self._scm_service.get_diff(repo_root, relative_path=relative_path)

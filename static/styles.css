@@ -297,6 +297,14 @@ a.button-primary:hover {
   border-color: var(--primary-dark);
 }
 
+button.primary.is-loading,
+.button-primary.is-loading,
+a.button-primary.is-loading {
+  background: #d7efe0;
+  border-color: #b6dbc5;
+  color: #185634;
+}
+
 button.secondary,
 .button-secondary {
   background: var(--neutral-soft);
@@ -323,6 +331,49 @@ button:disabled {
 
 .error {
   color: var(--danger);
+}
+
+.loading-panel {
+  min-height: 220px;
+  margin: 18px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,249,0.98));
+  box-shadow: var(--shadow);
+}
+
+.loading-panel-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.loading-video {
+  width: min(220px, 100%);
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 16px;
+  background: transparent;
+}
+
+.loading-copy {
+  max-width: 440px;
+}
+
+.loading-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1d2328;
+}
+
+.loading-text {
+  margin-top: 6px;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .empty-state {
@@ -523,6 +574,34 @@ tbody tr:hover {
 
 .hidden {
   display: none !important;
+}
+
+.bulk-job-panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(249, 252, 250, 0.96), rgba(244, 248, 245, 0.98));
+}
+
+.bulk-job-status {
+  margin-top: 18px;
+}
+
+.progress-bar-shell {
+  width: 100%;
+  height: 12px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: #e6ece8;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #2e8b57, #6db38b);
+  transition: width 0.25s ease;
 }
 
 .login-shell {

@@ -1,0 +1,67 @@
+<dx:ThemedWindow x:Class="Telemart.Client.Views.CustomMessageBoxView"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                 xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:vm="clr-namespace:Telemart.Client.ViewModels"
+                 xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 Title="{Binding Caption}"
+                 TitleAlignment="Center"
+                 Width="400" Height="200"
+                 WindowStartupLocation="CenterOwner"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 mc:Ignorable="d">
+    <dx:ThemedWindow.Resources>
+        <converters:YesNoVisibilityConverter x:Key="YesNoVisibilityConverter"/>
+        <converters:OkCancelVisibilityConverter x:Key="OkCancelVisibilityConverter"/>
+    </dx:ThemedWindow.Resources>
+    
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="KeyDown"
+                               Command="{Binding Path=KeyDownCommand, Mode=OneWay}"
+                               PassEventArgsToCommand="True" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <dx:DXImage Grid.Row="0" Grid.Column="0"
+                    Width="64" Height="64" Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Source="{Binding ImageSource}" />
+
+        <TextBlock Grid.Row="0" Grid.Column="1"
+                   Text="{Binding Message}"
+                   FontSize="14"
+                   TextWrapping="Wrap"
+                   VerticalAlignment="Center" />
+
+        <StackPanel Orientation="Horizontal" Grid.Row="1"
+                    HorizontalAlignment="Right"
+                    Margin="0,20,0,0"
+                    Grid.ColumnSpan="2">
+            <Button Content="Yes" Width="80" Margin="5" 
+                    Visibility="{Binding Buttons, Converter={StaticResource YesNoVisibilityConverter}}"
+                    Command="{Binding YesCommand}" />
+            <Button Content="No" Width="80" Margin="5"
+                    Visibility="{Binding Buttons, Converter={StaticResource YesNoVisibilityConverter}}"
+                    Command="{Binding NoCommand}" />
+            <Button Content="OK" Width="80" Margin="5"
+                    Visibility="{Binding Buttons, Converter={StaticResource OkCancelVisibilityConverter}, ConverterParameter=OK}"
+                    Command="{Binding OkCommand}" />
+            <Button Content="Cancel" Width="80" Margin="5"
+                    Visibility="{Binding Buttons, Converter={StaticResource OkCancelVisibilityConverter}, ConverterParameter=Cancel}"
+                    Command="{Binding CancelCommand}" />
+        </StackPanel>
+    </Grid>
+</dx:ThemedWindow>

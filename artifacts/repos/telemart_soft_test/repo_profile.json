@@ -1,0 +1,108 @@
+{
+  "repo_id": "telemart_soft_test",
+  "indexed_at": "2026-04-07T00:50:06.874370+00:00",
+  "primary_stack": "dotnet",
+  "detected_stacks": [
+    "dotnet"
+  ],
+  "solution_files": [
+    "src/Telemart.sln"
+  ],
+  "project_files": [
+    "src/Telemart.Client.Cache/Telemart.Client.Cache.csproj",
+    "src/Telemart.Client.Fonts/Telemart.Client.Fonts.csproj",
+    "src/Telemart.Client.HtmlToPdf/Telemart.Client.HtmlToPdf.csproj",
+    "src/Telemart.Client.Protos/Telemart.Client.Protos.csproj",
+    "src/client/Telemart.Client.Core/Telemart.Client.Core.csproj",
+    "src/client/Telemart.Client.Data/Telemart.Client.Data.csproj",
+    "src/client/Telemart.Client.Dictionaries/Telemart.Client.Dictionaries.csproj",
+    "src/client/Telemart.Client.FiscalRegistrar.Abstraction/Telemart.Client.FiscalRegistrar.Abstraction.csproj",
+    "src/client/Telemart.Client.FiscalRegistrar.Programmical/Telemart.Client.FiscalRegistrar.Programmical.csproj",
+    "src/client/Telemart.Client.FiscalRegistrar/Telemart.Client.FiscalRegistrar.csproj",
+    "src/client/Telemart.Client.Oktell/Telemart.Client.Oktell.csproj",
+    "src/client/Telemart.Client.PosTerminal.Ingenico/Telemart.Client.PosTerminal.Ingenico.csproj",
+    "src/client/Telemart.Client.PosTerminal.PrivatBank/Telemart.Client.PosTerminal.PrivatBank.csproj",
+    "src/client/Telemart.Client.ReportDesigner/Telemart.Client.ReportDesigner.csproj",
+    "src/client/Telemart.Client.Tests/Telemart.Client.Tests.csproj",
+    "src/client/Telemart.Client.TransferObjects/Telemart.Client.TransferObjects.csproj",
+    "src/client/Telemart.Client/Telemart.Client.csproj",
+    "src/client/TelemartAnimatedGif/TelemartAnimatedGif.csproj"
+  ],
+  "test_projects": [
+    "src/client/Telemart.Client.Tests/Telemart.Client.Tests.csproj"
+  ],
+  "source_roots": [
+    "src"
+  ],
+  "test_roots": [
+    ".claude",
+    "build_scripts",
+    "src",
+    "tools"
+  ],
+  "config_roots": [
+    ".claude",
+    "build_scripts",
+    "src",
+    "tools"
+  ],
+  "docs_roots": [
+    ".claude",
+    "build_scripts",
+    "src",
+    "tools"
+  ],
+  "program_files": [],
+  "startup_files": [],
+  "appsettings_files": [
+    "src/client/Telemart.Client/appsettings.Development.x64.json",
+    "src/client/Telemart.Client/appsettings.Development.x86.json",
+    "src/client/Telemart.Client/appsettings.Production.x64.json",
+    "src/client/Telemart.Client/appsettings.Production.x86.json",
+    "src/client/Telemart.Client/appsettings.Staging.x64.json",
+    "src/client/Telemart.Client/appsettings.Staging.x86.json",
+    "src/client/Telemart.Client/appsettings.Test.x64.json",
+    "src/client/Telemart.Client/appsettings.Test.x86.json",
+    "src/client/Telemart.Client/appsettings.Uat.x64.json",
+    "src/client/Telemart.Client/appsettings.Uat.x86.json",
+    "src/client/Telemart.Client/bin/x86/Debug/net9.0-windows/appsettings.json"
+  ],
+  "framework_markers": [
+    "aspnet-core",
+    "handler-pattern",
+    "appsettings",
+    "mediatr",
+    "fluentvalidation",
+    "xunit"
+  ],
+  "build_command_candidates": [
+    "dotnet build"
+  ],
+  "test_command_candidates": [
+    "dotnet test"
+  ],
+  "package_manager_markers": [
+    "nuget"
+  ],
+  "runtime_markers": [
+    ".NET"
+  ],
+  "file_role_counts": {
+    "interface": 1973,
+    "test": 76,
+    "dto": 1604,
+    "service": 53,
+    "request": 141,
+    "handler": 27,
+    "controller": 5,
+    "endpoint": 5,
+    "validator": 11
+  },
+  "solution_count": 1,
+  "project_count": 18,
+  "controller_count": 5,
+  "route_count": 0,
+  "handler_count": 27,
+  "validator_count": 11,
+  "glossary_term_count": 80
+}

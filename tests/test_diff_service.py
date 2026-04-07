@@ -110,6 +110,38 @@ class DiffServiceTests(unittest.TestCase):
         self.assertIn("+    return 'git-updated'", diff_result.files[0].diff)
         self.assertGreaterEqual(diff_result.files[0].additions_count, 1)
 
+    def test_copied_non_git_workspace_skips_detect_git_repo_and_uses_content_diff(self) -> None:
+        self.registry_service.update_repo_metadata(
+            "sample",
+            workspace_creation_mode="copytree_ignore_dotgit",
+            workspace_git_identity_expected="copied_files_only_non_git",
+            workspace_is_git_checkout=False,
+        )
+        apply_input = ApplyInput(
+            repo_id="sample",
+            dry_run=False,
+            operations=[
+                ApplyOperation(
+                    relative_path="src/app.py",
+                    operation_type="update",
+                    new_content="def run() -> str:\n    return 'copied-workspace-updated'\n",
+                )
+            ],
+        )
+        apply_result = self.apply_service.apply(apply_input, allow_real_writes=True)
+
+        with patch.object(self.diff_service._scm_service, "detect_git_repo", side_effect=AssertionError("detect_git_repo should not be called")):
+            diff_result = self.diff_service.build_diff(
+                repo_id="sample",
+                apply_input=apply_input,
+                apply_result=apply_result,
+            )
+
+        self.assertEqual(len(diff_result.files), 1)
+        self.assertIn("-    return 'ok'", diff_result.files[0].diff)
+        self.assertIn("+    return 'copied-workspace-updated'", diff_result.files[0].diff)
+        self.assertTrue(any("Git diff skipped: workspace marked as copied non-git workspace" in warning for warning in diff_result.warnings))
+
     def test_real_apply_diff_falls_back_without_git(self) -> None:
         apply_input = ApplyInput(
             repo_id="sample",

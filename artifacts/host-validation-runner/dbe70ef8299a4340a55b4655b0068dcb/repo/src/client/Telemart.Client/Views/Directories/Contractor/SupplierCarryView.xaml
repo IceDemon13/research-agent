@@ -1,0 +1,117 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Directories.Contractor.SupplierCarryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Directories.Contractor"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:client="clr-namespace:Telemart.Client"
+             Width="320"
+             DataContext="{client:Container Type=viewModels:SupplierCarryViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:SupplierCarryViewModel, IsDesignTimeCreatable=True}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded" Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}"/>
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl x:Name="LayoutControl"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}"
+                        ItemSpace="8">
+        <dxlc:LayoutItem Label="Склад пост">
+            <dxe:ComboBoxEdit ItemsSource="{Binding Path=SupplierWarehouses, Mode=OneWay}"
+                              EditValue="{Binding Path=Model.SupplierWarehouseId, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                              DisplayMember="Name"
+                              ValueMember="Id">
+            </dxe:ComboBoxEdit>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutItem Label="Склад">
+            <dxe:ComboBoxEdit ItemsSource="{Binding Path=Warehouses, Mode=OneWay}"
+                              EditValue="{Binding Path=Model.WarehouseId, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                              DisplayMember="Name"
+                              ValueMember="Id">
+            </dxe:ComboBoxEdit>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutItem Label="Доставка">
+            <dxe:ComboBoxEdit ItemsSource="{Binding CarryTypes, Mode=OneWay}"
+                              DisplayMember="Name"
+                              EditValue="{Binding Path=Model.CarryType, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}">
+            </dxe:ComboBoxEdit>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutItem Label="Закупка до">
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              View="Group"
+                              ItemLabelsAlignment="Local">
+                <dxlc:LayoutItem Label="ПН-ПТ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.TimeClose, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged, Converter={converters:TimeSpanToDateTimeConverter}}"
+                                  Style="{StaticResource TimeSpanTextEdit}"/>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="СБ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.TimeCloseSt, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged, Converter={converters:TimeSpanToDateTimeConverter}}"
+                                  Style="{StaticResource TimeSpanTextEdit}"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutItem Label="Прибытие в">
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              View="Group"
+                              ItemLabelsAlignment="Local">
+                <dxlc:LayoutItem Label="ПН-ПТ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.TimeArrive, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged, Converter={converters:TimeSpanToDateTimeConverter}}"
+                                  Style="{StaticResource TimeSpanTextEdit}"/>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="СБ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.TimeArriveSt, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged, Converter={converters:TimeSpanToDateTimeConverter}}"
+                                  Style="{StaticResource TimeSpanTextEdit}"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutItem Label="Получение в">
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              View="Group"
+                              ItemLabelsAlignment="Local">
+                <dxlc:LayoutItem Label="ПН-ПТ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.TimeGet, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged, Converter={converters:TimeSpanToDateTimeConverter}}"
+                                  Style="{StaticResource TimeSpanTextEdit}"/>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="СБ">
+                    <dxe:TextEdit EditValue="{Binding Path=Model.TimeGetSt, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged, Converter={converters:TimeSpanToDateTimeConverter}}"
+                                  Style="{StaticResource TimeSpanTextEdit}"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutItem Label="Дней в пути">
+            <dxe:SpinEdit EditValue="{Binding Path=Model.Days, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                          EditValueType="system:Int32"
+                          Increment="1"
+                          MinValue="0"
+                          MaxValue="{x:Static viewModels:SupplierCarryConstants.DaysMaxValue}"
+                          IsFloatValue="False">
+            </dxe:SpinEdit>
+        </dxlc:LayoutItem>
+        <dxlc:LayoutGroup VerticalAlignment="Center" HorizontalAlignment="Right">
+            <Button Content="OK"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}"/>
+            <Button Content="Отмена"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}"/>
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

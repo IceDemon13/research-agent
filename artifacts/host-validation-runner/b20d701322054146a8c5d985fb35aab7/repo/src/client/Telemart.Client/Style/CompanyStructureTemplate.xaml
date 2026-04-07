@@ -1,0 +1,38 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries">
+    <BitmapImage x:Key="ManagerImage"
+                 UriSource="/Images/CompanyStructure/manager_departments.png" />
+    <BitmapImage x:Key="WorkerImage"
+                 UriSource="/Images/CompanyStructure/worker_departments.png" />
+    
+    <dxmvvm:ObjectToObjectConverter x:Key="DepartmentAvatarConverter">
+        <dxmvvm:MapItem Source="1"
+                        Target="{StaticResource ManagerImage}" />
+        <dxmvvm:MapItem Source="2"
+                        Target="{StaticResource WorkerImage}" />
+    </dxmvvm:ObjectToObjectConverter>
+    
+    <DataTemplate x:Key="DepartmentEmployeeComboBoxItemTemplate"
+                  DataType="{x:Type dictionaries:DepartmentEmployeeType}">
+        <StackPanel Orientation="Horizontal"
+                    Background="Transparent"
+                    Height="20">
+            <dx:DXImage Source="{Binding Path=Id, Mode=OneWay, Converter={StaticResource DepartmentAvatarConverter}}"
+                        Height="16"
+                        Width="16"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Visibility="Visible"
+                        ToolTip="{Binding Name, Mode=OneWay}"
+                        Margin="5,0,0,0" />
+        </StackPanel>
+    </DataTemplate>
+    
+    <ControlTemplate x:Key="DepartmentEmployeeColumnDisplayTemplate">
+        <ContentControl Content="{Binding Path=EditValue, RelativeSource={RelativeSource TemplatedParent}, UpdateSourceTrigger=PropertyChanged}"
+                        ContentTemplate="{StaticResource DepartmentEmployeeComboBoxItemTemplate}" />
+    </ControlTemplate>
+</ResourceDictionary>

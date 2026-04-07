@@ -1,0 +1,242 @@
+<UserControl x:Class="Telemart.Client.Views.Tasks.ProcessPickupProductsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Tasks"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:productInformation="clr-namespace:Telemart.Client.Views.Store.Order.ProductInformation"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:ProcessPickupProductsViewModel}"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:ProcessPickupProductsViewModel}}"
+             Width="1472"
+             Height="800"
+             d:DesignWidth="1472"
+             d:DesignHeight="800">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}"
+                        dxe:ValidationService.IsValidationContainer="True">
+        <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxlc:LayoutGroup HorizontalAlignment="Stretch">
+                    <dxg:GridControl x:Name="GridControl"
+                                     ItemsSource="{Binding Path=Products, ValidatesOnDataErrors=True, Mode=TwoWay}"
+                                     SelectedItem="{Binding Path=SelectedProduct, ValidatesOnDataErrors=True, Mode=TwoWay}"
+                                     SelectionMode="None">
+                        <dxmvvm:Interaction.Behaviors>
+                            <behaviors:LayoutSerializationBehavior FileName="process_pickup_products1.xml" />
+                            <behaviors:CopyCurrentCellToClipboardBehavior />
+                        </dxmvvm:Interaction.Behaviors>
+                        <dxg:GridControl.Columns>
+                            <dxg:GridColumn Header="Код"
+                                            HeaderToolTip="Код товара"
+                                            FieldName="ProductId"
+                                            AllowSorting="True"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            ReadOnly="False"
+                                            AllowEditing="True"
+                                            AllowMoving="False"
+                                            AllowResizing="True"
+                                            FixedWidth="False"
+                                            MaxWidth="90"
+                                            MinWidth="40"
+                                            Width="80">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Название"
+                                            HeaderToolTip="Название товара"
+                                            FieldName="ProductName"
+                                            AllowSorting="True"
+                                            ReadOnly="False"
+                                            AllowEditing="True"
+                                            AllowMoving="False"
+                                            AllowResizing="True"
+                                            FixedWidth="False"
+                                            MinWidth="80"
+                                            Width="280" />
+                            <dxg:GridColumn Header="Категория"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HorizontalHeaderContentAlignment="Left"
+                                            FieldName="CategoryId"
+                                            AllowBestFit="True"
+                                            AllowResizing="True"
+                                            MinWidth="40"
+                                            AllowMoving="True"
+                                            AllowDrop="False"
+                                            AllowSorting="True"
+                                            ReadOnly="True"
+                                            AllowEditing="False"
+                                            Width="80"
+                                            AllowGrouping="True"
+                                            AllowColumnFiltering="True"
+                                            FilterPopupMode="CheckedList"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=DataContext.AllCategories,  Mode=OneWay, ElementName=GridControl}"
+                                                              ValueMember="Id"
+                                                              DisplayMember="DisplayValue"
+                                                              HorizontalContentAlignment="Left" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn
+                                Header="Причина"
+                                HeaderToolTip="Причина"
+                                Width="500"
+                                AllowGrouping="False"
+                                AllowSorting="True"
+                                IsEnabled="True"
+                                ReadOnly="True"
+                                AllowMoving="False"
+                                AllowEditing="False"
+                                AllowColumnFiltering="False"
+                                AllowResizing="True"
+                                FixedWidth="False"
+                                MinWidth="200"
+                                FilterPopupMode="CheckedList">
+                                <dxg:GridColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <dxe:ComboBoxEdit
+                                            DisplayMember="Name"
+                                            ValueMember="Id"
+                                            ShowPopupIfReadOnly="False"
+                                            IncrementalFiltering="True"
+                                            IsTextEditable="False"
+                                            ValidateOnEnterKeyPressed="False"
+                                            AllowLiveDataShaping="False"
+                                            AllowUpdateTwoWayBoundPropertiesOnSynchronization="False"
+                                            IsEnabled="True"
+                                            ItemsSource="{Binding Path=DataContext.Reasons, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, ElementName=ValidationContainer}"
+                                            EditValue="{Binding Path=RowData.Row.ReasonIds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                            ApplyItemTemplateToSelectedItem="False"
+                                            Style="{StaticResource ReadOnlyGridCheckedTokenComboBoxStyle}" />
+                                    </DataTemplate>
+                                </dxg:GridColumn.CellTemplate>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Действие"
+                                            HeaderToolTip="Действие по товару"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            AllowSorting="True"
+                                            ReadOnly="False"
+                                            AllowEditing="True"
+                                            AllowMoving="False"
+                                            AllowResizing="False"
+                                            FixedWidth="True"
+                                            MinWidth="170"
+                                            Width="170">
+                                <dxg:GridColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <RadioButton Content="Вернуть"
+                                                         IsEnabled="{Binding Path=RowData.Row.Processed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}}"
+                                                         ToolTip="Вернуть на основной склад"
+                                                         Margin="10,0,20, 0"
+                                                         IsChecked="{Binding Path=RowData.Row.ReturnOnMainWarehouse, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         VerticalAlignment="Center" />
+                                            <RadioButton Content="Оставить"
+                                                         IsEnabled="{Binding Path=RowData.Row.Processed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}}"
+                                                         ToolTip="Оставить на самовывозе"
+                                                         IsChecked="{Binding Path=RowData.Row.KeepOnPickup, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </dxg:GridColumn.CellTemplate>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="О"
+                                            HeaderToolTip="Обработан"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="Processed"
+                                            FixedWidth="True"
+                                            Width="24"
+                                            MinWidth="24"
+                                            AllowMoving="False"
+                                            AllowBestFit="False"
+                                            AllowResizing="False"
+                                            AllowGrouping="False"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <dx:DXImage Source="../../Images/Common/tick.png"
+                                                    Width="16"
+                                                    Height="16"
+                                                    Visibility="{Binding Path=RowData.Row.Processed, Mode=OneWay, Converter={dxmvvm:NumericToVisibilityConverter}}" />
+                                    </DataTemplate>
+                                </dxg:GridColumn.CellTemplate>
+                            </dxg:GridColumn>
+                        </dxg:GridControl.Columns>
+                        <dxg:GridControl.View>
+                            <dxg:TableView AllowResizing="False"
+                                           AllowPerPixelScrolling="True"
+                                           ShowGroupPanel="True"
+                                           AllowEditing="True"
+                                           AllowMoveColumnToDropArea="False"
+                                           AutoWidth="True"
+                                           ShowIndicator="False"
+                                           AllowGrouping="False"
+                                           MaxWidth="1500" />
+                        </dxg:GridControl.View>
+                    </dxg:GridControl>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Vertical"
+                                  HorizontalAlignment="Right"
+                                  ItemSpace="0"
+                                  Width="300"
+                                  MaxWidth="300">
+                    <productInformation:ProductInformation
+                        DataContext="{Binding Path=ProductInformation, Mode=OneWay}"
+                        dxmvvm:ViewModelExtensions.ParentViewModel="{Binding Path=DataContext, Mode=OneWay, ElementName=ValidationContainer}" />
+                </dxlc:LayoutGroup>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup x:Name="BusyIndicatorLayoutGroup"
+                                  Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Bottom">
+                    <dxlc:LayoutGroup.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="HandleLoadedCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxlc:LayoutGroup.Visibility>
+                    <viewComponents:WaitImage HorizontalAlignment="Left"
+                                              VerticalAlignment="Bottom" />
+                    <TextBlock Text="Обработка..." />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  VerticalAlignment="Bottom"
+                                  HorizontalAlignment="Right">
+                    <Button Content="Обработать"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsTabStop="True"
+                            IsEnabled="True" />
+                    <Button Content="Отмена"
+                            IsTabStop="True"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

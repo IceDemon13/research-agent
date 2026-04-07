@@ -1,0 +1,147 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Service.ServiceRequests.Create.CreateManyServiceRequestStep3View"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRequests.Create"
+             xmlns:dxco="http://schemas.devexpress.com/winfx/2008/xaml/controls"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             mc:Ignorable="d" 
+             DataContext="{client:Container Type=viewModels:CreateManyServiceRequestStep3ViewModel}"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CreateManyServiceRequestStep3ViewModel}}"
+             d:DesignWidth="600"
+             d:DesignHeight="280">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <DockPanel>
+        <dx:DialogFooter>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          Visibility="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxco:WizardButton Content="Назад"
+                                   dxco:Wizard.IsButtonBack="True" />
+                <dxco:WizardButton Content="Далее"
+                                   dxco:Wizard.IsButtonNext="True">
+                    <dxco:WizardButton.IsEnabled>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                            <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                     ElementName="LayoutControl" />
+                            <Binding Path="IsLongOperationInProgress" />
+                        </MultiBinding>
+                    </dxco:WizardButton.IsEnabled>
+                </dxco:WizardButton>
+                <dxco:WizardButton Content="Отмена"
+                                   dxco:Wizard.IsButtonCancel="True" />
+            </StackPanel>
+        </dx:DialogFooter>
+        <ContentPresenter DockPanel.Dock="Top"
+                          Content="{Binding}"
+                          ContentTemplate="{StaticResource WizardHeaderTemplate}" />
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutItem Label="ФИО заявителя">
+                <dxe:TextEdit EditValue="{Binding Path=Model.Fio, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Телефон">
+                <dxlc:LayoutGroup Orientation="Horizontal">
+                    <dxe:TextEdit EditValue="{Binding Model.Phone, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                      Style="{StaticResource PhoneTextEdit}" />
+                    <dxe:TextEdit EditValue="{Binding Path=Model.Phone2, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                      Style="{StaticResource PhoneTextEdit}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="E-mail">
+                <dxe:TextEdit EditValue="{Binding Path=Model.Email, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Требование">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Model.ClientRequirements, Mode=OneWay}"
+                                      EditValue="{Binding Path=Model.ClientRequirement, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                      DisplayMember="Name">
+                </dxe:ComboBoxEdit>
+            </dxlc:LayoutItem>
+            <dxg:GridControl x:Name="GridControl"
+                                         ItemsSource="{Binding Path=Model.SelectedProducts, Mode=OneWay}"
+                                         VerticalAlignment="Stretch"
+                                         HorizontalAlignment="Stretch"
+                                         SelectionMode="None">
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn Header="№ п.п."
+                                            HeaderToolTip="Порядковый номер"
+                                            AllowSorting="True"
+                                            AllowBestFit="True"
+                                            Width="50"
+                                            MinWidth="50">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding RowData.RowHandle.Value, UpdateSourceTrigger=PropertyChanged, Converter={converters:IncrementRowConverter}}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Товар"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="Name"
+                                                ReadOnly="True"
+                                                AllowMoving="False"
+                                                Width="260"/>
+                    <dxg:GridColumn Header="SN"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="SerialNumber"
+                                                ReadOnly="False"
+                                                AllowMoving="False"
+                                                IsEnabled="True"
+                                                AllowEditing="True"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="120">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:ComboBoxEdit x:Name="PART_Editor"
+                                                  ItemsSource="{Binding Path=RowData.Row.SerialNumbers}"
+                                                  ValueMember="SerialNumber"
+                                                  DisplayMember="SerialNumber"
+                                                  IsEnabled="{Binding Path=RowData.Row.AnySerialNumbers}"
+                                                  HorizontalContentAlignment="Center" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Дефект"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="Defect"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="244"
+                                                ReadOnly="False"
+                                                AllowMoving="False"
+                                                SortMode="Custom" />
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView AllowResizing="False"
+                                               AllowPerPixelScrolling="True"
+                                               ShowGroupPanel="False"
+                                               AllowEditing="True"
+                                               ShowIndicator="False"
+                                               AllowGrouping="False"/>
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+        </dxlc:LayoutControl>
+    </DockPanel>
+</UserControl>

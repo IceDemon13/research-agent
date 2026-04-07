@@ -1,0 +1,508 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Directories.ProductsFeatures.ProductFeaturesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxdo="http://schemas.devexpress.com/winfx/2008/xaml/docking"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxci="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Directories.ProductsFeatures"
+             xmlns:common1="clr-namespace:Telemart.Client.Common"
+             xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries"
+             xmlns:controls="clr-namespace:Telemart.Client.Controls"
+             xmlns:dictionaries1="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries"
+             xmlns:grid="clr-namespace:Telemart.Client.Common.MvvmEnhancements.Grid"
+             DataContext="{client:Container Type=viewModels:ProductFeaturesViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:ProductFeaturesViewModel}}"
+             d:DesignWidth="1024"
+             d:DesignHeight="768">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                    <system:Boolean x:Key="TrueValue">true</system:Boolean>
+                    <system:Boolean x:Key="FalseValue">false</system:Boolean>
+                    <converters:ComboBoxItemsConverter x:Key="ComboBoxItemsConverter" />
+                    <dxmvvm:ObjectToObjectConverter x:Key="FilterTypeToImageSourceConverter"
+                                                    DefaultTarget="../../../Images/Common/filter_32x32.png">
+                        <dxmvvm:MapItem Source="{x:Static viewModels:ProductsFeaturesFilterType.Changed}"
+                                        Target="../../../Images/Common/filter_pencil_32x32.png" />
+                        <dxmvvm:MapItem Source="{x:Static viewModels:ProductsFeaturesFilterType.Empty}"
+                                        Target="../../../Images/Common/filter_error_32x32.png" />
+                    </dxmvvm:ObjectToObjectConverter>
+                    <dxmvvm:ObjectToObjectConverter x:Key="BoolToFixedStyleConverter"
+                                                    DefaultTarget="{x:Static dxg:FixedStyle.None}">
+                        <dxmvvm:MapItem Source="{StaticResource TrueValue}"
+                                        Target="{x:Static dxg:FixedStyle.Left}" />
+                        <dxmvvm:MapItem Source="{StaticResource FalseValue}"
+                                        Target="{x:Static dxg:FixedStyle.None}" />
+                    </dxmvvm:ObjectToObjectConverter>
+                </ResourceDictionary>
+                <ResourceDictionary>
+                    <Style x:Key="ColumnStyle"
+                           TargetType="{x:Type dxg:GridColumn}">
+                        <Setter Property="AllowGrouping"
+                                Value="True" />
+                        <Setter Property="MinWidth"
+                                Value="25" />
+                        <Setter Property="AllowMoving"
+                                Value="True" />
+                        <Setter Property="AllowSorting"
+                                Value="True" />
+                        <Setter Property="AllowColumnFiltering"
+                                Value="True" />
+                        <Setter Property="FilterPopupMode"
+                                Value="CheckedList" />
+                    </Style>
+
+                    <DataTemplate x:Key="NameColumnTemplate">
+                        <ContentControl>
+                            <dxg:GridColumn grid:GridColumnHelper.BindingPath="{Binding Path=FieldName, Mode=OneWay}"
+                                            grid:GridColumnHelper.FieldName="{Binding Path=FieldName, Mode=OneWay}"
+                                            Header="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HeaderToolTip="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).HeaderToolTip, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FixedWidth="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FixedWidth, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            AllowEditing="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Editable, Mode=OneWay, RelativeSource={RelativeSource Self}, Converter={converters:BooleanToDefaultBooleanConverter}}"
+                                            AllowColumnFiltering="False"
+                                            AllowGrouping="False"
+                                            AllowMoving="False"
+                                            Width="300">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                        </ContentControl>
+                    </DataTemplate>
+                    <DataTemplate x:Key="IdColumnTemplate">
+                        <ContentControl>
+                            <dxg:GridColumn grid:GridColumnHelper.BindingPath="{Binding Path=FieldName, Mode=OneWay}"
+                                            grid:GridColumnHelper.FieldName="{Binding Path=FieldName, Mode=OneWay}"
+                                            Header="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HeaderToolTip="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).HeaderToolTip, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FixedWidth="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FixedWidth, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            AllowEditing="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Editable, Mode=OneWay, RelativeSource={RelativeSource Self}, Converter={converters:BooleanToDefaultBooleanConverter}}"
+                                            AllowColumnFiltering="False"
+                                            AllowGrouping="False"
+                                            AllowMoving="False"
+                                            MinWidth="48"
+                                            Width="48">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                        </ContentControl>
+                    </DataTemplate>
+                    <DataTemplate x:Key="ComboColumnTemplate">
+                        <ContentControl>
+                            <dxg:GridColumn grid:GridColumnHelper.BindingPath="{Binding Path=FieldName, Mode=OneWay}"
+                                            grid:GridColumnHelper.FieldName="{Binding Path=FieldName, Mode=OneWay}"
+                                            Header="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HeaderToolTip="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).HeaderToolTip, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FixedWidth="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FixedWidth, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            AllowEditing="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Editable, Mode=OneWay, RelativeSource={RelativeSource Self}, Converter={converters:BooleanToDefaultBooleanConverter}}">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:ComboBoxEditSettings ItemsSource="{Binding Source, Mode=OneWay}"
+                                                              ButtonsSource="{Binding ButtonSource, Mode=OneWay}"
+                                                              ValueMember="Id"
+                                                              DisplayMember="DisplayValue"
+                                                              AutoComplete="True"
+                                                              ImmediatePopup="True"
+                                                              ValidateOnTextInput="False"
+                                                              FilterCondition="Contains"
+                                                              IsTextEditable="True"
+                                                              ValidateOnEnterKeyPressed="True"
+                                                              AddNewButtonPlacement="None"
+                                                              IncrementalFiltering="True"
+                                                              NullValueButtonPlacement="EditBox"
+                                                              NullValue="{x:Null}">
+                                        <dxe:ComboBoxEditSettings.ButtonTemplate>
+                                            <DataTemplate>
+                                                <ContentControl>
+                                                    <dxe:ButtonInfo GlyphKind="Plus"
+                                                                    Command="{Binding Path=DataContext.CreateValueCommand, ElementName=GridControl}"/>
+                                                </ContentControl>
+                                            </DataTemplate>
+                                        </dxe:ComboBoxEditSettings.ButtonTemplate>
+                                    </dxe:ComboBoxEditSettings>
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                        </ContentControl>
+                    </DataTemplate>
+                    <DataTemplate x:Key="TokenComboColumnTemplate">
+                        <ContentControl>
+                            <dxg:GridColumn grid:GridColumnHelper.BindingPath="{Binding Path=FieldName, Mode=OneWay}"
+                                            grid:GridColumnHelper.FieldName="{Binding Path=FieldName, Mode=OneWay}"
+                                            Header="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HeaderToolTip="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).HeaderToolTip, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FixedWidth="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FixedWidth, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            AllowEditing="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Editable, Mode=OneWay, RelativeSource={RelativeSource Self}, Converter={converters:BooleanToDefaultBooleanConverter}}"
+                                            AllowGrouping="False"
+                                            AllowSorting="False"
+                                            AllowColumnFiltering="True"
+                                            FilterPopupMode="List">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Source, Mode=OneWay}"
+                                                              ButtonsSource="{Binding ButtonSource, Mode=OneWay}"
+                                                              ValueMember="Id"
+                                                              DisplayMember="DisplayValue"
+                                                              ValidateOnTextInput="False"
+                                                              ImmediatePopup="True"
+                                                              IncrementalFiltering="True"
+                                                              FilterCondition="Contains"
+                                                              IsTextEditable="True"
+                                                              ValidateOnEnterKeyPressed="True"
+                                                              AllowLiveDataShaping="True">
+                                        <dxe:ComboBoxEditSettings.StyleSettings>
+                                            <dxe:TokenComboBoxStyleSettings NewTokenPosition="Far" />
+                                        </dxe:ComboBoxEditSettings.StyleSettings>
+                                        <dxe:ComboBoxEditSettings.ButtonTemplate>
+                                            <DataTemplate>
+                                                <ContentControl>
+                                                    <dxe:ButtonInfo GlyphKind="Plus"
+                                                                    Command="{Binding Path=DataContext.CreateValueCommand, ElementName=GridControl}"/>
+                                                </ContentControl>
+                                            </DataTemplate>
+                                        </dxe:ComboBoxEditSettings.ButtonTemplate>
+                                    </dxe:ComboBoxEditSettings>
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                        </ContentControl>
+                    </DataTemplate>
+
+                    <grid:GridColumnTemplateSelector x:Key="ColumnTemplateSelector"
+                                                      NameColumnTemplate="{StaticResource NameColumnTemplate}"
+                                                      IdColumnTemplate="{StaticResource IdColumnTemplate}"
+                                                      ComboColumnTemplate="{StaticResource ComboColumnTemplate}"
+                                                      TokenComboColumnTemplate="{StaticResource TokenComboColumnTemplate}" />
+
+                    <DataTemplate x:Key="ChangedFormat">
+                        <ContentControl>
+                            <dxg:FormatCondition ApplyToRow="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).ApplyToRow, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 Expression="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Expression, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 FieldName="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FieldName, Mode=OneWay, RelativeSource={RelativeSource Self}}">
+                                <dxg:FormatCondition.Format>
+                                    <dx:Format Background="Yellow"
+                                               Foreground="Black"/>
+                                </dxg:FormatCondition.Format>
+                            </dxg:FormatCondition>
+                        </ContentControl>
+                    </DataTemplate>
+                    <DataTemplate x:Key="ChangedToEmptyFormat">
+                        <ContentControl>
+                            <dxg:FormatCondition ApplyToRow="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).ApplyToRow, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 Expression="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Expression, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 FieldName="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FieldName, Mode=OneWay, RelativeSource={RelativeSource Self}}">
+                                <dxg:FormatCondition.Format>
+                                    <dx:Format Background="LightPink"
+                                               Foreground="Black"/>
+                                </dxg:FormatCondition.Format>
+                            </dxg:FormatCondition>
+                        </ContentControl>
+                    </DataTemplate>
+                    <DataTemplate x:Key="ChangedFromEmptyFormat">
+                        <ContentControl>
+                            <dxg:FormatCondition ApplyToRow="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).ApplyToRow, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 Expression="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Expression, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 FieldName="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FieldName, Mode=OneWay, RelativeSource={RelativeSource Self}}">
+                                <dxg:FormatCondition.Format>
+                                    <dx:Format Background="LightGreen"
+                                               Foreground="Black"/>
+                                </dxg:FormatCondition.Format>
+                            </dxg:FormatCondition>
+                        </ContentControl>
+                    </DataTemplate>
+
+                    <grid:FormatConditionSelector x:Key="ConditionSelector"
+                                                   ChangedTemplate="{StaticResource ChangedFormat}"
+                                                   ChangedFromEmpty="{StaticResource ChangedFromEmptyFormat}"
+                                                   ChangedToEmpty="{StaticResource ChangedToEmptyFormat}" />
+
+                    <DataTemplate x:Key="BandTemplate">
+                        <ContentControl>
+                            <dxg:GridControlBand Header="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).BandName, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 Fixed="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).IsFixed, Mode=OneWay, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToFixedStyleConverter}}"
+                                                 ColumnsSource="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).Columns, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                 ColumnGeneratorTemplateSelector="{StaticResource ColumnTemplateSelector}"
+                                                 ColumnGeneratorStyle="{StaticResource ColumnStyle}" />
+                        </ContentControl>
+                    </DataTemplate>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+
+        <dxmvvm:OpenFileDialogService x:Name="ImportFromExcelFileDialogService"
+                                      Title="Выберите Excel файл для импорта"
+                                      AddExtension="True"
+                                      RestorePreviouslySelectedDirectory="True"
+                                      Filter="Excel Workbook|*.xlsx"
+                                      CheckFileExists="True"
+                                      CheckPathExists="True" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl Orientation="Vertical"
+                        ItemSpace="0"
+                        Padding="0">
+        <dxlc:LayoutGroup>
+            <dxb:BarManager VerticalAlignment="Top">
+                <dxb:ToolBarControl AllowQuickCustomization="False"
+                                    AllowCustomizationMenu="False"
+                                    IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, ElementName=GridControl, Converter={dxmvvm:BooleanNegationConverter}}">
+                    <dxb:BarButtonItem Content="Обновить"
+                                       ToolTip="Обновить (F5)"
+                                       LargeGlyph="{dx:DXImage Image=Refresh_32x32.png}"
+                                       Command="{Binding Path=RefreshCommand, Mode=OneWay}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarButtonItem Content="Сохранить"
+                                       ToolTip="Сохранить (Ctrl+S)"
+                                       LargeGlyph="{dx:DXImage Image=Save_32x32.png}"
+                                       Command="{Binding Path=SaveCommand, Mode=OneWay}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarSubItem Content="Фильтр"
+                                    ToolTip="Только измененные записи (Alt+F)"
+                                    BarItemDisplayMode="ContentAndGlyph"
+                                    GlyphAlignment="Top"
+                                    LargeGlyph="{Binding Path=FilterType, Mode=OneWay, Converter={StaticResource FilterTypeToImageSourceConverter}}">
+                        <dxb:BarCheckItem Content="Все"
+                                          BarItemDisplayMode="Content"
+                                          IsChecked="{Binding Path=FilterType, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static viewModels:ProductsFeaturesFilterType.All}, Mode=OneWay}"
+                                          Command="{Binding Path=SetFilterTypeCommand, Mode=OneWay}"
+                                          CommandParameter="{x:Static viewModels:ProductsFeaturesFilterType.All}" />
+                        <dxb:BarCheckItem Content="Измененные"
+                                          BarItemDisplayMode="Content"
+                                          IsChecked="{Binding Path=FilterType, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static viewModels:ProductsFeaturesFilterType.Changed}, Mode=OneWay}"
+                                          Command="{Binding Path=SetFilterTypeCommand, Mode=OneWay}"
+                                          CommandParameter="{x:Static viewModels:ProductsFeaturesFilterType.Changed}" />
+                        <dxb:BarCheckItem Content="Без характеристик"
+                                          BarItemDisplayMode="Content"
+                                          IsChecked="{Binding Path=FilterType, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static viewModels:ProductsFeaturesFilterType.Empty}, Mode=OneWay}"
+                                          Command="{Binding Path=SetFilterTypeCommand, Mode=OneWay}"
+                                          CommandParameter="{x:Static viewModels:ProductsFeaturesFilterType.Empty}" />
+                    </dxb:BarSubItem>
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Content="Заменить"
+                                       ToolTip="Заменить значения в характеристике"
+                                       LargeGlyph="/Images/Common/text_replace_32x32.png"
+                                       Command="{Binding Path=ValueReplaceCommand, Mode=OneWay}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Content="Экспорт"
+                                       ToolTip="Экспортировать в Excel (Alt+E)"
+                                       LargeGlyph="/Images/Parser/excel_32_32.png"
+                                       Command="{Binding Path=ExportCommand, Mode=OneWay}"
+                                       CommandParameter="{Binding Mode=OneWay, ElementName=TableView}" />
+                    <dxb:BarButtonItem Content="Импорт"
+                                       ToolTip="Импортировать из Excel (Alt+I)"
+                                       LargeGlyph="/Images/ProductsCatalog/folder_table_32x32.png"
+                                       Command="{Binding Path=ImportCommand, Mode=OneWay}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarCheckItem Content="Рус."
+                                      ToolTip="Русский язык"
+                                      Glyph="/Images/Common/flag_russia.png"
+                                      Command="{Binding LanguageChangedCommand}"
+                                      CommandParameter="{x:Static dictionaries1:Language.Russian}"
+                                      IsChecked="{Binding SelectedLanguage, Mode=OneWay, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static dictionaries1:Language.Russian}}" />
+                    <dxb:BarCheckItem Content="Укр."
+                                      ToolTip="Украинский язык"
+                                      Glyph="/Images/Common/flag_ukraine.png"
+                                      Command="{Binding LanguageChangedCommand}"
+                                      CommandParameter="{x:Static dictionaries1:Language.Ukrainian}"
+                                      IsChecked="{Binding SelectedLanguage, Mode=OneWay, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static dictionaries1:Language.Ukrainian}}"/>
+                    <dxb:BarCheckItem Content="Англ."
+                                      ToolTip="Английский язык"
+                                      Glyph="/Images/Common/flag_great_britain_32x32.png"
+                                      Command="{Binding LanguageChangedCommand}"
+                                      CommandParameter="{x:Static dictionaries1:Language.English}"
+                                      IsChecked="{Binding SelectedLanguage, Mode=OneWay, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static dictionaries1:Language.English}}"/>
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Content="Авто"
+                                       ToolTip="Автоматическое заполнение"
+                                       LargeGlyph="/Images/Common/android_32x32.png"
+                                       Command="{Binding Path=AutoCommand, Mode=OneWay}" />
+                    <dxb:BarButtonItem Content="Парсер YM"
+                                       ToolTip="Парсер YandexMarket"
+                                       LargeGlyph="/Images/Common/yandex_market_32x32.png"
+                                       Command="{Binding Path=ParseFromYandexMarketCommand, Mode=OneWay}" />
+                    <dxb:BarItemSeparator />
+                    <controls:WikiBarButtonItem />
+                </dxb:ToolBarControl>
+            </dxb:BarManager>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup>
+            <dxdo:DockLayoutManager>
+                <dxdo:LayoutGroup Padding="0"
+                                  Margin="0">
+                    <dxdo:LayoutPanel Style="{StaticResource PanelStyle}"
+                                      AllowSizing="True">
+                        <dxg:GridControl x:Name="GridControl"
+                                         ImplyNullLikeEmptyStringWhenFiltering="True"
+                                         BandsSource="{Binding Path=Bands, Mode=OneWay}"
+                                         ItemsSource="{Binding Path=Products, Mode=OneWay}"
+                                         CurrentColumn="{Binding Path=CurrentColumn, Mode=OneWayToSource}"
+                                         CurrentItem="{Binding Path=CurrentRow, Mode=OneWayToSource}"
+                                         BandGeneratorTemplate="{StaticResource BandTemplate}"
+                                         SelectionMode="None"
+                                         AutoExpandAllGroups="True"
+                                         AllowLiveDataShaping="True"
+                                         ShowBorder="False">
+                            <dxg:GridControl.ShowLoadingPanel>
+                                <MultiBinding Mode="OneWay"
+                                              Converter="{converters:BooleanOrMultiValueConverter}">
+                                    <Binding Path="RefreshCommand.IsExecuting"
+                                             Mode="OneWay" />
+                                    <Binding Path="SaveCommand.IsExecuting"
+                                             Mode="OneWay" />
+                                    <Binding Path="IsLongOperationInProgress"
+                                             Mode="OneWay" />
+                                </MultiBinding>
+                            </dxg:GridControl.ShowLoadingPanel>
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                                <dxmvvm:EventToCommand EventName="CurrentItemChanged"
+                                                       Command="{Binding Path=HandleSelectionChangedCommand, Mode=OneWay}"
+                                                       PassEventArgsToCommand="False" />
+                                <dxmvvm:EventToCommand EventName="CurrentColumnChanged"
+                                                       Command="{Binding Path=HandleSelectionChangedCommand, Mode=OneWay}"
+                                                       PassEventArgsToCommand="False" />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.View>
+                                <dxg:TableView x:Name="TableView"
+                                               FormatConditionGeneratorTemplateSelector="{StaticResource ConditionSelector}"
+                                               FormatConditionsSource="{Binding Path=FormattingRules, Mode=OneWay}"
+                                               SearchColumns="FieldName_Name"
+                                               NavigationStyle="Cell"
+                                               AutoWidth="False"
+                                               AllowSorting="True"
+                                               AllowGrouping="True"
+                                               AllowEditing="True"
+                                               AllowFilterEditor="False"
+                                               AllowMoveColumnToDropArea="False"
+                                               AllowLeaveInvalidEditor="True"
+                                               AllowCommitOnValidationAttributeError="False"
+                                               ShowIndicator="False"
+                                               ShowAutoFilterRow="False"
+                                               ShowFixedTotalSummary="False"
+                                               ShowTotalSummary="False"
+                                               IsTotalSummaryMenuEnabled="False"
+                                               EnableImmediatePosting="True"
+                                               EditorShowMode="MouseUp"
+                                               CustomRowAppearance="TableViewCustomRowAppearance"
+                                               CustomCellAppearance="TableViewOnCustomCellAppearance">
+                                    <dxg:TableView.BandHeaderTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Mode=OneWay}"
+                                                       FontWeight="Bold"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </dxg:TableView.BandHeaderTemplate>
+                                    <dxmvvm:Interaction.Behaviors>
+                                        <dxmvvm:EventToCommand EventName="Loaded"
+                                                               Command="{Binding Path=HandleTableViewLoadedCommand, Mode=OneWay}"
+                                                               PassEventArgsToCommand="True" />
+                                    </dxmvvm:Interaction.Behaviors>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                            <dxg:GridControl.GroupSummary>
+                                <dxg:GridSummaryItem SummaryType="Count"
+                                                     Alignment="Right"
+                                                     Visible="True" />
+                            </dxg:GridControl.GroupSummary>
+                        </dxg:GridControl>
+                    </dxdo:LayoutPanel>
+                    <dxdo:LayoutPanel Caption="Поиск"
+                                      AllowClose="False"
+                                      AllowDrag="False"
+                                      AllowDock="True"
+                                      AutoHidden="False"
+                                      AllowHide="True"
+                                      FloatOnDoubleClick="False"
+                                      MinWidth="300"
+                                      MaxWidth="500"
+                                      ItemWidth="400">
+                        <dxlc:LayoutControl Orientation="Vertical"
+                                            ItemStyle="{StaticResource LayoutItemStyle}"
+                                            IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, ElementName=GridControl, Converter={dxmvvm:BooleanNegationConverter}}">
+                            <dxlc:LayoutItem Label="Наличие">
+                                <dxlc:LayoutItem.LabelTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <dx:DXImage Source="../../../Images/Order/Filter/package.png"
+                                                        Style="{StaticResource ImageStyle}" />
+                                            <TextBlock Text="{Binding Mode=OneWay}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </dxlc:LayoutItem.LabelTemplate>
+                                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Filter.AvailTypes, Mode=OneWay}"
+                                                  DisplayMember="DisplayValue"
+                                                  EditValue="{Binding Path=Filter.SelectedAvailTypes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource ComboBoxItemsConverter}}"
+                                                  Style="{StaticResource CheckedTokenComboBoxStyle}">
+                                </dxe:ComboBoxEdit>
+                            </dxlc:LayoutItem>
+                            <dxlc:LayoutItem Label="Категория"
+                                             LabelPosition="Left"
+                                             LabelVerticalAlignment="Top"
+                                             VerticalAlignment="Stretch">
+                                <dxlc:LayoutItem.LabelTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <dx:DXImage Source="../../../Images/Parser/folders_16_16.png"
+                                                        Style="{StaticResource ImageStyle}" />
+                                            <TextBlock Text="{Binding Mode=OneWay}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </dxlc:LayoutItem.LabelTemplate>
+                                <common:CategoryTreeView Categories="{Binding Path=Filter.Categories, Mode=OneWay}"
+                                                         SelectedCategory="{Binding Path=Filter.SelectedCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         SelectionMode="None"
+                                                         ShowBorder="True"
+                                                         ShowLoadingPanel="{Binding Path=ShowLoadingPanel, Mode=OneWay, ElementName=GridControl}"/>
+                            </dxlc:LayoutItem>
+                            <dxlc:LayoutItem Label="Товаров"
+                                             VerticalAlignment="Bottom">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Path=Products.Count, Mode=OneWay, FallbackValue=0}"
+                                               FontWeight="Bold" />
+                                    <TextBlock Text=" шт." />
+                                </StackPanel>
+                            </dxlc:LayoutItem>
+                            <dxlc:LayerSeparator Kind="Horizontal"
+                                                 VerticalAlignment="Bottom" />
+                            <dxlc:LayoutItem VerticalAlignment="Bottom">
+                                <dxb:ToolBarControl BarItemDisplayMode="ContentAndGlyph"
+                                                    Style="{StaticResource SmallToolBarStyle}">
+                                    <dxb:BarButtonItem Content="Применить"
+                                                       Glyph="{dx:DXImage Image=Apply_16x16.png}"
+                                                       GlyphAlignment="Left"
+                                                       Command="{Binding Path=RefreshCommand, Mode=OneWay}" />
+                                    <dxb:BarItemSeparator />
+                                    <dxb:BarButtonItem Content="Отмена"
+                                                       Glyph="{dx:DXImage Image=Cancel_16x16.png}"
+                                                       GlyphAlignment="Left"
+                                                       Command="{Binding Path=ResetFilterCommand, Mode=OneWay}" />
+                                </dxb:ToolBarControl>
+                            </dxlc:LayoutItem>
+                        </dxlc:LayoutControl>
+                    </dxdo:LayoutPanel>
+                </dxdo:LayoutGroup>
+            </dxdo:DockLayoutManager>
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+
+</UserControl>

@@ -1,0 +1,142 @@
+<UserControl x:Class="Telemart.Client.Views.Backlog.BacklogTaskAddToPlanView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Backlog"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:system="clr-namespace:System;assembly=System.Runtime"
+             DataContext="{client:Container Type=viewModels:BacklogTaskAddToPlanViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:BacklogTaskAddToPlanViewModel}}"
+             Width="380"
+             Height="180">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            IsEnabled="{Binding Path=IsVisible, Mode=OneWay, ElementName=BusyIndicatorLayoutGroup, Converter={dxmvvm:BooleanNegationConverter}}">
+
+            <dxlc:LayoutGroup Orientation="Vertical">
+
+                <dxlc:LayoutItem Label="Спринт">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Quotas, Mode=OneWay}"
+                                      ValueMember="Id"
+                                      DisplayMember="DisplayValue"
+                                      EditValue="{Binding Path=SelectedQuotaId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Estimate">
+                    <dxe:TextEdit EditValue="{Binding Path=Estimate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  MaskType="Numeric"
+                                  Mask="F0"
+                                  EditValueType="{x:Type system:Int32}">
+                    </dxe:TextEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="План отдела">
+                    <dxe:TextEdit IsReadOnly="True"
+                                  FontWeight="Bold"
+                                  Foreground="{Binding Path=DepartmentQuotaPlanColor, Mode=OneWay}"
+                                  EditValue="{Binding Path=DepartmentQuotaPlanString, Mode=OneWay}"
+                                  Style="{StaticResource ReadOnlyConditionsStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Общий план">
+                    <dxe:TextEdit IsReadOnly="True"
+                                  FontWeight="Bold"
+                                  Foreground="{Binding Path=TotalQuotaPlanColor, Mode=OneWay}"
+                                  Style="{StaticResource ReadOnlyConditionsStyle}"
+                                  EditValue="{Binding Path=TotalQuotaPlanString, Mode=OneWay}"/>
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup x:Name="BusyIndicatorLayoutGroup"
+                                  Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center">
+                    <dxlc:LayoutGroup.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxlc:LayoutGroup.Visibility>
+                    <viewComponents:WaitImage HorizontalAlignment="Left"
+                                              VerticalAlignment="Center" />
+                    <TextBlock Text="Обработка..." />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button x:Name="OkButton"
+                            Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}">
+                        <Button.Style>
+                            <Style TargetType="{x:Type Button}"
+                                   BasedOn="{StaticResource {x:Type Button}}">
+                                <Setter Property="IsEnabled"
+                                        Value="False" />
+                                <Style.Triggers>
+                                    <DataTrigger Value="True">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Mode="OneWay"
+                                                          Converter="{converters:BooleanAndMultiValueConverter}">
+                                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                                         Mode="OneWay"
+                                                         ElementName="LayoutControl"
+                                                         Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="IsEnabled"
+                                                Value="True" />
+                                    </DataTrigger>
+                                    <DataTrigger Value="True">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Mode="OneWay"
+                                                          Converter="{converters:BooleanAndMultiValueConverter}">
+                                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                                         Mode="OneWay"
+                                                         ElementName="LayoutControl"
+                                                         Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="IsEnabled"
+                                                Value="True" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

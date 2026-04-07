@@ -79,6 +79,44 @@ class JiraTaskLoaderTests(unittest.TestCase):
         self.assertEqual(payload["attachments"][1]["media_type"], "image")
         self.assertEqual(payload["attachments"][1]["size_bytes"], 654)
 
+    def test_load_jira_task_detects_acceptance_criteria_from_named_custom_field(self) -> None:
+        issue_payload = {
+            "names": {
+                "customfield_22222": "Acceptance Criteria",
+            },
+            "fields": {
+                "summary": "Update report output",
+                "description": "Detailed Jira description.",
+                "customfield_22222": {
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "bulletList",
+                            "content": [
+                                {
+                                    "type": "listItem",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [{"type": "text", "text": "Report includes a new totals row"}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            },
+        }
+
+        with patch("services.jira_task_loader.get_issue", return_value=issue_payload):
+            payload = load_jira_task("TEL-101")
+
+        self.assertEqual(payload["acceptance_criteria"], ["Report includes a new totals row"])
+        self.assertEqual(payload["acceptance_criteria_source"], "customfield_22222")
+        self.assertTrue(payload["acceptance_criteria_field_present"])
+        self.assertEqual(payload["raw_jira_fields"]["acceptance_criteria_field_id"], "customfield_22222")
+
 
 if __name__ == "__main__":
     unittest.main()

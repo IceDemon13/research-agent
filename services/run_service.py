@@ -1463,6 +1463,13 @@ class RunService:
         changed_files = list(implementation.get("changed_files", []) or [])
         diff_available = bool(diff_result.get("diff_available", False))
         repeated_failure_detected = bool(run_record.retry_context.get("repeated_failure_detected", False))
+        workflow_debug = dict(detail.get("spec_result", {}) or {}).get("workflow_debug", {})
+        workflow_name = ""
+        if isinstance(workflow_debug, dict):
+            workflow_name = str(workflow_debug.get("workflow_name", "") or "").strip().lower()
+        persisted_summary = str(detail.get("final_result_summary", "") or "").strip()
+        persisted_recommendation = str(detail.get("recommendation", "") or "").strip()
+        persisted_outcome = str(detail.get("run_outcome_type", "") or "").strip()
 
         if repo_relevance_status == "repo_mismatch" or status == "repo_mismatch" or implementation_status == "repo_mismatch":
             return {
@@ -1525,6 +1532,13 @@ class RunService:
                     "final_result_summary": "Changes ready for approval.",
                     "recommendation": "Approve changes to create PR.",
                 }
+
+        if normalized_mode == "spec" and status == "success" and workflow_name == "analyze_task":
+            return {
+                "run_outcome_type": persisted_outcome or "success",
+                "final_result_summary": persisted_summary or "Specification generated.",
+                "recommendation": persisted_recommendation or "Review the proposed files, risks, and acceptance criteria.",
+            }
 
         if normalized_mode == "spec" and status == "success":
             return {

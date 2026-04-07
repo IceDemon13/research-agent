@@ -1,0 +1,229 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.AssemblyService.AssemblyServiceTestView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:dialogs="clr-namespace:Telemart.Client.ViewModels.AssemblyService"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.AssemblyTest"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              DataContext="{client:Container Type=dialogs:AssemblyServiceTestViewModel}"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type dialogs:AssemblyServiceTestViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                    <HierarchicalDataTemplate DataType="{x:Type viewModels:AssemblyTestGroupViewItem}"
+                                              ItemsSource="{Binding Path=Children}">
+                        <TextBlock Text="{Binding Path=DataContext.Name}"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Padding="5 0 0 0" />
+                    </HierarchicalDataTemplate>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="ContentTextEditStyle"
+                   TargetType="dxe:TextEdit">
+                <Setter Property="VerticalContentAlignment"
+                        Value="Center" />
+                <Setter Property="TextWrapping"
+                        Value="NoWrap" />
+                <Setter Property="AcceptsReturn"
+                        Value="False" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Path=IsMultiline}"
+                                 Value="True">
+                        <Setter Property="VerticalContentAlignment"
+                                Value="Top" />
+                        <Setter Property="TextWrapping"
+                                Value="Wrap" />
+                        <Setter Property="AcceptsReturn"
+                                Value="True" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        Orientation="Vertical"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+        <dxlc:LayoutGroup Orientation="Vertical">
+            <dxlc:LayoutItem VerticalAlignment="Stretch">
+                <dxg:GridControl x:Name="GridControl"
+                                 ItemsSource="{Binding Path=TestGroups, Mode=OneWay}"
+                                 AllowDrop="False"
+                                 ShowBorder="True"
+                                 SelectionMode="None"
+                                 ItemsSourceChanged="GridControlOnItemsSourceChanged">
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:LayoutSerializationBehavior FileName="assembly_service_tests_1.xml" />
+                        <behaviors:CopyCurrentCellToClipboardBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.ShowLoadingPanel>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter}">
+                            <Binding Path="RefreshCommand.IsExecuting" />
+                        </MultiBinding>
+                    </dxg:GridControl.ShowLoadingPanel>
+                    <dxg:GridControl.Resources>
+                        <Style TargetType="dxg:GridColumn"
+                               BasedOn="{StaticResource GeneralGridColumnStyle}" />
+                    </dxg:GridControl.Resources>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Название"
+                                        HeaderToolTip="Название теста"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Name"
+                                        FixedWidth="False"
+                                        Width="130"
+                                        MinWidth="180"
+                                        MaxWidth="200"
+                                        AllowBestFit="True"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowMoving="False"
+                                        AllowColumnFiltering="False"
+                                        AllowAutoFilter="False"
+                                        FilterPopupMode="CheckedList">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Left" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Описание"
+                                        HeaderToolTip="Описание теста"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Description"
+                                        FixedWidth="False"
+                                        Width="290"
+                                        MinWidth="150"
+                                        MaxWidth="300"
+                                        AllowBestFit="True"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowMoving="False"
+                                        AllowColumnFiltering="False"
+                                        AllowAutoFilter="False"
+                                        FilterPopupMode="CheckedList">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Left" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="О"
+                                        HeaderToolTip="Обязательный"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Required"
+                                        FixedWidth="True"
+                                        Width="20"
+                                        MinWidth="20"
+                                        AllowBestFit="False"
+                                        AllowResizing="False"
+                                        AllowColumnFiltering="False"
+                                        FilterPopupMode="CheckedList"
+                                        AllowAutoFilter="False">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dx:DXImage Source="../../Images/Common/tick.png"
+                                                Width="16"
+                                                Height="16"
+                                                Visibility="{Binding Path=RowData.Row.Required, Mode=OneWay, Converter={dxmvvm:NumericToVisibilityConverter}}" />
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Результат"
+                                        HeaderToolTip="Результат теста"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Value"
+                                        FixedWidth="False"
+                                        Width="180"
+                                        MinWidth="80"
+                                        MaxWidth="250"
+                                        IsEnabled="True"
+                                        AllowEditing="True"
+                                        ReadOnly="{Binding Path=IsFormEditable, Converter={dxmvvm:BooleanNegationConverter}}"
+                                        AllowBestFit="True"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowMoving="False"
+                                        AllowColumnFiltering="False"
+                                        AllowAutoFilter="False"
+                                        FilterPopupMode="CheckedList">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Суффикс"
+                                        HeaderToolTip="Суффикс"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Suffix"
+                                        FixedWidth="True"
+                                        Width="180"
+                                        MinWidth="80"
+                                        MaxWidth="250"
+                                        AllowBestFit="True"
+                                        AllowResizing="True"
+                                        AllowGrouping="False"
+                                        AllowMoving="False"
+                                        AllowAutoFilter="False">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TreeListView x:Name="TreeListView"
+                                          AllowBestFit="True"
+                                          AllowEditing="True"
+                                          AllowFilterEditor="False"
+                                          AllowColumnFiltering="False"
+                                          AllowColumnMoving="False"
+                                          AllowDrop="True"
+                                          NavigationStyle="Cell"
+                                          AutoWidth="True"
+                                          IsColumnMenuEnabled="False"
+                                          ShowIndicator="False"
+                                          EditorShowMode="MouseDownFocused"
+                                          AllowMoveColumnToDropArea="False"
+                                          TreeDerivationMode="HierarchicalDataTemplate">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                                       Command="{Binding Path=EditCommand, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxg:TreeListView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom"
+                          HorizontalAlignment="Right">
+            <Button Content="OK"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsTabStop="True"
+                    Visibility="{Binding Path=IsFormEditable, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=ValidationContainer, Converter={dxmvvm:BooleanNegationConverter}}" />
+            <Button Content="Сохранить"
+                    Visibility="{Binding Path=IsFormEditable, Mode=OneWay ,Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                    Command="{Binding Path=SaveCommand, Mode=OneWay}"
+                    IsTabStop="True"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=ValidationContainer, Converter={dxmvvm:BooleanNegationConverter}}" />
+            <Button Content="Отмена"
+                    Visibility="{Binding Path=IsFormEditable, Mode=OneWay ,Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                    IsTabStop="True"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</controls:TelemartUserControl>

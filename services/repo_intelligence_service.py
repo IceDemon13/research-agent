@@ -26,7 +26,7 @@ from services.repo_index_service import RepositoryIndexService
 from services.repo_registry import RepositoryRegistryService, normalize_repo_id
 
 
-POC_GITNEXUS_WORKFLOWS = {"implementation_plan", "pre_review"}
+POC_GITNEXUS_WORKFLOWS = {"implementation_plan", "pre_review", "analyze_task"}
 
 
 def _safe_text(value: object) -> str:
@@ -661,7 +661,13 @@ class RepoIntelligenceProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def query_for_workflow(self, repo: RepoMetadata, request: RepoQueryRequest) -> dict[str, Any]:
+    def query_for_workflow(
+        self,
+        repo: RepoMetadata,
+        request: RepoQueryRequest,
+        *,
+        progress_callback: Any | None = None,
+    ) -> dict[str, Any]:
         raise NotImplementedError
 
 
@@ -694,8 +700,15 @@ class NativeRepoIntelligenceProvider(RepoIntelligenceProvider):
         state["provider"] = self.name
         return state
 
-    def query_for_workflow(self, repo: RepoMetadata, request: RepoQueryRequest) -> dict[str, Any]:
+    def query_for_workflow(
+        self,
+        repo: RepoMetadata,
+        request: RepoQueryRequest,
+        *,
+        progress_callback: Any | None = None,
+    ) -> dict[str, Any]:
         _ = repo
+        _ = progress_callback
         return {
             "provider": "native",
             "available": False,
@@ -745,11 +758,29 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
         gitnexus_state = self._gitnexus_index_service.analyze_repo(refreshed, force=True)
         return {**native_state, **gitnexus_state, "provider": self.name}
 
-    def query_for_workflow(self, repo: RepoMetadata, request: RepoQueryRequest) -> dict[str, Any]:
-        if request.workflow_name == "implementation_plan":
-            normalized, mcp_debug = self._build_implementation_plan_result(repo, request)
+    def query_for_workflow(
+        self,
+        repo: RepoMetadata,
+        request: RepoQueryRequest,
+        *,
+        progress_callback: Any | None = None,
+    ) -> dict[str, Any]:
+        def _mark(substep: str, marker: str, **extra: Any) -> None:
+            if callable(progress_callback):
+                progress_callback(substep, marker, **extra)
+
+        if request.workflow_name in {"implementation_plan", "analyze_task"}:
+            _mark("gitnexus_provider_build_implementation_plan_result", "started")
+            normalized, mcp_debug = self._build_implementation_plan_result(
+                repo,
+                request,
+                progress_callback=progress_callback,
+            )
+            _mark("gitnexus_provider_build_implementation_plan_result", "finished")
         elif request.workflow_name == "pre_review":
+            _mark("gitnexus_provider_build_pre_review_result", "started")
             normalized, mcp_debug = self._build_pre_review_result(repo, request)
+            _mark("gitnexus_provider_build_pre_review_result", "finished")
         else:
             return {
                 "provider": "native",
@@ -774,18 +805,39 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             }
         return self._to_workflow_payload(normalized, request.workflow_name, request.changed_files, task_text=request.task_text, mcp_debug=mcp_debug)
 
-    def _build_implementation_plan_result(self, repo: RepoMetadata, request: RepoQueryRequest) -> tuple[NormalizedRepoIntelligenceResult, dict[str, Any]]:
+    def _build_implementation_plan_result(
+        self,
+        repo: RepoMetadata,
+        request: RepoQueryRequest,
+        *,
+        progress_callback: Any | None = None,
+    ) -> tuple[NormalizedRepoIntelligenceResult, dict[str, Any]]:
         mcp_debug = _empty_mcp_debug()
-        result = self._bridge_service.query(repo, request.task_text)
+        if callable(progress_callback):
+            progress_callback("gitnexus_provider_bridge_query", "started")
+        result = self._bridge_service.query(
+            repo,
+            request.task_text,
+            progress_callback=progress_callback,
+        )
         mcp_debug = _merge_mcp_debug(mcp_debug, self._bridge_service.last_debug_snapshot())
         mcp_debug = _merge_mcp_debug(mcp_debug, self._bridge_service.last_query_debug_snapshot())
+        if callable(progress_callback):
+            progress_callback("gitnexus_provider_bridge_query", "finished")
         if result.symbols:
             top_symbol = result.symbols[0].name
             try:
+                if callable(progress_callback):
+                    progress_callback("gitnexus_provider_bridge_context", "started", gitnexus_top_symbol=_safe_text(top_symbol))
                 context = self._bridge_service.context(repo, top_symbol)
                 mcp_debug = _merge_mcp_debug(mcp_debug, self._bridge_service.last_debug_snapshot())
+                if callable(progress_callback):
+                    progress_callback("gitnexus_provider_bridge_context", "finished", gitnexus_top_symbol=_safe_text(top_symbol))
+                    progress_callback("gitnexus_provider_bridge_impact", "started", gitnexus_top_symbol=_safe_text(top_symbol))
                 impact = self._bridge_service.impact(repo, top_symbol)
                 mcp_debug = _merge_mcp_debug(mcp_debug, self._bridge_service.last_debug_snapshot())
+                if callable(progress_callback):
+                    progress_callback("gitnexus_provider_bridge_impact", "finished", gitnexus_top_symbol=_safe_text(top_symbol))
                 result = NormalizedRepoIntelligenceResult(
                     files=result.files,
                     symbols=result.symbols,
@@ -795,7 +847,13 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
                     changes=result.changes,
                     fallback_reason=result.fallback_reason,
                 )
-            except Exception:
+            except Exception as exc:
+                if callable(progress_callback):
+                    progress_callback(
+                        "gitnexus_provider_bridge_context_or_impact",
+                        "finished",
+                        gitnexus_timeout_reason=_safe_text(exc),
+                    )
                 pass
         return result, mcp_debug
 
@@ -1022,7 +1080,11 @@ class GitNexusRepoIntelligenceProvider(RepoIntelligenceProvider):
             ),
             "provider_used": self.name,
             "provider_fallback": False,
-            "provider_reason": "GitNexus MCP evidence was used for implementation planning.",
+            "provider_reason": (
+                "GitNexus MCP evidence was used for analyze_task."
+                if workflow_name == "analyze_task"
+                else "GitNexus MCP evidence was used for implementation planning."
+            ),
             **mcp_debug_payload,
         }
 
@@ -1080,19 +1142,56 @@ class RepoIntelligenceService:
             gitnexus_index_service=self._gitnexus_index_service,
         )
 
-    def _promote_gitnexus_ready_repo(self, repo: RepoMetadata | None, workflow_name: str = "") -> RepoMetadata | None:
+    def _promote_gitnexus_ready_repo(
+        self,
+        repo: RepoMetadata | None,
+        workflow_name: str = "",
+        *,
+        progress_callback: Any | None = None,
+    ) -> RepoMetadata | None:
+        def _mark(substep: str, marker: str, **extra: Any) -> None:
+            if callable(progress_callback):
+                progress_callback(substep, marker, **extra)
+
         if repo is None:
             return None
+        _mark("resolve_provider_promote_ready_repo", "started")
+        _mark("resolve_provider_promote_check_workflow", "started")
         normalized_workflow = _safe_text(workflow_name).lower()
         if normalized_workflow and normalized_workflow not in POC_GITNEXUS_WORKFLOWS:
+            _mark("resolve_provider_promote_check_workflow", "finished")
+            _mark("resolve_provider_promote_ready_repo", "finished")
             return repo
+        _mark("resolve_provider_promote_check_workflow", "finished")
+        _mark("resolve_provider_promote_check_provider_mode", "started")
         if _safe_text(self._repo_settings.provider).lower() != "gitnexus_http":
+            _mark("resolve_provider_promote_check_provider_mode", "finished")
+            _mark("resolve_provider_promote_ready_repo", "finished")
             return repo
+        _mark("resolve_provider_promote_check_provider_mode", "finished")
+        _mark("resolve_provider_promote_check_gitnexus_enabled", "started")
         if not bool(self._repo_settings.gitnexus_enabled):
+            _mark("resolve_provider_promote_check_gitnexus_enabled", "finished")
+            _mark("resolve_provider_promote_ready_repo", "finished")
             return repo
-        visibility_debug = self._gitnexus_index_service.repo_visibility_debug(repo)
+        _mark("resolve_provider_promote_check_gitnexus_enabled", "finished")
+        _mark("resolve_provider_promote_repo_visibility_debug", "started")
+        visibility_debug = self._gitnexus_index_service.repo_visibility_debug(
+            repo,
+            progress_callback=progress_callback,
+        )
+        _mark(
+            "resolve_provider_promote_repo_visibility_debug",
+            "finished",
+            resolve_provider_visibility_visible=bool(visibility_debug.get("visible", False)),
+        )
+        _mark("resolve_provider_promote_check_visibility", "started")
         if not bool(visibility_debug.get("visible", False)):
+            _mark("resolve_provider_promote_check_visibility", "finished")
+            _mark("resolve_provider_promote_ready_repo", "finished")
             return repo
+        _mark("resolve_provider_promote_check_visibility", "finished")
+        _mark("resolve_provider_promote_update_repo_metadata", "started")
         refreshed = self._registry_service.update_repo_metadata(
             repo.repo_id,
             gitnexus_indexed=True,
@@ -1101,20 +1200,51 @@ class RepoIntelligenceService:
             gitnexus_last_fallback_reason="",
             gitnexus_indexed_at=_safe_text(repo.gitnexus_indexed_at) or _safe_text(repo.indexed_at),
         )
+        _mark("resolve_provider_promote_update_repo_metadata", "finished")
+        _mark("resolve_provider_promote_ready_repo", "finished")
         return refreshed or repo
 
-    def _selection_debug(self, repo: RepoMetadata | None, workflow_name: str = "") -> dict[str, Any]:
+    def _selection_debug(
+        self,
+        repo: RepoMetadata | None,
+        workflow_name: str = "",
+        *,
+        progress_callback: Any | None = None,
+    ) -> dict[str, Any]:
+        def _mark(substep: str, marker: str, **extra: Any) -> None:
+            if callable(progress_callback):
+                progress_callback(substep, marker, **extra)
+
+        _mark("resolve_provider_selection_debug", "started")
+        _mark("resolve_provider_selection_basic_fields", "started")
         normalized_workflow = _safe_text(workflow_name).lower()
         configured_provider = _safe_text(self._repo_settings.provider).lower() or "native"
         repo_metadata_provider = _safe_text(getattr(repo, "intelligence_provider", "") if repo is not None else "").lower() or "native"
         enabled = bool(self._repo_settings.gitnexus_enabled)
         configured_allowlist_match = _allowlist_match(self._repo_settings, getattr(repo, "repo_id", ""))
         gitnexus_index_status = _safe_text(getattr(repo, "gitnexus_index_status", "") if repo is not None else "")
-        visibility_debug = self._gitnexus_index_service.repo_visibility_debug(repo) if repo is not None and enabled else {}
+        _mark("resolve_provider_selection_basic_fields", "finished")
+        _mark("resolve_provider_selection_repo_visibility_debug", "started")
+        visibility_debug = (
+            self._gitnexus_index_service.repo_visibility_debug(
+                repo,
+                progress_callback=progress_callback,
+            )
+            if repo is not None and enabled
+            else {}
+        )
+        _mark(
+            "resolve_provider_selection_repo_visibility_debug",
+            "finished",
+            resolve_provider_visibility_visible=bool(visibility_debug.get("visible", False)),
+        )
         backend_visible = bool(visibility_debug.get("visible", False))
         gitnexus_index_ready = bool(getattr(repo, "gitnexus_indexed", False)) or gitnexus_index_status == "ready" or backend_visible
         allowlist_match = configured_allowlist_match or backend_visible or gitnexus_index_ready
+        _mark("resolve_provider_selection_backend_runtime_status", "started")
         runtime_debug = self._gitnexus_index_service.backend_runtime_status() if enabled else {}
+        _mark("resolve_provider_selection_backend_runtime_status", "finished")
+        _mark("resolve_provider_selection_decision", "started")
         if configured_provider != "gitnexus_http":
             selection_decision = "configured_native_provider"
             selected_provider = "native"
@@ -1133,7 +1263,14 @@ class RepoIntelligenceService:
         else:
             selection_decision = "selected_gitnexus_http"
             selected_provider = "gitnexus_http"
-        return {
+        _mark(
+            "resolve_provider_selection_decision",
+            "finished",
+            resolve_provider_selected_provider=selected_provider,
+            resolve_provider_selection_decision=selection_decision,
+        )
+        _mark("resolve_provider_selection_payload_construction", "started")
+        payload = {
             "configured_provider": configured_provider,
             "repo_metadata_provider": repo_metadata_provider,
             "allowlist_match": allowlist_match,
@@ -1153,6 +1290,9 @@ class RepoIntelligenceService:
             "visibility_match_reason": _safe_text(visibility_debug.get("visibility_match_reason", "")),
             "normalized_repo_visibility_targets": list(visibility_debug.get("normalized_repo_visibility_targets", []) or []),
         }
+        _mark("resolve_provider_selection_payload_construction", "finished")
+        _mark("resolve_provider_selection_debug", "finished")
+        return payload
 
     def _attach_multi_repo_file_targeting(
         self,
@@ -1245,25 +1385,115 @@ class RepoIntelligenceService:
                 payload["implementation_file_plan"] = file_plan
         return payload
 
-    def resolve_provider_name(self, repo_id: str, workflow_name: str = "") -> str:
+    def resolve_provider_name(
+        self,
+        repo_id: str,
+        workflow_name: str = "",
+        *,
+        progress_callback: Any | None = None,
+    ) -> str:
+        if callable(progress_callback):
+            progress_callback("resolve_provider_name", "started")
+        if callable(progress_callback):
+            progress_callback("provider_metadata_resolve_provider_registry_get_repo", "started")
         repo = self._registry_service.get_repo(normalize_repo_id(repo_id))
-        repo = self._promote_gitnexus_ready_repo(repo, workflow_name)
-        return str(self._selection_debug(repo, workflow_name).get("selected_provider", "native") or "native")
+        if callable(progress_callback):
+            progress_callback("provider_metadata_resolve_provider_registry_get_repo", "finished")
+            progress_callback("provider_metadata_resolve_provider_promote_gitnexus_ready_repo", "started")
+        repo = self._promote_gitnexus_ready_repo(
+            repo,
+            workflow_name,
+            progress_callback=progress_callback,
+        )
+        if callable(progress_callback):
+            progress_callback("provider_metadata_resolve_provider_promote_gitnexus_ready_repo", "finished")
+            progress_callback("provider_metadata_resolve_provider_selection_debug", "started")
+            progress_callback("resolve_provider_name", "started")
+        selected_provider = str(
+            self._selection_debug(
+                repo,
+                workflow_name,
+                progress_callback=progress_callback,
+            ).get("selected_provider", "native")
+            or "native"
+        )
+        if callable(progress_callback):
+            progress_callback(
+                "provider_metadata_resolve_provider_selection_debug",
+                "finished",
+                provider_metadata_selected_provider=selected_provider,
+            )
+            progress_callback(
+                "resolve_provider_name",
+                "finished",
+                resolve_provider_selected_provider=selected_provider,
+            )
+        return selected_provider
 
-    def assign_provider_metadata(self, repo_id: str) -> RepoMetadata | None:
+    def assign_provider_metadata(
+        self,
+        repo_id: str,
+        *,
+        progress_callback: Any | None = None,
+    ) -> RepoMetadata | None:
+        if callable(progress_callback):
+            progress_callback("assign_provider_metadata", "started")
+            progress_callback("provider_metadata_normalize_repo_id", "started")
         normalized_repo_id = normalize_repo_id(repo_id)
+        if callable(progress_callback):
+            progress_callback("provider_metadata_normalize_repo_id", "finished", provider_metadata_repo_id=normalized_repo_id)
+            progress_callback("provider_metadata_registry_get_repo", "started")
         repo = self._registry_service.get_repo(normalized_repo_id)
+        if callable(progress_callback):
+            progress_callback("provider_metadata_registry_get_repo", "finished", provider_metadata_repo_found=bool(repo is not None))
         if repo is None:
+            if callable(progress_callback):
+                progress_callback("assign_provider_metadata", "finished", provider_metadata_timeout_reason="repo_not_found")
             return None
+        if callable(progress_callback):
+            progress_callback("provider_metadata_promote_gitnexus_ready_repo", "started")
         repo = self._promote_gitnexus_ready_repo(repo)
-        provider_name = self.resolve_provider_name(normalized_repo_id)
-        return self._registry_service.update_repo_metadata(normalized_repo_id, intelligence_provider=provider_name)
+        if callable(progress_callback):
+            progress_callback("provider_metadata_promote_gitnexus_ready_repo", "finished")
+            progress_callback("provider_metadata_resolve_provider_name", "started")
+        provider_name = self.resolve_provider_name(
+            normalized_repo_id,
+            progress_callback=progress_callback,
+        )
+        if callable(progress_callback):
+            progress_callback(
+                "provider_metadata_resolve_provider_name",
+                "finished",
+                provider_metadata_selected_provider=provider_name,
+            )
+            progress_callback("provider_metadata_update_repo_metadata", "started")
+        updated_repo = self._registry_service.update_repo_metadata(normalized_repo_id, intelligence_provider=provider_name)
+        if callable(progress_callback):
+            progress_callback(
+                "provider_metadata_update_repo_metadata",
+                "finished",
+                provider_metadata_selected_provider=provider_name,
+            )
+            progress_callback("assign_provider_metadata", "finished")
+        return updated_repo
 
     def reindex_repo(self, repo_id: str, *, repo_metadata: RepoMetadata | None = None) -> dict[str, Any]:
         normalized_repo_id = normalize_repo_id(repo_id)
         repo = repo_metadata or self.assign_provider_metadata(normalized_repo_id) or self._registry_service.get_repo(normalized_repo_id)
         if repo is None:
             raise KeyError(f"Unknown repo_id: {normalized_repo_id}")
+        if self._can_bootstrap_gitnexus_via_explicit_reindex(repo):
+            native_state = self._native_provider.reindex_repo(repo)
+            refreshed_repo = self._registry_service.get_repo(repo.repo_id) or repo
+            gitnexus_state = self._gitnexus_index_service.analyze_repo(
+                refreshed_repo,
+                force=True,
+                allow_unlisted=True,
+            )
+            latest_repo = self._registry_service.get_repo(repo.repo_id) or refreshed_repo
+            merged_state = {**native_state, **gitnexus_state}
+            merged_state["intelligence_provider"] = str(getattr(latest_repo, "intelligence_provider", "") or "native").strip() or "native"
+            return merged_state
         return self._provider_for_repo(repo).reindex_repo(repo)
 
     def ensure_index_for_head(
@@ -1289,8 +1519,14 @@ class RepoIntelligenceService:
         changed_files: list[str] | None = None,
         jira_key: str = "",
         execution_mode: str = "",
+        progress_callback: Any | None = None,
     ) -> dict[str, Any]:
+        def _mark(substep: str, marker: str, **extra: Any) -> None:
+            if callable(progress_callback):
+                progress_callback(substep, marker, **extra)
+
         normalized_repo_id = normalize_repo_id(repo_id)
+        _mark("gitnexus_route", "started")
         routing_debug = self._multi_repo_routing_service.route(
             workflow_name=_safe_text(workflow_name),
             task_text=_safe_text(task_text),
@@ -1298,15 +1534,33 @@ class RepoIntelligenceService:
             requested_repo_id=normalized_repo_id,
             changed_files=_unique_strings(changed_files or []),
         )
+        _mark("gitnexus_route", "finished")
         selected_repo_id = _safe_text(dict((routing_debug.get("selected_repos", []) or [{}])[0]).get("repo_id", ""))
         effective_repo_id = normalize_repo_id(selected_repo_id or normalized_repo_id)
-        repo = self.assign_provider_metadata(effective_repo_id) or self._registry_service.get_repo(effective_repo_id)
+        _mark("gitnexus_assign_provider_metadata", "started", gitnexus_effective_repo_id=effective_repo_id)
+        repo = self.assign_provider_metadata(
+            effective_repo_id,
+            progress_callback=progress_callback,
+        ) or self._registry_service.get_repo(effective_repo_id)
+        _mark("gitnexus_assign_provider_metadata", "finished", gitnexus_effective_repo_id=effective_repo_id)
         if repo is None:
             raise KeyError(f"Unknown repo_id: {effective_repo_id or normalized_repo_id}")
+        _mark("gitnexus_promote_ready_repo", "started", gitnexus_effective_repo_id=repo.repo_id)
         repo = self._promote_gitnexus_ready_repo(repo, workflow_name)
+        _mark("gitnexus_promote_ready_repo", "finished", gitnexus_effective_repo_id=repo.repo_id)
+        _mark("gitnexus_refresh_repo_metadata", "started", gitnexus_effective_repo_id=repo.repo_id)
         repo = self._registry_service.refresh_repo_metadata(repo.repo_id) or repo
+        _mark("gitnexus_refresh_repo_metadata", "finished", gitnexus_effective_repo_id=repo.repo_id)
+        _mark("gitnexus_selection_debug", "started")
         selection_debug = self._selection_debug(repo, workflow_name)
+        _mark(
+            "gitnexus_selection_debug",
+            "finished",
+            gitnexus_selected_provider=_safe_text(selection_debug.get("selected_provider", "")),
+            gitnexus_selection_decision=_safe_text(selection_debug.get("selection_decision", "")),
+        )
         if selection_debug["selected_provider"] != "gitnexus_http":
+            _mark("gitnexus_native_provider_query", "started")
             payload = self._native_provider.query_for_workflow(
                 repo,
                 RepoQueryRequest(
@@ -1315,7 +1569,9 @@ class RepoIntelligenceService:
                     task_text=_safe_text(task_text),
                     changed_files=_unique_strings(changed_files or []),
                 ),
+                progress_callback=progress_callback,
             )
+            _mark("gitnexus_native_provider_query", "finished")
             payload.update(selection_debug)
             payload["provider_used"] = "native"
             payload["provider_fallback"] = False
@@ -1332,6 +1588,7 @@ class RepoIntelligenceService:
                 str(selection_debug.get("selection_decision", "")),
                 f"Workflow '{workflow_name}' uses the native provider.",
             )
+            _mark("gitnexus_attach_multi_repo_file_targeting", "started")
             payload = self._attach_multi_repo_file_targeting(
                 payload=payload,
                 effective_repo_id=repo.repo_id,
@@ -1341,12 +1598,16 @@ class RepoIntelligenceService:
                 changed_files=_unique_strings(changed_files or []),
                 routing_debug=routing_debug,
             )
-            return self._attach_bounded_scope(
+            _mark("gitnexus_attach_multi_repo_file_targeting", "finished")
+            _mark("gitnexus_attach_bounded_scope", "started")
+            payload = self._attach_bounded_scope(
                 payload=payload,
                 workflow_name=workflow_name,
                 task_text=task_text,
                 execution_mode=execution_mode,
             )
+            _mark("gitnexus_attach_bounded_scope", "finished")
+            return payload
         request = RepoQueryRequest(
             repo_id=repo.repo_id,
             workflow_name=_safe_text(workflow_name),
@@ -1354,8 +1615,20 @@ class RepoIntelligenceService:
             changed_files=_unique_strings(changed_files or []),
         )
         try:
-            payload = self._gitnexus_provider.query_for_workflow(repo, request)
+            _mark("gitnexus_provider_query_for_workflow", "started", gitnexus_effective_repo_id=repo.repo_id)
+            payload = self._gitnexus_provider.query_for_workflow(
+                repo,
+                request,
+                progress_callback=progress_callback,
+            )
+            _mark("gitnexus_provider_query_for_workflow", "finished", gitnexus_effective_repo_id=repo.repo_id)
         except Exception as exc:
+            _mark(
+                "gitnexus_provider_query_for_workflow",
+                "finished",
+                gitnexus_effective_repo_id=repo.repo_id,
+                gitnexus_timeout_reason=_safe_text(exc),
+            )
             reason = _safe_text(exc) or "GitNexus provider query failed."
             mcp_debug = _merge_mcp_debug(_empty_mcp_debug(), self._gitnexus_bridge_service.last_debug_snapshot())
             self._registry_service.update_repo_metadata(
@@ -1380,6 +1653,7 @@ class RepoIntelligenceService:
                 **mcp_debug,
                 **selection_debug,
             }
+            _mark("gitnexus_attach_multi_repo_file_targeting", "started")
             payload = self._attach_multi_repo_file_targeting(
                 payload=payload,
                 effective_repo_id=repo.repo_id,
@@ -1389,12 +1663,16 @@ class RepoIntelligenceService:
                 changed_files=_unique_strings(changed_files or []),
                 routing_debug=routing_debug,
             )
-            return self._attach_bounded_scope(
+            _mark("gitnexus_attach_multi_repo_file_targeting", "finished")
+            _mark("gitnexus_attach_bounded_scope", "started")
+            payload = self._attach_bounded_scope(
                 payload=payload,
                 workflow_name=workflow_name,
                 task_text=task_text,
                 execution_mode=execution_mode,
             )
+            _mark("gitnexus_attach_bounded_scope", "finished")
+            return payload
         if str(payload.get("provider_used", "") or "").strip() == "gitnexus_http" and not bool(payload.get("provider_fallback", False)):
             self._registry_service.update_repo_metadata(
                 repo.repo_id,
@@ -1416,6 +1694,7 @@ class RepoIntelligenceService:
         payload["repo_routing_audit"] = list(payload.get("repo_routing_audit", []) or _repo_routing_audit(repo, selection_debug, provider_used=payload["provider_used"]))
         payload.update({key: value for key, value in routing_debug.items() if key not in {"candidate_repos_count"}})
         payload.update(selection_debug)
+        _mark("gitnexus_attach_multi_repo_file_targeting", "started")
         payload = self._attach_multi_repo_file_targeting(
             payload=payload,
             effective_repo_id=repo.repo_id,
@@ -1425,12 +1704,16 @@ class RepoIntelligenceService:
             changed_files=_unique_strings(changed_files or []),
             routing_debug=routing_debug,
         )
-        return self._attach_bounded_scope(
+        _mark("gitnexus_attach_multi_repo_file_targeting", "finished")
+        _mark("gitnexus_attach_bounded_scope", "started")
+        payload = self._attach_bounded_scope(
             payload=payload,
             workflow_name=workflow_name,
             task_text=task_text,
             execution_mode=execution_mode,
         )
+        _mark("gitnexus_attach_bounded_scope", "finished")
+        return payload
 
     def provider_status(self, repo_id: str) -> dict[str, Any]:
         normalized_repo_id = normalize_repo_id(repo_id)
@@ -1478,3 +1761,16 @@ class RepoIntelligenceService:
 
     def _provider_for_repo(self, repo: RepoMetadata) -> RepoIntelligenceProvider:
         return self._gitnexus_provider if self.resolve_provider_name(repo.repo_id) == "gitnexus_http" else self._native_provider
+
+    def _can_bootstrap_gitnexus_via_explicit_reindex(self, repo: RepoMetadata | None) -> bool:
+        if repo is None or not bool(self._repo_settings.gitnexus_enabled):
+            return False
+        normalized_repo_id = normalize_repo_id(getattr(repo, "repo_id", "") or "")
+        if normalized_repo_id in {"", "self"}:
+            return False
+        provider_name = _safe_text(getattr(repo, "intelligence_provider", "")).lower()
+        if provider_name == "gitnexus_http":
+            return True
+        if bool(getattr(repo, "gitnexus_indexed", False)) or _safe_text(getattr(repo, "gitnexus_index_status", "")) == "ready":
+            return True
+        return self._gitnexus_index_service._is_repo_path_addressable(repo)

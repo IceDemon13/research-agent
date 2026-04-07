@@ -1,0 +1,479 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Showcase.ShowcasesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Showcase"
+             xmlns:productInformation="clr-namespace:Telemart.Client.Views.Store.Order.ProductInformation"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:business="clr-namespace:Telemart.Client.Business"
+             DataContext="{client:Container Type=viewModels:ShowcasesViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewModels:ShowcasesViewModel, IsDesignTimeCreatable=True}"
+             d:DesignWidth="1024"
+             d:DesignHeight="768">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="DateStyle"
+                   TargetType="dxe:DateEdit">
+                <Setter Property="Mask" Value="{x:Static business:DateFormattingRules.FullDateTimeFormat}"/>
+                <Setter Property="StyleSettings">
+                    <Setter.Value>
+                        <dxe:DateEditNavigatorWithTimePickerStyleSettings />
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl Orientation="Horizontal"
+                        ItemSpace="4"
+                        Padding="2"
+                        IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}, ElementName=GridControl}">
+        <dxlc:LayoutGroup Orientation="Vertical"
+                          ItemSpace="0">
+            <dxb:BarManager VerticalAlignment="Top">
+                <dxb:ToolBarControl AllowQuickCustomization="False"
+                                    AllowCustomizationMenu="False"
+                                    IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, ElementName=GridControl, Converter={dxmvvm:BooleanNegationConverter}}">
+                    <dxb:BarButtonItem Content="Обновить"
+                                   ToolTip="Обновить (F5)"
+                                   LargeGlyph="{dx:DXImage Image=Refresh_32x32.png}"
+                                   Glyph="{dx:DXImage Image=Refresh_16x16.png}"
+                                   Command="{Binding Path=RefreshCommand, Mode=OneTime}"/>
+                    <dxb:BarButtonItem Content="Колонки"
+                                   ToolTip="Колонки (F6)"
+                                   LargeGlyph="{dx:DXImage Image=Columns_32x32.png}"
+                                   Glyph="{dx:DXImage Image=Columns_16x16.png}"
+                                   Command="{x:Static dxg:GridCommands.ShowColumnChooser}"
+                                   CommandTarget="{Binding Path=View, ElementName=GridControl}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Content="История ассортимент"
+                                       ToolTip="История ассортимент"
+                                       LargeGlyph="../../Images/Common/assorti.png"
+                                       Glyph="../../Images/Common/assorti.png"
+                                       Command="{Binding Path=ShowcaseCategoryCommand, Mode=OneTime}" />
+
+                </dxb:ToolBarControl>
+            </dxb:BarManager>
+            <StackPanel Style="{StaticResource SeparatorStackPanelStyle}"></StackPanel>
+            <dxg:GridControl x:Name="GridControl"
+                                     ItemsSource="{Binding Path=ShowcasesHistories, Mode=OneWay}"
+                                     CurrentItem="{Binding Path=SelectedShowcasesHistory, Mode=TwoWay}"
+                                     ShowBorder="False"
+                                     SelectionMode="None"
+                                     AutoExpandAllGroups="True"
+                                     ShowLoadingPanel="{Binding Path=RefreshCommand.IsExecuting, Mode=OneWay}">
+                <dxmvvm:Interaction.Behaviors>
+                    <behaviors:LayoutSerializationBehavior FileName="showcases_3.xml" />
+                    <behaviors:CopyCurrentCellToClipboardBehavior />
+                </dxmvvm:Interaction.Behaviors>
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn Header="Код"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="ShowcaseId"
+                                            FixedWidth="True"
+                                            AllowResizing="False"
+                                            AllowGrouping="False"
+                                            AllowBestFit="True"
+                                            AllowColumnFiltering="False"
+                                            MinWidth="48"
+                                            Width="48">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Склад"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FieldName="WarehouseId"
+                                            MinWidth="60"
+                                            Width="150"
+                                            FixedWidth="True"
+                                            AllowBestFit="True"
+                                            AllowResizing="True"
+                                            AllowGrouping="True"
+                                            AllowAutoFilter="False"
+                                            AllowSorting="True"
+                                            AllowColumnFiltering="True"
+                                            FilterPopupMode="CheckedList"
+                                            ColumnFilterMode="DisplayText">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Warehouses}"
+                                                              DisplayMember="DisplayValue"
+                                                              ValueMember="Id"/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Код товара"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="ProductId"
+                                            FixedWidth="True"
+                                            AllowResizing="True"
+                                            AllowGrouping="False"
+                                            AllowBestFit="True"
+                                            AllowColumnFiltering="False"
+                                            MinWidth="48"
+                                            Width="50">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Товар"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FieldName="ProductName"
+                                            MinWidth="40"
+                                            Width="120"
+                                            MaxWidth="300"
+                                            AllowResizing="True"
+                                            AllowGrouping="False"
+                                            AllowBestFit="True"
+                                            AllowColumnFiltering="False"/>
+                    <dxg:GridColumn Header="Категория товара"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            FieldName="CategoryId"
+                                            MinWidth="60"
+                                            Width="200"
+                                            MaxWidth="300"
+                                            FixedWidth="True"
+                                            AllowBestFit="True"
+                                            AllowResizing="True"
+                                            AllowGrouping="True"
+                                            AllowAutoFilter="False"
+                                            AllowSorting="True"
+                                            AllowColumnFiltering="True"
+                                            FilterPopupMode="CheckedList"
+                                            ColumnFilterMode="DisplayText">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Categories}"
+                                                              DisplayMember="DisplayValue"
+                                                              ValueMember="Id"/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="К-во (старое)"
+                                            HeaderToolTip="Количество старое значение"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="CapacityOld"
+                                            AllowResizing="False"
+                                            AllowGrouping="False"
+                                            AllowBestFit="True"
+                                            FixedWidth="True"
+                                            Width="40"
+                                            AllowColumnFiltering="False">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="К-во (новое)"
+                                    HeaderToolTip="Количество новое значение"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    FieldName="CapacityNew"
+                                    AllowResizing="False"
+                                    AllowGrouping="False"
+                                    AllowBestFit="True"
+                                    FixedWidth="True"
+                                    Width="40"
+                                    AllowColumnFiltering="False">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="А"
+                                    HeaderToolTip="Активен старое значение"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    FieldName="ActiveOld"
+                                    Width="30"
+                                    AllowResizing="False"
+                                    AllowColumnFiltering="False"
+                                    FixedWidth="True"
+                                    DisplayTemplate="{StaticResource BooleanTickColumnDisplayTemplate}"/>
+                    <dxg:GridColumn Header="А"
+                                    HeaderToolTip="Активен новое значение"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    FieldName="ActiveNew"
+                                    Width="30"
+                                    AllowResizing="False"
+                                    AllowAutoFilter="False"
+                                    AllowColumnFiltering="False"
+                                    FixedWidth="True"
+                                    DisplayTemplate="{StaticResource BooleanTickColumnDisplayTemplate}"/>
+                    <dxg:GridColumn Header="Дата изменения"
+                                    HeaderToolTip="Дата изменения"
+                                    FieldName="ModifiedOn"
+                                    AllowResizing="False"
+                                    FixedWidth="True"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    AllowColumnFiltering="False"
+                                    Width="105">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                                      NullText=""
+                                                      MaskUseAsDisplayFormat="True"
+                                                      Mask="{x:Static business:DateFormattingRules.FullDateTimeFormat}"
+                                                      MaskType="DateTime" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Изменил"
+                                        HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                        HorizontalHeaderContentAlignment="Left"
+                                        FieldName="ModifiedBy"
+                                        FixedWidth="True"
+                                        Width="150"
+                                        MinWidth="40"
+                                        AllowBestFit="True"
+                                        AllowSorting="True"
+                                        AllowResizing="True"
+                                        AllowGrouping="True"
+                                        AllowColumnFiltering="True"
+                                        AllowAutoFilter="False"
+                                        ColumnFilterMode="DisplayText"
+                                        FilterPopupMode="CheckedList">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=AllEmployees, Mode=OneWay}"
+                                                          DisplayMember="DisplayValue"
+                                                          ValueMember="Id" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView AutoWidth="True"
+                                           AllowEditing="False"
+                                           NavigationStyle="Cell"
+                                           ShowIndicator="False"
+                                           ShowAutoFilterRow="False"
+                                           ShowFixedTotalSummary="False"
+                                           IsTotalSummaryMenuEnabled="False"
+                                           ShowTotalSummary="False"
+                                           IsColumnChooserVisible="{Binding Path=IsColumnChooserVisible, Mode=TwoWay}">
+                        <dxmvvm:Interaction.Behaviors>
+                            <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                                           Command="{Binding Path=EditCommand, Mode=OneWay}"
+                                                           CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=GridControl}" />
+                        </dxmvvm:Interaction.Behaviors>
+                    </dxg:TableView>
+                </dxg:GridControl.View>
+                <dxg:GridControl.GroupSummary>
+                    <dxg:GridSummaryItem SummaryType="Count"
+                                                 Alignment="Right"
+                                                 Visible="True" />
+                </dxg:GridControl.GroupSummary>
+            </dxg:GridControl>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup View="Tabs"
+                          Width="380"
+                          TabsStyle="{StaticResource LayoutGroupTabsStyle}"
+                          TabStyle="{StaticResource LayoutGroupTabStyle}">
+            <dxlc:LayoutGroup Header="Поиск"
+                              Margin="8,12,8,8">
+                <dxlc:LayoutGroup Orientation="Vertical"
+                                  ItemStyle="{StaticResource LayoutItemStyle}"
+                                  Margin="0,0,0,0">
+                    <dxlc:LayoutItem Label="Дата">
+                        <dxlc:LayoutItem.LabelTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../Images/Order/Filter/calendar.png"
+                                                        Style="{StaticResource ImageStyle}" />
+                                    <TextBlock Text="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutItem.LabelTemplate>
+                        <dxlc:LayoutGroup Orientation="Horizontal"
+                                          VerticalAlignment="Center"
+                                          ItemSpace="0">
+                            <dxe:DateEdit EditValue="{Binding Path=Filter.From, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                                          AllowNullInput="True"
+                                          MaskType="DateTime"
+                                          MaskUseAsDisplayFormat="True"
+                                          IsTextEditable="False"
+                                          InvalidValueBehavior="AllowLeaveEditor"
+                                          AllowRoundOutOfRangeValue="True"
+                                          Style="{StaticResource DateStyle}" />
+                            <TextBlock Text="-"
+                                       Width="18"
+                                       TextAlignment="Center" />
+                            <dxe:DateEdit EditValue="{Binding Path=Filter.To, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                                          AllowNullInput="True"
+                                          MaskType="DateTime"
+                                          MaskUseAsDisplayFormat="True"
+                                          IsTextEditable="False"
+                                          InvalidValueBehavior="AllowLeaveEditor"
+                                          AllowRoundOutOfRangeValue="True"
+                                          Style="{StaticResource DateStyle}" />
+                        </dxlc:LayoutGroup>
+                    </dxlc:LayoutItem>
+
+                    <dxlc:LayoutItem Label="Склад">
+                        <dxlc:LayoutItem.LabelTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../Images/Order/Filter/house.png"
+                                                            Style="{StaticResource ImageStyle}" />
+                                    <TextBlock Text="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutItem.LabelTemplate>
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Filter.Warehouses, Mode=OneWay}"
+                                                      EditValue="{Binding Path=Filter.WarehouseIds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={converters:IntCollectionConverter ToObservable=True}}"
+                                                      DisplayMember="DisplayValue"
+                                                      ValueMember="Id"
+                                                      Style="{StaticResource TokenComboBoxStyle}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                                 Command="{Binding Path=RefreshCommand, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ComboBoxEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Товар">
+                        <dxlc:LayoutItem.LabelTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../Images/Common/package.png"
+                                                            Style="{StaticResource ImageStyle}" />
+                                    <TextBlock Text="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutItem.LabelTemplate>
+                        <dxe:ButtonEdit EditValue="{Binding Path=Filter.Product, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                                                    AllowDefaultButton="False"
+                                                    NullValueButtonPlacement="EditBox">
+                            <dxe:ButtonInfo ButtonKind="Simple"
+                                                        GlyphKind="Regular"
+                                                        Command="{Binding Path=SelectProductCommand, Mode=OneTime}" />
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                                 Command="{Binding Path=RefreshCommand, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ButtonEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Ответственный">
+                        <dxlc:LayoutItem.LabelTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../Images/Order/Filter/user_green.png"
+                                                Style="{StaticResource ImageStyle}" />
+                                    <TextBlock Text="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutItem.LabelTemplate>
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=Filter.Employees, Mode=OneWay}"
+                                          EditValue="{Binding Path=Filter.SelectedCategoryEmployeeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMember="DisplayValue"
+                                          ValueMember="Id"
+                                          NullValueButtonPlacement="EditBox"
+                                          ValidateOnTextInput="False"
+                                          IsTextEditable="False"/>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Категория">
+                        <dxlc:LayoutItem.LabelTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../../Images/Parser/folders_16_16.png"
+                                                Style="{StaticResource ImageStyle}" />
+                                    <TextBlock Text="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutItem.LabelTemplate>
+                             <dxg:LookUpEdit ItemsSource="{Binding Path=Filter.Categories, Mode=OneWay}"
+                                             EditValue="{Binding Path=Filter.SelectedCategoryId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                             DisplayMember="Name"
+                                             ValueMember="Id"
+                                             AutoPopulateColumns="False"
+                                             AutoComplete="False"
+                                             IncrementalFiltering="True"
+                                             FilterCondition="Like"
+                                             FindMode="Always"
+                                             ImmediatePopup="True"
+                                             IsPopupAutoWidth="True"
+                                             NullValueButtonPlacement="EditBox">
+                                 <dxmvvm:Interaction.Behaviors>
+                                     <dxmvvm:FocusBehavior />
+                                 </dxmvvm:Interaction.Behaviors>
+                                 <dxg:LookUpEdit.StyleSettings>
+                                     <dxg:SearchLookUpEditStyleSettings/>
+                                 </dxg:LookUpEdit.StyleSettings>
+                                 <dxg:LookUpEdit.PopupContentTemplate>
+                                     <ControlTemplate>
+                                         <dxg:GridControl Name="PART_GridControl">
+                                             <dxg:GridControl.Resources>
+                                                 <Style TargetType="dxg:GridColumn"
+                                                        BasedOn="{StaticResource GeneralGridColumnStyle}">
+                                                 </Style>
+                                             </dxg:GridControl.Resources>
+                                             <dxg:GridControl.Columns>
+                                                 <dxg:GridColumn FieldName="Name"
+                                                                 Header="Папка"
+                                                                 AllowResizing="False"
+                                                                 FixedWidth="False" />
+                                             </dxg:GridControl.Columns>
+                                             <dxg:GridControl.View>
+                                                 <dxg:TreeListView AutoWidth="True"
+                                                                   AutoExpandAllNodes="True"
+                                                                   KeyFieldName="Id"
+                                                                   ParentFieldName="ParentId"
+                                                                   ShowIndicator="False"
+                                                                   UseEvenRowBackground="True"
+                                                                   AlternationCount="2"/>
+                                             </dxg:GridControl.View>
+                                         </dxg:GridControl>
+                                     </ControlTemplate>
+                                 </dxg:LookUpEdit.PopupContentTemplate>
+                             </dxg:LookUpEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayerSeparator Kind="Horizontal" />
+                    <dxlc:LayoutItem Label="Записей">
+                        <dxlc:LayoutItem.LabelTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Style="{StaticResource ImageStyle}" />
+                                    <TextBlock Text="{Binding Mode=OneWay}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutItem.LabelTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Path=ShowcasesHistories.Count, Mode=OneWay, FallbackValue=0}"
+                                       FontWeight="Bold" />
+                            <TextBlock Text=" шт." />
+                        </StackPanel>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayerSeparator Kind="Horizontal"
+                                         Thickness="1"
+                                         Height="1" />
+                    <dxlc:LayoutGroup Orientation="Horizontal">
+                        <Button VerticalAlignment="Top"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource NoBordersButton}"
+                                Command="{Binding Path=RefreshCommand, Mode=OneTime}">
+                            <StackPanel Orientation="Horizontal">
+                                <dx:DXImage Source="{dx:DXImage Image=Apply_16x16.png}" />
+                                <TextBlock Text="Применить"
+                                           Margin="4,0,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Header="Инфо">
+                <productInformation:ProductInformation DataContext="{Binding Path=ProductInformation, Mode=OneWay}"
+                                                       dxmvvm:ViewModelExtensions.ParentViewModel="{Binding Path=DataContext, Mode=OneWay, ElementName=GridControl}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

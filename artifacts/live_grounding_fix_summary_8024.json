@@ -1,0 +1,44 @@
+{
+  "onboard_status": 409,
+  "onboard_payload": {
+    "detail": {
+      "error": "repo_onboarding_failed",
+      "message": "Cloning into 'C:/work/my repositories/research-agent/repos/telemart_soft_test'...\nremote: The requested repository either does not exist or you do not have access. If you believe this repository exists and you have access, make sure you're authenticated.\nfatal: unable to access 'https://bitbucket.org/telemartsoft/telemart.soft.test.git/': The requested URL returned error: 403\n"
+    }
+  },
+  "analyze_status": 200,
+  "provider_used": null,
+  "selected_repos": [
+    {
+      "repo_id": "self",
+      "score": 0.0,
+      "reasons": [],
+      "historical_match_count": 0,
+      "top_historical_matches": [],
+      "top_historical_changed_files": []
+    }
+  ],
+  "top_historical_matches": [],
+  "top_historical_changed_files": [],
+  "novelty_score": 62,
+  "analysis_mode": "guided",
+  "patch_generation_ready": false,
+  "patch_generation_blockers": [
+    "novelty too high",
+    "decision questions unresolved"
+  ],
+  "allowed_files": [
+    "agents/change_agent.py",
+    "services/repo_context_rules.py",
+    "agents/root_agent.py"
+  ],
+  "patch_status": 200,
+  "diff_generated": false,
+  "touched_files": [],
+  "hallucinated_files": [],
+  "bounded": false,
+  "rationale_count": 3,
+  "validation_plan_count": 1,
+  "auto_apply": false,
+  "review_required": true
+}

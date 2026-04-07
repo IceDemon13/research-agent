@@ -1,0 +1,60 @@
+{
+  "run_id": "5b9668298b7745edbe490381513ccc1a",
+  "goal": "TEL-404 Analyze this Jira task content and return concrete missing details, task text:\n\n\ntechnical risks, and direct follow-up questions. Avoid generic wording. If a repo is supplied, state whether the task matches that repo and why.",
+  "status": "failed",
+  "started_at": "2026-04-06T21:06:57.030910+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "sample",
+  "actor_context": {
+    "actor_id": "lead-1",
+    "actor_type": "api",
+    "role": "techlead",
+    "source_channel": "api",
+    "display_name": "Local API Developer",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-04-06T21:06:57.032911+00:00",
+  "steps": [
+    {
+      "name": "spec",
+      "status": "failed",
+      "started_at": "2026-04-06T21:06:57.031913+00:00",
+      "finished_at": "2026-04-06T21:06:57.031913+00:00",
+      "message": "",
+      "error": {
+        "type": "jira_auth_missing",
+        "message": "Jira auth is missing; refusing to fetch live Jira content.",
+        "step": "spec",
+        "details": {
+          "error": "jira_auth_missing",
+          "message": "Jira auth is missing; refusing to fetch live Jira content.",
+          "workflow_type": "analyze_task",
+          "request_input_text": "TEL-404",
+          "jira_auth_present": false,
+          "run_invalid_due_to_provider": false,
+          "source_stage": "workflow_input_resolution",
+          "routing_reason": "Workflow failed before tracked execution because Jira-backed input resolution did not complete.",
+          "run_outcome_type": "failed_preflight"
+        }
+      }
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/5b9668298b7745edbe490381513ccc1a.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}

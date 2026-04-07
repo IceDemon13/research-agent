@@ -1,0 +1,282 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Money.Receive.ReceiveMoneyView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:commonViews="clr-namespace:Telemart.Client.Views.Common"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Money.Receive"
+                              DataContext="{client:Container Type=viewModels:ReceiveMoneyViewModel}"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance Type={x:Type viewModels:ReceiveMoneyViewModel}, IsDesignTimeCreatable=True}"
+                              d:DesignWidth="750"
+                              d:DesignHeight="450">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/OrderStatus.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:DispatcherService />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}">
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              ItemSpace="0">
+                <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                    <dxb:BarButtonItem Content="Очистить содержимое таблицы"
+                                       Glyph="../../../Images/Common/page_white.png"
+                                       Command="{Binding Path=RemoveAllCommand, Mode=OneTime}" />
+                    <dxb:BarButtonItem Content="Удалить выделенную строку"
+                                       Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                       KeyGesture="Delete"
+                                       CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=GridControl}"
+                                       Command="{Binding Path=RemoveItemCommand, Mode=OneTime}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Content="Обработать записи"
+                                       Glyph="../../../Images/Common/server_lightning.png"
+                                       Command="{Binding Path=RecognizeAllCommand, Mode=OneTime}" />
+                </dxb:ToolBarControl>
+                <dxlc:LayoutGroup Orientation="Horizontal">
+                    <dxg:GridControl x:Name="GridControl"
+                                     ItemsSource="{Binding Path=Items, Mode=OneWay}"
+                                     CurrentItem="{Binding Path=CurrentItem, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     SelectionMode="None">
+                        <dxmvvm:Interaction.Behaviors>
+                            <behaviors:CopyCurrentCellToClipboardBehavior />
+                        </dxmvvm:Interaction.Behaviors>
+                        <dxg:GridControl.Columns>
+                            <dxg:GridColumn Header="№"
+                                            HeaderToolTip="Номер при сканировании"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="Number"
+                                            FixedWidth="True"
+                                            Width="48">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Заказ"
+                                            HeaderToolTip="Номер заказа"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="OrderId"
+                                            FixedWidth="True"
+                                            Width="60">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="ТТН"
+                                            HeaderToolTip="Номер ТТН"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="TrackNumber"
+                                            Width="100">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="План"
+                                            HeaderToolTip="Сумма, которую нужно внести в заказ"
+                                            HorizontalHeaderContentAlignment="Right"
+                                            FieldName="PlannedAmount"
+                                            Width="80">
+                                <dxg:GridColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Vertical">
+                                            <dxe:ProgressBarEdit ShowNullText="True"
+                                                                 ShowBorder="False"
+                                                                 Visibility="{Binding Path=RowData.Row.Recognizing, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter} }">
+                                                <dxe:ProgressBarEdit.StyleSettings>
+                                                    <dxe:ProgressBarMarqueeStyleSettings />
+                                                </dxe:ProgressBarEdit.StyleSettings>
+                                            </dxe:ProgressBarEdit>
+                                            <dxe:SpinEdit x:Name="PART_Editor"
+                                                          MaskType="Numeric"
+                                                          MaskUseAsDisplayFormat="True"
+                                                          Mask="C2"
+                                                          MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                                          MaskSaveLiteral="False"
+                                                          MinValue="0"
+                                                          IsFloatValue="False"
+                                                          AllowDefaultButton="False"
+                                                          Visibility="{Binding Path=RowData.Row.Recognizing, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </dxg:GridColumn.CellTemplate>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Факт"
+                                            HeaderToolTip="Фактическая сумма денег"
+                                            HorizontalHeaderContentAlignment="Right"
+                                            FieldName="ActualAmount"
+                                            AllowEditing="True"
+                                            Width="80">
+                                <dxg:GridColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <dxe:SpinEdit x:Name="PART_Editor"
+                                                      HorizontalContentAlignment="Right"
+                                                      MaskType="Numeric"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      Mask="C2"
+                                                      MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                                      MaskSaveLiteral="False"
+                                                      MinValue="0"
+                                                      IsFloatValue="False"
+                                                      AllowDefaultButton="False"
+                                                      EditValuePostMode="Delayed"
+                                                      EditValuePostDelay="500"
+                                                      IsReadOnly="{Binding RowData.Row.Recognized, Converter={dxmvvm:BooleanNegationConverter}}">
+                                        </dxe:SpinEdit>
+                                    </DataTemplate>
+                                </dxg:GridColumn.CellTemplate>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Статус"
+                                            HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                            HorizontalHeaderContentAlignment="Left"
+                                            FieldName="OrderState"
+                                            FixedWidth="True"
+                                            Width="110"
+                                            DisplayTemplate="{StaticResource OrderStatusColumnDisplayTemplate}">
+                            </dxg:GridColumn>
+                        </dxg:GridControl.Columns>
+                        <dxg:GridControl.View>
+                            <dxg:TableView x:Name="TableView"
+                                           AllowResizing="False"
+                                           AllowSorting="False"
+                                           AllowGrouping="False"
+                                           CustomRowAppearance="TableViewOnCustomRowAppearance"
+                                           Style="{StaticResource ReadOnlyTableViewStyle}">
+                                <dxmvvm:Interaction.Behaviors>
+                                    <dxmvvm:EventToCommand EventName="CellValueChanged"
+                                                           Command="{Binding Path=HandleActualAmountChangedCommand, Mode=OneTime}" />
+                                </dxmvvm:Interaction.Behaviors>
+                                <dxg:TableView.FormatConditions>
+                                    <dxg:FormatCondition Expression="[Recognized] = FALSE AND [Recognizing] = FALSE">
+                                        <dx:Format Background="{StaticResource RoseColor}"
+                                                   Foreground="Black"/>
+                                    </dxg:FormatCondition>
+                                    <dxg:IconSetFormatCondition Expression="[ActualAmount] / [PlannedAmount]"
+                                                                FieldName="ActualAmount">
+                                        <dx:IconSetFormat ElementThresholdType="Number">
+                                            <dx:IconSetElement ThresholdComparisonType="Greater"
+                                                               Threshold="1">
+                                                <dx:IconSetElement.Icon>
+                                                    <BitmapImage UriSource="pack://application:,,,/DevExpress.Xpf.Core.v24.2;component/Core/ConditionalFormatting/Images/IconSets/Symbols3_3.png"
+                                                                 UriCachePolicy="{x:Null}" />
+                                                </dx:IconSetElement.Icon>
+                                            </dx:IconSetElement>
+                                            <dx:IconSetElement ThresholdComparisonType="GreaterOrEqual"
+                                                               Threshold="1">
+                                                <dx:IconSetElement.Icon>
+                                                    <BitmapImage CacheOption="OnLoad"
+                                                                 UriSource="pack://application:,,,/DevExpress.Xpf.Core.v24.2;component/Core/ConditionalFormatting/Images/IconSets/Symbols23_1.png"
+                                                                 UriCachePolicy="{x:Null}" />
+                                                </dx:IconSetElement.Icon>
+                                            </dx:IconSetElement>
+                                            <dx:IconSetElement ThresholdComparisonType="GreaterOrEqual"
+                                                               Threshold="0">
+                                                <dx:IconSetElement.Icon>
+                                                    <BitmapImage CacheOption="OnLoad"
+                                                                 UriSource="pack://application:,,,/DevExpress.Xpf.Core.v24.2;component/Core/ConditionalFormatting/Images/IconSets/Symbols23_2.png"
+                                                                 UriCachePolicy="{x:Null}" />
+                                                </dx:IconSetElement.Icon>
+                                            </dx:IconSetElement>
+                                        </dx:IconSetFormat>
+                                    </dxg:IconSetFormatCondition>
+                                </dxg:TableView.FormatConditions>
+                            </dxg:TableView>
+                        </dxg:GridControl.View>
+                    </dxg:GridControl>
+                    <commonViews:SummaryItemsView SummaryItems="{Binding Path=SummaryItems, Mode=OneWay}"
+                                                  LabelColumnWidth="1*"
+                                                  ContentColumnWidth="1.2*"
+                                                  VerticalAlignment="Stretch"
+                                                  Width="180" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              View="GroupBox"
+                              Header="Обработка"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  VerticalAlignment="Top">
+                    <dxlc:LayoutItem Label="{Binding RecognizeType.BarcodeLabel}">
+                        <dxe:TextEdit EditValue="{Binding Path=Barcode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                     Command="{Binding Path=RecognizeCommand, Mode=OneWay}" />
+                                <dxmvvm:FocusBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:TextEdit>
+                    </dxlc:LayoutItem>
+                </dxlc:LayoutGroup>
+                <dxg:GridControl ItemsSource="{Binding Path=Messages, Mode=OneWay}"
+                                 CurrentItem="{Binding Path=CurrentMessage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 SelectionMode="None"
+                                 Height="130">
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:CopyCurrentCellToClipboardBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Время"
+                                        HeaderToolTip="Время"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FieldName="Time"
+                                        FixedWidth="True"
+                                        Width="66"
+                                        SortMode="Value"
+                                        SortIndex="0"
+                                        SortOrder="Descending">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:DateEditSettings HorizontalContentAlignment="Center"
+                                                      Mask="HH:mm:ss"
+                                                      MaskUseAsDisplayFormat="True" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Сообщение"
+                                        HeaderToolTip="Сообщение"
+                                        FieldName="Message">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings TextWrapping="Wrap" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView AllowResizing="False"
+                                       AllowSorting="False"
+                                       EnableImmediatePosting="True"
+                                       Style="{StaticResource ReadOnlyTableViewStyle}">
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup VerticalAlignment="Bottom"
+                              HorizontalAlignment="Right">
+                <Button Content="OK"
+                        Command="{Binding Path=OkCommand, Mode=OneTime}"
+                        IsEnabled="{Binding Path=HasValidationError, ElementName=TableView, Converter={dxmvvm:BooleanNegationConverter}}"/>
+                <Button Content="Отмена"
+                        Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

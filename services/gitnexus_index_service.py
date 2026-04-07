@@ -5,6 +5,7 @@ import logging
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -41,6 +42,28 @@ def _path_basename(value: object) -> str:
     if not normalized:
         return ""
     return PurePosixPath(normalized).name.lower()
+
+
+def _gitnexus_repo_path(repo_meta: RepoMetadata, repo_settings: RepoIntelligenceSettings) -> str:
+    raw_path = _safe_text(getattr(repo_meta, "local_path", "") or getattr(repo_meta, "resolved_local_path", ""))
+    if not raw_path:
+        return ""
+    normalized_repo_root = _normalize_repo_value(repo_settings.gitnexus_repo_root)
+    if normalized_repo_root and _normalize_repo_value(raw_path).startswith(normalized_repo_root.rstrip("/") + "/"):
+        return raw_path
+    try:
+        host_clone_root = Path(settings.runtime.repo_clone_root).expanduser().resolve()
+        resolved_repo_path = Path(raw_path).expanduser().resolve()
+    except OSError:
+        return raw_path
+    try:
+        relative_repo_path = resolved_repo_path.relative_to(host_clone_root)
+    except ValueError:
+        return raw_path
+    if not normalized_repo_root:
+        return raw_path
+    relative_posix = PurePosixPath(relative_repo_path.as_posix())
+    return str(PurePosixPath(normalized_repo_root).joinpath(relative_posix))
 
 
 def _extract_embedded_json_payload(value: object) -> Any | None:
@@ -106,7 +129,18 @@ class GitNexusIndexService:
         self._registry_service = registry_service or RepositoryRegistryService()
         self._mcp_client = mcp_client or GitNexusMcpClient(repo_settings=self._repo_settings)
 
-    def is_enabled_for_repo(self, repo_meta: RepoMetadata | None) -> bool:
+    def _is_repo_path_addressable(self, repo_meta: RepoMetadata | None) -> bool:
+        if repo_meta is None:
+            return False
+        translated_repo_path = _gitnexus_repo_path(repo_meta, self._repo_settings)
+        normalized_repo_root = _normalize_repo_value(self._repo_settings.gitnexus_repo_root)
+        normalized_translated_path = _normalize_repo_value(translated_repo_path)
+        if not normalized_repo_root or not normalized_translated_path:
+            return False
+        normalized_repo_root = normalized_repo_root.rstrip("/")
+        return normalized_translated_path == normalized_repo_root or normalized_translated_path.startswith(normalized_repo_root + "/")
+
+    def is_enabled_for_repo(self, repo_meta: RepoMetadata | None, *, allow_unlisted: bool = False) -> bool:
         if repo_meta is None or not bool(self._repo_settings.gitnexus_enabled):
             return False
         allowlist = {
@@ -121,11 +155,13 @@ class GitNexusIndexService:
             return True
         if bool(getattr(repo_meta, "gitnexus_indexed", False)) or _safe_text(getattr(repo_meta, "gitnexus_index_status", "")) == "ready":
             return True
+        if allow_unlisted and self._is_repo_path_addressable(repo_meta):
+            return True
         visibility_debug = self.repo_visibility_debug(repo_meta)
         return bool(visibility_debug.get("visible", False))
 
-    def analyze_repo(self, repo_meta: RepoMetadata, force: bool = True) -> dict[str, Any]:
-        if not self.is_enabled_for_repo(repo_meta):
+    def analyze_repo(self, repo_meta: RepoMetadata, force: bool = True, *, allow_unlisted: bool = False) -> dict[str, Any]:
+        if not self.is_enabled_for_repo(repo_meta, allow_unlisted=allow_unlisted):
             return {
                 "provider": "native",
                 "success": False,
@@ -137,7 +173,7 @@ class GitNexusIndexService:
         backend_health = self.backend_runtime_status()
         analyze_runtime = dict(backend_health.get("analyze_runtime", {}) or {})
         payload = {
-            "repoPath": str(repo_meta.local_path or repo_meta.resolved_local_path or "").strip(),
+            "repoPath": _gitnexus_repo_path(repo_meta, self._repo_settings),
             "force": bool(force),
             "skipEmbeddings": not bool(self._repo_settings.gitnexus_use_embeddings),
             "useSkills": bool(self._repo_settings.gitnexus_use_skills),
@@ -296,10 +332,33 @@ class GitNexusIndexService:
             return f"GitNexus index control endpoint returned HTTP {error.code}."
         return _safe_text(error) or "GitNexus indexing failed."
 
-    def repo_visibility_debug(self, repo_meta: RepoMetadata) -> dict[str, Any]:
+    def repo_visibility_debug(
+        self,
+        repo_meta: RepoMetadata,
+        *,
+        progress_callback: Any | None = None,
+    ) -> dict[str, Any]:
+        def _mark(substep: str, marker: str, **extra: Any) -> None:
+            if callable(progress_callback):
+                progress_callback(substep, marker, **extra)
+
+        _mark("repo_visibility_debug", "started")
+        _mark("repo_visibility_debug_mcp_client_reuse", "started")
+        _mark("repo_visibility_debug_mcp_client_reuse", "finished")
+        _mark("repo_visibility_debug_list_repos_call", "started")
         try:
-            raw_payload = self._mcp_client.list_repos()
+            raw_payload = self._mcp_client.list_repos(progress_callback=progress_callback)
         except Exception as exc:
+            _mark(
+                "repo_visibility_debug_list_repos_call",
+                "finished",
+                repo_visibility_debug_timeout_reason=_safe_text(exc) or "list_repos_failed",
+            )
+            _mark(
+                "repo_visibility_debug",
+                "finished",
+                repo_visibility_debug_timeout_reason=_safe_text(exc) or "list_repos_failed",
+            )
             return {
                 "visible": False,
                 "visible_repo_count": 0,
@@ -309,8 +368,29 @@ class GitNexusIndexService:
                 "normalized_repo_visibility_targets": [],
                 "error": _safe_text(exc) or "GitNexus backend repo listing failed.",
             }
+        _mark(
+            "repo_visibility_debug_list_repos_call",
+            "finished",
+            repo_visibility_debug_raw_payload_type=type(raw_payload).__name__,
+        )
+        _mark("repo_visibility_debug_raw_response_receipt", "started")
+        raw_excerpt = _safe_text(json.dumps(raw_payload, ensure_ascii=False)[:600])
+        _mark("repo_visibility_debug_raw_response_receipt", "finished")
+        _mark("repo_visibility_debug_response_normalization", "started")
         visible_values = self._normalize_visible_repo_values(raw_payload)
+        _mark(
+            "repo_visibility_debug_response_normalization",
+            "finished",
+            repo_visibility_debug_visible_repo_count=len(visible_values),
+        )
+        _mark("repo_visibility_debug_target_repo_values", "started")
         target_values = self._target_repo_values(repo_meta)
+        _mark(
+            "repo_visibility_debug_target_repo_values",
+            "finished",
+            repo_visibility_debug_target_value_count=len(target_values),
+        )
+        _mark("repo_visibility_debug_repo_matching_loop", "started")
         visible = False
         match_reason = ""
         for item in visible_values:
@@ -319,26 +399,38 @@ class GitNexusIndexService:
                 visible = True
                 match_reason = reason
                 break
+        _mark(
+            "repo_visibility_debug_repo_matching_loop",
+            "finished",
+            repo_visibility_debug_visible=visible,
+        )
         error = ""
         if not visible:
             error = "GitNexus analyze completed but backend registry does not include repo."
-        return {
+        _mark("repo_visibility_debug_payload_construction", "started")
+        payload = {
             "visible": visible,
             "visible_repo_count": len(visible_values),
             "visible_repo_ids_or_paths": visible_values[:20],
-            "raw_list_repos_result_excerpt": _safe_text(json.dumps(raw_payload, ensure_ascii=False)[:600]),
+            "raw_list_repos_result_excerpt": raw_excerpt,
             "visibility_match_reason": match_reason,
             "normalized_repo_visibility_targets": sorted(target_values),
             "error": error,
         }
+        _mark("repo_visibility_debug_payload_construction", "finished")
+        _mark("repo_visibility_debug", "finished")
+        return payload
 
     def _target_repo_values(self, repo_meta: RepoMetadata) -> set[str]:
+        translated_repo_path = _gitnexus_repo_path(repo_meta, self._repo_settings)
         values = {
             _normalize_repo_value(repo_meta.local_path),
             _normalize_repo_value(repo_meta.resolved_local_path),
+            _normalize_repo_value(translated_repo_path),
             _normalize_repo_value(repo_meta.repo_id),
             _path_basename(repo_meta.local_path),
             _path_basename(repo_meta.resolved_local_path),
+            _path_basename(translated_repo_path),
             _path_basename(repo_meta.repo_id),
         }
         repo_root = _normalize_repo_value(self._repo_settings.gitnexus_repo_root)

@@ -166,19 +166,20 @@ services:
     depends_on:
       gitnexus:
         condition: service_started
+    environment:
+      GITNEXUS_WEB_BACKEND_URL: ${GITNEXUS_WEB_BACKEND_URL:-}
     command: >
       bash -lc "
         apt-get update &&
         apt-get install -y git &&
-        if [ ! -d /opt/GitNexus ]; then
-          git clone https://github.com/abhigyanpatwari/GitNexus.git /opt/GitNexus;
-        fi &&
+        node /opt/bootstrap-gitnexus-web.mjs &&
         cd /opt/GitNexus/gitnexus-web &&
-        npm install &&
         npm run dev -- --host 0.0.0.0 --port 5173
       "
     ports:
       - "5173:5173"
+    volumes:
+      - ./scripts/bootstrap-gitnexus-web.mjs:/opt/bootstrap-gitnexus-web.mjs:ro
 
 volumes:
   postgres_data:

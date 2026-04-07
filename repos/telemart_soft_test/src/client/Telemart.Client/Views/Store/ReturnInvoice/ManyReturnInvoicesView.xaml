@@ -1,0 +1,135 @@
+<UserControl x:Class="Telemart.Client.Views.Store.ReturnInvoice.ManyReturnInvoicesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.ReturnInvoice"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             DataContext="{client:Container Type=viewModels:ManyReturnInvoicesViewModel}"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:ManyReturnInvoicesViewModel}}"
+             mc:Ignorable="d"
+             Width="420"
+             Height="320"
+             d:DesignHeight="320" 
+             d:DesignWidth="420">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutItem Label="Контрагент">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Contractors, Mode=OneWay}"
+                                  EditValue="{Binding Path=Contractor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  DisplayMember="Name"
+                                  Style="{StaticResource SearchableComboBoxStyle}" 
+                                  ShowEditorButtons="True"
+                                  NullValueButtonPlacement="EditBox"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Принята от">
+                <dxe:DateEdit EditValue="{Binding AcceptedFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskType="DateTime"
+                              Mask="dd.MM.yyyy"
+                              MaskUseAsDisplayFormat="True"
+                              IsTextEditable="True"
+                              ValidateOnTextInput="False"
+                              AllowRoundOutOfRangeValue="True"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Принята до">
+                <dxe:DateEdit EditValue="{Binding AcceptedTo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskType="DateTime"
+                              Mask="dd.MM.yyyy"
+                              MaskUseAsDisplayFormat="True"
+                              IsTextEditable="True"
+                              ValidateOnTextInput="False"
+                              AllowRoundOutOfRangeValue="True"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Склад">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Warehouses, Mode=OneWay}"
+                                  EditValue="{Binding Path=WarehouseId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  ValueMember="Id"
+                                  DisplayMember="DisplayValue"
+                                  HorizontalContentAlignment="Left"
+                                  Style="{StaticResource SearchableComboBoxStyle}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Дата возврата">
+                <dxe:DateEdit EditValue="{Binding Path=ReturnDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskType="DateTime"
+                              Mask="dd.MM.yyyy"
+                              MaskUseAsDisplayFormat="True"
+                              IsTextEditable="False"
+                              AllowRoundOutOfRangeValue="True">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:FocusBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                </dxe:DateEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Доставка">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=CarryTypes, Mode=OneWay}"
+                                  DisplayMember="Name"
+                                  EditValue="{Binding Path=CarryType, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                  ItemTemplate="{StaticResource ValidatableComboBoxItemTemplate}"
+                                  AllowNullInput="True" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Плательщик услуг доставки">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=TtnPayers, Mode=OneWay}"
+                                  EditValue="{Binding Path=PayerType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  DisplayMember="Name" 
+                                  ShowEditorButtons="True"
+                                  NullValueButtonPlacement="EditBox"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Город">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Cities, Mode=OneWay}"
+                                  EditValue="{Binding Path=ReceiverCityId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  DisplayMember="DisplayValue"
+                                  ValueMember="Id"
+                                  ShowEditorButtons="True"
+                                  NullValueButtonPlacement="EditBox"
+                                  Style="{StaticResource SearchableComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Отделение">
+                <dxe:ButtonEdit EditValue="{Binding Path=RecipientAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                AllowDefaultButton="False"
+                                IsReadOnly="True">
+                    <dxe:ButtonInfo GlyphKind="Edit"
+                                    ToolTipService.ToolTip="Выбрать адрес"
+                                    Command="{Binding Path=SelectNpWarehouseCommand, Mode=OneWay}" />
+                </dxe:ButtonEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Загрузка..."
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Converter={dxmvvm:BooleanToVisibilityConverter}}"/>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

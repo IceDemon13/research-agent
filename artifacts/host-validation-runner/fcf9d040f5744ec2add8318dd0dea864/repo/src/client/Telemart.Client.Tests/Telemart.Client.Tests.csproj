@@ -1,0 +1,54 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <Configurations>Debug;Release</Configurations>
+        <Platforms>AnyCPU</Platforms>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+        <DebugType>full</DebugType>
+        <CodeAnalysisRuleSet>..\Telemart.Client\Telemart.Client.ruleset</CodeAnalysisRuleSet>
+    </PropertyGroup>
+    <Import Project="$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets" Condition="Exists('$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets')"/>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0"/>
+        <PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.13.61">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Xunit.StaFact" Version="2.0.44" />
+        <PackageReference Include="xunit.v3" Version="1.1.0" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Bogus" Version="35.6.3"/>
+        <PackageReference Include="Castle.Core" Version="5.2.1"/>
+        <PackageReference Include="Humanizer.Core" Version="2.14.1"/>
+        <PackageReference Include="Humanizer.Core.ru" Version="2.14.1"/>
+        <PackageReference Include="Moq" Version="4.20.72"/>
+        <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.435">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="System.IO.Abstractions" Version="22.0.13"/>
+        <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="22.0.13"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+    <ItemGroup>
+        <None Include=".editorconfig"/>
+        <None Update="Data\np_bill_long.xlsx">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Data\np_bill_short.xlsx">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Telemart.Client.Core\Telemart.Client.Core.csproj"/>
+        <ProjectReference Include="..\Telemart.Client.Data\Telemart.Client.Data.csproj"/>
+        <ProjectReference Include="..\Telemart.Client.Dictionaries\Telemart.Client.Dictionaries.csproj"/>
+        <ProjectReference Include="..\Telemart.Client.FiscalRegistrar\Telemart.Client.FiscalRegistrar.csproj"/>
+        <ProjectReference Include="..\Telemart.Client.TransferObjects\Telemart.Client.TransferObjects.csproj"/>
+        <ProjectReference Include="..\Telemart.Client\Telemart.Client.csproj"/>
+    </ItemGroup>
+</Project>

@@ -1,0 +1,169 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Store.Order.PromoCodeConfirmationView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Order"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              mc:Ignorable="d"
+                              DataContext="{client:Container Type=viewModels:PromoCodeConfirmationViewModel}"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:PromoCodeConfirmationViewModel}}"
+                              d:DesignWidth="840"
+                              d:DesignHeight="470">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                    <dxg:GridColumnWidth x:Key="Width">91</dxg:GridColumnWidth>
+                    <system:Double x:Key="MinWidth">91</system:Double>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical">
+            <dxlc:LayoutGroup Name="Center"
+                              Orientation="Vertical">
+                <dxg:GridControl ItemsSource="{Binding Path=Items, Mode=OneWay}"
+                                 SelectionMode="None">
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Товар"
+                                        FieldName="ProductName">
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Исх. цена"
+                                        HeaderToolTip="Цена при добавлении в заказ"
+                                        HorizontalHeaderContentAlignment="Right"
+                                        FieldName="Price"
+                                        Width="{StaticResource Width}"
+                                        MinWidth="{StaticResource MinWidth}">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                  MaskType="Numeric"
+                                                  MaskUseAsDisplayFormat="True"
+                                                  Mask="{Binding Path=RowData.Row.CurrencyId, Mode=OneWay, Converter={StaticResource CurrencyIdToMaskConverter}}"
+                                                  MaskCulture="{Binding Path=RowData.Row.CurrencyId, Mode=OneWay, Converter={converters:CurrencyToMaskCultureConverter}}"
+                                                  MaskSaveLiteral="False"
+                                                  HorizontalContentAlignment="Right" />
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Текущая цена"
+                                        HeaderToolTip="Текущая цена в заказе"
+                                        HorizontalHeaderContentAlignment="Right"
+                                        FieldName="PriceCurrent"
+                                        Width="{StaticResource Width}"
+                                        MinWidth="{StaticResource MinWidth}">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                  MaskType="Numeric"
+                                                  MaskUseAsDisplayFormat="True"
+                                                  Mask="{Binding Path=RowData.Row.CurrencyCurrentId, Mode=OneWay, Converter={StaticResource CurrencyIdToMaskConverter}}"
+                                                  MaskCulture="{Binding Path=RowData.Row.CurrencyCurrentId, Mode=OneWay, Converter={converters:CurrencyToMaskCultureConverter}}"
+                                                  MaskSaveLiteral="False"
+                                                  HorizontalContentAlignment="Right" />
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Новая цена"
+                                        HeaderToolTip="Новая цена"
+                                        HorizontalHeaderContentAlignment="Right"
+                                        FieldName="PriceNew"
+                                        Width="{StaticResource Width}"
+                                        MinWidth="{StaticResource MinWidth}">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dxe:SpinEdit x:Name="PART_Editor"
+                                                  MaskType="Numeric"
+                                                  MaskUseAsDisplayFormat="True"
+                                                  Mask="{Binding Path=RowData.Row.CurrencyNewId, Mode=OneWay, Converter={StaticResource CurrencyIdToMaskConverter}}"
+                                                  MaskCulture="{Binding Path=RowData.Row.CurrencyNewId, Mode=OneWay, Converter={converters:CurrencyToMaskCultureConverter}}"
+                                                  MaskSaveLiteral="False"
+                                                  HorizontalContentAlignment="Right" />
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Текущие бонусы"
+                                        HeaderToolTip="Текущее количество бонусов в заказе"
+                                        HorizontalHeaderContentAlignment="Right"
+                                        FieldName="BonusesToChargeCurrent"
+                                        Width="{StaticResource Width}"
+                                        MinWidth="{StaticResource MinWidth}">
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Новые бонусы"
+                                        HeaderToolTip="Новое количество бонусов"
+                                        HorizontalHeaderContentAlignment="Right"
+                                        FieldName="BonusesToChargeNew"
+                                        Width="{StaticResource Width}"
+                                        MinWidth="{StaticResource MinWidth}">
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Промо-код"
+                                        FieldName="PromoCode"
+                                        FixedWidth="True"
+                                        Width="200">
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView AllowResizing="False"
+                                       Style="{StaticResource ReadOnlyTableViewStyle}">
+                            <dxg:TableView.FormatConditions>
+                                <dxg:FormatCondition FieldName="PriceNew"
+                                                     Expression="[PriceNew] &gt; [PriceCurrent]">
+                                    <dx:Format Icon="../../../Images/Arrows/up_red_16_16.png" />
+                                </dxg:FormatCondition>
+                                <dxg:FormatCondition FieldName="PriceNew"
+                                                     Expression="[PriceNew] &lt; [PriceCurrent]">
+                                    <dx:Format Icon="../../../Images/Arrows/down_green_16_16.png" />
+                                </dxg:FormatCondition>
+                                <dxg:FormatCondition FieldName="BonusesToChargeNew"
+                                                     Expression="[BonusesToChargeNew] &gt; [BonusesToChargeCurrent]">
+                                    <dx:Format Icon="../../../Images/Arrows/up_green_16_16.png" />
+                                </dxg:FormatCondition>
+                                <dxg:FormatCondition FieldName="BonusesToChargeNew"
+                                                     Expression="[BonusesToChargeNew] &lt; [BonusesToChargeCurrent]">
+                                    <dx:Format Icon="../../../Images/Arrows/down_red_16_16.png" />
+                                </dxg:FormatCondition>
+                                <dxg:FormatCondition FieldName="PriceNew"
+                                                     Expression="[IsGift] = True">
+                                    <dx:Format Icon="../../../Images/Order/gift_add.png" />
+                                </dxg:FormatCondition>
+                            </dxg:TableView.FormatConditions>
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Bottom">
+                <Button x:Name="OkButton"
+                        Content="OK"
+                        Command="{Binding Path=OkCommand, Mode=OneTime}">
+                </Button>
+                <Button Content="Отмена"
+                        Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>

@@ -47,11 +47,24 @@ class TempWorkspaceServiceTests(unittest.TestCase):
             Path(temp_repo.root_path).resolve().as_posix(),
             Path(context.workspace_repo_root).resolve().as_posix(),
         )
+        self.assertEqual(context.workspace_creation_mode, "copytree_ignore_dotgit")
+        self.assertEqual(context.workspace_git_identity_expected, "copied_files_only_non_git")
+        self.assertFalse(context.workspace_is_git_checkout)
+        self.assertEqual(temp_repo.workspace_creation_mode, "copytree_ignore_dotgit")
+        self.assertEqual(temp_repo.workspace_git_identity_expected, "copied_files_only_non_git")
+        self.assertFalse(temp_repo.workspace_is_git_checkout)
+        self.assertFalse((Path(context.workspace_repo_root) / ".git").exists())
 
         warnings = service.cleanup_workspace(context)
 
         self.assertFalse(Path(context.workspace_root_path).exists())
         self.assertFalse(warnings)
+
+    def test_workspace_dir_name_is_short_for_windows_path_budget(self) -> None:
+        name = TempWorkspaceService._workspace_dir_name("telemart_soft_test")
+
+        self.assertLessEqual(len(name), 19)
+        self.assertTrue(name.startswith("telemartso-"))
 
 
 if __name__ == "__main__":

@@ -721,6 +721,48 @@ class RunServiceTests(unittest.TestCase):
         self.assertEqual(detail.spec_result["title"], "Spec")
         self.assertEqual(detail.repo_context_summary["chunk_count"], 1)
 
+    def test_load_run_detail_prefers_persisted_analyze_task_summary_for_successful_spec_run(self) -> None:
+        service = RunService(
+            storage_dir=self.workspace_root / "artifacts" / "runs",
+            persist=True,
+        )
+        actor = ActorContext(
+            actor_id="ba-1",
+            actor_type="cli",
+            role="ba",
+            source_channel="cli",
+            display_name="Business Analyst",
+        )
+        run = service.start_run("Analyze task", repo_id="telemart_soft_test", actor_context=actor)
+        finished_run = service.finish_run(run.run_id, "success")
+        service.persist_run_detail(
+            run.run_id,
+            {
+                "mode": "spec",
+                "goal": "Analyze task",
+                "repo_id": "telemart_soft_test",
+                "run_outcome_type": "success",
+                "final_result_summary": "Historical Jira evidence points to telemart_soft_test; likely affected files include ServiceRequestReport.Designer.cs.",
+                "recommendation": "Start from the historically changed receipt files.",
+                "spec_result": {
+                    "workflow_debug": {
+                        "workflow_name": "analyze_task",
+                    }
+                },
+            },
+            log_path=run.log_path,
+        )
+
+        detail = service.load_run_detail(run.run_id, run_record=finished_run, log_path=run.log_path)
+
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail.run_outcome_type, "success")
+        self.assertEqual(
+            detail.final_result_summary,
+            "Historical Jira evidence points to telemart_soft_test; likely affected files include ServiceRequestReport.Designer.cs.",
+        )
+        self.assertEqual(detail.recommendation, "Start from the historically changed receipt files.")
+
     def test_persist_and_load_review_and_research_run_detail(self) -> None:
         service = RunService(
             storage_dir=self.workspace_root / "artifacts" / "runs",

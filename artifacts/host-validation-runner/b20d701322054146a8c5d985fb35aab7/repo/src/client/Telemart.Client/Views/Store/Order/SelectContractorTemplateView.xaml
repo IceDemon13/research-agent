@@ -1,0 +1,119 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Store.Order.SelectContractorTemplateView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Order"
+             xmlns:themes="http://schemas.devexpress.com/winfx/2008/xaml/editors/themekeys"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             DataContext="{client:Container Type=viewModels:SelectContractorTemplateViewModel}"
+             Width="520"
+             Height="480"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:SelectContractorTemplateViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Subdivision.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+        <dxlc:LayoutGroup Orientation="Vertical"
+                          VerticalAlignment="Stretch"
+                          HorizontalAlignment="Stretch">
+            <dxlc:LayoutItem Label="Контрагент">
+                <dxe:ComboBoxEdit x:Name="ContractorsComboBox"
+                                  ItemsSource="{Binding Contractors, Mode=OneWay}"
+                                  SelectedItem="{Binding TemplatesEditor.SelectedContractor, Mode=TwoWay, ValidatesOnDataErrors=True, NotifyOnValidationError=True, UpdateSourceTrigger=PropertyChanged}"
+                                  CausesValidation="True"
+                                  AllowNullInput="True"
+                                  NullValue="{x:Null}"
+                                  NullText="(выберите котрагента)"
+                                  ShowNullText="True"
+                                  DisplayMember="Name"
+                                  FilterCondition="Contains"
+                                  ImmediatePopup="True"
+                                  AllowDrop="False"
+                                  IncrementalFiltering="True"
+                                  ValidateOnTextInput="False"
+                                  IsTextEditable="True"
+                                  ApplyItemTemplateToSelectedItem="True">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:FocusBehavior EventName="Loaded" />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxe:ComboBoxEdit.EditTemplate>
+                        <ControlTemplate>
+                            <dxlc:LayoutGroup Padding="0 4 0 4"
+                                              ItemSpace="0"
+                                              Orientation="Horizontal">
+                                <dx:DXImage Source="{Binding Path=EditValue.Subdivision.Id, Mode=OneWay, Converter={StaticResource SubdivisionImageConverter}, ElementName=ContractorsComboBox}"
+                                            VerticalAlignment="Center"
+                                            Margin="4 0 0 0"
+                                            Width="16"
+                                            Height="16"
+                                            Visibility="{Binding Path=EditValue, Mode=OneWay, ElementName=ContractorsComboBox, Converter={converters:ObjectToVisibilityConverter}, ConverterParameter=True}" />
+                                <TextBox Name="PART_Editor"
+                                         Style="{DynamicResource {themes:TextEditThemeKey ResourceKey=TextStyle}}" />
+                            </dxlc:LayoutGroup>
+                        </ControlTemplate>
+                    </dxe:ComboBoxEdit.EditTemplate>
+                    <dxe:ComboBoxEdit.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <dx:DXImage Source="{Binding Path=Subdivision.Id, Mode=OneWay, Converter={StaticResource SubdivisionImageConverter}}"
+                                            VerticalAlignment="Center"
+                                            Margin="0 0 5 0"
+                                            Width="16"
+                                            Height="16" />
+                                <Label Content="{Binding Path=Name, Mode=OneWay}"
+                                       VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </dxe:ComboBoxEdit.ItemTemplate>
+                </dxe:ComboBoxEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem VerticalAlignment="Stretch">
+                <Border BorderThickness="1"
+                        BorderBrush="DarkGray">
+                    <common:ContractorTemplatesEditorView DataContext="{Binding Path=TemplatesEditor}" />
+                </Border>
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom">
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Left"
+                              ItemSpace="4">
+                <TextBlock Text="Шаблонов:" />
+                <TextBlock Text="{Binding Path=TemplatesEditor.ContractorTemplates.Count, Mode=OneWay, FallbackValue=0}"
+                           FontWeight="Bold" />
+                <TextBlock Text="шт." />
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Right">
+                <Button Content="{Binding Path=OkButtonTitle}"
+                        Command="{Binding Path=OkCommand, Mode=OneWay}"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=ValidationContainer, Converter={dx:NegationConverter}}" />
+                <Button Content="Отмена"
+                        Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

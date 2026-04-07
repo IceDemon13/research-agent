@@ -545,11 +545,27 @@ class WorkflowEvaluationService:
         case: dict[str, Any],
         primary_repo_id: str,
         execution_mode: str,
+        progress_callback: Any | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         assert self._web_app_module is not None
+        def _mark(request_name: str, marker: str, **extra: Any) -> None:
+            if callable(progress_callback):
+                progress_callback(request_name, marker, **extra)
+
         jira_key = _safe_text(case.get("jira_key", "")).upper()
+        _mark("jira_payload_for_case", "started")
         jira_payload = self._jira_payload_for_case(case)
+        _mark("jira_payload_for_case", "finished")
+        _mark("compose_resolved_jira_text", "started")
         resolved_text = _safe_text(self._web_app_module._compose_resolved_jira_text(jira_payload))
+        _mark(
+            "compose_resolved_jira_text",
+            "finished",
+            resolved_jira_text_length=len(resolved_text),
+        )
+        _mark("hash_workflow_input", "started")
+        final_workflow_input_hash = self._web_app_module._hash_workflow_input(resolved_text)
+        _mark("hash_workflow_input", "finished")
         input_debug = {
             "workflow_type": "implementation_plan",
             "request_input_text": jira_key,
@@ -559,9 +575,10 @@ class WorkflowEvaluationService:
             "resolved_jira_title": _safe_text(jira_payload.get("title", "")),
             "resolved_jira_text_length": len(resolved_text),
             "final_workflow_input": resolved_text,
-            "final_workflow_input_hash": self._web_app_module._hash_workflow_input(resolved_text),
+            "final_workflow_input_hash": final_workflow_input_hash,
         }
         started_at = self._now_provider().isoformat()
+        _mark("attach_workflow_input_debug_implementation", "started")
         implementation_run = RunRecord(
             run_id=f"workflow-eval-implementation-{jira_key.lower()}",
             goal=resolved_text or jira_key,
@@ -584,11 +601,15 @@ class WorkflowEvaluationService:
             input_debug,
             workflow_name="implementation_plan",
         )
+        _mark("attach_workflow_input_debug_implementation", "finished")
+        _mark("build_implementation_plan_result", "started")
         implementation_result = self._web_app_module._build_implementation_plan_result(
             implementation_run,
             implementation_detail,
             locale="en",
+            progress_callback=progress_callback,
         ).to_dict()
+        _mark("build_implementation_plan_result", "finished")
         pre_review_run = RunRecord(
             run_id=f"workflow-eval-pre-review-{jira_key.lower()}",
             goal=resolved_text or jira_key,
@@ -610,16 +631,20 @@ class WorkflowEvaluationService:
         )
         pre_review_input_debug = dict(input_debug)
         pre_review_input_debug["workflow_type"] = "pre_review"
+        _mark("attach_workflow_input_debug_pre_review", "started")
         self._web_app_module._attach_workflow_input_debug(
             pre_review_detail,
             pre_review_input_debug,
             workflow_name="pre_review",
         )
+        _mark("attach_workflow_input_debug_pre_review", "finished")
+        _mark("build_pre_review_result", "started")
         pre_review_result = self._web_app_module._build_pre_review_result(
             pre_review_run,
             pre_review_detail,
             locale="en",
         ).to_dict()
+        _mark("build_pre_review_result", "finished")
         return {"result": implementation_result}, {"result": pre_review_result}
 
     def _jira_payload_for_case(self, case: dict[str, Any]) -> dict[str, Any]:

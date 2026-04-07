@@ -1,0 +1,157 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Warehouse.Movement.MovementDelayView"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:store="clr-namespace:Telemart.Client.ViewModels.Warehouse.Movement"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors" xmlns:productInformation="clr-namespace:Telemart.Client.Views.Store.Order.ProductInformation"
+                              DataContext="{client:Container Type=store:MovementDelayViewModel}"
+                              mc:Ignorable="d"
+                              Width="1000"
+                              Height="550"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type store:MovementDelayViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <dxmvvm:ObjectToObjectConverter x:Key="AlternativeToImageConverter">
+                <dxmvvm:MapItem Source="1"
+                                Target="../../../Images/Common/bullet_green_16x16.png"/>
+                <dxmvvm:MapItem Source="2"
+                                Target="../../../Images/Common/bullet_yellow_16x16.png"/>
+                <dxmvvm:MapItem Source="3"
+                                Target="../../../Images/Common/bullet_red_16x16.png"/>
+            </dxmvvm:ObjectToObjectConverter>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}">
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxlc:LayoutGroup Orientation="Vertical">
+                    <dxlc:LayoutItem Label="Причина задержки">
+                        <dxe:ComboBoxEdit ItemsSource="{Binding Path=ExpireReasons, Mode=OneWay}"
+                                          DisplayMember="DisplayValue"
+                                          ValueMember="Id"
+                                          EditValue="{Binding Path=ExpireReasonId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"/>
+                    </dxlc:LayoutItem>
+                    <dxg:GridControl x:Name="GridControl"
+                                     ItemsSource="{Binding Path=Products, Mode=OneWay}"
+                                     CurrentItem="{Binding Path=SelectedProduct, Mode=TwoWay}"
+                                     SelectionMode="None"
+                                     ShowBorder="True"
+                                     ClipboardCopyMode="ExcludeHeader">
+                        <dxmvvm:Interaction.Behaviors>
+                            <behaviors:CopyCurrentCellToClipboardBehavior />
+                            <behaviors:LayoutSerializationBehavior FileName="movement_products_delay.xml"/>
+                        </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.ShowLoadingPanel>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter}">
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </dxg:GridControl.ShowLoadingPanel>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="Код товара"
+                                        HeaderToolTip="Код товара"
+                                        FieldName="ProductId"
+                                        FixedWidth="True" />
+                        <dxg:GridColumn Header="Товар"
+                                        HeaderToolTip="Товар"
+                                        FieldName="DisplayName"
+                                        FixedWidth="False" />
+                        <dxg:GridColumn Header="Зак"
+                                        HeaderToolTip="Кол-во в заказах"
+                                        AllowSorting="True"
+                                        FieldName="OrderQuantity"
+                                        Width="45"
+                                        MinWidth="45"
+                                        HorizontalHeaderContentAlignment="Center">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Center"/>
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Шт"
+                                        HeaderToolTip="Количество в перемещении"
+                                        FieldName="QuantityOut"
+                                        AllowSorting="True"
+                                        Width="45"
+                                        MinWidth="45"
+                                        HorizontalHeaderContentAlignment="Center">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="А"
+                                        HeaderToolTip="Альтернатива"
+                                        FieldName="AlternativeId"
+                                        FixedWidth="True"
+                                        Width="24"
+                                        HorizontalHeaderContentAlignment="Center">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Image Source="{Binding Path=RowData.Row.AlternativeId, Converter={StaticResource AlternativeToImageConverter}}"
+                                           Width="16"
+                                           Height="16"/>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn Header="Решение"
+                                        HeaderToolTip="Решение"
+                                        FieldName="RemoveSource"
+                                        AllowEditing="True">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dxe:ComboBoxEdit x:Name="PART_Editor"
+                                                      IsTextEditable="False">
+                                        <dxe:ComboBoxEdit.Items>
+                                            <dxe:CustomItem DisplayText="Оставить источник"
+                                                            EditValue="{StaticResource SaveSource}" />
+                                            <dxe:CustomItem DisplayText="Удалить источник"
+                                                            EditValue="{StaticResource DeleteSource}" />
+                                            <dxe:CustomItem DisplayText="Авто"
+                                                            EditValue="{StaticResource AutoSource}"/>
+                                        </dxe:ComboBoxEdit.Items>
+                                    </dxe:ComboBoxEdit>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView AllowResizing="False"
+                                       AllowSorting="True"
+                                       Style="{StaticResource ReadOnlyTableViewStyle}">
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+                </dxlc:LayoutGroup>
+                <productInformation:ProductInformation DataContext="{Binding Path=ProductInformation, Mode=OneWay}"
+                                                       Width="300"
+                                                       dxmvvm:ViewModelExtensions.ParentViewModel="{Binding Path=DataContext, ElementName=LayoutControl}" />
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup VerticalAlignment="Bottom"
+                              HorizontalAlignment="Right">
+                <Button Content="ОК"
+                        Command="{Binding Path=OkCommand, Mode=OneWay}"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}" />
+                <Button Content="Отмена"
+                        Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

@@ -1,0 +1,45 @@
+{
+  "run_id": "de2f9771e04747b19a2b5e16d11f174a",
+  "goal": "Analyze this Jira task content and return concrete missing details, task text:\nTitle: Service request: change of text and printed form “Receipt” p.2\nDescription:\nПотреба:\nВ друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст\n“Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\"\n\nhttps://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715\n\ntechnical risks, and direct follow-up questions. Avoid generic wording. If a repo is supplied, state whether the task matches that repo and why.",
+  "status": "success",
+  "started_at": "2026-04-07T00:48:08.212095+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "",
+  "actor_context": {
+    "actor_id": "codex",
+    "actor_type": "machine",
+    "role": "admin",
+    "source_channel": "automation",
+    "display_name": "codex",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-04-07T00:48:08.214104+00:00",
+  "steps": [
+    {
+      "name": "spec",
+      "status": "partial",
+      "started_at": "2026-04-07T00:48:08.213601+00:00",
+      "finished_at": "2026-04-07T00:48:08.214104+00:00",
+      "message": "Analyze-task routed directly to repo intelligence after Jira input resolution.",
+      "error": null
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/de2f9771e04747b19a2b5e16d11f174a.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}

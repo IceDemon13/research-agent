@@ -1,0 +1,512 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Reporting.ReportEditorView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:reporting="clr-namespace:Telemart.Client.ViewModels.Reporting"
+                              xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+                              xmlns:viewItems="clr-namespace:Telemart.Client.ViewModels.Reporting.ViewItems"
+                              DataContext="{client:Container Type=reporting:ReportEditorViewModel}"
+                              mc:Ignorable="d"
+                              d:DesignHeight="768"
+                              d:DesignWidth="1024"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type reporting:ReportEditorViewModel}}">
+
+    <controls:TelemartUserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CommonImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </controls:TelemartUserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutControl.IsEnabled>
+                <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                    <Binding Path="SaveCommand.IsExecuting" />
+                    <Binding Path="OkCommand.IsExecuting" />
+                </MultiBinding>
+            </dxlc:LayoutControl.IsEnabled>
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxlc:LayoutGroup x:Name="QueryLayoutGroup"
+                                  Orientation="Vertical"
+                                  View="GroupBox"
+                                  Header="Запрос"
+                                  Width="420"
+                                  MinWidth="100"
+                                  GroupBoxStyle="{StaticResource GroupBoxWithNoPaddingStyle}"
+                                  dxe:ValidationService.IsValidationContainer="True"
+                                  dxlc:LayoutControl.AllowHorizontalSizing="True">
+                    <dxlc:LayoutGroup.MaxWidth>
+                        <MultiBinding Converter="{converters:ResizableLayoutGroupMaxDimensionConverter OppositeMinDimensionValue=250}">
+                            <Binding Path="ActualWidth"
+                                     RelativeSource="{RelativeSource AncestorType=dxlc:LayoutControl}" />
+                            <Binding Path="ItemSpace"
+                                     RelativeSource="{RelativeSource AncestorType=dxlc:LayoutControl}" />
+                            <Binding Path="Padding"
+                                     RelativeSource="{RelativeSource AncestorType=dxlc:LayoutControl}" />
+                        </MultiBinding>
+                    </dxlc:LayoutGroup.MaxWidth>
+                    <dxe:TextEdit EditValue="{Binding Path=Model.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  TextWrapping="Wrap"
+                                  AcceptsReturn="True"
+                                  VerticalContentAlignment="Top"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto" />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup View="Tabs"
+                                  TabStyle="{StaticResource LayoutGroupTabStyle}"
+                                  TabsStyle="{StaticResource LayoutGroupTabsStyle}">
+                    <dxlc:LayoutGroup x:Name="InfoLayoutGroup"
+                                      Header="Инфо"
+                                      Orientation="Vertical"
+                                      Padding="8"
+                                      dxe:ValidationService.IsValidationContainer="True">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="/Images/Contractor/information.png" />
+                                    <TextBlock Text="{Binding}"
+                                               Foreground="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=InfoLayoutGroup, Converter={StaticResource BooleanToColorConverter}}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxlc:LayoutItem Label="Родитель">
+                            <dxe:ComboBoxEdit ItemsSource="{Binding Path=AllReports, Mode=OneWay}"
+                                              EditValue="{Binding Path=Model.ParentId, Mode=OneWay}"
+                                              DisplayMember="DisplayValue"
+                                              ValueMember="Id"
+                                              ShowEditorButtons="False"
+                                              Style="{StaticResource ReadOnlyEditorStyle}">
+                                <dxmvvm:Interaction.Behaviors>
+                                    <dxmvvm:FocusBehavior SourceObject="{Binding Path=HandleLoadedCommand}"
+                                                          PropertyName="IsExecuting" />
+                                </dxmvvm:Interaction.Behaviors>
+                            </dxe:ComboBoxEdit>
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem Label="Название">
+                            <dxe:TextEdit EditValue="{Binding Path=Model.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem Label="Описание">
+                            <dxe:TextEdit EditValue="{Binding Path=Model.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" />
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem Label="Лимит (сек)">
+                            <dxe:SpinEdit EditValue="{Binding Path=Model.TimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                          EditValueType="{x:Type system:Int32}"
+                                          IsFloatValue="False"
+                                          MinValue="1"
+                                          MaxValue="999"
+                                          AllowNullInput="True"
+                                          NullValueButtonPlacement="EditBox"
+                                          NullValue="{x:Null}"
+                                          NullText="(не задано)" />
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem Label="Пользователи">
+                            <dxe:ComboBoxEdit ItemsSource="{Binding Path=AllEmployees, Mode=OneWay}"
+                                              EditValue="{Binding Path=Model.Employees, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={converters:IntItemsConverter}}"
+                                              DisplayMember="DisplayValue"
+                                              ValueMember="Id"
+                                              Style="{StaticResource TokenComboBoxStyle}">
+                            </dxe:ComboBoxEdit>
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem Label="БД"
+                                         ToolTip="База данных">
+                            <dxe:ComboBoxEdit ItemsSource="{Binding Path=ReportDataBases, Mode=OneWay}"
+                                              DisplayMember="DisplayValue"
+                                              ValueMember="Id"
+                                              EditValue="{Binding Path=Model.DatabaseId, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"/>
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem Label="Роли"
+                                         LabelVerticalAlignment="Top"
+                                         VerticalAlignment="Stretch">
+                            <dxe:ListBoxEdit ItemsSource="{Binding Path=AllRoles, Mode=OneWay}"
+                                             EditValue="{Binding Path=Model.Roles, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={converters:StringItemsConverterConverter}}"
+                                             ShowCustomItems="True"
+                                             SelectionMode="Multiple">
+                                <dxe:ListBoxEdit.StyleSettings>
+                                    <dxe:CheckedListBoxEditStyleSettings />
+                                </dxe:ListBoxEdit.StyleSettings>
+                            </dxe:ListBoxEdit>
+                        </dxlc:LayoutItem>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="ParametersLayoutGroup"
+                                      Header="Параметры"
+                                      Orientation="Vertical"
+                                      ItemSpace="0">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="pack://application:,,,/Telemart.Client;component/Images/Common/filter_16x16.png"
+                                                Width="16"
+                                                Height="16" />
+                                    <TextBlock Text="{Binding}"
+                                               Foreground="{Binding Path=DataContext.ParametersHaveErrors, Mode=OneWay,ElementName=LayoutControl, Converter={StaticResource BooleanToColorConverter}}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                            <dxb:BarButtonItem Content="Удалить"
+                                               Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                               LargeGlyph="{dx:DXImage Image=Delete_32x32.png}"
+                                               Command="{Binding Path=RemoveParameterCommand, Mode=OneTime}"
+                                               CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=ParametersGridControl}" />
+                            <dxb:BarItemSeparator />
+                            <dxb:BarButtonItem Content="Переместить вверх"
+                                               ToolTip="Переместить вверх"
+                                               Glyph="{StaticResource ArrowUp16}"
+                                               Command="{Binding Path=MoveParameterUpCommand, Mode=OneTime}"
+                                               CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=ParametersGridControl}" />
+                            <dxb:BarButtonItem Content="Переместить вниз"
+                                               ToolTip="Переместить вниз"
+                                               Glyph="{StaticResource ArrowDown16}"
+                                               Command="{Binding Path=MoveParameterDownCommand, Mode=OneTime}"
+                                               CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=ParametersGridControl}" />
+                        </dxb:ToolBarControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxg:GridControl x:Name="ParametersGridControl"
+                                         ItemsSource="{Binding Path=Model.Parameters, Mode=OneWay}"
+                                         SelectionMode="None"
+                                         ShowBorder="False"
+                                         DesignTimeDataObjectType="{x:Type viewItems:ReportParameterViewItem}"
+                                         DesignTimeDataSourceRowCount="6">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                                <behaviors:LayoutSerializationBehavior FileName="report_parameters.xml" />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Name"
+                                                Header="Name"
+                                                FixedWidth="True"
+                                                Width="140">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:TextEditSettings />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="SqlName"
+                                                Header="SqlName"
+                                                FixedWidth="True"
+                                                Width="100">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:TextEditSettings />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="EditorType"
+                                                Header="Type"
+                                                FixedWidth="True"
+                                                Width="140">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=ParameterEditorTypes, Mode=OneWay}"
+                                                                  IsTextEditable="False" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DataSourceId"
+                                                Header="DataSource"
+                                                FixedWidth="False">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxg:LookUpEditSettings ItemsSource="{Binding Path=DataSources, Mode=OneWay}"
+                                                                ValueMember="Id"
+                                                                DisplayMember="Name"
+                                                                AutoPopulateColumns="False"
+                                                                AutoComplete="False"
+                                                                IncrementalFiltering="True"
+                                                                FilterCondition="Contains"
+                                                                FindMode="Always"
+                                                                ImmediatePopup="True"
+                                                                IsPopupAutoWidth="True"
+                                                                NullValueButtonPlacement="EditBox"
+                                                                NullValue="{x:Null}">
+                                            <dxg:LookUpEditSettings.StyleSettings>
+                                                <dxg:LookUpEditStyleSettings />
+                                            </dxg:LookUpEditSettings.StyleSettings>
+                                            <dxg:LookUpEditSettings.PopupContentTemplate>
+                                                <ControlTemplate>
+                                                    <dxg:GridControl x:Name="PART_GridControl">
+                                                        <dxg:GridControl.Columns>
+                                                            <dxg:GridColumn FieldName="Name"
+                                                                            FixedWidth="True"
+                                                                            Width="140" />
+                                                            <dxg:GridColumn FieldName="Description"
+                                                                            FixedWidth="False" />
+                                                            <dxg:GridColumn FieldName="IsSecured"
+                                                                            Header="S"
+                                                                            HeaderToolTip="IsSecured"
+                                                                            HorizontalHeaderContentAlignment="Center"
+                                                                            FixedWidth="True"
+                                                                            Width="24">
+                                                            </dxg:GridColumn>
+                                                        </dxg:GridControl.Columns>
+                                                        <dxg:GridControl.View>
+                                                            <dxg:TableView AutoWidth="True"
+                                                                           ShowIndicator="False" />
+                                                        </dxg:GridControl.View>
+                                                    </dxg:GridControl>
+                                                </ControlTemplate>
+                                            </dxg:LookUpEditSettings.PopupContentTemplate>
+                                        </dxg:LookUpEditSettings>
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView AllowEditing="True"
+                                               AllowSorting="False"
+                                               AllowBestFit="True"
+                                               NewItemRowPosition="Top"
+                                               EditFormShowMode="Inline"
+                                               EditFormPostConfirmation="YesNoCancel"
+                                               EditFormPostMode="Cached"
+                                               EditFormColumnCount="1"
+                                               EditFormCaptionBinding="{Binding Path=Row.Name, RelativeSource={RelativeSource Self}}"
+                                               ValidateRow="TableViewOnValidateRow"
+                                               InvalidRowException="TableViewOnInvalidRowException"
+                                               Style="{StaticResource ReadOnlyTableViewStyle}">
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="FieldsLayoutGroup"
+                                      Header="Колонки"
+                                      Orientation="Vertical"
+                                      ItemSpace="0">
+                        <dxlc:LayoutGroup.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="{dx:DXImage Image=Columns_16x16.png}"
+                                                Width="16"
+                                                Height="16" />
+                                    <TextBlock Text="{Binding}"
+                                               Foreground="{Binding Path=DataContext.FieldsHaveErrors, Mode=OneWay, ElementName=LayoutControl, Converter={StaticResource BooleanToColorConverter}}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </dxlc:LayoutGroup.HeaderTemplate>
+                        <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                            <dxb:BarButtonItem Content="Удалить"
+                                               Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                               LargeGlyph="{dx:DXImage Image=Delete_32x32.png}"
+                                               Command="{Binding Path=RemoveFieldCommand, Mode=OneTime}"
+                                               CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=FieldsGridControl}" />
+                            <dxb:BarItemSeparator />
+                            <dxb:BarButtonItem Content="Переместить вверх"
+                                               ToolTip="Переместить вверх"
+                                               Glyph="{StaticResource ArrowUp16}"
+                                               Command="{Binding Path=MoveFieldUpCommand, Mode=OneTime}"
+                                               CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=FieldsGridControl}" />
+                            <dxb:BarButtonItem Content="Переместить вниз"
+                                               ToolTip="Переместить вниз"
+                                               Glyph="{StaticResource ArrowDown16}"
+                                               Command="{Binding Path=MoveFieldDownCommand, Mode=OneTime}"
+                                               CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=FieldsGridControl}" />
+                        </dxb:ToolBarControl>
+                        <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                        <dxg:GridControl x:Name="FieldsGridControl"
+                                         ItemsSource="{Binding Path=Model.Fields, Mode=OneWay}"
+                                         SelectionMode="None"
+                                         ShowBorder="False"
+                                         DesignTimeDataObjectType="{x:Type viewItems:ReportFieldViewItem}"
+                                         DesignTimeDataSourceRowCount="6">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                                <behaviors:LayoutSerializationBehavior FileName="report_fields_1.xml" />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Bands>
+                                <dxg:GridControlBand Header="General">
+                                    <dxg:GridColumn FieldName="FieldName"
+                                                    Header="FieldName">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="UniqueName"
+                                                    Header="Название"
+                                                    ToolTip="Уникальное название колонки">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings/>
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="Caption"
+                                                    Header="Caption">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="Description"
+                                                    Header="Description">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings TextWrapping="Wrap"
+                                                                  AcceptsReturn="True" />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                </dxg:GridControlBand>
+                                <dxg:GridControlBand Header="Analysis">
+                                    <dxg:GridColumn x:Name="AreaColumn"
+                                                    FieldName="Area"
+                                                    Header="Area"
+                                                    FixedWidth="True"
+                                                    Width="60">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=FieldAreas, Mode=OneWay}"
+                                                                      AllowNullInput="False"
+                                                                      IsTextEditable="False" />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="CellFormat"
+                                                    Header="CellFormat"
+                                                    FixedWidth="True"
+                                                    Width="74">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="GroupInterval"
+                                                    Header="GroupInterval"
+                                                    FixedWidth="True"
+                                                    Width="90">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=FieldGroupIntervals, Mode=OneWay}"
+                                                                      AllowNullInput="True"
+                                                                      IsTextEditable="False"
+                                                                      NullValueButtonPlacement="EditBox" />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn x:Name="SummaryTypeColumn"
+                                                    FieldName="SummaryType"
+                                                    Header="SummaryType"
+                                                    FixedWidth="True"
+                                                    Width="94">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=FieldSummaryTypes, Mode=OneWay}"
+                                                                      AllowNullInput="False"
+                                                                      IsTextEditable="False" />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                </dxg:GridControlBand>
+                                <dxg:GridControlBand Header="Plain">
+                                    <dxg:GridColumn FieldName="DisplayFormat"
+                                                    Header="DisplayFormat"
+                                                    FixedWidth="True"
+                                                    Width="74">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="EntityType"
+                                                    Header="EntityType"
+                                                    FixedWidth="True"
+                                                    Width="120">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=FieldEntityTypes, Mode=OneWay}"
+                                                                      AllowNullInput="True"
+                                                                      IsTextEditable="False"
+                                                                      NullValueButtonPlacement="EditBox" />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn FieldName="FilterPopupMode"
+                                                    Header="FilterPopupMode"
+                                                    FixedWidth="True"
+                                                    Width="120">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=FilterPopupModes, Mode=OneWay}"
+                                                                      AllowNullInput="True"
+                                                                      IsTextEditable="False"
+                                                                      NullValueButtonPlacement="EditBox" />
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                </dxg:GridControlBand>
+                            </dxg:GridControl.Bands>
+                            <dxg:GridControl.View>
+                                <dxg:TableView AllowEditing="True"
+                                               AllowSorting="False"
+                                               AllowBestFit="True"
+                                               NewItemRowPosition="Top"
+                                               EditFormShowMode="Inline"
+                                               EditFormPostConfirmation="YesNoCancel"
+                                               EditFormPostMode="Immediate"
+                                               EnableImmediatePosting="True"
+                                               EditFormColumnCount="1"
+                                               AllowLeaveInvalidEditor="True"
+                                               AllowCommitOnValidationAttributeError="False"
+                                               EditFormCaptionBinding="{Binding Path=Row.Name, RelativeSource={RelativeSource Self}}"
+                                               InitNewRow="FieldsTableViewOnInitNewRow"
+                                               CellValueChanged="TableView_CellValueChanged"
+                                               ValidateRow="TableViewOnValidateRow"
+                                               ValidateCell="GridColumn_Validate"
+                                               InvalidRowException="TableViewOnInvalidRowException"
+                                               Style="{StaticResource ReadOnlyTableViewStyle}" />
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Bottom">
+                    <viewComponents:WaitImage HorizontalAlignment="Left"
+                                              VerticalAlignment="Center">
+                        <viewComponents:WaitImage.Visibility>
+                            <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                                <Binding Path="SaveCommand.IsExecuting" />
+                                <Binding Path="OkCommand.IsExecuting" />
+                            </MultiBinding>
+                        </viewComponents:WaitImage.Visibility>
+                    </viewComponents:WaitImage>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Top">
+                    <Button x:Name="OkButton"
+                            Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}">
+                        <Button.IsEnabled>
+                            <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                         ElementName="QueryLayoutGroup" />
+                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                         ElementName="InfoLayoutGroup" />
+                                <Binding Path="ParametersHaveErrors" />
+                                <Binding Path="FieldsHaveErrors" />
+                            </MultiBinding>
+                        </Button.IsEnabled>
+                    </Button>
+                    <Button Content="Сохранить"
+                            Width="90"
+                            Command="{Binding Path=SaveCommand, Mode=OneTime}"
+                            IsEnabled="{Binding Path=IsEnabled, Mode=OneWay, ElementName=OkButton}">
+                    </Button>
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>
+

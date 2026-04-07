@@ -1,0 +1,97 @@
+﻿<UserControl x:Name="CurrentUserControl"
+             x:Class="Telemart.Client.ViewComponents.Editors.DatePeriodEdit"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:business="clr-namespace:Telemart.Client.Business"
+             xmlns:editors="clr-namespace:Telemart.Client.ViewComponents.Editors"
+             mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <Style x:Key="DateEditStyle"
+                   TargetType="{x:Type dxe:DateEdit}">
+                <Setter Property="MaskType"
+                        Value="DateTime" />
+                <Setter Property="Mask"
+                        Value="{x:Static business:DateFormattingRules.DateFormat}" />
+                <Setter Property="MaskUseAsDisplayFormat"
+                        Value="True" />
+                <Setter Property="MinWidth"
+                        Value="74" />
+            </Style>
+            <x:Array x:Key="Periods"
+                     Type="{x:Type editors:DatePeriodEditValue}">
+                <x:Static Member="editors:DatePeriodEditValue.Empty" />
+                <x:Static Member="editors:DatePeriodEditValue.None" />
+                <x:Static Member="editors:DatePeriodEditValue.CurrentWeek" />
+                <x:Static Member="editors:DatePeriodEditValue.LastWeek" />
+                <x:Static Member="editors:DatePeriodEditValue.CurrentMonth" />
+                <x:Static Member="editors:DatePeriodEditValue.LastMonth" />
+                <x:Static Member="editors:DatePeriodEditValue.CurrentYear" />
+                <x:Static Member="editors:DatePeriodEditValue.LastYear" />
+            </x:Array>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid DataContext="{Binding Mode=OneWay, ElementName=CurrentUserControl}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <dxg:LookUpEdit Grid.Column="0"
+                        x:Name="PeriodComboBoxEdit"
+                        ItemsSource="{StaticResource Periods}"
+                        EditValue="{Binding Path=SelectedPeriod, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        DisplayMember="Name"
+                        AutoPopulateColumns="False"
+                        IsPopupAutoWidth="True"
+                        Width="46"
+                        Margin="0,0,8,0"
+                        EditValueChanged="PeriodOnEditValueChanged">
+            <dxg:LookUpEdit.StyleSettings>
+                <dxg:LookUpEditStyleSettings />
+            </dxg:LookUpEdit.StyleSettings>
+            <dxg:LookUpEdit.PopupContentTemplate>
+                <ControlTemplate>
+                    <dxg:GridControl x:Name="PART_GridControl">
+                        <dxg:GridControl.Columns>
+                            <dxg:GridColumn FieldName="Name"
+                                            FixedWidth="True"
+                                            Width="30">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn FieldName="Description" />
+                        </dxg:GridControl.Columns>
+                        <dxg:GridControl.View>
+                            <dxg:TableView AutoWidth="True"
+                                           ShowColumnHeaders="False"
+                                           ShowIndicator="False" />
+                        </dxg:GridControl.View>
+                    </dxg:GridControl>
+                </ControlTemplate>
+            </dxg:LookUpEdit.PopupContentTemplate>
+        </dxg:LookUpEdit>
+        <dxe:DateEdit Grid.Column="1"
+                      EditValue="{Binding Path=From, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      EditValueChanged="DateTimeOnEditValueChanged"
+                      Style="{StaticResource DateEditStyle}" />
+        <TextBlock Grid.Column="2"
+                   Text="-"
+                   Width="8"
+                   Margin="4,0,4,0"
+                   TextAlignment="Center" />
+        <dxe:DateEdit Grid.Column="3"
+                      EditValue="{Binding Path=Till, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      EditValueChanged="DateTimeOnEditValueChanged"
+                      Style="{StaticResource DateEditStyle}" />
+    </Grid>
+
+</UserControl>

@@ -2,8 +2,43 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
+import os
+from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parent
+_ENV_FILE_PATH = (_PROJECT_ROOT / ".env").resolve()
+
+
+def _resolve_project_path(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = (_PROJECT_ROOT / path).resolve()
+    else:
+        path = path.resolve()
+    return str(path)
+
+
+def _normalize_base_url(value: str) -> str:
+    return str(value or "").strip().rstrip("/")
+
+
+def _resolve_gitnexus_base_url(internal_base_url: str, external_base_url: str, *, gitnexus_port: int) -> str:
+    normalized_internal = _normalize_base_url(internal_base_url)
+    normalized_external = _normalize_base_url(external_base_url)
+    if not normalized_internal:
+        normalized_internal = f"http://gitnexus:{gitnexus_port}"
+    if os.name == "nt" and normalized_external:
+        hostname = str(urlsplit(normalized_internal).hostname or "").strip().lower()
+        if hostname == "gitnexus":
+            return normalized_external
+    return normalized_internal or normalized_external
 
 
 class _LoadedSettings(BaseSettings):
@@ -40,6 +75,7 @@ class _LoadedSettings(BaseSettings):
     validation_timeout_seconds: int = 120
     validation_runner_enabled: bool = False
     validation_runner_base_url: str = ""
+    validation_runner_windows_desktop_base_url: str = "http://host.docker.internal:8092"
     validation_runner_type: str = "http_dotnet_sdk"
     validation_runner_timeout_seconds: int = 180
     repo_clone_timeout_seconds: int = 300
@@ -61,6 +97,10 @@ class _LoadedSettings(BaseSettings):
     session_https_only: bool = False
     allow_dev_login: bool = False
     allow_header_actor_fallback: bool = False
+    allow_automation_actor: bool = False
+    automation_actor_token: str = ""
+    automation_allowed_roles: str = "workflow_runner"
+    automation_allowed_endpoints: str = "/workflows/analyze-task,/workflows/implementation-plan,/workflows/generate-draft-patch,/runs/"
     bootstrap_admin_username: str = ""
     bootstrap_admin_password: str = ""
     bootstrap_admin_display_name: str = "Bootstrap Admin"
@@ -147,7 +187,7 @@ class _LoadedSettings(BaseSettings):
     gitnexus_external_base_url: str = ""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE_PATH),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -216,6 +256,7 @@ class RuntimeSettings:
     validation_timeout_seconds: int
     validation_runner_enabled: bool
     validation_runner_base_url: str
+    validation_runner_windows_desktop_base_url: str
     validation_runner_type: str
     validation_runner_timeout_seconds: int
     repo_clone_timeout_seconds: int
@@ -237,6 +278,10 @@ class RuntimeSettings:
     session_https_only: bool
     allow_dev_login: bool
     allow_header_actor_fallback: bool
+    allow_automation_actor: bool
+    automation_actor_token: str
+    automation_allowed_roles: str
+    automation_allowed_endpoints: str
     bootstrap_admin_username: str
     bootstrap_admin_password: str
     bootstrap_admin_display_name: str
@@ -352,7 +397,7 @@ class Settings:
         return LoggingSettings(
             log_to_console=self._loaded.log_to_console,
             log_to_file=self._loaded.log_to_file,
-            log_dir=self._loaded.log_dir,
+            log_dir=_resolve_project_path(self._loaded.log_dir),
             log_file_name=self._loaded.log_file_name,
             log_level_console=self._loaded.log_level_console,
             log_level_file=self._loaded.log_level_file,
@@ -386,6 +431,7 @@ class Settings:
             validation_timeout_seconds=self._loaded.validation_timeout_seconds,
             validation_runner_enabled=self._loaded.validation_runner_enabled,
             validation_runner_base_url=self._loaded.validation_runner_base_url,
+            validation_runner_windows_desktop_base_url=self._loaded.validation_runner_windows_desktop_base_url,
             validation_runner_type=self._loaded.validation_runner_type,
             validation_runner_timeout_seconds=self._loaded.validation_runner_timeout_seconds,
             repo_clone_timeout_seconds=max(30, int(self._loaded.repo_clone_timeout_seconds or 300)),
@@ -407,6 +453,10 @@ class Settings:
             session_https_only=self._loaded.session_https_only,
             allow_dev_login=self._loaded.allow_dev_login,
             allow_header_actor_fallback=self._loaded.allow_header_actor_fallback,
+            allow_automation_actor=self._loaded.allow_automation_actor,
+            automation_actor_token=self._loaded.automation_actor_token,
+            automation_allowed_roles=self._loaded.automation_allowed_roles,
+            automation_allowed_endpoints=self._loaded.automation_allowed_endpoints,
             bootstrap_admin_username=self._loaded.bootstrap_admin_username,
             bootstrap_admin_password=self._loaded.bootstrap_admin_password,
             bootstrap_admin_display_name=self._loaded.bootstrap_admin_display_name,
@@ -418,11 +468,11 @@ class Settings:
             crucible_api_token=self._loaded.crucible_api_token,
             crucible_project_key=self._loaded.crucible_project_key,
             crucible_default_reviewers=self._loaded.crucible_default_reviewers,
-            crucible_review_registry_path=self._loaded.crucible_review_registry_path,
-            data_dir=self._loaded.DATA_DIR,
-            index_dir=self._loaded.INDEX_DIR,
-            repo_registry_path=self._loaded.REPO_REGISTRY_PATH,
-            repo_clone_root=self._loaded.REPO_CLONE_ROOT,
+            crucible_review_registry_path=_resolve_project_path(self._loaded.crucible_review_registry_path),
+            data_dir=_resolve_project_path(self._loaded.DATA_DIR),
+            index_dir=_resolve_project_path(self._loaded.INDEX_DIR),
+            repo_registry_path=_resolve_project_path(self._loaded.REPO_REGISTRY_PATH),
+            repo_clone_root=_resolve_project_path(self._loaded.REPO_CLONE_ROOT),
             chunk_size=self._loaded.CHUNK_SIZE,
             chunk_overlap=self._loaded.CHUNK_OVERLAP,
             top_k_semantic=self._loaded.TOP_K_SEMANTIC,
@@ -462,10 +512,14 @@ class Settings:
         if provider not in {"native", "gitnexus_http"}:
             provider = "native"
         gitnexus_port = max(1, int(self._loaded.gitnexus_port or 3010))
-        internal_base_url = str(self._loaded.gitnexus_internal_base_url or "").strip() or f"http://gitnexus:{gitnexus_port}"
         external_ui_url = (
             str(self._loaded.gitnexus_external_ui_url or "").strip()
             or str(self._loaded.gitnexus_external_base_url or "").strip()
+        )
+        internal_base_url = _resolve_gitnexus_base_url(
+            str(self._loaded.gitnexus_internal_base_url or "").strip(),
+            external_ui_url,
+            gitnexus_port=gitnexus_port,
         )
         return RepoIntelligenceSettings(
             provider=provider,

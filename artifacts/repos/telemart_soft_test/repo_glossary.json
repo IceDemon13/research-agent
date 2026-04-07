@@ -1,0 +1,1366 @@
+{
+  "repo_id": "telemart_soft_test",
+  "indexed_at": "2026-04-07T00:50:06.874370+00:00",
+  "terms": [
+    {
+      "term": "src",
+      "aliases": [
+        "srcs"
+      ],
+      "sources": [
+        "src/.cr/personal/FavoritesList/List.xml",
+        "src/.editorconfig",
+        "src/GlobalAssemblyInfo.cs",
+        "src/Telemart.Client.Cache/ICache.cs",
+        "src/Telemart.Client.Cache/ILiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Cache/LiteDbCache.cs",
+        "src/Telemart.Client.Cache/LiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Cache/Synchronization/Base/ISyncServiceBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "telemart",
+      "aliases": [
+        "telemarts"
+      ],
+      "sources": [
+        "README.md",
+        "build_scripts/TelemartClient.nuspec",
+        "build_scripts/TelemartClientStaging.nuspec",
+        "build_scripts/TelemartClientTest.nuspec",
+        "build_scripts/TelemartClientUat.nuspec",
+        "src/Telemart.Client.Cache/ICache.cs",
+        "src/Telemart.Client.Cache/ILiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Cache/LiteDbCache.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "client",
+      "aliases": [
+        "clients"
+      ],
+      "sources": [
+        "README.md",
+        "build_scripts/TelemartClient.nuspec",
+        "build_scripts/TelemartClientStaging.nuspec",
+        "build_scripts/TelemartClientTest.nuspec",
+        "build_scripts/TelemartClientUat.nuspec",
+        "src/Telemart.Client.Cache/ICache.cs",
+        "src/Telemart.Client.Cache/ILiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Cache/LiteDbCache.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "view",
+      "aliases": [
+        "views"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/ReportLayout/TransferObjects/ReportLayoutDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/ReportLayout/TransferObjects/ReportLayoutSaveDto.cs",
+        "src/client/Telemart.Client.Data/WebClient/IFilteringViewModel.cs",
+        "src/client/Telemart.Client.Dictionaries/Entity.cs",
+        "src/client/Telemart.Client.Dictionaries/ModuleHelpUrl.cs",
+        "src/client/Telemart.Client.Tests/LoginViewModelTests.cs",
+        "src/client/Telemart.Client.Tests/OrderPackCellViewModelTests.cs",
+        "src/client/Telemart.Client.Tests/OrderViewModelTests.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "dto",
+      "aliases": [
+        "dtos"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbCache.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "base",
+      "aliases": [
+        "bases"
+      ],
+      "sources": [
+        ".claude/skills/generated/base/SKILL.md",
+        "src/Telemart.Client.Cache/Synchronization/Base/ISyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "void",
+      "aliases": [
+        "voids"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/Telemart.Client.HtmlToPdf/HtmlToPdfHelper.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Core/AsyncHelper.cs",
+        "src/client/Telemart.Client.Core/Helpers/ProcessHelper.cs",
+        "src/client/Telemart.Client.Data/Authentication/AuthenticationManager.cs",
+        "src/client/Telemart.Client.Data/Diagnostics/NetworkDiagnoser.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "views",
+      "aliases": [
+        "view"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/Views/Accessory/AccessoriesView.xaml",
+        "src/client/Telemart.Client/Views/Accessory/AccessoriesView.xaml.cs",
+        "src/client/Telemart.Client/Views/Accessory/AccessoryCategoryFeatureView.xaml",
+        "src/client/Telemart.Client/Views/Accessory/AccessoryCategoryFeatureView.xaml.cs",
+        "src/client/Telemart.Client/Views/Accessory/AccessoryView.xaml",
+        "src/client/Telemart.Client/Views/Accessory/AccessoryView.xaml.cs",
+        "src/client/Telemart.Client/Views/AdditionalService/AdditionalServiceGroupView.xaml",
+        "src/client/Telemart.Client/Views/AdditionalService/AdditionalServiceGroupView.xaml.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "public",
+      "aliases": [
+        "publics"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbCache.cs",
+        "src/Telemart.Client.Cache/LiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Fonts/FontHelper.cs",
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/Telemart.Client.HtmlToPdf/HtmlToPdfHelper.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Core/AsyncHelper.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "string",
+      "aliases": [
+        "strings"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Cache/Synchronization/NpContractorsSyncService.cs",
+        "src/Telemart.Client.Fonts/FontHelper.cs",
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Core/Extensions/AssemblyExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/StringExtensions.cs",
+        "src/client/Telemart.Client.Core/Helpers/ProcessHelper.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "create",
+      "aliases": [
+        "creates"
+      ],
+      "sources": [
+        ".claude/skills/generated/create/SKILL.md",
+        "src/Telemart.Client.Cache/LiteDbConnectionFactory.cs",
+        "src/client/Telemart.Client.Core/Extensions/TypeExtensions.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/CreateEntityRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/CreateEntityResultRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/CreateAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/CreateAdditionalService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/CreateAdditionalServiceGroup.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "type",
+      "aliases": [
+        "types"
+      ],
+      "sources": [
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Core/Extensions/AssemblyExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/StringExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/TypeExtensions.cs",
+        "src/client/Telemart.Client.Data/CallTrackType.cs",
+        "src/client/Telemart.Client.Data/Exceptions/Args/ResourceNotFoundExceptionArgs.cs",
+        "src/client/Telemart.Client.Data/Exceptions/ResourceNotFoundException.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "int",
+      "aliases": [
+        "ints"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/WarehousesSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "requests",
+      "aliases": [
+        "request"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/ApiResources.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionWithBodyRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionWithBodyRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionWithBodyRequestBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "obj",
+      "aliases": [
+        "objs"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.B5430049.Up2Date",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.GeneratedMSBuildEditorConfig.editorconfig",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.GlobalUsings.g.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.csproj.CoreCompileInputs.cache",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.csproj.FileListAbsolute.txt"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "models",
+      "aliases": [
+        "model"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Dictionaries/Entity.cs",
+        "src/client/Telemart.Client.TransferObjects/EntityDto.cs",
+        "src/client/Telemart.Client/Extensions/ContainerExtensions/ContainerViewModelExtensions.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoriesViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoryCategoryFeatureParameter.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoryCategoryFeatureViewItem.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoryCategoryFeatureViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoryCategoryViewItem.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "features",
+      "aliases": [
+        "feature"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/Action/LockAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/Action/UnlockAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/CreateAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/QueryAccessories.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/QueryAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/UpdateAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AccountingSystem/SaveConversionRatesToAccountingSystem.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/LockAdditionalService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "control",
+      "aliases": [
+        "controls"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/ReturnInvoice/Actions/SwitchDocumentsControlReturnInvoice.cs",
+        "src/client/Telemart.Client.Tests/Control/CardNumberTextEditTests.cs",
+        "src/client/Telemart.Client.Tests/Control/IbanTextEditTests.cs",
+        "src/client/Telemart.Client.Tests/Control/InnTextEditTests.cs",
+        "src/client/Telemart.Client.TransferObjects/AdditionalServiceCreateDto.cs",
+        "src/client/Telemart.Client.TransferObjects/AdditionalServiceDto.cs",
+        "src/client/Telemart.Client.TransferObjects/AdditionalServiceProductDto.cs",
+        "src/client/Telemart.Client.TransferObjects/AdditionalServiceSaveDto.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "user",
+      "aliases": [
+        "users"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Authentication/AuthResponse.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Invoice/AssignInvoiceProductsToCurrentUser.cs",
+        "src/client/Telemart.Client.FiscalRegistrar/FiscalRegistrarClient.cs",
+        "src/client/Telemart.Client.TransferObjects/ActiveClientDto.cs",
+        "src/client/Telemart.Client/Common/Controls/TelemartUserControl.cs",
+        "src/client/Telemart.Client/Common/Messages/TelewikiParameter.cs",
+        "src/client/Telemart.Client/Common/Messages/UpdateUserNotificationsMessage.cs",
+        "src/client/Telemart.Client/Common/Messages/UserCancelLoginMessage.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "debug",
+      "aliases": [
+        "debugs"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.B5430049.Up2Date",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.GeneratedMSBuildEditorConfig.editorconfig",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.GlobalUsings.g.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.csproj.CoreCompileInputs.cache",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.csproj.FileListAbsolute.txt"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "net9",
+      "aliases": [
+        "net9s"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.B5430049.Up2Date",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.GeneratedMSBuildEditorConfig.editorconfig",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.GlobalUsings.g.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.csproj.CoreCompileInputs.cache",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.csproj.FileListAbsolute.txt"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "product",
+      "aliases": [
+        "products"
+      ],
+      "sources": [
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/ProductGrpc.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/da39a3ee5e6b4b0d_product.protodep",
+        "src/Telemart.Client.Protos/product.proto",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/CompleteAdditionalServiceProduct.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/DefectAdditionalServiceProduct.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/LockAdditionalServiceProduct.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/SetUnavailableDiscountProduct.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "initialize",
+      "aliases": [
+        "initializes"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.ReportDesigner/OrderWarrantyCardReport.Designer.cs",
+        "src/client/Telemart.Client.ReportDesigner/ServiceRequestPaidRepairReport.designer.cs",
+        "src/client/Telemart.Client.ReportDesigner/TradeInActReport.Designer.cs",
+        "src/client/Telemart.Client.Tests/OrderViewModelTests.cs",
+        "src/client/Telemart.Client/Reports/AdditionalServiceProduct/ActIncomeClientProductReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/AdditionalServiceProduct/ActOutcomeClientProductReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/AdditionalServiceProduct/AdditionalServiceProductMovementReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/Assembly/OrderSingleAssemblyReport.Designer.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "windows",
+      "aliases": [
+        "window"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Microsoft.Web.WebView2.Core.xml",
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Microsoft.Web.WebView2.WinForms.xml",
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Microsoft.Web.WebView2.Wpf.xml",
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Reports/ServiceRequest/ServiceRequestIssuanceCertificateReport.html",
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Reports/TradeIn/TradeInActReport.html",
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Reports/TradeIn/TradeInInnReport.html",
+        "src/client/Telemart.Client.Tests/bin/Debug/net9.0-windows/Telemart.Client.Tests.dll.config",
+        "src/client/Telemart.Client.Tests/obj/Debug/net9.0-windows/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "component",
+      "aliases": [
+        "components"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.ReportDesigner/OrderWarrantyCardReport.Designer.cs",
+        "src/client/Telemart.Client.ReportDesigner/ServiceRequestPaidRepairReport.designer.cs",
+        "src/client/Telemart.Client.ReportDesigner/TradeInActReport.Designer.cs",
+        "src/client/Telemart.Client/Common/CustomTypeDescriptors/PropertyGridRowPropertyDescriptor.cs",
+        "src/client/Telemart.Client/Reports/AdditionalServiceProduct/ActIncomeClientProductReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/AdditionalServiceProduct/ActOutcomeClientProductReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/AdditionalServiceProduct/AdditionalServiceProductMovementReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/Assembly/OrderSingleAssemblyReport.Designer.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "system",
+      "aliases": [
+        "systems"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Core/IO/FileDownloader.cs",
+        "src/client/Telemart.Client.Data/Exceptions/UnexpectedErrorException.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AccountingSystem/SaveConversionRatesToAccountingSystem.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Movement/Actions/FastSendMovement.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Movement/Actions/ReceiveMovement.cs",
+        "src/client/Telemart.Client.TransferObjects/AdditionalServiceProductDto.cs",
+        "src/client/Telemart.Client.TransferObjects/AssemblyService/AssemblyServiceDto.cs",
+        "src/client/Telemart.Client.TransferObjects/Call/CallDependencyDto.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "xaml",
+      "aliases": [
+        "xamls"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/App.xaml",
+        "src/client/Telemart.Client/App.xaml.cs",
+        "src/client/Telemart.Client/Style/AccordionItemTemplates.xaml",
+        "src/client/Telemart.Client/Style/AdditionalServiceProductState.xaml",
+        "src/client/Telemart.Client/Style/AssemblyServiceState.xaml",
+        "src/client/Telemart.Client/Style/BonusType.xaml",
+        "src/client/Telemart.Client/Style/CallDependencyType.xaml",
+        "src/client/Telemart.Client/Style/CallState.xaml"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "item",
+      "aliases": [
+        "items"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/QueryAdditionalServiceGroups.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/QueryAdditionalServices.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/QueryAdditionalServiceProducts.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssembledComputer/QueryAssembledComputers.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssembledComputerRule/QueryAssembledComputerRuleReserve.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssembledComputerRule/QueryFilteredAssembledComputerRules.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/QueryAssemblyServices.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/QueryAssemblyTestResults.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "transfer",
+      "aliases": [
+        "transfers"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/Backlog/Actions/TransferToItBacklogTask.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CatalogCategoryDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/CategoryDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/CheckCompatibilityResponse.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/ProductQuantityDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/ProductValidationRelationDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/ValidatedProductDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/ComplectationGeneratorOptionsDto.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "controls",
+      "aliases": [
+        "control"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/Common/Controls/CardNumberTextEdit.cs",
+        "src/client/Telemart.Client/Common/Controls/CircleBorder.cs",
+        "src/client/Telemart.Client/Common/Controls/IbanTextEdit.cs",
+        "src/client/Telemart.Client/Common/Controls/InnTextEdit.cs",
+        "src/client/Telemart.Client/Common/Controls/TelemartUserControl.cs",
+        "src/client/Telemart.Client/Controls/Accordion/AccordionItemTemplateSelector.cs",
+        "src/client/Telemart.Client/Controls/Accordion/CheckedListAccordionItem.cs",
+        "src/client/Telemart.Client/Controls/Accordion/IAccordionItem.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "markup",
+      "aliases": [
+        "markups"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.TransferObjects/CategoryFullDto.cs",
+        "src/client/Telemart.Client.TransferObjects/Prices/ProductPriceDto.cs",
+        "src/client/Telemart.Client.TransferObjects/ProductInfoContractorPriceDto.cs",
+        "src/client/Telemart.Client/Common/Converters/Base/MultiValueConverterBase.cs",
+        "src/client/Telemart.Client/Common/Converters/Base/ValueConverterBase.cs",
+        "src/client/Telemart.Client/Common/Converters/SpinEditErrorToolTipConverter.cs",
+        "src/client/Telemart.Client/ContainerExtension.cs",
+        "src/client/Telemart.Client/ViewModels/Directories/Category/CategoryOptionsViewModel.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "objects",
+      "aliases": [
+        "object"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CatalogCategoryDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/CategoryDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/CheckCompatibilityResponse.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/ProductQuantityDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/ProductValidationRelationDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/ValidatedProductDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/ComplectationGeneratorOptionsDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/ComplectationsGeneratorDto.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "connector",
+      "aliases": [
+        "connectors"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/ViewModels/LogisticsMap/LogisticsMapViewModel.cs",
+        "src/client/Telemart.Client/Views/LogisticsMap/LogisticsMapView.xaml.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/Editors/DatePeriodEdit.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/Threading/BusyIndicator.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/Threading/CircularProgressBar.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/WaitImage.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoriesView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoryCategoryFeatureView.g.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "icomponent",
+      "aliases": [
+        "icomponents"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/Editors/DatePeriodEdit.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/Threading/BusyIndicator.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/Threading/CircularProgressBar.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/ViewComponents/WaitImage.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoriesView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoryCategoryFeatureView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoryView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/AdditionalService/AdditionalServiceGroupView.g.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "entity",
+      "aliases": [
+        "entitys"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionWithBodyRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionWithBodyRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/CreateEntityRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/CreateEntityResultRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/DeleteEntityRequestBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "order",
+      "aliases": [
+        "orders"
+      ],
+      "sources": [
+        ".claude/skills/generated/order/SKILL.md",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/SetUnavailableDiscountProduct.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/UpdateAdditionalServiceProductDate.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/Actions/UpdateAssemblyServiceDate.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AutoSource/QueryOrderProductSourceEntities.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AutoSource/QueryOrderProductSourceSettings.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AutoSource/SaveOrderProductSourceSettings.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/BankPayment/Actions/PayBankPayment.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "common",
+      "aliases": [
+        "commons"
+      ],
+      "sources": [
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/Tools/Common.targets",
+        "src/client/Telemart.Client/Common/Asterisk/AsteriskConstants.cs",
+        "src/client/Telemart.Client/Common/Behaviors/AutoUpdateBehaviour.cs",
+        "src/client/Telemart.Client/Common/Behaviors/BehaviorBase.cs",
+        "src/client/Telemart.Client/Common/Behaviors/BrowserBehavior.cs",
+        "src/client/Telemart.Client/Common/Behaviors/CloseWindowBehavior.cs",
+        "src/client/Telemart.Client/Common/Behaviors/CopyCurrentCellToClipboardBehavior.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "internal",
+      "aliases": [
+        "internals"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/Common/Converters/Base/SelectedItemsConverter.cs",
+        "src/client/Telemart.Client/Common/Converters/BooleanAndMultiValueConverter.cs",
+        "src/client/Telemart.Client/Extensions/EmployeeExtensions.cs",
+        "src/client/Telemart.Client/ThirdParty/FlowDocuments/Helpers.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductDefectViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/AssemblyFullRule/AssemblyFullRuleViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/AssemblyTest/AssemblyTestViewModel.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "private",
+      "aliases": [
+        "privates"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbConnectionFactory.cs",
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/client/Telemart.Client.Core/Update/UpdateManager.cs",
+        "src/client/Telemart.Client.Data/Authentication/AuthenticationManager.cs",
+        "src/client/Telemart.Client.Data/Diagnostics/NetworkDiagnoser.cs",
+        "src/client/Telemart.Client.Data/Exceptions/GenericException.cs",
+        "src/client/Telemart.Client.Data/HubClient/Base/HubClientBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntitiesPagedRequestBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "delegate",
+      "aliases": [
+        "delegates"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/GeneratedInternalTypeHelper.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoriesView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/Accessory/AccessoryView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/AdditionalService/AdditionalServiceGroupView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/AdditionalService/AdditionalServiceView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/AdditionalService/AdditionalServicesView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/AdditionalService/SelectAdditionalServicesView.g.cs",
+        "src/client/Telemart.Client/obj/Debug/net9.0-windows/Views/AdditionalServiceProduct/AdditionalServiceProductView.g.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "store",
+      "aliases": [
+        "stores"
+      ],
+      "sources": [
+        ".claude/skills/generated/store/SKILL.md",
+        "src/client/Telemart.Client.Data/Stores/CallStore.cs",
+        "src/client/Telemart.Client.Data/Stores/ICallStore.cs",
+        "src/client/Telemart.Client/Business/Order/OrderReportBuilder.cs",
+        "src/client/Telemart.Client/Common/Navigation/NavigationMenuBuilder.cs",
+        "src/client/Telemart.Client/Common/ReportFactory/BarcodeReportFactory.cs",
+        "src/client/Telemart.Client/Common/Settings/Equipment/EquipmentSettingsStore.cs",
+        "src/client/Telemart.Client/Common/Settings/Equipment/IEquipmentSettingsStore.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "task",
+      "aliases": [
+        "tasks"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbCache.cs",
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "override",
+      "aliases": [
+        "overrides"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/NpContractorsSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "name",
+      "aliases": [
+        "names"
+      ],
+      "sources": [
+        "src/Telemart.Client.Fonts/FontHelper.cs",
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/client/Telemart.Client.Core/IO/FileDownloader.cs",
+        "src/client/Telemart.Client.Data/Exceptions/Args/ResourceNotFoundExceptionArgs.cs",
+        "src/client/Telemart.Client.Data/Exceptions/ResourceNotFoundException.cs",
+        "src/client/Telemart.Client.Data/HubClient/Base/HubClientBase.cs",
+        "src/client/Telemart.Client.Data/HubClient/Hubs/CallHub.cs",
+        "src/client/Telemart.Client.Data/HubClient/Hubs/NotificationHub.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "async",
+      "aliases": [
+        "asyncs"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/LiteDbCache.cs",
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "object",
+      "aliases": [
+        "objects"
+      ],
+      "sources": [
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Core/Cloning/ReflectionObjectCloner.cs",
+        "src/client/Telemart.Client.Core/Cloning/SerializeObjectCloner.cs",
+        "src/client/Telemart.Client.Core/Extensions/TypeExtensions.cs",
+        "src/client/Telemart.Client.Data/Diagnostics/NetworkDiagnoser.cs",
+        "src/client/Telemart.Client.Data/Exceptions/Args/ResourceNotFoundExceptionArgs.cs",
+        "src/client/Telemart.Client.Data/Exceptions/GenericException.cs",
+        "src/client/Telemart.Client.Data/Exceptions/ResourceNotFoundException.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "bool",
+      "aliases": [
+        "bools"
+      ],
+      "sources": [
+        "src/Telemart.Client.Fonts/FontHelper.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Core/Extensions/CharExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/DateTimeExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/StringExtensions.cs",
+        "src/client/Telemart.Client.Core/IO/FileDownloader.cs",
+        "src/client/Telemart.Client.Data/Authentication/AuthenticationManager.cs",
+        "src/client/Telemart.Client.Data/ErrorHandling/ErrorExtensions.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "protected",
+      "aliases": [
+        "protecteds"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "static",
+      "aliases": [
+        "statics"
+      ],
+      "sources": [
+        "src/Telemart.Client.Fonts/FontHelper.cs",
+        "src/Telemart.Client.Fonts/FontInstaller.cs",
+        "src/Telemart.Client.HtmlToPdf/HtmlToPdfHelper.cs",
+        "src/client/Telemart.Client.Core/AsyncHelper.cs",
+        "src/client/Telemart.Client.Core/Extensions/AssemblyExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/CharExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/DateTimeExtensions.cs",
+        "src/client/Telemart.Client.Core/Extensions/RandomExtensions.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "x86",
+      "aliases": [
+        "x86s"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs",
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/Telemart.5DD5CE3C.Up2Date",
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/Telemart.Client.PosTerminal.Ingenico.AssemblyInfo.cs",
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/Telemart.Client.PosTerminal.Ingenico.AssemblyInfoInputs.cache",
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/Telemart.Client.PosTerminal.Ingenico.GeneratedMSBuildEditorConfig.editorconfig",
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/Telemart.Client.PosTerminal.Ingenico.csproj.CoreCompileInputs.cache",
+        "src/client/Telemart.Client.PosTerminal.Ingenico/obj/x86/Debug/net9.0/Telemart.Client.PosTerminal.Ingenico.csproj.FileListAbsolute.txt",
+        "src/client/Telemart.Client/appsettings.Development.x86.json"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "get",
+      "aliases": [
+        "gets"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "loaded",
+      "aliases": [
+        "loadeds"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Tests/OrderPackCellViewModelTests.cs",
+        "src/client/Telemart.Client/Common/Behaviors/BehaviorBase.cs",
+        "src/client/Telemart.Client/Common/Controls/TelemartUserControl.cs",
+        "src/client/Telemart.Client/Common/MvvmEnhancements/WizardDialogViewModel.cs",
+        "src/client/Telemart.Client/ThirdParty/FlowDocuments/BlockTemplateContent.cs",
+        "src/client/Telemart.Client/ThirdParty/FlowDocuments/ItemsContent.cs",
+        "src/client/Telemart.Client/ViewComponents/Threading/CircularProgressBar.xaml.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoriesViewModel.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "call",
+      "aliases": [
+        "calls"
+      ],
+      "sources": [
+        ".claude/skills/generated/call/SKILL.md",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/ProductGrpc.cs",
+        "src/client/Telemart.Client.Data/CallTrackType.cs",
+        "src/client/Telemart.Client.Data/HubClient/Base/HubClientBase.cs",
+        "src/client/Telemart.Client.Data/HubClient/Hubs/CallHub.cs",
+        "src/client/Telemart.Client.Data/Options/CallServiceOptions.cs",
+        "src/client/Telemart.Client.Data/Options/CallTrackOptions.cs",
+        "src/client/Telemart.Client.Data/Options/NovaPayOptions.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "warehouse",
+      "aliases": [
+        "warehouses"
+      ],
+      "sources": [
+        ".claude/skills/generated/warehouse/SKILL.md",
+        "src/Telemart.Client.Cache/Synchronization/WarehousesSyncService.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/UpdateAdditionalServiceProductWarehouse.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByFilter.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductPrices.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/ComplectationGeneratorOptionsDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Contractor/Carry/SetAsMainContractorCarry.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "handle",
+      "aliases": [
+        "handles"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/ResponseHandler.cs",
+        "src/client/Telemart.Client.Tests/OrderPackCellViewModelTests.cs",
+        "src/client/Telemart.Client/Common/Controls/TelemartUserControl.cs",
+        "src/client/Telemart.Client/Common/MvvmEnhancements/WizardDialogViewModel.cs",
+        "src/client/Telemart.Client/Common/PhoneCopingToClipboardHelper.cs",
+        "src/client/Telemart.Client/Mediator/RequestsHandlers/CallNotificationHandler.cs",
+        "src/client/Telemart.Client/Mediator/RequestsHandlers/PrintA4PdfHandler.cs",
+        "src/client/Telemart.Client/Mediator/RequestsHandlers/PrintAdditionalServiceBarcodeReportHandler.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "query",
+      "aliases": [
+        "querys"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntitiesPagedRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntitiesRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntityRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/ChunkedRequest.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/QueryAccessories.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/QueryAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/QueryAdditionalService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "invoice",
+      "aliases": [
+        "invoices"
+      ],
+      "sources": [
+        ".claude/skills/generated/invoice/SKILL.md",
+        "src/client/Telemart.Client.Data/Requests/Features/Contractor/Actions/UpdateContractorInvoiceBulkAddProductColumns.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Contractor/QueryInvoiceTemplates.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Invoice/Actions/AnalyzeInvoice.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Invoice/Actions/ArriveInvoice.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Invoice/Actions/CancelInvoice.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Invoice/Actions/CloseInvoice.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Invoice/Actions/DelayInvoice.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "category",
+      "aliases": [
+        "categorys"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Backlog/QueryBacklogCategories.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Bitrix/CreateBitrixTask.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Bitrix/QueryBitrixCategories.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Bitrix/UpdateBitrixTask.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryCategoryFilters.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryPriceList.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByFilter.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "products",
+      "aliases": [
+        "product"
+      ],
+      "sources": [
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/QueryAdditionalServiceProducts.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/UpdateAssemblyService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssemblyServiceProduct/QueryAssemblyServiceProducts.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/CheckProductCompatibility.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByFilter.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByNames.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByPattern.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "action",
+      "aliases": [
+        "actions"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/HubClient/Base/HubClientBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionWithBodyRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionWithBodyRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionWithBodyRequestBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "parameter",
+      "aliases": [
+        "parameters"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Core/Extensions/TypeExtensions.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Report/ExecuteReport.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportParameterDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportParameterValueDto.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportProcessedParameterDto.cs",
+        "src/client/Telemart.Client.PosTerminal.PrivatBank/Requests/RequestBase.cs",
+        "src/client/Telemart.Client.PosTerminal.PrivatBank/Responses/ResponseBase.cs",
+        "src/client/Telemart.Client/Business/Audit/Property/JsonDictionaryAuditEntryPropertyProcessor.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "event",
+      "aliases": [
+        "events"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/Event/CreateEvent.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Event/EventFilteringItem.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Event/QueryEvents.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Order/QueryUnpackOrderEventInfo.cs",
+        "src/client/Telemart.Client.Dictionaries/EventConstants.cs",
+        "src/client/Telemart.Client.Dictionaries/EventType.cs",
+        "src/client/Telemart.Client.TransferObjects/EventCreateDto.cs",
+        "src/client/Telemart.Client.TransferObjects/EventDto.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "report",
+      "aliases": [
+        "reports"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Options/ReportServiceOptions.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Movement/QueryMovementReportData.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/PrintReport/QueryActAdditionalServiceProductReportData.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/PrintReport/QueryAssemblySheetReport.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/PrintReport/QueryOrderAssemblyReport.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/PrintReport/QueryOrderAssemblyReportSimple.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/PrintReport/QueryReturnInvoiceSerialsPrintReport.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Report/CreateReport.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "args",
+      "aliases": [
+        "argss"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Core/Extensions/AssemblyExtensions.cs",
+        "src/client/Telemart.Client.Data/Exceptions/Args/ResourceNotFoundExceptionArgs.cs",
+        "src/client/Telemart.Client.Data/Exceptions/Args/UnexpectedSatusExceptionArgs.cs",
+        "src/client/Telemart.Client.Data/Exceptions/ExceptionArgs.cs",
+        "src/client/Telemart.Client.Data/Exceptions/GenericException.cs",
+        "src/client/Telemart.Client.Data/Exceptions/ResourceNotFoundException.cs",
+        "src/client/Telemart.Client.Data/Exceptions/UnexpectedErrorException.cs",
+        "src/client/Telemart.Client.Data/Exceptions/UnexpectedSatusException.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "message",
+      "aliases": [
+        "messages"
+      ],
+      "sources": [
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/ProductGrpc.cs",
+        "src/client/Telemart.Client.Core/Update/CheckUpdateException.cs",
+        "src/client/Telemart.Client.Data/Authentication/AuthResponse.cs",
+        "src/client/Telemart.Client.Data/Authentication/AuthenticationHttpClientMessageHandler.cs",
+        "src/client/Telemart.Client.Data/ErrorHandling/ErrorExtensions.cs",
+        "src/client/Telemart.Client.Data/Exceptions/GenericException.cs",
+        "src/client/Telemart.Client.Data/Exceptions/UnexpectedErrorException.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "build",
+      "aliases": [
+        "builds"
+      ],
+      "sources": [
+        "build_scripts/TelemartClient.nuspec",
+        "build_scripts/TelemartClientStaging.nuspec",
+        "build_scripts/TelemartClientTest.nuspec",
+        "build_scripts/TelemartClientUat.nuspec",
+        "src/build.cmd",
+        "src/client/Telemart.Client.Data/HubClient/Base/HubClientBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntitiesPagedRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/RestClientGatewayRequestBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "builder",
+      "aliases": [
+        "builders"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Core/Serialization/ISerializerBuilder.cs",
+        "src/client/Telemart.Client.Core/Serialization/Json/JsonSerializerBuilder.cs",
+        "src/client/Telemart.Client.Tests/NavigationMenuBuilderTests.cs",
+        "src/client/Telemart.Client.Tests/obj/Debug/net9.0-windows/AutoRegisteredExtensions.cs",
+        "src/client/Telemart.Client/Business/Audit/ExternalPaymentAuditEntryProcessorBuilder.cs",
+        "src/client/Telemart.Client/Business/Audit/IAuditEntryProcessorBuilder.cs",
+        "src/client/Telemart.Client/Business/Audit/OrderAuditEntryProcessorBuilder.cs",
+        "src/client/Telemart.Client/Business/Audit/OrderProductAuditEntryProcessorBuilder.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "assembly",
+      "aliases": [
+        "assemblys"
+      ],
+      "sources": [
+        "src/GlobalAssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.Fonts/obj/Debug/netstandard2.0/.NETStandard,Version=v2.0.AssemblyAttributes.cs",
+        "src/Telemart.Client.Fonts/obj/Debug/netstandard2.0/Telemart.Client.Fonts.AssemblyInfo.cs",
+        "src/Telemart.Client.Fonts/obj/Debug/netstandard2.0/Telemart.Client.Fonts.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.HtmlToPdf/obj/Debug/netstandard2.0/.NETStandard,Version=v2.0.AssemblyAttributes.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "info",
+      "aliases": [
+        "infos"
+      ],
+      "sources": [
+        "src/GlobalAssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfo.cs",
+        "src/Telemart.Client.Cache/obj/Debug/net9.0/Telemart.Client.Cache.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.Fonts/obj/Debug/netstandard2.0/Telemart.Client.Fonts.AssemblyInfo.cs",
+        "src/Telemart.Client.Fonts/obj/Debug/netstandard2.0/Telemart.Client.Fonts.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.HtmlToPdf/obj/Debug/netstandard2.0/Telemart.Client.HtmlToPdf.AssemblyInfo.cs",
+        "src/Telemart.Client.HtmlToPdf/obj/Debug/netstandard2.0/Telemart.Client.HtmlToPdf.AssemblyInfoInputs.cache",
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Telemart.Client.Protos.AssemblyInfo.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "edit",
+      "aliases": [
+        "edits"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/CanEditOrderAdditionalService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/CanEditOrderAssembly.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/PackList/EditPackList.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/TradeIn/UpdateTradeIn.cs",
+        "src/client/Telemart.Client.FiscalRegistrar/FiscalRegistrarClient.cs",
+        "src/client/Telemart.Client.FiscalRegistrar/Requests/EditPaymentTableRequest.cs",
+        "src/client/Telemart.Client.FiscalRegistrar/Responses/EditTableResponse.cs",
+        "src/client/Telemart.Client.Tests/Control/CardNumberTextEditTests.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "metadata",
+      "aliases": [
+        "metadatas"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.TransferObjects/Content/FeaturesMetadataDto.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoryViewItem.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceGroupSimpleViewItem.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceViewItem.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductClientProductViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductsFilterViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/Area/AreaViewItem.cs",
+        "src/client/Telemart.Client/ViewModels/AssembledComputerRule/AssembledComputerRuleCreateCategoryViewModel.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "dialog",
+      "aliases": [
+        "dialogs"
+      ],
+      "sources": [
+        "src/client/Telemart.Client/Common/Controls/TelemartUserControl.cs",
+        "src/client/Telemart.Client/Common/Converters/CallDialogParameterMultiValueConverter.cs",
+        "src/client/Telemart.Client/Common/DocumentCommands.cs",
+        "src/client/Telemart.Client/Common/ErrorHandler/ResultErrorHandler.cs",
+        "src/client/Telemart.Client/Common/MvvmEnhancements/WizardDialogViewModel.cs",
+        "src/client/Telemart.Client/Factories/Complaint/ComplaintCreatorBase.cs",
+        "src/client/Telemart.Client/ViewModels/Accessory/AccessoryCategoryFeatureViewModel.cs",
+        "src/client/Telemart.Client/ViewModels/AdditionalService/SelectAdditionalServicesViewModel.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "save",
+      "aliases": [
+        "saves"
+      ],
+      "sources": [
+        "src/Telemart.Client.Protos/obj/Debug/net9.0/Product.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/CreateAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/UpdateAccessory.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AccountingSystem/SaveConversionRatesToAccountingSystem.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/UpdateAdditionalService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/UpdateAdditionalServiceProduct.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssembledComputerRule/UpdateAssembledComputerRule.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AssemblyFullRule/CreateAssemblyFullRule.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "actions",
+      "aliases": [
+        "action"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/LockAdditionalService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/LockAdditionalServiceGroup.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/MoveAdditionalService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/MoveAdditionalServiceGroup.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/ReorderAdditionalServiceGroups.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/ReorderAdditionalServices.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/ReorderAdditionalServicesPriority.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/UnlockAdditionalService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "collection",
+      "aliases": [
+        "collections"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "update",
+      "aliases": [
+        "updates"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Core/Update/CheckUpdateException.cs",
+        "src/client/Telemart.Client.Core/Update/IUpdateManager.cs",
+        "src/client/Telemart.Client.Core/Update/ReleaseToApply.cs",
+        "src/client/Telemart.Client.Core/Update/UpdateManager.cs",
+        "src/client/Telemart.Client.Core/Update/UpdateManagerOptions.cs",
+        "src/client/Telemart.Client.Core/Update/WinCheckForUpdateResult.cs",
+        "src/client/Telemart.Client.Data/Options/EmployeeOptions.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/UpdateCommentBase.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "contractor",
+      "aliases": [
+        "contractors"
+      ],
+      "sources": [
+        ".claude/skills/generated/contractor/SKILL.md",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/NpContractorsSyncService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryCategoryFilters.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryPriceList.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByFilter.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Catalog/QueryProductByNames.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Contractor/Actions/CreateContractorInBuh1C.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "entities",
+      "aliases": [
+        "entitie"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntitiesPagedRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/QueryEntitiesRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/ChunkedRequest.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/Accessory/QueryAccessories.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/QueryAdditionalServiceGroups.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/QueryAdditionalServices.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/QueryAdditionalServiceProducts.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "only",
+      "aliases": [
+        "onlys"
+      ],
+      "sources": [
+        "src/Telemart.Client.Cache/Synchronization/Base/SyncServiceBase.cs",
+        "src/Telemart.Client.Cache/Synchronization/CashboxesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CategoriesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/CitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ContractorsSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/EmployeesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/LegalEntitiesSyncService.cs",
+        "src/Telemart.Client.Cache/Synchronization/ModuleAnalyticUrlSyncService.cs"
+      ],
+      "confidence": 1.0
+    },
+    {
+      "term": "with",
+      "aliases": [
+        "withs"
+      ],
+      "sources": [
+        "src/client/Telemart.Client.Core/Extensions/StringExtensions.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionWithBodyRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallActionWithBodyRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionWithBodyRequestBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Base/Action/CallEntityActionWithBodyRequestResultBase.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AccountingSystem/SaveConversionRatesToAccountingSystem.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/MoveAdditionalService.cs",
+        "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/MoveAdditionalServiceGroup.cs"
+      ],
+      "confidence": 1.0
+    }
+  ]
+}

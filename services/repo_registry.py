@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -88,6 +89,21 @@ def _detect_status(root_path: Path, indexed_at: str) -> str:
     return DEFAULT_REPO_STATUS
 
 
+def _load_registry_payload_from_text(raw_text: str) -> dict | None:
+    text = str(raw_text or "")
+    if not text.strip():
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            decoder = json.JSONDecoder()
+            payload, _ = decoder.raw_decode(text)
+        except json.JSONDecodeError:
+            return None
+    return payload if isinstance(payload, dict) else None
+
+
 class RepositoryRegistryService:
     def __init__(
         self,
@@ -114,6 +130,9 @@ class RepositoryRegistryService:
         display_name: str = "",
         default_branch: str = "",
         remote_url: str = "",
+        workspace_creation_mode: str = "",
+        workspace_git_identity_expected: str = "",
+        workspace_is_git_checkout: bool = True,
     ) -> RepoMetadata:
         resolved_root_path = Path(local_path or root_path).expanduser().resolve()
         if not resolved_root_path.exists():
@@ -150,6 +169,9 @@ class RepositoryRegistryService:
                 capability_tags=list(existing_deleted.capability_tags),
                 credential_alias=existing_deleted.credential_alias,
                 auth_mode=existing_deleted.auth_mode,
+                workspace_creation_mode=workspace_creation_mode,
+                workspace_git_identity_expected=workspace_git_identity_expected,
+                workspace_is_git_checkout=workspace_is_git_checkout,
             )
             updated_repos = [
                 metadata if repo.repo_id == final_repo_id else repo
@@ -167,6 +189,9 @@ class RepositoryRegistryService:
             display_name=display_name,
             default_branch=default_branch,
             remote_url=remote_url,
+            workspace_creation_mode=workspace_creation_mode,
+            workspace_git_identity_expected=workspace_git_identity_expected,
+            workspace_is_git_checkout=workspace_is_git_checkout,
         )
         self._save_state(
             RepoRegistryState(
@@ -251,6 +276,9 @@ class RepositoryRegistryService:
             head_resolved=bool(current.head_resolved),
             recovered_by_reclone=bool(current.recovered_by_reclone),
             onboarding_last_error=current.onboarding_last_error,
+            workspace_creation_mode=current.workspace_creation_mode,
+            workspace_git_identity_expected=current.workspace_git_identity_expected,
+            workspace_is_git_checkout=bool(current.workspace_is_git_checkout),
         )
         updated_repos = [
             refreshed if repo.repo_id == refreshed.repo_id else repo
@@ -340,6 +368,9 @@ class RepositoryRegistryService:
         head_resolved: bool = False,
         recovered_by_reclone: bool = False,
         onboarding_last_error: str = "",
+        workspace_creation_mode: str = "",
+        workspace_git_identity_expected: str = "",
+        workspace_is_git_checkout: bool = True,
     ) -> RepoMetadata:
         resolved_root_path = root_path.expanduser().resolve()
         detected_default_branch = _detect_default_branch(resolved_root_path) or (default_branch or "").strip()
@@ -390,6 +421,9 @@ class RepositoryRegistryService:
             head_resolved=bool(head_resolved),
             recovered_by_reclone=bool(recovered_by_reclone),
             onboarding_last_error=str(onboarding_last_error or "").strip(),
+            workspace_creation_mode=str(workspace_creation_mode or "").strip(),
+            workspace_git_identity_expected=str(workspace_git_identity_expected or "").strip(),
+            workspace_is_git_checkout=bool(workspace_is_git_checkout),
         )
 
     def _load_state(self) -> RepoRegistryState:
@@ -397,18 +431,27 @@ class RepositoryRegistryService:
             return RepoRegistryState(version=REGISTRY_VERSION, repos=[])
 
         try:
-            payload = json.loads(self._storage_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            raw_text = self._storage_path.read_text(encoding="utf-8")
+        except OSError:
+            return RepoRegistryState(version=REGISTRY_VERSION, repos=[])
+        payload = _load_registry_payload_from_text(raw_text)
+        if payload is None:
             return RepoRegistryState(version=REGISTRY_VERSION, repos=[])
 
         return RepoRegistryState.from_dict(payload)
 
     def _save_state(self, state: RepoRegistryState) -> None:
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        self._storage_path.write_text(
-            json.dumps(state.to_dict(), ensure_ascii=False, indent=2),
+        serialized = json.dumps(state.to_dict(), ensure_ascii=False, indent=2)
+        with tempfile.NamedTemporaryFile(
+            "w",
             encoding="utf-8",
-        )
+            dir=str(self._storage_path.parent),
+            delete=False,
+        ) as handle:
+            handle.write(serialized)
+            temp_path = Path(handle.name)
+        temp_path.replace(self._storage_path)
 
     def _sync_repo_to_db(self, metadata: RepoMetadata) -> None:
         if self._db_service.enabled:

@@ -1,0 +1,58 @@
+{
+  "workflow": "generate_draft_patch",
+  "result": {
+    "repo_id": "self",
+    "patch_generation_ready": false,
+    "patch_generation_blockers": [
+      "novelty too high",
+      "decision questions unresolved"
+    ],
+    "allowed_files": [
+      "agents/change_agent.py",
+      "services/repo_context_rules.py",
+      "agents/root_agent.py"
+    ],
+    "generated_diff": "",
+    "file_rationales": [
+      {
+        "file": "agents/change_agent.py",
+        "why": "Поточне file targeting виводить change_agent.py як ймовірну точку змін.",
+        "expected_effect": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+      },
+      {
+        "file": "services/repo_context_rules.py",
+        "why": "Поточне file targeting виводить repo_context_rules.py як ймовірну точку змін.",
+        "expected_effect": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+      },
+      {
+        "file": "agents/root_agent.py",
+        "why": "Поточне file targeting виводить root_agent.py як ймовірну точку змін.",
+        "expected_effect": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію."
+      }
+    ],
+    "patch_summary": "Draft patch заблокований для self; обмежені файли: agents/change_agent.py, services/repo_context_rules.py, agents/root_agent.py.",
+    "validation_plan": [
+      "Зберіть виявлений репозиторій self після ручного перегляду draft diff."
+    ],
+    "review_required": true,
+    "auto_apply": false,
+    "technical_details": {
+      "jira_ticket": "TEL-13508",
+      "repo_id": "self",
+      "allowed_files": [
+        "agents/change_agent.py",
+        "services/repo_context_rules.py",
+        "agents/root_agent.py"
+      ],
+      "selected_files_count": 5,
+      "analysis_mode": "guided",
+      "repo_confidence": 75,
+      "file_confidence": 90,
+      "novelty_score": 62,
+      "critical_decision_questions": [
+        "Це новий модуль або bounded context, чи розширення наявного шляху реалізації?"
+      ],
+      "final_workflow_input_excerpt": "Title: Service request: change of text and printed form “Receipt” p.2\nDescription:\nПотреба:\nВ друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст\n“Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту"
+    }
+  }
+}

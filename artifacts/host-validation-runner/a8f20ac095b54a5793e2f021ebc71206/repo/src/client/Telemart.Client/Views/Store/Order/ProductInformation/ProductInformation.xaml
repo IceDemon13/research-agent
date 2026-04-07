@@ -1,0 +1,1643 @@
+﻿<UserControl x:Name="UserControl"
+             x:Class="Telemart.Client.Views.Store.Order.ProductInformation.ProductInformation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxgt="http://schemas.devexpress.com/winfx/2008/xaml/grid/themekeys"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:controls="clr-namespace:Telemart.Client.Controls"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Order"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:productInformation="clr-namespace:Telemart.Client.ViewModels.Store.Order.ProductInformation"
+             xmlns:productInformation1="clr-namespace:Telemart.Client.Views.Store.Order.ProductInformation"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:client="clr-namespace:Telemart.Client"
+             BorderThickness="1"
+             mc:Ignorable="d"
+             d:DesignWidth="300"
+             d:DesignHeight="1000"
+             DataContext="{client:Container Type=productInformation:ProductInformationViewModel}"
+             d:DataContext="{d:DesignInstance Type=productInformation:ProductInformationViewModel, IsDesignTimeCreatable=True}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary>
+                    <system:Int32 x:Key="IntZeroValue">0</system:Int32>
+                    <Style x:Key="SimpleWithoutHeaderTableViewStyle"
+                           TargetType="{x:Type dxg:TableView}"
+                           BasedOn="{StaticResource SimpleTableViewStyle}">
+                        <Setter Property="ShowColumnHeaders"
+                                Value="False" />
+                        <Setter Property="NavigationStyle"
+                                Value="Cell" />
+                        <Setter Property="AllowEditing"
+                                Value="False" />
+                    </Style>
+                    <Style x:Key="LinkStyle"
+                           TargetType="Hyperlink">
+                        <EventSetter Event="RequestNavigate"
+                                     Handler="HyperlinkRequestNavigate" />
+                    </Style>
+                    <Style x:Key="ProductInfoSimpleGridControlStyle"
+                           TargetType="dxg:GridControl"
+                           BasedOn="{StaticResource SimpleGridControlStyle}">
+                        <Setter Property="ShowBorder"
+                                Value="False" />
+                        <Setter Property="VerticalAlignment"
+                                Value="Top" />
+                        <Setter Property="CurrentItem"
+                                Value="{x:Null}" />
+                        <Setter Property="SelectedItem"
+                                Value="{x:Null}" />
+                        <Setter Property="SelectionMode"
+                                Value="Cell" />
+                        <Setter Property="ClipboardCopyMode"
+                                Value="ExcludeHeader" />
+                        <EventSetter Event="GotFocus"
+                                     Handler="GotGridFocus" />
+                    </Style>
+                    <Style x:Key="TitleColumn"
+                           TargetType="dxg:GridColumn">
+                        <Setter Property="Width"
+                                Value="90" />
+                        <Setter Property="FixedWidth"
+                                Value="False" />
+                        <Setter Property="EditSettings">
+                            <Setter.Value>
+                                <dxe:TextEditSettings TextWrapping="NoWrap"
+                                                      ShowTooltipForTrimmedText="True" />
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style x:Key="PriceColumnGeneral"
+                           TargetType="dxg:GridColumn">
+                        <Setter Property="Width"
+                                Value="60" />
+                        <Setter Property="FixedWidth"
+                                Value="True" />
+                        <Setter Property="CellTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <dxe:TextEdit x:Name="PART_Editor"
+                                                  HorizontalContentAlignment="Center"
+                                                  TextWrapping="Wrap"
+                                                  DisplayFormatString="{}{0:0.##}">
+                                        <ToolTipService.ToolTip>
+                                            <TextBlock Text="Цена" />
+                                        </ToolTipService.ToolTip>
+                                    </dxe:TextEdit>
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style x:Key="QuantityColumnGeneral"
+                           TargetType="dxg:GridColumn">
+                        <Setter Property="Width"
+                                Value="40" />
+                        <Setter Property="FixedWidth"
+                                Value="True" />
+                        <Setter Property="CellTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <dxe:TextEdit x:Name="PART_Editor"
+                                                  HorizontalContentAlignment="Center">
+                                        <ToolTipService.ToolTip>
+                                            <TextBlock Text="Кол-во" />
+                                        </ToolTipService.ToolTip>
+                                    </dxe:TextEdit>
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style x:Key="ExtraChargeColumnGeneral"
+                           TargetType="dxg:GridColumn">
+                        <Setter Property="Width"
+                                Value="45" />
+                        <Setter Property="FixedWidth"
+                                Value="True" />
+                        <Setter Property="CellTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <dxe:TextEdit x:Name="PART_Editor"
+                                                  HorizontalContentAlignment="Center"
+                                                  MaskUseAsDisplayFormat="True"
+                                                  MaskType="Numeric"
+                                                  Mask="P1">
+                                        <ToolTipService.ToolTip>
+                                            <TextBlock Text="Рентабельность" />
+                                        </ToolTipService.ToolTip>
+                                    </dxe:TextEdit>
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style x:Key="PriceColumnSmaller"
+                           TargetType="dxg:GridColumn"
+                           BasedOn="{StaticResource PriceColumnGeneral}">
+                        <Setter Property="Width"
+                                Value="50" />
+                    </Style>
+                    <Style x:Key="AvailColumn"
+                           TargetType="dxg:GridColumn">
+                        <Setter Property="Width"
+                                Value="80" />
+                        <Setter Property="FixedWidth"
+                                Value="True" />
+                        <Setter Property="CellTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <dxe:TextEdit x:Name="PART_Editor"
+                                                  HorizontalContentAlignment="Center"
+                                                  TextWrapping="Wrap">
+                                        <ToolTipService.ToolTip>
+                                            <TextBlock Text="Наличие" />
+                                        </ToolTipService.ToolTip>
+                                    </dxe:TextEdit>
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style x:Key="AvailColumnSmaller"
+                           TargetType="dxg:GridColumn"
+                           BasedOn="{StaticResource AvailColumn}">
+                        <Setter Property="Width"
+                                Value="50" />
+                    </Style>
+                    <Style x:Key="GroupBoxHeaderButtonStyle"
+                           TargetType="{x:Type Button}"
+                           BasedOn="{StaticResource NoBordersButton}">
+                        <Setter Property="Width"
+                                Value="16" />
+                        <Setter Property="Height"
+                                Value="16" />
+                        <Setter Property="Padding"
+                                Value="0" />
+                        <Setter Property="BorderThickness"
+                                Value="0" />
+                    </Style>
+
+                    <BitmapImage x:Key="ArrowUp"
+                                 UriSource="/Images/Arrows/bullet_arrow_up_16x16.png" />
+                    <BitmapImage x:Key="ArrowDown"
+                                 UriSource="/Images/Arrows/bullet_arrow_down_16x16.png" />
+
+                    <dxmvvm:ObjectToObjectConverter x:Key="GroupBoxArrowImageConverter">
+                        <dxmvvm:MapItem Source="{x:Static dxlc:GroupBoxState.Maximized}"
+                                        Target="{StaticResource ArrowUp}" />
+                        <dxmvvm:MapItem Source="{x:Static dxlc:GroupBoxState.Normal}"
+                                        Target="{StaticResource ArrowUp}" />
+                        <dxmvvm:MapItem Source="{x:Static dxlc:GroupBoxState.Minimized}"
+                                        Target="{StaticResource ArrowDown}" />
+                    </dxmvvm:ObjectToObjectConverter>
+
+                    <Style x:Key="GroupBoxStyle"
+                           TargetType="dxlc:GroupBox">
+                        <Setter Property="Padding"
+                                Value="0" />
+                        <Setter Property="BorderThickness"
+                                Value="0,0,0,0" />
+                        <Setter Property="BorderBrush"
+                                Value="DarkGray" />
+                        <Setter Property="SeparatorBrush"
+                                Value="DarkGray" />
+                        <Setter Property="UseLayoutRounding"
+                                Value="True" />
+                        <Setter Property="HeaderTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <DockPanel>
+                                        <TextBlock Text="{Binding Mode=OneWay}"
+                                                   FontWeight="Bold" />
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Right">
+                                            <Button Click="ResizeButtonOnClick"
+                                                    Style="{StaticResource GroupBoxHeaderButtonStyle}">
+                                                <dx:DXImage Source="{Binding Path=State, Mode=OneWay, Converter={StaticResource GroupBoxArrowImageConverter}, RelativeSource={RelativeSource AncestorType={x:Type dxlc:GroupBox}}}" />
+                                            </Button>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ResourceDictionary>
+                <ResourceDictionary>
+                    <DataTemplate x:Key="HyperlinkTemplate">
+                        <TextBlock VerticalAlignment="Center"
+                                   Margin="4,0,0,0">
+                            <Hyperlink NavigateUri="{Binding Data.Link, Mode=OneWay}"
+                                       Style="{StaticResource LinkStyle}">
+                                <TextBlock Text="{Binding Path=Data.ContractorName, Mode=OneWay}"
+                                           TextTrimming="CharacterEllipsis">
+                                    <TextBlock.ToolTip>
+                                        <ToolTip Visibility="{Binding Path=PlacementTarget, Mode=OneWay, Converter={converters:TrimmedTextBlockVisibilityConverter}, RelativeSource={RelativeSource Self}}">
+                                            <ToolTip.Content>
+                                                <TextBlock Text="{Binding Path=Data.ContractorName, Mode=OneWay}" />
+                                            </ToolTip.Content>
+                                        </ToolTip>
+                                    </TextBlock.ToolTip>
+                                </TextBlock>
+                            </Hyperlink>
+                        </TextBlock>
+                    </DataTemplate>
+
+                    <DataTemplate x:Key="ContractorCellTemplate">
+                        <TextBlock Text="{Binding Path=Data.ContractorName, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="4,0,0,0"
+                                   VerticalAlignment="Center">
+                            <TextBlock.ToolTip>
+                                <ToolTip Visibility="{Binding Path=PlacementTarget, Mode=OneWay, Converter={converters:TrimmedTextBlockVisibilityConverter}, RelativeSource={RelativeSource Self}}">
+                                    <ToolTip.Content>
+                                        <TextBlock Text="{Binding Path=Data.ContractorName, Mode=OneWay}" />
+                                    </ToolTip.Content>
+                                </ToolTip>
+                            </TextBlock.ToolTip>
+                        </TextBlock>
+                    </DataTemplate>
+
+                    <productInformation1:LinkCellTemplateSelector x:Key="ContractorColumnCellTemplateSelector"
+                                                                  HyperlinkDataTemplate="{StaticResource HyperlinkTemplate}"
+                                                                  TextDataTemplate="{StaticResource ContractorCellTemplate}" />
+
+                    <ControlTemplate x:Key="{dxgt:TableViewThemeKey ResourceKey=ControlTemplate, IsThemeIndependent=True}">
+                        <controls:TelemartScrollViewer VerticalScrollBarVisibility="{Binding Path=VerticalScrollbarVisibility, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                       HorizontalScrollBarVisibility="{Binding Path=HorizontalScrollbarVisibility, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                       Focusable="False"
+                                                       dxg:GridControl.CurrentView="{Binding Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                       Template="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=ScrollViewerTemplate, IsThemeIndependent=True}}">
+                        </controls:TelemartScrollViewer>
+                    </ControlTemplate>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dx:LoadingDecorator OwnerLock="None"
+                         IsSplashScreenShown="{Binding Path=IsLoadingInProgress, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}">
+        <Border BorderBrush="#FFD6D6D6"
+                Margin="-1,-1,-1,-1"
+                BorderThickness="{Binding Path=BorderThickness, Mode=OneWay, ElementName=UserControl}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0"
+                      Height="22"
+                      Background="{Binding Source={x:Static SystemParameters.WindowGlassBrush}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <dxe:TextEdit Grid.Column="0"
+                                  Margin="2,0,0,0"
+                                  EditValue="{Binding Path=ProductName, Mode=OneWay}"
+                                  TextWrapping="Wrap"
+                                  VerticalAlignment="Center"
+                                  Foreground="White"
+                                  FontWeight="SemiBold"
+                                  IsPrintingMode="True" />
+                    <Button Grid.Column="3"
+                            Style="{StaticResource GroupBoxHeaderButtonStyle}"
+                            ToolTip="Скопировать код товара"
+                            Command="{Binding Path=CopyProductIdCommand, Mode=OneWay}">
+                        <dx:DXImage Source="/Images/Common/copying_and_distribution.png"
+                                    PreviewMouseLeftButtonDown="ImagePreviewMouseLeftButtonDown" />
+                    </Button>
+                    <dx:DXImage Grid.Column="4"
+                                Source="/Images/Product/money.png"
+                                Height="16"
+                                Width="16"
+                                Margin="2,0,2,0"
+                                PreviewMouseLeftButtonDown="ImagePreviewMouseLeftButtonDown">
+                        <dxb:BarManager.DXContextMenu>
+                            <dxb:PopupMenu>
+                                <dxb:PopupMenu.Items>
+                                    <dxb:BarCheckItem Content="Авто"
+                                                      IsChecked="{Binding SelectedCurrencyMode, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static viewModels:CurrencyMode.Auto}, Mode=OneWay}"
+                                                      Command="{Binding Path=SetCurrencyModeCommand, Mode=OneWay}"
+                                                      CommandParameter="{Binding Mode=OneWay, Source={x:Static viewModels:CurrencyMode.Auto}}" />
+                                    <dxb:BarCheckItem Content="Гривна"
+                                                      IsChecked="{Binding SelectedCurrencyMode, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static viewModels:CurrencyMode.Uah}, Mode=OneWay}"
+                                                      Command="{Binding Path=SetCurrencyModeCommand, Mode=OneWay}"
+                                                      CommandParameter="{Binding Mode=OneWay, Source={x:Static viewModels:CurrencyMode.Uah}}" />
+                                    <dxb:BarCheckItem Content="Доллар"
+                                                      IsChecked="{Binding SelectedCurrencyMode, Converter={converters:IsEqualConverter}, ConverterParameter={x:Static viewModels:CurrencyMode.Usd}, Mode=OneWay}"
+                                                      Command="{Binding Path=SetCurrencyModeCommand, Mode=OneWay}"
+                                                      CommandParameter="{Binding Mode=OneWay, Source={x:Static viewModels:CurrencyMode.Usd}}" />
+                                </dxb:PopupMenu.Items>
+                            </dxb:PopupMenu>
+                        </dxb:BarManager.DXContextMenu>
+                    </dx:DXImage>
+                    <Button Grid.Column="5"
+                            Style="{StaticResource GroupBoxHeaderButtonStyle}"
+                            Command="{Binding Path=ShowProductInfoCommand, Mode=OneWay}">
+                        <dx:DXImage Source="/Images/Common/gear_16x16.png"
+                                    PreviewMouseLeftButtonDown="ImagePreviewMouseLeftButtonDown" />
+                    </Button>
+                </Grid>
+                <controls:CustomFlowLayoutControl Grid.Row="1"
+                                                  x:Name="FlowLayoutControl"
+                                                  Orientation="Vertical"
+                                                  AllowItemMoving="True"
+                                                  AnimateItemMoving="True"
+                                                  BreakFlowToFit="False"
+                                                  StretchContent="True"
+                                                  Padding="0"
+                                                  ItemSpace="0"
+                                                  dx:ScrollBarExtensions.ScrollBarMode="TouchOverlap">
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:FlowLayoutControlLayoutSerializationBehavior FileName="product_info2.xml" />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxlc:GroupBox x:Name="LeftoversGroupBox"
+                                   Header="Остатки"
+                                   Visibility="{Binding Path=LeftoversVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl ItemsSource="{Binding Path=Leftovers, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard"
+                                         Style="{StaticResource ProductInfoSimpleGridControlStyle}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Склад"
+                                                FieldName="WarehouseName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}"
+                                                Width="195" />
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                Header="Цена"
+                                                ReadOnly="True"
+                                                Style="{StaticResource PriceColumnGeneral}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Свободный остаток"
+                                                FieldName="Available"
+                                                ReadOnly="True"
+                                                Width="40" >
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Свободный остаток" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Всего товаров"
+                                                FieldName="WarehouseItems"
+                                                ReadOnly="True"
+                                                FixedWidth="True"
+                                                Width="40">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Всего товаров" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="Available"
+                                                             Expression="[Available] &lt; 0">
+                                            <dx:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="WarehouseItems"
+                                                             Expression="[WarehouseItems] &lt; 0">
+                                            <dx:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="LeftoversReserveGroupBox"
+                                   Header="Резерв остатков"
+                                   Visibility="{Binding Path=LeftoversReserveVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl ItemsSource="{Binding Path=LeftoversReserve, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard"
+                                         Style="{StaticResource ProductInfoSimpleGridControlStyle}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Склад"
+                                                FieldName="WarehouseName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}"
+                                                Width="195" />
+                                <dxg:GridColumn Header="Заказы"
+                                                FieldName="OrderReserveQuantity"
+                                                ReadOnly="True"
+                                                Width="40" >
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Резерв под заказы" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Возвраты"
+                                                FieldName="ReturnInvoiceReserveQuantity"
+                                                ReadOnly="True"
+                                                Width="40" >
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Резерв под возвраты" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Сборки"
+                                                FieldName="AssembledComputerRuleReserveQuantity"
+                                                ReadOnly="True"
+                                                Width="40" >
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Резерв под сборки" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Перемещения"
+                                                FieldName="ReservedByMovement"
+                                                ReadOnly="True"
+                                                Width="40" >
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Резерв под перемещения" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="Available"
+                                                             Expression="[Available] &lt; 0">
+                                            <dx:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="WarehouseItems"
+                                                             Expression="[WarehouseItems] &lt; 0">
+                                            <dx:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="ShowcasesGroupBox"
+                                   Header="Витрина"
+                                   Visibility="{Binding Path=ShowcasesVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxlc:GroupBox.HeaderTemplate>
+                            <DataTemplate>
+                                <Grid >
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <dxe:ButtonEdit Grid.Column="0"
+                                                    IsReadOnly="True"
+                                                    ShowBorder="False"
+                                                    EditValue="{Binding Mode=OneWay}"
+                                                    FontWeight="Bold"
+                                                    IsTextEditable="False"
+                                                    AllowDefaultButton="False"
+                                                    HorizontalAlignment="Stretch"
+                                                    Padding="0"
+                                                    Margin="-6,0,0,0">
+                                        <dxe:ButtonInfo GlyphKind="Plus"
+                                                        Command="{Binding DataContext.ShowShowcaseCommand, ElementName=FlowLayoutControl}"
+                                                        CommandParameter="{StaticResource IntZeroValue}"
+                                                        Visibility="{Binding DataContext.CanAddShowcase, Converter={dx:BooleanToVisibilityConverter}, ElementName=FlowLayoutControl}"/>
+                                    </dxe:ButtonEdit>
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Right">
+                                        <Button Click="ResizeButtonOnClick"
+                                                Style="{StaticResource GroupBoxHeaderButtonStyle}">
+                                            <dx:DXImage Source="{Binding Path=State, Mode=OneWay, Converter={StaticResource GroupBoxArrowImageConverter}, RelativeSource={RelativeSource AncestorType={x:Type dxlc:GroupBox}}}" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </dxlc:GroupBox.HeaderTemplate>
+                        <dxg:GridControl ItemsSource="{Binding Path=Showcases, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard"
+                                         Style="{StaticResource ProductInfoSimpleGridControlStyle}">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Склад"
+                                                FieldName="WarehouseName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}"
+                                                Width="195" />
+                                <dxg:GridColumn Header="Количество"
+                                                FieldName="Capacity"
+                                                ReadOnly="True"
+                                                Width="50">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Кол-во на витрине" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn ReadOnly="True"
+                                                FixedWidth="True"
+                                                Width="30">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:ButtonEdit ShowBorder="False"
+                                                            IsTextEditable="False"
+                                                            AllowDefaultButton="False"
+                                                            Margin="0 0 8 0"
+                                                            MinWidth="0"
+                                                            ShowText="False">
+                                                <dxe:ButtonInfo GlyphKind="Search"
+                                                                Command="{Binding DataContext.ShowShowcaseCommand, ElementName=ShowcasesGroupBox}"
+                                                                CommandParameter="{Binding RowData.Row.Id}"/>
+                                            </dxe:ButtonEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition ApplyToRow="True"
+                                                             Expression="Active = 0">
+                                            <dxg:FormatCondition.Format>
+                                                <dx:Format Foreground="DarkGray" />
+                                            </dxg:FormatCondition.Format>
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="MovementsGroupBox"
+                                   Header="Перемещения"
+                                   Visibility="{Binding Path=MovementsVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=Movements, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="MovementName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="Available"
+                                                Width="50"
+                                                FixedWidth="True"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Свободное кол-во" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="Overall"
+                                                ReadOnly="True"
+                                                Width="50"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Всего в перемещении" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DateIn"
+                                                ReadOnly="True"
+                                                Width="40"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Дата получения" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}" />
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="TransitsGroupBox"
+                                   Header="Транзиты"
+                                   Visibility="{Binding Path=TransitsVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=Transits, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="TransitName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="Available"
+                                                Width="40"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Свободный остаток по накладной" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="Overall"
+                                                ReadOnly="True"
+                                                FixedWidth="True"
+                                                Width="60">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Заказано у поставщика" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DateGet"
+                                                Width="40"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Дата получения" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition Expression="IgnoreTransit = True"
+                                                             FieldName="TransitName">
+                                            <dx:Format Foreground="{StaticResource SmokeGrey}" />
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition Expression="IgnoreTransit = True"
+                                                             FieldName="Available">
+                                            <dx:Format Foreground="{StaticResource SmokeGrey}" />
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition Expression="IgnoreTransit = True"
+                                                             FieldName="Overall">
+                                            <dx:Format Foreground="{StaticResource SmokeGrey}" />
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition Expression="IgnoreTransit = True"
+                                                             FieldName="DateGet">
+                                            <dx:Format Foreground="{StaticResource SmokeGrey}" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="SuppliersGroupBox"
+                                   Header="Поставщики"
+                                   Visibility="{Binding Path=SuppliersVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=Suppliers, Mode=OneWay}"
+                                         DesignTimeShowSampleData="True"
+                                         DesignTimeDataObjectType="{x:Type productInformation:ProductContractorPriceViewItem}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="ContractorName"
+                                                Header="Контрагент"
+                                                ReadOnly="True"
+                                                ToolTip="ColumnTooltip"
+                                                CellTemplateSelector="{StaticResource ContractorColumnCellTemplateSelector}"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="Avail"
+                                                Header="Наличие"
+                                                ReadOnly="True"
+                                                Style="{StaticResource AvailColumn}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                Header="Цена"
+                                                ReadOnly="True"
+                                                Width="60"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          DisplayFormatString="{}{0:0.##}"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="{Binding Path=RowData.Row.DisplayPriceToolTip, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="ExtraCharge"
+                                                Header="Рентабельность"
+                                                ReadOnly="True"
+                                                Style="{StaticResource ExtraChargeColumnGeneral}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DateAdd"
+                                                HeaderToolTip="{Binding Path=Header, RelativeSource={RelativeSource Self}, Mode=OneWay}"
+                                                ReadOnly="True"
+                                                Width="40"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Дата парсинга" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="ExtraCharge"
+                                                             Expression="[IsHighestExtraCharge] = true">
+                                            <dx:Format Background="{StaticResource LightGreenColor}"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="ExtraCharge"
+                                                             Expression="[IsSecondHighestExtraCharge] = true">
+                                            <dx:Format Background="#FFFF8A"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="ExtraCharge"
+                                                             Expression="[ExtraCharge] &lt; 0">
+                                            <dx:Format Foreground="{StaticResource RedCherry}"/>
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="CompetitorsGroupBox"
+                                   Header="Конкуренты"
+                                   Visibility="{Binding Path=CompetitorsVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=Competitors, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="ContractorName"
+                                                ReadOnly="True"
+                                                CellTemplateSelector="{StaticResource ContractorColumnCellTemplateSelector}"
+                                                Style="{StaticResource TitleColumn}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="Avail"
+                                                ReadOnly="True"
+                                                Style="{StaticResource AvailColumn}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                ReadOnly="True"
+                                                Style="{StaticResource PriceColumnGeneral}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DateAdd"
+                                                Width="40"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          DisplayFormatString="dd.MM"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Дата парсинга" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="DisplayPrice"
+                                                             Expression="[IsLowestPrice] = true">
+                                            <dx:Format Background="{StaticResource LightGreenColor}"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="DisplayPrice"
+                                                             Expression="[IsSecondLowestPrice] = true">
+                                            <dx:Format Background="#FFFF8A"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="SearchTemplatesGroupBox"
+                                   Header="Сопоставление по характеристикам"
+                                   Visibility="{Binding Path=SearchTemplatesVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=SearchTemplates, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="SearchTemplateName"
+                                                ReadOnly="True"
+                                                Width="80"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Название шаблона" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayMinPrice"
+                                                ReadOnly="True"
+                                                Width="72"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Минимальная цена по шаблону" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayAvgPrice"
+                                                ReadOnly="True"
+                                                Width="72"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Средняя цена по шаблону" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayMaxPrice"
+                                                ReadOnly="True"
+                                                Width="72"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Максимальная цена по шаблону" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}"/>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="PricesGroupBox"
+                                   Header="Цены"
+                                   Visibility="{Binding Path=PricesVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=Prices, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Name"
+                                                ReadOnly="True"
+                                                Width="50"
+                                                CellTemplateSelector="{StaticResource ContractorColumnCellTemplateSelector}"
+                                                Style="{StaticResource TitleColumn}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                ReadOnly="True"
+                                                Style="{StaticResource PriceColumnGeneral}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="ModifiedOn"
+                                                ReadOnly="True"
+                                                FixedWidth="True"
+                                                Width="40">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          DisplayFormatString="dd.MM"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Посл. изменение" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="DisplayPrice"
+                                                             Expression="[IsLowestPrice] = true">
+                                            <dx:Format Background="{StaticResource LightGreenColor}"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="DisplayPrice"
+                                                             Expression="[IsSecondLowestPrice] = true">
+                                            <dx:Format Background="#FFFF8A"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="ServiceGroupBox"
+                                   Header="Сервис"
+                                   Visibility="{Binding Path=ServiceItemsVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=ServiceItems, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Name"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="TradeInPriceStr"
+                                                ReadOnly="True" >
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}"/>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="RrpGroupBox"
+                                   Header="РРЦ"
+                                   Visibility="{Binding Path=RrpVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=Rrp, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="ContractorName"
+                                                ReadOnly="True"
+                                                CellTemplateSelector="{StaticResource ContractorColumnCellTemplateSelector}"
+                                                Style="{StaticResource TitleColumn}">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="Avail"
+                                                ReadOnly="True"
+                                                Style="{StaticResource AvailColumn}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                ReadOnly="True"
+                                                Style="{StaticResource PriceColumnGeneral}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DateAdd"
+                                                Width="40"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Дата парсинга" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="DisplayPrice"
+                                                             Expression="[IsLowestPrice] = true">
+                                            <dx:Format Background="{StaticResource LightGreenColor}"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                        <dxg:FormatCondition FieldName="DisplayPrice"
+                                                             Expression="[IsSecondLowestPrice] = true">
+                                            <dx:Format Background="#FFFF8A"
+                                                       Foreground="Black"/>
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="PurchaseHistoryGroupBox"
+                                   Header="История закупок"
+                                   Visibility="{Binding Path=PurchaseHistoryVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=PurchaseHistory, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="ContractorName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="Quantity"
+                                                ReadOnly="True"
+                                                Style="{StaticResource QuantityColumnGeneral}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                ReadOnly="True"
+                                                Style="{StaticResource PriceColumnGeneral}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DateClose"
+                                                Width="40"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Закрытие накладной" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn ReadOnly="True"
+                                                FixedWidth="True"
+                                                Width="30">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:ButtonEdit ShowBorder="False"
+                                                            IsTextEditable="False"
+                                                            AllowDefaultButton="False"
+                                                            Margin="0 0 8 0"
+                                                            MinWidth="0"
+                                                            ShowText="False">
+                                                <dxe:ButtonInfo GlyphKind="Undo"
+                                                                ToolTip="Создать возврат"
+                                                                Command="{Binding DataContext.DocumentCommands.ShowCreateReturnInvoiceCommand, Mode=OneWay, ElementName=PurchaseHistoryGroupBox}"
+                                                                CommandParameter="{Binding RowData.Row.InvoiceId}" />
+                                            </dxe:ButtonEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="DateClose"
+                                                             Expression="[LastPurchase] = True">
+                                            <dx:Format Foreground="Red" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="ContractorSalesHistoryGroupBox"
+                                   Header="Продажи данному клиенту"
+                                   Visibility="{Binding Path=ContractorSalesHistoryVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=ContractorSalesHistory, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Label"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="Quantity"
+                                                FixedWidth="True"
+                                                Width="50"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Кол-во" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                Width="60"
+                                                FixedWidth="True"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Цена" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="LastSaleDateTime"
+                                                Width="33"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Посл. продажа" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="LastSaleDateTime"
+                                                             Expression="[LastSale] = True">
+                                            <dx:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="TelemartSalesHistoryGroupBox"
+                                   Header="Продажи магазина"
+                                   Visibility="{Binding Path=TelemartSalesHistoryVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=TelemartSalesHistory, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Label"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}" />
+                                <dxg:GridColumn FieldName="Quantity"
+                                                Width="50"
+                                                FixedWidth="True"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Кол-во" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                Width="60"
+                                                FixedWidth="True"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Средневзвешенная цена" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="LastSaleDateTime"
+                                                ReadOnly="True"
+                                                Width="33">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center"
+                                                          DisplayFormatString="dd.MM">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Посл прод." />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}">
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="LastSaleDateTime"
+                                                             Expression="[LastSale] = True">
+                                            <dx:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="PurchasePriceStatsGroupBox"
+                                   Header="Статистика цен закупки"
+                                   Visibility="{Binding Path=PurchasePriceStatsVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=PurchasePriceStats, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Label"
+                                                ReadOnly="True"
+                                                Width="80"
+                                                FixedWidth="True"/>
+                                <dxg:GridColumn FieldName="DisplayMinPrice"
+                                                ReadOnly="True"
+                                                Width="72"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Минимальная цена закупки" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayMaxPrice"
+                                                ReadOnly="True"
+                                                Width="72"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Максимальная цена закупки" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayAveragePrice"
+                                                ReadOnly="True"
+                                                Width="72"
+                                                FixedWidth="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Средневзвешенная цена закупки" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}"/>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="ViewsInfoGroupBox"
+                                   Header="Инфо"
+                                   Visibility="{Binding Path=ViewsInfoVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=ViewsInfo, Mode=OneWay }"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Key"
+                                                ReadOnly="True"
+                                                Width="40" />
+                                <dxg:GridColumn FieldName="Value"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:TextEditSettings TextTrimming="CharacterEllipsis"
+                                                              ShowTooltipForTrimmedText="True"
+                                                              DisplayTextConverter="{converters:MultiLineToSingleLineTextConverter}" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}" >
+                                    <dxg:TableView.FormatConditions>
+                                        <dxg:FormatCondition FieldName="Value"
+                                                         Expression="[Level] = 2">
+                                            <dxg:Format Foreground="{StaticResource RedCherry}" />
+                                        </dxg:FormatCondition>
+                                    </dxg:TableView.FormatConditions>
+                                </dxg:TableView>
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="ViewsSummaryGroupBox"
+                                   Header="Статистика"
+                                   Visibility="{Binding Path=ViewsSummaryVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=ViewsSummary, Mode=OneWay }"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Summary"
+                                                ReadOnly="True">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Кол-во просмотров на Telemart.ua" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}" />
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="HotlineInfoGroupBox"
+                                   Header="Hotline-инфо"
+                                   Visibility="{Binding Path=HotlineInfoVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=HotlineInfo, Mode=OneWay }"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Title"
+                                                ReadOnly="True"
+                                                Width="40" />
+                                <dxg:GridColumn FieldName="ContractorName"
+                                                ReadOnly="True"
+                                                CellTemplateSelector="{StaticResource ContractorColumnCellTemplateSelector}"
+                                                Style="{StaticResource TitleColumn}">
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}" />
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="HotlineCompetitorsGroupBox"
+                                   Header="Hotline-конкуренты"
+                                   Visibility="{Binding Path=HotlineCompetitorPricesVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxlc:GroupBox.HeaderTemplate>
+                            <DataTemplate>
+                                <DockPanel>
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               FontWeight="Bold" />
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Right">
+                                        <Button Command="{Binding Path=DataContext.ShowHotlineCompetitorsCommand, Mode=OneWay, ElementName=FlowLayoutControl}"
+                                                Visibility="{Binding Path=DataContext.HotlineCompetitorsButtonVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}, ElementName=FlowLayoutControl}"
+                                                Style="{StaticResource GroupBoxHeaderButtonStyle}">
+                                            <dx:DXImage Source="/Images/Common/gear_16x16.png"
+                                                        PreviewMouseLeftButtonDown="ImagePreviewMouseLeftButtonDown" />
+                                        </Button>
+                                        <Button Click="ResizeButtonOnClick"
+                                                Style="{StaticResource GroupBoxHeaderButtonStyle}">
+                                            <dx:DXImage Source="{Binding Path=State, Mode=OneWay, Converter={StaticResource GroupBoxArrowImageConverter}, RelativeSource={RelativeSource AncestorType={x:Type dxlc:GroupBox}}}" />
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </dxlc:GroupBox.HeaderTemplate>
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=HotlineCompetitorPrices, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard"
+                                         MaxHeight="2000">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn FieldName="Name"
+                                                ReadOnly="True" />
+                                <dxg:GridColumn FieldName="AbcId"
+                                                ReadOnly="True"
+                                                Width="30">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:ComboBoxEdit x:Name="PART_Editor"
+                                                 ItemsSource="{Binding Path=DataContext.AbcTypes, Mode=OneWay, ElementName=FlowLayoutControl}"
+                                                 ValueMember="Id"
+                                                 DisplayMember="Name"
+                                                 ApplyItemTemplateToSelectedItem="True"
+                                                 IsReadOnly="True"
+                                                 HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Класс" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:ComboBoxEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="Ratio"
+                                                ReadOnly="True"
+                                                Width="30">
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor"
+                                                          HorizontalContentAlignment="Center">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Рейтинг" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                ReadOnly="True"
+                                                Style="{StaticResource PriceColumnGeneral}">
+                                    <dxg:GridColumn.EditSettings>
+                                        <dxe:TextEditSettings HorizontalContentAlignment="Right" />
+                                    </dxg:GridColumn.EditSettings>
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}" />
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                    <dxlc:GroupBox x:Name="WhiteStocksGroupBox"
+                                   Header="Белые остатки"
+                                   Visibility="{Binding Path=WhiteStocksVisible, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                   Style="{StaticResource GroupBoxStyle}">
+                        <dxg:GridControl Style="{StaticResource ProductInfoSimpleGridControlStyle}"
+                                         ItemsSource="{Binding Path=WhiteStocks, Mode=OneWay}"
+                                         CopyingToClipboard="CopyingToClipboard">
+                            <dxmvvm:Interaction.Behaviors>
+                                <behaviors:CopyCurrentCellToClipboardBehavior />
+                            </dxmvvm:Interaction.Behaviors>
+                            <dxg:GridControl.Columns>
+                                <dxg:GridColumn Header="Организация"
+                                                FieldName="OrganizationName"
+                                                ReadOnly="True"
+                                                Style="{StaticResource TitleColumn}"
+                                                Width="195" >
+                                    <dxg:GridColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <dxe:TextEdit x:Name="PART_Editor">
+                                                <ToolTipService.ToolTip>
+                                                    <TextBlock Text="Организация" />
+                                                </ToolTipService.ToolTip>
+                                            </dxe:TextEdit>
+                                        </DataTemplate>
+                                    </dxg:GridColumn.CellTemplate>
+                                </dxg:GridColumn>
+                                <dxg:GridColumn FieldName="DisplayPrice"
+                                                Header="Цена"
+                                                ReadOnly="True"
+                                                ToolTip="Цена"
+                                                Style="{StaticResource PriceColumnGeneral}" >
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="СО"
+                                                FieldName="QuantityFree"
+                                                ReadOnly="True"
+                                                ToolTip="Свободный остаток"
+                                                FixedWidth="True"
+                                                Style="{StaticResource QuantityColumnGeneral}"
+                                                Width="40">
+                                </dxg:GridColumn>
+                                <dxg:GridColumn Header="Кол-во"
+                                                FieldName="Quantity"
+                                                ReadOnly="True"
+                                                ToolTip="Общий остаток"
+                                                FixedWidth="True"
+                                                Style="{StaticResource QuantityColumnGeneral}"
+                                                Width="40">
+                                </dxg:GridColumn>
+                            </dxg:GridControl.Columns>
+                            <dxg:GridControl.View>
+                                <dxg:TableView Style="{StaticResource SimpleWithoutHeaderTableViewStyle}" />
+                            </dxg:GridControl.View>
+                        </dxg:GridControl>
+                    </dxlc:GroupBox>
+                </controls:CustomFlowLayoutControl>
+            </Grid>
+        </Border>
+    </dx:LoadingDecorator>
+</UserControl>

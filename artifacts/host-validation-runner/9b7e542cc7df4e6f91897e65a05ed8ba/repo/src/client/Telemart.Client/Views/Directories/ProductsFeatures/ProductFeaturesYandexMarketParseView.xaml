@@ -1,0 +1,98 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Directories.ProductsFeatures.ProductFeaturesYandexMarketParseView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Directories.ProductsFeatures.YandexMarketFeaturesParser"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             mc:Ignorable="d"
+             DataContext="{client:Container Type=viewModels:ProductFeaturesYandexMarketParseViewModel}"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:ProductFeaturesYandexMarketParseViewModel}, IsDesignTimeCreatable=True}"
+             Width="600"
+             Height="340">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch">
+            <dxg:GridControl ItemsSource="{Binding Path=Products, Mode=OneWay}"
+                             SelectionMode="None">
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn FieldName="IsChecked"
+                                    Width="24"
+                                    FixedWidth="True"
+                                    HorizontalHeaderContentAlignment="Center">
+                        <dxg:GridColumn.HeaderTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit EditValue="{Binding Path=DataContext.CheckAllState, Mode=TwoWay, ElementName=LayoutControl}"
+                                               Margin="0,-5"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.HeaderTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Товар"
+                                    FieldName="Item.Name"
+                                    ReadOnly="True"/>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView Style="{StaticResource ReadOnlyTableViewStyle}"
+                                   AllowSorting="False"
+                                   AllowResizing="False"
+                                   AllowEditing="True"
+                                   EnableImmediatePosting="True">
+                        <dxmvvm:Interaction.Behaviors>
+                            <dxmvvm:EventToCommand EventName="CellValueChanged"
+                                                   Command="{Binding Path=ProductChangedCommand}"/>
+                        </dxmvvm:Interaction.Behaviors>
+                    </dxg:TableView>
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <Button Content="Выбрать без хар-ик"
+                        Command="{Binding Path=SelectEmptyFeaturesProductsCommand, Mode=OneWay}"
+                        HorizontalAlignment="Left"/>
+                <TextBlock Text="{Binding SelectedProductsCountText}"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"/>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="Спарсить"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=AnyProductsNotSelected, Converter={dxmvvm:BooleanNegationConverter}}" />
+                        <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</UserControl>

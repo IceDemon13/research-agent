@@ -45,6 +45,9 @@ class RepoMetadata:
     head_resolved: bool = False
     recovered_by_reclone: bool = False
     onboarding_last_error: str = ""
+    workspace_creation_mode: str = ""
+    workspace_git_identity_expected: str = ""
+    workspace_is_git_checkout: bool = True
 
     @classmethod
     def from_dict(cls, payload: dict | None) -> "RepoMetadata":
@@ -92,6 +95,9 @@ class RepoMetadata:
             head_resolved=bool(item.get("head_resolved", False)),
             recovered_by_reclone=bool(item.get("recovered_by_reclone", False)),
             onboarding_last_error=str(item.get("onboarding_last_error", "")).strip(),
+            workspace_creation_mode=str(item.get("workspace_creation_mode", "")).strip(),
+            workspace_git_identity_expected=str(item.get("workspace_git_identity_expected", "")).strip(),
+            workspace_is_git_checkout=bool(item.get("workspace_is_git_checkout", True)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -133,6 +139,9 @@ class RepoMetadata:
             "head_resolved": bool(self.head_resolved),
             "recovered_by_reclone": bool(self.recovered_by_reclone),
             "onboarding_last_error": self.onboarding_last_error,
+            "workspace_creation_mode": self.workspace_creation_mode,
+            "workspace_git_identity_expected": self.workspace_git_identity_expected,
+            "workspace_is_git_checkout": bool(self.workspace_is_git_checkout),
         }
 
     @property

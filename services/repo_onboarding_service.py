@@ -217,6 +217,7 @@ class RepoOnboardingService:
             )
             self._repo_intelligence_service.assign_provider_metadata(normalized_repo_id)
             self._repo_intelligence_service.reindex_repo(normalized_repo_id)
+            self._historical_change_memory_service.bootstrap_repo_history(normalized_repo_id)
             refreshed = self._registry_service.refresh_repo_metadata(normalized_repo_id) or existing_repo
             return RepoOnboardingResult(
                 repo_id=refreshed.repo_id,
@@ -296,6 +297,7 @@ class RepoOnboardingService:
         ) or metadata
         self._repo_intelligence_service.assign_provider_metadata(normalized_repo_id)
         self._repo_intelligence_service.reindex_repo(normalized_repo_id)
+        self._historical_change_memory_service.bootstrap_repo_history(normalized_repo_id)
         refreshed_metadata = self._registry_service.refresh_repo_metadata(normalized_repo_id) or metadata
         return RepoOnboardingResult(
             repo_id=refreshed_metadata.repo_id,

@@ -1,0 +1,249 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Store.Invoice.CreateInvoiceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Store.Invoice"
+             xmlns:client="clr-namespace:Telemart.Client"
+             DataContext="{client:Container Type=viewModels:CreateInvoiceViewModel}"
+             Width="380"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CreateInvoiceViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/InvoiceState.xaml" />
+                <ResourceDictionary>
+                    <Style TargetType="dxg:GridColumn">
+                        <Setter Property="AllowSorting"
+                                Value="True" />
+                        <Setter Property="AllowAutoFilter"
+                                Value="False" />
+                        <Setter Property="AllowBestFit"
+                                Value="True" />
+                        <Setter Property="AllowCellMerge"
+                                Value="False" />
+                        <Setter Property="AllowColumnFiltering"
+                                Value="False" />
+                        <Setter Property="AllowGrouping"
+                                Value="False" />
+                        <Setter Property="AllowMoving"
+                                Value="False" />
+                        <Setter Property="AllowResizing"
+                                Value="False" />
+                        <Setter Property="AllowEditing"
+                                Value="False" />
+                        <Setter Property="FixedWidth"
+                                Value="True" />
+                        <Setter Property="HeaderTemplate">
+                            <Setter.Value>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"
+                                               FontWeight="Bold"
+                                               Width="{TemplateBinding Width}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dxlc:LayoutControl x:Name="LayoutControl"
+                        Orientation="Vertical"
+                        ItemStyle="{StaticResource LayoutItemStyle}"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        IsEnabled="{Binding Path=ShowLoadingPanel, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}, ElementName=TemplateGridControl}">
+        <dxlc:LayoutGroup Orientation="Vertical">
+            <dxlc:LayoutItem Label="Поставщик">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Suppliers, Mode=OneWay}"
+                                  EditValue="{Binding Path=SelectedSupplier, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                  DisplayMember="Name"
+                                  IsTextEditable="True"
+                                  ImmediatePopup="True"
+                                  IncrementalFiltering="True"
+                                  ValidateOnTextInput="False"
+                                  EditValueChanged="SupplierEditValueChanged"
+                                  ShowEditorWaitIndicator="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                                  IsEnabled="{Binding Path=OpenWithSupplier, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:FocusBehavior />
+                        <dxmvvm:EventToCommand EventName="EditValueChanged"
+                                               Command="{Binding Path=HandleSelectedSupplierChangedCommand, Mode=OneWay}" />
+                    </dxmvvm:Interaction.Behaviors>
+                </dxe:ComboBoxEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Дата">
+                <dxe:DateEdit EditValue="{Binding Path=DateFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              IsEnabled="{Binding Path=SelectedSupplier, Converter={dxmvvm:ObjectToBooleanConverter}}"
+                              MinValue="{Binding Path=DateMin, Mode=OneWay}"
+                              MaxValue="{Binding Path=DateFromMax, Mode=OneWay}"
+                              NullText="сегодня"
+                              AllowRoundOutOfRangeValue="true">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand EventName="EditValueChanged"
+                                               Command="{Binding Path=HandleDateFromChangedCommand, Mode=OneWay}" />
+                    </dxmvvm:Interaction.Behaviors>
+                </dxe:DateEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Шаблон">
+                <dxg:GridControl Name="TemplateGridControl"
+                                 ItemsSource="{Binding Path=InvoiceTemplates, Mode=OneWay}"
+                                 SelectedItem="{Binding Path=SelectedInvoiceTemplate, Mode=TwoWay}"
+                                 SelectionMode="Row"
+                                 Height="172">
+                    <dxg:GridControl.ShowLoadingPanel>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter}">
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="HandleDateFromChangedCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="HandleSelectedSupplierChangedCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxg:GridControl.ShowLoadingPanel>
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:FocusBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn FieldName="DateGet"
+                                        Header="Дата"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FixedWidth="True"
+                                        Width="90">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:DateEditSettings Mask="dd.MM.yy HH:mm"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      HorizontalContentAlignment="Center" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="CarryName"
+                                        Header="Доставка"
+                                        FixedWidth="False" />
+                        <dxg:GridColumn FieldName="State"
+                                        Header=" "
+                                        HeaderToolTip="Статус"
+                                        HorizontalHeaderContentAlignment="Center"
+                                        FixedWidth="True"
+                                        Width="24">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <dx:DXImage Source="{Binding Path=RowData.Row.State.Id, Mode=OneWay, Converter={StaticResource InvoiceStateImageConverter}}"
+                                                ToolTip="{Binding Path=RowData.Row.State.Name, Mode=OneWay}"
+                                                Width="16"
+                                                Height="16" />
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TableView ShowTotalSummary="False"
+                                       ShowGroupPanel="False"
+                                       ShowIndicator="False"
+                                       ShowGroupFooters="False"
+                                       ShowFixedTotalSummary="False"
+                                       ShowAutoFilterRow="False"
+                                       ShowSearchPanelMode="Never"
+                                       AllowResizing="False"
+                                       IsColumnMenuEnabled="False"
+                                       AllowPerPixelScrolling="True"
+                                       AutoWidth="True"
+                                       AllowEditing="False"
+                                       NavigationStyle="Row">
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Склад пост.">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=SupplierWarehouses, Mode=OneWay}"
+                                  EditValue="{Binding Path=SupplierWarehouseId, ValidatesOnDataErrors=True, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  DisplayMember="DisplayValue"
+                                  ValueMember="Id"
+                                  IsReadOnly="{Binding Path=Editable, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                </dxe:ComboBoxEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Склад">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Warehouses, Mode=OneWay}"
+                                  EditValue="{Binding Path=WarehouseId, ValidatesOnDataErrors=True, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  DisplayMember="Name"
+                                  ValueMember="Id"
+                                  IsReadOnly="{Binding Path=Editable, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                </dxe:ComboBoxEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Доставка">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=CarryTypes}"
+                                  EditValue="{Binding Path=CarryType, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                  DisplayMember="Name"
+                                  IsReadOnly="{Binding Path=Editable, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                </dxe:ComboBoxEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Закрытие">
+                <dxe:DateEdit EditValue="{Binding Path=DateClose, ValidatesOnDataErrors=True, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              MinValue="{Binding Path=DateMin, Mode=OneWay}"
+                              MaxValue="{Binding Path=DateMax, Mode=OneWay}"
+                              IsTextEditable="True"
+                              ValidateOnTextInput="False"
+                              Mask="dd.MM.yyyy HH:mm"
+                              MaskUseAsDisplayFormat="True"
+                              NullText="не задано"
+                              AllowRoundOutOfRangeValue="true"
+                              IsReadOnly="{Binding Path=Editable, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                </dxe:DateEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Прибытие">
+                <dxe:DateEdit EditValue="{Binding Path=DateArrive, ValidatesOnDataErrors=True, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              MinValue="{Binding Path=DateMin, Mode=OneWay}"
+                              MaxValue="{Binding Path=DateMax, Mode=OneWay}"
+                              IsTextEditable="True"
+                              ValidateOnTextInput="False"
+                              Mask="dd.MM.yyyy HH:mm"
+                              MaskUseAsDisplayFormat="True"
+                              NullText="не задано"
+                              AllowRoundOutOfRangeValue="true"
+                              IsReadOnly="{Binding Path=Editable, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                </dxe:DateEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Поступление">
+                <dxe:DateEdit EditValue="{Binding Path=DateGet, ValidatesOnDataErrors=True, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              MinValue="{Binding Path=DateMin, Mode=OneWay}"
+                              MaxValue="{Binding Path=DateMax, Mode=OneWay}"
+                              IsTextEditable="True"
+                              ValidateOnTextInput="False"
+                              Mask="dd.MM.yyyy HH:mm"
+                              MaskUseAsDisplayFormat="True"
+                              NullText="не задано"
+                              AllowRoundOutOfRangeValue="true"
+                              IsReadOnly="{Binding Path=Editable, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+                </dxe:DateEdit>
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Bottom">
+            <Button Content="Очистить"
+                    Command="{Binding Path=ClearCommand, Mode=OneWay}"
+                    Click="ClearButtonOnClick"
+                    Visibility="{Binding Path=OpenWithSupplier, Converter={dx:BooleanToVisibilityConverter Invert=True}}">
+            </Button>
+            <Button Content="Создать"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}" />
+            <Button Content="Отмена"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

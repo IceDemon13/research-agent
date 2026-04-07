@@ -1,0 +1,205 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Reporting.ReportSelectionView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Reporting"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:controlswiki="clr-namespace:Telemart.Client.Controls"
+                              DataContext="{client:Container Type=viewModels:ReportSelectionViewModel}"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:ReportSelectionViewModel}}"
+                              d:DesignWidth="700"
+                              d:DesignHeight="462">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Insert"
+                             Command="{Binding Path=AddCommand, Mode=OneTime}"
+                             CommandParameter="{Binding Path=SelectedReport, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="F2"
+                             Command="{Binding Path=EditCommand, Mode=OneTime}"
+                             CommandParameter="{Binding Path=SelectedReport, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Delete"
+                             Command="{Binding Path=DeleteCommand, Mode=OneTime}"
+                             CommandParameter="{Binding Path=SelectedReport, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              ItemSpace="0">
+                <dxb:ToolBarControl Style="{StaticResource SmallToolBarStyle}">
+                    <dxb:BarButtonItem Content="Создать"
+                                       ToolTip="Создать (Insert)"
+                                       Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                       LargeGlyph="{dx:DXImage Image=Add_32x32.png}"
+                                       Command="{Binding Path=AddCommand, Mode=OneTime}"
+                                       CommandParameter="{Binding Path=SelectedReport, Mode=OneWay}"
+                                       IsVisible="{Binding Path=CanCreate}" />
+                    <dxb:BarButtonItem Content="Изменить"
+                                       ToolTip="Изменить (F2)"
+                                       Glyph="{dx:DXImage Image=Edit_16x16.png}"
+                                       LargeGlyph="{dx:DXImage Image=Edit_32x32.png}"
+                                       Command="{Binding Path=EditCommand, Mode=OneTime}"
+                                       CommandParameter="{Binding Path=SelectedReport, Mode=OneWay}"
+                                       IsVisible="{Binding Path=CanUpdate}" />
+                    <dxb:BarButtonItem Content="Удалить"
+                                       ToolTip="Удалить (Del)"
+                                       Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                       LargeGlyph="{dx:DXImage Image=Delete_32x32.png}"
+                                       Command="{Binding Path=DeleteCommand, Mode=OneTime}"
+                                       CommandParameter="{Binding Path=SelectedReport, Mode=OneWay}"
+                                       IsVisible="{Binding Path=CanDelete}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Content="Развернуть"
+                                       ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                       Glyph="../../Images/Actions/toggle_expand_16_16.png"
+                                       Command="{Binding Path=View.Commands.(dxg:TreeListViewCommands.ExpandAllNodes), ElementName=GridControl}" />
+                    <dxb:BarButtonItem Content="Свернуть"
+                                       ToolTip="{Binding Path=Content, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                       Glyph="../../Images/Actions/toggle_16_16.png"
+                                       Command="{Binding Path=View.Commands.(dxg:TreeListViewCommands.CollapseAllNodes), ElementName=GridControl}" />
+                    <dxb:BarItemSeparator />
+                    <controlswiki:WikiBarButtonItem />
+                </dxb:ToolBarControl>
+                <dxg:GridControl x:Name="GridControl"
+                                 ItemsSource="{Binding Path=Reports, Mode=OneWay}"
+                                 CurrentItem="{Binding Path=SelectedReport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 SelectionMode="None"
+                                 ShowLoadingPanel="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:FocusBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header=" "
+                                        HeaderToolTip="Папка"
+                                        VisibleIndex="0"
+                                        FixedWidth="True"
+                                        Width="24"
+                                        MinWidth="24">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top">
+                                        <dx:DXImage Source="{dx:DXImage Image=Open_16x16.png}"
+                                                    Visibility="{Binding RowData.Row.IsFolder, Converter={dxmvvm:BooleanToVisibilityConverter}}"
+                                                    Width="16"
+                                                    Height="16"
+                                                    Margin="5,2,0,0" />
+                                        <dx:DXImage Source="{dx:DXImage Image=Report_16x16.png}"
+                                                    Visibility="{Binding RowData.Row.IsFolder, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}"
+                                                    Width="16"
+                                                    Height="16"
+                                                    Margin="5,2,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="Id"
+                                        Header="Код"
+                                        HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                        VisibleIndex="1"
+                                        FixedWidth="True"
+                                        Width="50"
+                                        MinWidth="24">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:SpinEditSettings Mask="D6"
+                                                      MaskUseAsDisplayFormat="True"
+                                                      HorizontalContentAlignment="Left"
+                                                      VerticalContentAlignment="Top" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="Name"
+                                        Header="Название"
+                                        HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                        VisibleIndex="2"
+                                        FixedWidth="True"
+                                        Width="220"
+                                        MinWidth="100">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Left"
+                                                      VerticalContentAlignment="Top" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                        <dxg:GridColumn FieldName="Description"
+                                        Header="Описание"
+                                        HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                        VisibleIndex="3">
+                            <dxg:GridColumn.EditSettings>
+                                <dxe:TextEditSettings HorizontalContentAlignment="Left"
+                                                      VerticalContentAlignment="Top" />
+                            </dxg:GridColumn.EditSettings>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.View>
+                        <dxg:TreeListView TreeDerivationMode="Selfreference"
+                                          NavigationStyle="Row"
+                                          KeyFieldName="Id"
+                                          ParentFieldName="ParentId"
+                                          FilterMode="Extended"
+                                          AllowEditing="False"
+                                          AllowSorting="False"
+                                          AllowColumnFiltering="False"
+                                          AllowColumnMoving="False"
+                                          AllowResizing="True"
+                                          AllowBestFit="True"
+                                          AllowDrop="False"
+                                          ShowVerticalLines="False"
+                                          ShowHorizontalLines="True"
+                                          ShowIndicator="False"
+                                          TreeLineStyle="Solid"
+                                          AutoWidth="True"
+                                          AutoExpandAllNodes="False"
+                                          ShowExpandButtons="True">
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                                       Command="{Binding Path=HandleRowDoubleClickCommand, Mode=OneTime}"
+                                                       PassEventArgsToCommand="True" />
+                                <dxmvvm:EventToCommand EventName="PreviewKeyDown"
+                                                       Command="{Binding Path=HandlePreviewKeyDownCommand, Mode=OneTime}"
+                                                       PassEventArgsToCommand="True" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxg:TreeListView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Bottom">
+                <Button x:Name="OkButton"
+                        Content="OK"
+                        Command="{Binding Path=OkCommand, Mode=OneTime}"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}">
+                </Button>
+                <Button Content="Отмена"
+                        Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>
+

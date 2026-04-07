@@ -1,0 +1,71 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Novaposhta.NovaposhtaBill.NovaposhtaBillDocumentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+             xmlns:novaposhtaBill="clr-namespace:Telemart.Client.ViewModels.Novaposhta.NovaposhtaBill"
+             DataContext="{client:Container Type=novaposhtaBill:NovaposhtaBillDocumentViewModel}"
+             Width="330"
+             Height="170"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type={x:Type novaposhtaBill:NovaposhtaBillDocumentViewModel}, IsDesignTimeCreatable=True}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <common:SummaryItemsView SummaryItems="{Binding Path=SummaryViewItems, Mode=OneWay}"
+                                     LabelColumnWidth="*"
+                                     ContentColumnWidth="2.25*" />
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage x:Name="WaitImage"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Чтение документа..."
+                                          Visibility="{Binding OkCommand.IsExecuting, Converter={dx:BooleanToVisibilityConverter}}" />
+                <dx:SimpleButton Glyph="../../../Images/Common/cross.png"
+                                 MinWidth="22"
+                                 Width="22"
+                                 Padding="2,1,0,0"
+                                 Command="{Binding Path=DeleteNpBillCommand}"
+                                 Visibility="{Binding Path=IsVisible, ElementName=WaitImage, Converter={dx:BooleanToVisibilityConverter Invert=True}}"/>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="Сохранить"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

@@ -1,0 +1,46 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dictionaries="clr-namespace:Telemart.Client.Dictionaries;assembly=Telemart.Client.Dictionaries">
+
+    <BitmapImage x:Key="UkrImage"
+                 UriSource="/Images/Common/ukrainian_flag.png" />
+    <BitmapImage x:Key="RuImage"
+                 UriSource="/Images/Common/russian_flag.png" />
+    <BitmapImage x:Key="EnImage"
+                 UriSource="/Images/Common/flag_great_britain.png" />
+
+    <dxmvvm:ObjectToObjectConverter x:Key="LanguageImageConverter">
+        <dxmvvm:MapItem Source="{x:Static dictionaries:Language.UkrainianId}"
+                        Target="{StaticResource UkrImage}" />
+        <dxmvvm:MapItem Source="{x:Static dictionaries:Language.RussianId}"
+                        Target="{StaticResource RuImage}" />
+        <dxmvvm:MapItem Source="{x:Static dictionaries:Language.EnglishId}"
+                        Target="{StaticResource EnImage}" />
+    </dxmvvm:ObjectToObjectConverter>
+
+    <DataTemplate x:Key="LanguageComboBoxItemTemplate"
+                  DataType="{x:Type dictionaries:Language}">
+        <StackPanel Orientation="Horizontal"
+                    Background="Transparent">
+            <dx:DXImage Source="{Binding Path=Id, Mode=OneWay, Converter={StaticResource LanguageImageConverter}}"
+                        ToolTip="{Binding Path=Name, Mode=OneWay}"
+                        Height="16"
+                        Width="16"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Left"
+                        Margin="5,0,0,0" />
+            <TextBlock Text="{Binding Path=Name, Mode=OneWay}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Left"
+                       Background="Transparent"
+                       Margin="5,0,0,0" />
+        </StackPanel>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="LanguageColumnDisplayTemplate">
+        <ContentControl Content="{Binding Path=EditValue, RelativeSource={RelativeSource TemplatedParent}, UpdateSourceTrigger=PropertyChanged}"
+                        ContentTemplate="{StaticResource LanguageComboBoxItemTemplate}"/>
+    </ControlTemplate>
+</ResourceDictionary>

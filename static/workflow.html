@@ -39,16 +39,33 @@
     </form>
 
     <div id="errorBox" class="error"></div>
+    <div id="workflowLoadingPanel" class="loading-panel" hidden aria-live="polite" aria-busy="false">
+      <div class="loading-panel-inner">
+        <video id="workflowLoadingVideo" class="loading-video" autoplay muted loop playsinline preload="metadata">
+          <source src="./media/telemart-loader.mp4" type="video/mp4">
+        </video>
+        <div class="loading-copy">
+          <div id="workflowLoadingTitle" class="loading-title">Виконується...</div>
+          <div id="workflowLoadingText" class="loading-text">Аналізую задачу та збираю сигнали з Jira і repo...</div>
+        </div>
+      </div>
+    </div>
 
     <div id="resultCard" class="card" hidden>
       <h2 data-i18n="workflow.result.result">Результат</h2>
       <div id="resultSummary"></div>
       <div id="resultBody"></div>
       <div class="toolbar">
+        <button id="openImplementationPlanButton" type="button" hidden>Open Implementation Plan</button>
+        <button id="generateDraftPatchButton" type="button" hidden>Generate Draft Patch</button>
         <button id="fixAndRetryButton" type="button" hidden data-i18n="workflow.result.fix_and_retry">Виправити проблеми і повторити</button>
         <a id="technicalRunLink" href="./runs.html" hidden data-i18n="common.open_technical_run">Відкрити технічний run</a>
       </div>
       <div id="actionStatus" class="muted"></div>
+      <details id="draftPatchPanel" hidden>
+        <summary>Draft Patch (Review Required)</summary>
+        <div id="draftPatchBody"></div>
+      </details>
       <details>
         <summary data-i18n="common.technical_details">Технічні деталі</summary>
         <pre id="technicalDetails"></pre>
@@ -60,15 +77,21 @@
     const auth = window.AuthUI;
     const workflowType = new URLSearchParams(window.location.search).get("type") || "analyze_task";
     let workflowFieldsReady = false;
+    let currentRenderedWorkflow = workflowType;
+    let workflowRequestInFlight = false;
+    let currentDraftPatchContext = null;
+    let draftPatchActionInFlight = false;
 
     const workflowConfig = {
       analyze_task: {
         titleKey: "workflow.analyze_task.title",
         descriptionKey: "workflow.analyze_task.description",
         endpoint: "/workflows/analyze-task",
+        autoDetectRepo: true,
+        autoDetectHint: "Repository is detected automatically from Jira and repo intelligence. You can override it below if needed.",
         fields: [
           { id: "jira_ticket", labelKey: "workflow.field.jira_ticket", type: "text", required: true, placeholderKey: "workflow.placeholder.jira_ticket" },
-          { id: "repo_id", labelKey: "workflow.field.repo_id", type: "text", required: false, placeholderKey: "workflow.placeholder.repo_id" }
+          { id: "repo_id", labelKey: "workflow.field.repo_id", type: "text", required: false, placeholderKey: "workflow.placeholder.repo_id", advancedOnly: true, hint: "Optional manual override for debugging or forced repo selection." }
         ]
       },
       structure_task: {
@@ -105,17 +128,41 @@
       document.getElementById("workflowDescription").textContent = auth.t(configItem.descriptionKey);
       const container = document.getElementById("dynamicFields");
       container.innerHTML = "";
-      configItem.fields.forEach((field) => {
-        const wrapper = document.createElement("label");
-        const labelText = auth.t(field.labelKey);
-        const placeholder = auth.t(field.placeholderKey);
-        wrapper.innerHTML = field.type === "textarea"
-          ? `<span>${labelText}</span><textarea id="${field.id}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}"></textarea>`
-          : `<span>${labelText}</span><input id="${field.id}" type="${field.type}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}">`;
-        container.appendChild(wrapper);
+      if (configItem.autoDetectRepo) {
+        const hint = document.createElement("div");
+        hint.className = "muted";
+        hint.setAttribute("data-testid", "analyze-task-auto-repo-hint");
+        hint.textContent = configItem.autoDetectHint || "Repository is detected automatically.";
+        container.appendChild(hint);
+      }
+      const primaryFields = configItem.fields.filter((field) => !field.advancedOnly);
+      const advancedFields = configItem.fields.filter((field) => field.advancedOnly);
+      primaryFields.forEach((field) => {
+        container.appendChild(renderField(field));
       });
+      if (advancedFields.length) {
+        const details = document.createElement("details");
+        details.id = "advancedFieldsPanel";
+        details.setAttribute("data-testid", "advanced-fields-panel");
+        details.innerHTML = `<summary>Advanced options</summary>`;
+        advancedFields.forEach((field) => {
+          details.appendChild(renderField(field));
+        });
+        container.appendChild(details);
+      }
       workflowFieldsReady = true;
-      document.getElementById("runWorkflowButton").disabled = false;
+      setWorkflowLoadingState(false);
+    }
+
+    function renderField(field) {
+      const wrapper = document.createElement("label");
+      const labelText = auth.t(field.labelKey);
+      const placeholder = auth.t(field.placeholderKey);
+      const hintText = String(field.hint || "").trim();
+      wrapper.innerHTML = field.type === "textarea"
+        ? `<span>${labelText}</span><textarea id="${field.id}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}"></textarea>${hintText ? `<small class="muted">${auth.escapeHtml(hintText)}</small>` : ""}`
+        : `<span>${labelText}</span><input id="${field.id}" type="${field.type}" ${field.required ? "required" : ""} placeholder="${auth.escapeHtml(placeholder)}">${hintText ? `<small class="muted">${auth.escapeHtml(hintText)}</small>` : ""}`;
+      return wrapper;
     }
 
     function renderList(titleKey, items) {
@@ -124,6 +171,68 @@
         return `<p><strong>${auth.t(titleKey)}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
       }
       return `<div><strong>${auth.t(titleKey)}:</strong><ul>${values.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul></div>`;
+    }
+
+    function renderListTitle(title, items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      const safeTitle = auth.escapeHtml(String(title || "").trim() || auth.t("workflow.result.suggested_additions"));
+      if (!values.length) {
+        return `<p><strong>${safeTitle}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `<div><strong>${safeTitle}:</strong><ul>${values.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul></div>`;
+    }
+
+    function renderQualityScore(result) {
+      const score = Number(result?.quality_score || 0);
+      const breakdown = result?.quality_breakdown || {};
+      let tone = "#c0392b";
+      let background = "linear-gradient(135deg, #fdecea, #f9d6d1)";
+      if (score >= 75) {
+        tone = "#1e8449";
+        background = "linear-gradient(135deg, #e9f7ef, #d4efdf)";
+      } else if (score >= 40) {
+        tone = "#b9770e";
+        background = "linear-gradient(135deg, #fef5e7, #fdebd0)";
+      }
+      return `
+        <details style="margin: 12px 0;">
+          <summary style="cursor: pointer; list-style: none;">
+            <div style="display: inline-block; min-width: 170px; padding: 10px 14px; border-radius: 12px; background: ${background}; color: ${tone}; border: 1px solid rgba(0,0,0,0.08);">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;">Task Quality</div>
+              <div style="font-size: 28px; font-weight: 700; line-height: 1.1;">${Math.round(score)}/100</div>
+              <div style="font-size: 13px;">${auth.escapeHtml(String(result?.quality_state || "-"))}</div>
+            </div>
+          </summary>
+          <div style="margin-top: 10px;">
+            <p><strong>Breakdown:</strong></p>
+            <ul>
+              <li>Jira: ${Number(breakdown.jira || 0)}/50</li>
+              <li>Attachments: ${Number(breakdown.attachments || 0)}/15</li>
+              <li>Repo: ${Number(breakdown.repo || 0)}/35</li>
+            </ul>
+          </div>
+        </details>
+      `;
+    }
+
+    function renderSignalScore(title, score, level) {
+      const numeric = Number(score || 0);
+      let tone = "#c0392b";
+      let background = "linear-gradient(135deg, #fdecea, #f9d6d1)";
+      if (numeric >= 75) {
+        tone = "#1e8449";
+        background = "linear-gradient(135deg, #e9f7ef, #d4efdf)";
+      } else if (numeric >= 40) {
+        tone = "#b9770e";
+        background = "linear-gradient(135deg, #fef5e7, #fdebd0)";
+      }
+      return `
+        <div style="display:inline-block; min-width: 170px; margin-right: 12px; padding: 10px 14px; border-radius: 12px; background: ${background}; color: ${tone}; border: 1px solid rgba(0,0,0,0.08);">
+          <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;">${auth.escapeHtml(title)}</div>
+          <div style="font-size: 24px; font-weight: 700; line-height: 1.1;">${Math.round(numeric)}</div>
+          <div style="font-size: 13px;">${auth.escapeHtml(String(level || "-"))}</div>
+        </div>
+      `;
     }
 
     function renderSelectionDetails(titleKey, items, fieldName = "name") {
@@ -161,6 +270,62 @@
               <li>
                 <strong>${auth.escapeHtml(item.file || "-")}</strong>
                 (${auth.escapeHtml(item.action || "-")}): ${auth.escapeHtml(item.description || "-")}
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function setWorkflowLoadingState(isLoading) {
+      const form = document.getElementById("workflowForm");
+      const button = document.getElementById("runWorkflowButton");
+      const loadingPanel = document.getElementById("workflowLoadingPanel");
+      const loadingVideo = document.getElementById("workflowLoadingVideo");
+      form.setAttribute("aria-busy", isLoading ? "true" : "false");
+      loadingPanel.hidden = !isLoading;
+      loadingPanel.setAttribute("aria-busy", isLoading ? "true" : "false");
+      button.disabled = isLoading || !workflowFieldsReady;
+      button.classList.toggle("is-loading", Boolean(isLoading));
+      button.textContent = isLoading ? "Виконується..." : "Запустити workflow";
+      if (isLoading) {
+        loadingVideo?.play?.().catch(() => {});
+      } else {
+        loadingVideo?.pause?.();
+        if (loadingVideo) {
+          loadingVideo.currentTime = 0;
+        }
+      }
+    }
+
+    function renderSimpleSelections(title, items, fieldName = "name") {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>${auth.escapeHtml(title)}:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `
+        <div>
+          <strong>${auth.escapeHtml(title)}:</strong>
+          <ul>
+            ${values.map((item) => `<li>${auth.escapeHtml(item?.[fieldName] || "-")}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderHistoricalMatches(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p><strong>Top Historical Match:</strong> <span class="muted">${auth.t("workflow.result.none")}</span></p>`;
+      }
+      return `
+        <div>
+          <strong>Top Historical Match:</strong>
+          <ul>
+            ${values.slice(0, 1).map((item) => `
+              <li>
+                <strong>${auth.escapeHtml(item.jira_key || "-")}</strong>
+                ${Array.isArray(item.changed_files) && item.changed_files.length ? `<br><span class="muted">${auth.escapeHtml(item.changed_files.slice(0, 3).join(", "))}</span>` : ""}
               </li>
             `).join("")}
           </ul>
@@ -267,6 +432,329 @@
       `;
     }
 
+    function renderImplementationPlanPreview(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return "";
+      }
+      return `
+        <details>
+          <summary>Implementation Plan (Preview)</summary>
+          <ul>
+            ${values.map((item) => `
+              <li>
+                <strong>${auth.escapeHtml(item.file || "-")}</strong>
+                <div><strong>Action:</strong> ${auth.escapeHtml(item.action || "-")}</div>
+                <div><strong>Reason:</strong> ${auth.escapeHtml(item.reason || "-")}</div>
+                <div><strong>Likely changes:</strong> ${auth.escapeHtml(item.likely_changes || "-")}</div>
+                <div><strong>Risk:</strong> ${auth.escapeHtml(item.risk || "-")}</div>
+              </li>
+            `).join("")}
+          </ul>
+        </details>
+      `;
+    }
+
+    function renderImplementationPlanBranches(items) {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return "";
+      }
+      return `
+        <details>
+          <summary>Implementation Plan Alternatives</summary>
+          ${values.map((branch) => `
+            <div style="margin: 12px 0;">
+              <strong>${auth.escapeHtml(branch.decision || "-")}</strong>
+              <ul>
+                ${(Array.isArray(branch.options) ? branch.options : []).slice(0, 2).map((option) => `
+                  <li>
+                    <strong>Option ${auth.escapeHtml(option.option || "-")}</strong>
+                    <ul>
+                      ${(Array.isArray(option.plan) ? option.plan : []).slice(0, 3).map((step) => `<li>${auth.escapeHtml(step || "-")}</li>`).join("")}
+                    </ul>
+                  </li>
+                `).join("")}
+              </ul>
+            </div>
+          `).join("")}
+        </details>
+      `;
+    }
+
+    function renderPatchReadiness(result) {
+      const ready = Boolean(result?.patch_generation_ready);
+      const blockers = Array.isArray(result?.patch_generation_blockers) ? result.patch_generation_blockers.filter(Boolean) : [];
+      const allowedFiles = Array.isArray(result?.patch_generation_allowed_files) ? result.patch_generation_allowed_files.filter(Boolean) : [];
+      return `
+        <details>
+          <summary>Draft Patch Readiness</summary>
+          <p><strong>Status:</strong> ${ready ? "Ready" : "Blocked"}</p>
+          <p><strong>Allowed Files:</strong> ${allowedFiles.length ? auth.escapeHtml(allowedFiles.join(", ")) : "-"}</p>
+          ${blockers.length ? `<div><strong>Blockers:</strong><ul>${blockers.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul></div>` : "<p><strong>Blockers:</strong> none</p>"}
+        </details>
+      `;
+    }
+
+    function renderDraftPatchResult(result) {
+      const safe = result || {};
+      const panel = document.getElementById("draftPatchPanel");
+      const body = document.getElementById("draftPatchBody");
+      const blockers = Array.isArray(safe.apply_blockers) ? safe.apply_blockers.filter(Boolean) : [];
+      const reviewState = String(safe.review_state || "pending").trim() || "pending";
+      const canApply = Boolean(safe.apply_ready) && reviewState === "approved" && !draftPatchActionInFlight;
+      const supportedModes = Array.isArray(safe.apply_modes_supported) ? safe.apply_modes_supported.filter(Boolean) : [];
+      const modeOptions = [
+        ...supportedModes.map((mode) => {
+          const label = mode === "local_apply" ? "Local apply" : mode === "dry_apply" ? "Dry apply" : mode;
+          return `<option value="${auth.escapeHtml(mode)}">${auth.escapeHtml(label)}</option>`;
+        }),
+        !supportedModes.includes("branch_create")
+          ? `<option value="branch_create" disabled>Branch create (coming soon)</option>`
+          : ""
+      ].join("");
+      panel.hidden = false;
+      panel.open = true;
+      body.innerHTML = `
+        <p><strong>Repository:</strong> ${auth.escapeHtml(safe.repo_id || "-")}</p>
+        <p><strong>Status:</strong> ${safe.patch_generation_ready ? "Ready" : "Blocked"}</p>
+        <p><strong>Review state:</strong> ${auth.escapeHtml(reviewState)}</p>
+        <p><strong>Validation status:</strong> ${auth.escapeHtml(String(safe.validation_status || "pending") || "pending")}</p>
+        <p><strong>Validation summary:</strong> ${auth.escapeHtml(String(safe.validation_summary || "-") || "-")}</p>
+        <p><strong>Summary:</strong> ${auth.escapeHtml(safe.patch_summary || "-")}</p>
+        <p><strong>Confidence / Novelty:</strong> ${Number(safe.confidence_score || 0)} / ${Number(safe.novelty_score || 0)}</p>
+        <p><strong>Diff hash:</strong> <code>${auth.escapeHtml(safe.diff_hash || "-")}</code></p>
+        ${Array.isArray(safe.patch_generation_blockers) && safe.patch_generation_blockers.length ? `<div><strong>Blockers:</strong><ul>${safe.patch_generation_blockers.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : ""}
+        ${blockers.length ? `<div><strong>Apply blockers:</strong><ul>${blockers.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : "<p><strong>Apply blockers:</strong> none</p>"}
+        ${Array.isArray(safe.repair_attempts) && safe.repair_attempts.length ? `<div><strong>Repair attempts:</strong><ul>${safe.repair_attempts.map((item) => `<li>Attempt ${Number(item.attempt_index || 0)}: ${auth.escapeHtml(String(item.status || "-"))}${item.retry_strategy ? `, strategy ${auth.escapeHtml(String(item.retry_strategy))}` : ""}${item.error_summary ? `<br><span class="muted">${auth.escapeHtml(String(item.error_summary))}</span>` : ""}</li>`).join("")}</ul></div>` : ""}
+        ${Array.isArray(safe.file_rationales) && safe.file_rationales.length ? `<div><strong>File rationales:</strong><ul>${safe.file_rationales.map((item) => `<li><strong>${auth.escapeHtml(item.file || "-")}</strong><br><span>${auth.escapeHtml(item.why || "-")}</span><br><span class="muted">${auth.escapeHtml(item.expected_effect || "-")}</span></li>`).join("")}</ul></div>` : ""}
+        ${Array.isArray(safe.validation_plan) && safe.validation_plan.length ? `<div><strong>Validation intent:</strong><ul>${safe.validation_plan.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : ""}
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 16px 0;">
+          <button id="approveDraftPatchButton" type="button" ${draftPatchActionInFlight ? "disabled" : ""}>Approve</button>
+          <button id="rejectDraftPatchButton" type="button" ${draftPatchActionInFlight ? "disabled" : ""}>Reject</button>
+          <label style="display:flex; flex-direction:column; gap:4px; min-width:180px;">
+            <span>Apply mode</span>
+            <select id="draftPatchApplyMode">${modeOptions}</select>
+          </label>
+          <button id="applyDraftPatchButton" type="button" ${canApply ? "" : "disabled"}>Apply</button>
+        </div>
+        <div id="draftPatchStatus" class="muted">${auth.escapeHtml(String(safe.applied ? "Draft patch applied." : safe.review_state === "approved" && safe.validated ? "Approved, validated, and ready for apply." : safe.review_state === "approved" ? "Approved, but validation/repair must complete before apply." : safe.review_state === "rejected" ? "Rejected. Apply remains blocked." : "Review required before apply."))}</div>
+        <pre>${auth.escapeHtml(safe.generated_diff || "")}</pre>
+      `;
+      attachDraftPatchReviewControls(safe);
+    }
+
+    function draftPatchSeedContext() {
+      return currentDraftPatchContext?.seedContext || {};
+    }
+
+    function attachDraftPatchReviewControls(result) {
+      const approveButton = document.getElementById("approveDraftPatchButton");
+      const rejectButton = document.getElementById("rejectDraftPatchButton");
+      const applyButton = document.getElementById("applyDraftPatchButton");
+      const applyMode = document.getElementById("draftPatchApplyMode");
+      const statusBox = document.getElementById("draftPatchStatus");
+      const actionStatus = document.getElementById("actionStatus");
+      if (!approveButton || !rejectButton || !applyButton || !applyMode || !statusBox || !currentDraftPatchContext) {
+        return;
+      }
+      applyMode.value = String(result?.apply_mode || "").trim() || (applyMode.querySelector("option")?.value || "dry_apply");
+      const setBusy = (isBusy) => {
+        draftPatchActionInFlight = Boolean(isBusy);
+        approveButton.disabled = isBusy;
+        rejectButton.disabled = isBusy;
+        applyMode.disabled = isBusy;
+        applyButton.disabled = isBusy || !(Boolean(result?.apply_ready) && String(result?.review_state || "").trim() === "approved");
+      };
+      const submitReview = async (decision) => {
+        setBusy(true);
+        statusBox.textContent = decision === "approved" ? "Recording approval..." : "Recording rejection...";
+        actionStatus.textContent = statusBox.textContent;
+        try {
+          const payload = await auth.fetchJson("/workflows/review-draft-patch", {
+            method: "POST",
+            body: {
+              jira_ticket: currentDraftPatchContext.jiraTicket,
+              repo_id: currentDraftPatchContext.repoId,
+              decision,
+              seed_context: draftPatchSeedContext(),
+            }
+          });
+          currentDraftPatchContext.result = payload?.result || {};
+          renderDraftPatchResult(currentDraftPatchContext.result);
+          actionStatus.textContent = decision === "approved" ? "Draft patch approved." : "Draft patch rejected.";
+        } catch (error) {
+          statusBox.textContent = error.message;
+          actionStatus.textContent = error.message;
+          setBusy(false);
+        }
+      };
+      approveButton.onclick = async () => submitReview("approved");
+      rejectButton.onclick = async () => submitReview("rejected");
+      applyButton.onclick = async () => {
+        const selectedMode = String(applyMode.value || "dry_apply").trim() || "dry_apply";
+        const confirmationText = selectedMode === "local_apply"
+          ? "Apply this approved draft patch to the local repository and create a commit?"
+          : "Run a dry apply for this approved draft patch?";
+        if (!window.confirm(confirmationText)) {
+          return;
+        }
+        setBusy(true);
+        statusBox.textContent = selectedMode === "local_apply" ? "Applying approved draft patch..." : "Running dry apply...";
+        actionStatus.textContent = statusBox.textContent;
+        try {
+          const payload = await auth.fetchJson("/workflows/apply-draft-patch", {
+            method: "POST",
+            body: {
+              jira_ticket: currentDraftPatchContext.jiraTicket,
+              repo_id: currentDraftPatchContext.repoId,
+              review_id: String(currentDraftPatchContext.result?.review_id || "").trim(),
+              apply_mode: selectedMode,
+              seed_context: draftPatchSeedContext(),
+            }
+          });
+          currentDraftPatchContext.result = payload?.result || {};
+          renderDraftPatchResult(currentDraftPatchContext.result);
+          actionStatus.textContent = selectedMode === "local_apply"
+            ? "Approved draft patch applied and committed."
+            : "Dry apply completed for the approved draft patch.";
+        } catch (error) {
+          statusBox.textContent = error.message;
+          actionStatus.textContent = error.message;
+          setBusy(false);
+        }
+      };
+    }
+
+    function configurePromoteToImplementation(payload) {
+      const button = document.getElementById("openImplementationPlanButton");
+      const actionStatus = document.getElementById("actionStatus");
+      button.hidden = true;
+      button.disabled = false;
+      button.onclick = null;
+      if (currentRenderedWorkflow !== "analyze_task") {
+        return;
+      }
+      const result = payload?.result || {};
+      const jiraTicket = String(result?.technical_details?.request_input_text || "").trim();
+      const detectedRepo = String(result?.selected_repos?.[0]?.repo_id || "").trim();
+      const topCandidateFiles = Array.isArray(result?.top_candidate_files) ? result.top_candidate_files.filter(Boolean) : [];
+      if (!jiraTicket || !detectedRepo || !topCandidateFiles.length) {
+        return;
+      }
+      button.hidden = false;
+      button.textContent = "Open Implementation Plan";
+      button.onclick = async () => {
+        button.disabled = true;
+        actionStatus.textContent = "Analyze -> Implementation Plan";
+        try {
+          const promotePayload = await auth.fetchJson("/workflows/implementation-plan", {
+            method: "POST",
+            body: {
+              jira_ticket: jiraTicket,
+              repo_id: detectedRepo,
+              seed_context: {
+                final_workflow_input: result?.technical_details?.final_workflow_input || "",
+                prompt_task_text: result?.technical_details?.final_workflow_input || "",
+                selected_repos: result?.selected_repos || [],
+                top_candidate_files: result?.top_candidate_files || [],
+                top_historical_matches: result?.top_historical_matches || [],
+                top_historical_changed_files: result?.top_historical_changed_files || [],
+                candidate_files_count: Number(result?.candidate_files_count || 0),
+                selected_files_count: Number(result?.selected_files_count || 0),
+                implementation_plan_preview: result?.implementation_plan_preview || [],
+                technical_details: result?.technical_details || {},
+                provider_used: result?.technical_details?.provider_used || "",
+                configured_provider: result?.technical_details?.configured_provider || "",
+                repo_metadata_provider: result?.technical_details?.repo_metadata_provider || "",
+                provider_reason: result?.technical_details?.provider_reason || "",
+                final_merge_strategy: result?.technical_details?.final_merge_strategy || "",
+                recommendation: result?.recommendation || "",
+              }
+            }
+          });
+          renderResult(promotePayload);
+          actionStatus.textContent = "Implementation plan opened from analyze result.";
+        } catch (error) {
+          actionStatus.textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+    }
+
+    function configureGenerateDraftPatch(payload) {
+      const button = document.getElementById("generateDraftPatchButton");
+      const actionStatus = document.getElementById("actionStatus");
+      const draftPanel = document.getElementById("draftPatchPanel");
+      const draftBody = document.getElementById("draftPatchBody");
+      button.hidden = true;
+      button.disabled = false;
+      button.onclick = null;
+      draftPanel.hidden = true;
+      draftPanel.open = false;
+      draftBody.textContent = "";
+      if (currentRenderedWorkflow !== "analyze_task") {
+        return;
+      }
+      const result = payload?.result || {};
+      const jiraTicket = String(result?.technical_details?.request_input_text || "").trim();
+      const detectedRepo = String(result?.selected_repos?.[0]?.repo_id || "").trim();
+      if (!jiraTicket) {
+        return;
+      }
+      button.hidden = false;
+      button.textContent = "Generate Draft Patch";
+      if (!result?.patch_generation_ready) {
+        button.disabled = true;
+        actionStatus.textContent = Array.isArray(result?.patch_generation_blockers) && result.patch_generation_blockers.length
+          ? `Draft patch blocked: ${result.patch_generation_blockers.join(", ")}`
+          : actionStatus.textContent;
+        return;
+      }
+      button.onclick = async () => {
+        button.disabled = true;
+        actionStatus.textContent = "Generating draft patch...";
+        try {
+          const seedContext = {
+            final_workflow_input: result?.technical_details?.final_workflow_input || "",
+            selected_repos: result?.selected_repos || [],
+            top_candidate_files: result?.top_candidate_files || [],
+            top_historical_matches: result?.top_historical_matches || [],
+            top_historical_changed_files: result?.top_historical_changed_files || [],
+            selected_files_count: Number(result?.selected_files_count || 0),
+            implementation_plan_preview: result?.implementation_plan_preview || [],
+            decision_questions: result?.decision_questions || [],
+            repo_confidence: Number(result?.repo_confidence || 0),
+            file_confidence: Number(result?.file_confidence || 0),
+            novelty_score: Number(result?.novelty_score || 0),
+            analysis_mode: result?.analysis_mode || "",
+            technical_details: result?.technical_details || {}
+          };
+          const patchPayload = await auth.fetchJson("/workflows/generate-draft-patch", {
+            method: "POST",
+            body: {
+              jira_ticket: jiraTicket,
+              repo_id: detectedRepo,
+              seed_context: seedContext
+            }
+          });
+          currentDraftPatchContext = {
+            jiraTicket,
+            repoId: detectedRepo,
+            seedContext,
+            result: patchPayload?.result || {}
+          };
+          renderDraftPatchResult(patchPayload?.result || {});
+          actionStatus.textContent = "Draft patch ready for review.";
+        } catch (error) {
+          actionStatus.textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+    }
+
     function configureFixAndRetry(result, technicalRun) {
       const button = document.getElementById("fixAndRetryButton");
       const actionStatus = document.getElementById("actionStatus");
@@ -312,6 +800,7 @@
     }
 
     function renderResult(payload) {
+      currentRenderedWorkflow = String(payload?.workflow || workflowType || "analyze_task");
       const result = payload?.result || {};
       const technicalRun = result.technical_run || {};
       const resultCard = document.getElementById("resultCard");
@@ -321,20 +810,39 @@
       const technicalRunLink = document.getElementById("technicalRunLink");
       document.getElementById("technicalDetails").textContent = JSON.stringify(payload, null, 2);
 
-      if (workflowType === "analyze_task") {
+      if (currentRenderedWorkflow === "analyze_task") {
+        const detectedRepo = result.selected_repos?.[0]?.repo_id || "-";
+        const repoWhy = result.repo_match?.reason || result.top_historical_matches?.[0]?.jira_key || "-";
         summaryBox.innerHTML = `
+          ${renderQualityScore(result)}
+          <div style="margin: 10px 0 12px;">
+            ${renderSignalScore("Task Confidence", result.confidence_score, result.analysis_mode)}
+            ${renderSignalScore("Task Novelty", result.novelty_score, result.novelty_level)}
+          </div>
           <p><strong>${auth.t("common.summary")}:</strong> ${auth.escapeHtml(result.task_quality_summary || "-")}</p>
           <p><strong>${auth.t("common.recommendation")}:</strong> ${auth.escapeHtml(result.recommendation || "-")}</p>
+          <p><strong>Detected Repo:</strong> ${auth.escapeHtml(detectedRepo)}</p>
+          <p><strong>Why this repo:</strong> ${auth.escapeHtml(repoWhy)}</p>
         `;
         bodyBox.innerHTML = `
+          <p><strong>Detected Repo:</strong> ${auth.escapeHtml(detectedRepo)}</p>
+          <p><strong>Candidate Files Count:</strong> ${Number(result.candidate_files_count || 0)}</p>
+          <p><strong>Selected Files Count:</strong> ${Number(result.selected_files_count || 0)}</p>
           ${renderList("workflow.result.missing_details", result.missing_details)}
           ${renderList("workflow.result.risks", result.risks)}
-          ${renderList("workflow.result.suggested_additions", result.suggested_additions)}
+          ${renderListTitle(result.advisory_block_title, result.suggested_additions)}
           ${renderList("workflow.result.concrete_questions", result.concrete_questions)}
+          ${renderList("Decision Questions", result.decision_questions)}
+          ${renderHistoricalMatches(result.top_historical_matches)}
+          ${renderList("Top Historical Changed Files", result.top_historical_changed_files)}
+          ${renderSimpleSelections("Top Candidate Files", result.top_candidate_files)}
+          ${renderImplementationPlanPreview(result.implementation_plan_preview)}
+          ${renderImplementationPlanBranches(result.implementation_plan_branches)}
+          ${renderPatchReadiness(result)}
           <p><strong>${auth.t("workflow.result.repo_match")}:</strong> ${auth.escapeHtml(result.repo_match?.status || "-")}</p>
           <p><strong>${auth.t("workflow.result.repo_match_reason")}:</strong> ${auth.escapeHtml(result.repo_match?.reason || "-")}</p>
         `;
-      } else if (workflowType === "structure_task") {
+      } else if (currentRenderedWorkflow === "structure_task") {
         summaryBox.innerHTML = `
           <p><strong>Title:</strong> ${auth.escapeHtml(result.title || "-")}</p>
           <p><strong>${auth.t("common.summary")}:</strong> ${auth.escapeHtml(result.summary || "-")}</p>
@@ -346,7 +854,7 @@
           ${renderList("workflow.result.risks", result.risks)}
           ${renderList("workflow.result.open_questions", result.open_questions)}
         `;
-      } else if (workflowType === "implementation_plan") {
+      } else if (currentRenderedWorkflow === "implementation_plan") {
         summaryBox.innerHTML = `
           <p><strong>${auth.t("workflow.result.repo_match")}:</strong> ${auth.escapeHtml(result.repo_match || "-")}</p>
           <p><strong>${auth.t("workflow.result.repo_match_reason")}:</strong> ${auth.escapeHtml(result.repo_match_reason || "-")}</p>
@@ -398,9 +906,14 @@
       technicalRunLink.hidden = !technicalRun.run_id;
       technicalRunLink.href = technicalRun.run_id ? `./run.html?id=${encodeURIComponent(technicalRun.run_id)}` : "./runs.html";
       configureFixAndRetry(result, technicalRun);
+      configurePromoteToImplementation(payload);
+      configureGenerateDraftPatch(payload);
     }
 
     async function submitWorkflow() {
+      if (workflowRequestInFlight) {
+        return;
+      }
       if (!workflowFieldsReady) {
         document.getElementById("errorBox").textContent = "Workflow form is still loading. Please wait a moment and try again.";
         return;
@@ -420,11 +933,18 @@
         body[field.id] = value;
       }
       document.getElementById("errorBox").textContent = "";
+      currentDraftPatchContext = null;
+      draftPatchActionInFlight = false;
+      workflowRequestInFlight = true;
+      setWorkflowLoadingState(true);
       try {
         const payload = await auth.fetchJson(configItem.endpoint, { method: "POST", body });
         renderResult(payload);
       } catch (error) {
         document.getElementById("errorBox").textContent = error.message;
+      } finally {
+        workflowRequestInFlight = false;
+        setWorkflowLoadingState(false);
       }
     }
 

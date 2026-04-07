@@ -1,0 +1,97 @@
+<UserControl x:Class="Telemart.Client.Views.Discussions.DiscussionTypePropertiesView"
+             x:Name="CurrentUserControl"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Discussions"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:dxprg="http://schemas.devexpress.com/winfx/2008/xaml/propertygrid"
+                              DataContext="{client:Container Type=viewModels:DiscussionTypePropertiesViewModel}"
+                              d:DataContext="{d:DesignInstance Type=viewModels:DiscussionTypePropertiesViewModel, IsDesignTimeCreatable=True}"
+                              mc:Ignorable="d"
+                              d:DesignHeight="600"
+                              d:DesignWidth="600">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Editors/EditorsTemplateSelector.xaml" />
+                <ResourceDictionary>
+                    <DataTemplate x:Key="DiscussionTypePropertiesContentTemplate">
+                        <Grid ShowGridLines="False">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="17"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <dxe:TextEdit  Grid.Column="1" EditValue="{Binding Value.DiscussionText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                           HorizontalAlignment="Stretch"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           IsReadOnly="False"
+                                           ShowNullText="True"
+                                           NullText=""
+                                           Style="{StaticResource ReadOnlyConditionsStyle}"
+                                           Margin="5 5"/>
+                        </Grid>
+                    </DataTemplate>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxprg:PropertyGridControl x:Name="PropertyGridControl"
+                                       ShowEditorButtons="False"
+                                       ShowMenuButtonInRows="False"
+                                       HeaderColumnWidth="*"
+                                       ValueColumnWidth="3*"
+                                       ShowSearchBox="False"
+                                       ShowGridLines="False"
+                                       ShowToolPanel="False"
+                                       ShowCategories="Hidden"
+                                       SelectedObject="{Binding PropertyGridSource}">
+                <dxprg:PropertyDefinition Path="*"
+                                          ContentTemplate="{StaticResource DiscussionTypePropertiesContentTemplate}"></dxprg:PropertyDefinition>
+            </dxprg:PropertyGridControl>
+            <dxlc:LayoutGroup Name="Bottom"
+                              VerticalAlignment="Bottom"
+                              Orientation="Horizontal">
+                <viewComponents:WaitImage x:Name="BusyIndicator"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=PropertyGridControl, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</UserControl>

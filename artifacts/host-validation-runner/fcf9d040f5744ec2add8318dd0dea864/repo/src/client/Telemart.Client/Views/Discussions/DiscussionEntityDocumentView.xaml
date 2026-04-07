@@ -1,0 +1,67 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Discussions.DiscussionEntityDocumentView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:dialogs="clr-namespace:Telemart.Client.ViewModels.Discussions"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:system="clr-namespace:System;assembly=System.Runtime"
+                              DataContext="{client:Container Type=dialogs:DiscussionEntityDocumentViewModel}"
+                              Width="400"
+                              Height="115"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type dialogs:DiscussionEntityDocumentViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            ItemStyle="{StaticResource LayoutItemStyle}">
+            <dxlc:LayoutItem Label="Документ">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=Entities, Mode=OneWay}"
+                                  ValueMember="Id"
+                                  DisplayMember="DisplayValue"
+                                  EditValue="{Binding Path=SelectedEntityId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  Style="{StaticResource LookupComboBoxStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Код документа">
+                <dxe:TextEdit
+                    EditValue="{Binding Path=DocumentId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                    Mask="#######"
+                    MaskType="Numeric"
+                    EditValueType="{x:Type system:Int32}"/>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom"
+                              HorizontalAlignment="Right">
+                <Button Content="OK"
+                        Command="{Binding Path=OkCommand, Mode=OneWay}"
+                        IsTabStop="True"
+                        IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}" />
+                <Button Content="Отмена"
+                        IsTabStop="True"
+                        Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

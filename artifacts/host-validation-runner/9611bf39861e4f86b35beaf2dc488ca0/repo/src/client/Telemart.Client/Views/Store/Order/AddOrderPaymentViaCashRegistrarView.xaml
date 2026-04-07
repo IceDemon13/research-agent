@@ -1,0 +1,130 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.Store.Order.AddOrderPaymentViaCashRegistrarView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:system="clr-namespace:System;assembly=mscorlib"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:order="clr-namespace:Telemart.Client.ViewModels.Store.Order"
+                              xmlns:business="clr-namespace:Telemart.Client.Business"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls" xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              DataContext="{client:Container Type=order:AddOrderPaymentViaCashRegistrarViewModel}"
+                              Width="400"
+                              Height="200"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type order:AddOrderPaymentViaCashRegistrarViewModel}}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/ReadOnlyConditionStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            IsEnabled="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutGroup x:Name="Center"
+                              Orientation="Vertical">
+                <dxlc:LayoutItem Label="Способ">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=PaymentTypes, Mode=OneWay}"
+                                      EditValue="{Binding Path=SelectedPayment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Касса">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Cashboxes, Mode=OneWay}"
+                                      EditValue="{Binding Path=SelectedCashbox, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="К оплате">
+                    <dxe:SpinEdit EditValue="{Binding Path=ToPayAmount, Mode=OneWay}"
+                                  EditValueType="{x:Type system:Decimal}"
+                                  MaskType="Numeric"
+                                  MaskUseAsDisplayFormat="True"
+                                  Mask="C0"
+                                  MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                  MaskSaveLiteral="False"
+                                  IsFloatValue="True"
+                                  AllowDefaultButton="False"
+                                  Style="{StaticResource ReadOnlyEditorStyle}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Сумма">
+                    <dxe:SpinEdit EditValue="{Binding Path=PayedAmount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  EditValueType="{x:Type system:Decimal}"
+                                  MinValue="0"
+                                  MaxValue="1000000"
+                                  MaskType="Numeric"
+                                  MaskUseAsDisplayFormat="True"
+                                  Mask="C0"
+                                  MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                  MaskSaveLiteral="False"
+                                  IsFloatValue="True"
+                                  AllowDefaultButton="True" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Сдача">
+                    <dxe:SpinEdit EditValue="{Binding Path=ShortChange, Mode=OneWay}"
+                                  EditValueType="{x:Type system:Decimal}"
+                                  InvalidValueBehavior="AllowLeaveEditor"
+                                  MaskType="Numeric"
+                                  MaskUseAsDisplayFormat="True"
+                                  Mask="C0"
+                                  MaskCulture="{x:Static business:CurrencyFormatingRules.UahCultureInfo}"
+                                  MaskSaveLiteral="False"
+                                  IsFloatValue="True"
+                                  AllowDefaultButton="False"
+                                  Style="{StaticResource ReadOnlyEditorStyle}" />
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Bottom">
+                <viewComponents:WaitImage HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxlc:LayoutGroup HorizontalAlignment="Right">
+                    <Button Content="Внести без терминала"
+                            Command="{Binding Path=WithoutTerminalCommand, Mode=OneTime}"
+                            IsTabStop="True">
+                        <Button.IsEnabled>
+                            <MultiBinding Converter="{converters:BooleanAndMultiValueConverter}">
+                                <Binding Path="CanAddWithoutTerminal"/>
+                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                         ElementName="LayoutControl"
+                                         Converter="{dxmvvm:BooleanNegationConverter}"/>
+                            </MultiBinding>
+                        </Button.IsEnabled>
+                    </Button>
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}"
+                            IsTabStop="True"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=LayoutControl, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}"
+                            IsTabStop="True" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</controls:TelemartUserControl>

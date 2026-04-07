@@ -1,0 +1,244 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Payment.PaymentView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Payments"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             DataContext="{client:Container Type=viewModels:PaymentViewModel}"
+             Width="460"
+             Height="288"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type={x:Type viewModels:PaymentViewModel}, IsDesignTimeCreatable=True}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="ComboBoxEditReadOnlyConditionsStyle"
+                   TargetType="dxe:ComboBoxEdit">
+                <Setter Property="AllowDefaultButton"
+                        Value="False" />
+                <Setter Property="IsTextEditable"
+                        Value="True" />
+                <Setter Property="IsReadOnly"
+                        Value="True" />
+                <Setter Property="Opacity"
+                        Value="{StaticResource DisabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True">
+                        <DataTrigger.Binding>
+                            <MultiBinding Mode="OneWay"
+                                          Converter="{converters:BooleanOrMultiValueConverter}">
+                                <Binding Path="DataContext.IsLockedByCurrentEmployee"
+                                         ElementName="CurrentUserControl"
+                                         Mode="OneWay" />
+                            </MultiBinding>
+                        </DataTrigger.Binding>
+                        <Setter Property="AllowDefaultButton"
+                                Value="True" />
+                        <Setter Property="IsTextEditable"
+                                Value="False" />
+                        <Setter Property="IsReadOnly"
+                                Value="False" />
+                        <Setter Property="Opacity"
+                                Value="{StaticResource EnabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="ReadOnlyConditionsStyle"
+                   TargetType="dxe:BaseEdit">
+                <Setter Property="IsReadOnly"
+                        Value="True" />
+                <Setter Property="Opacity"
+                        Value="{StaticResource DisabledElementOpacity}" />
+                <Style.Triggers>
+                    <DataTrigger Value="True">
+                        <DataTrigger.Binding>
+                            <MultiBinding Mode="OneWay"
+                                          Converter="{converters:BooleanOrMultiValueConverter}">
+                                <Binding Path="DataContext.IsLockedByCurrentEmployee"
+                                         ElementName="CurrentUserControl"
+                                         Mode="OneWay" />
+                            </MultiBinding>
+                        </DataTrigger.Binding>
+                        <Setter Property="IsReadOnly"
+                                Value="False" />
+                        <Setter Property="Opacity"
+                                Value="{StaticResource EnabledElementOpacity}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            IsEnabled="{Binding Path=IsVisible, ElementName=WaitImage, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            dxe:ValidationService.IsValidationContainer="True">
+            <dxlc:LayoutItem Label="Название">
+                <dxe:TextEdit EditValue="{Binding Path=Model.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              Style="{StaticResource ReadOnlyConditionsStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Название (укр)">
+                <dxe:TextEdit EditValue="{Binding Path=Model.NameUa, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              Style="{StaticResource ReadOnlyConditionsStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Название (англ)">
+                <dxe:TextEdit EditValue="{Binding Path=Model.NameEn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              Style="{StaticResource ReadOnlyConditionsStyle}" />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Лимит UAH">
+                <dxe:SpinEdit EditValue="{Binding Path=Model.LimitUah, Mode=TwoWay, TargetNullValue='Не заполнено', UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              HorizontalContentAlignment="Left"
+                              ShowEditorButtons="False"
+                              Mask="F0"
+                              MaskType="Numeric"
+                              MaxLength="9"
+                              MaskUseAsDisplayFormat="True"
+                              Style="{StaticResource ReadOnlyConditionsStyle}"  />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Лимит USD">
+                <dxe:SpinEdit EditValue="{Binding Path=Model.LimitUsd, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              HorizontalContentAlignment="Left"
+                              ShowEditorButtons="False"
+                              Mask="F0"
+                              MaskType="Numeric"
+                              MaxLength="9"
+                              MaskUseAsDisplayFormat="True"
+                              Style="{StaticResource ReadOnlyConditionsStyle}"  />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Наша комиссия">
+                <dxe:SpinEdit EditValue="{Binding Path=Model.Fee, Mode=TwoWay, TargetNullValue='Не заполнено', UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              HorizontalContentAlignment="Left"
+                              ShowEditorButtons="False"
+                              Mask="#0.00"
+                              MaskType="Numeric"
+                              MaskUseAsDisplayFormat="True"
+                              Style="{StaticResource ReadOnlyConditionsStyle}"  />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Комиссия сервиса">
+                <dxe:SpinEdit EditValue="{Binding Path=Model.ProviderFee, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              HorizontalContentAlignment="Left"
+                              ShowEditorButtons="False"
+                              Mask="#0.00"
+                              MaskType="Numeric"
+                              MaxLength="9"
+                              MaskUseAsDisplayFormat="True"
+                              Style="{StaticResource ReadOnlyConditionsStyle}"  />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Статус">
+                <dxe:ComboBoxEdit ItemsSource="{Binding Path=ActiveValues, Mode=OneWay}"
+                                  EditValue="{Binding Path=Model.Active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, Converter={converters:BooleanToEntityActiveConverter}}"
+                                  DisplayMember="Name"
+                                  Style="{StaticResource ComboBoxEditReadOnlyConditionsStyle}"  />
+            </dxlc:LayoutItem>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <TextBlock Text="{Binding Path=Model.EmployeeLockName, Mode=OneWay, StringFormat={}Редактирует: {0}}"
+                           Foreground="Red"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Left">
+                    <TextBlock.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanAndMultiValueConverter ToVisibility=True}">
+                            <Binding Path="Model.EmployeeLockId"
+                                     Mode="OneWay"
+                                     Converter="{dxmvvm:ObjectToBooleanConverter}" />
+                            <Binding Path="IsLockedByCurrentEmployee"
+                                     Mode="OneWay"
+                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                        </MultiBinding>
+                    </TextBlock.Visibility>
+                </TextBlock>
+                <dxlc:LayoutGroup x:Name="ButtonsLayoutGroup"
+                                  Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  Visibility="{Binding Path=IsVisible, Mode=OneWay, ElementName=WaitImage, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}">
+                    <Button Content="Редактировать"
+                            Command="{Binding Path=LockCommand, Mode=OneWay}"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource VisibilityBasedOnEnabledButtonStyle}">
+                        <Button.ContentTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <dx:DXImage Source="../../Images/CategoryOptions/pencil.png"
+                                                Width="16"
+                                                Height="16" />
+                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                               Margin="5,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </Button.ContentTemplate>
+                    </Button>
+                </dxlc:LayoutGroup>
+
+                <viewComponents:WaitImage x:Name="WaitImage"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Сохранение...">
+                    <viewComponents:WaitImage.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="OkCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="SaveCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="LockCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </viewComponents:WaitImage.Visibility>
+                </viewComponents:WaitImage>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button x:Name="OkButton"
+                            Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}">
+                        <Button.IsEnabled>
+                            <MultiBinding Mode="OneWay"
+                                          Converter="{converters:BooleanAndMultiValueConverter}">
+                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                         Mode="OneWay"
+                                         ElementName="LayoutControl"
+                                         Converter="{dxmvvm:BooleanNegationConverter}" />
+                                <Binding Path="IsLockedByCurrentEmployee"
+                                         Mode="OneWay" />
+                            </MultiBinding>
+                        </Button.IsEnabled>
+                    </Button>
+                    <Button Content="Сохранить"
+                            Command="{Binding Path=SaveCommand, Mode=OneTime}"
+                            IsEnabled="{Binding Path=IsEnabled, Mode=OneWay, ElementName=OkButton}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</UserControl>

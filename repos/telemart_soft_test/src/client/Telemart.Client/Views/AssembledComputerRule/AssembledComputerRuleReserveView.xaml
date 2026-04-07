@@ -1,0 +1,378 @@
+﻿<controls:TelemartUserControl x:Class="Telemart.Client.Views.AssembledComputerRule.AssembledComputerRuleReserveView"
+             x:Name="CurrentUserControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.AssembledComputerRule"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:productInformation="clr-namespace:Telemart.Client.Views.Store.Order.ProductInformation"
+             DataContext="{client:Container Type=viewModels:AssembledComputerRuleReserveViewModel}"
+             mc:Ignorable="d">
+    <controls:TelemartUserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </controls:TelemartUserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            IsEnabled="{Binding Path=IsVisible, Mode=OneWay, ElementName=BusyIndicatorLayoutGroup, Converter={dxmvvm:BooleanNegationConverter}}">
+            <dxlc:LayoutGroup Name="MiddleLeftGroup"
+                    Orientation="Horizontal">
+                <dxlc:LayoutGroup View="GroupBox"
+                                  Header="Товары"
+                                  Orientation="Vertical"
+                                  GroupBoxStyle="{StaticResource GroupBoxBorderWithNoPaddingStyle}"
+                                  ItemSpace="0">
+                    <dxb:ToolBarControl VerticalAlignment="Top"
+                                        Style="{StaticResource SmallToolBarStyle}">
+                        <dxb:BarButtonItem Content="Обновить"
+                                           Glyph="{dx:DXImage Image=Refresh_16x16.png}"
+                                           Command="{Binding Path=RefreshCommand, Mode=OneWay}" />
+                        <dxb:BarButtonItem Content="Добавить"
+                                           Glyph="{dx:DXImage Image=Add_16x16.png}"
+                                           Command="{Binding Path=AddProductCommand, Mode=OneWay}" />
+                        <dxb:BarButtonItem Content="Удалить выбранный товар"
+                                           Glyph="{dx:DXImage Image=Delete_16x16.png}"
+                                           Command="{Binding Path=DeleteProductCommand, Mode=OneWay}" />
+                        <dxb:BarButtonItem Content="Удалить все незарезервированные товары"
+                                           Glyph="../../Images/Common/delete_16x16.png"
+                                           Command="{Binding Path=DeleteZeroReserveProductsCommand, Mode=OneWay}" />
+                        <dxb:BarButtonItem Content="Актуализировать"
+                                           Glyph="../../Images/Common/lightbulb.png"
+                                           Command="{Binding Path=ActualizeCommand, Mode=OneWay}" />
+                    </dxb:ToolBarControl>
+                    <StackPanel Style="{StaticResource SeparatorStackPanelStyle}" />
+                    <dxg:GridControl ItemsSource="{Binding Path=Products, Mode=OneWay}"
+                                     CurrentItem="{Binding Path=SelectedProduct}"
+                                     SelectionMode="None"
+                                     AllowLiveDataShaping="True"
+                                     x:Name="ProductsGridControl"
+                                     ShowBorder="False">
+                        <dxmvvm:Interaction.Behaviors>
+                            <behaviors:CopyCurrentCellToClipboardBehavior />
+                            <behaviors:LayoutSerializationBehavior FileName="assembled_computer_rule_reserve_2.xml"/>
+                            <dxmvvm:EventToCommand EventName="Loaded"
+                                                   Command="{Binding Path=GridControlLoadedCommand, Mode=OneWay}"
+                                                   PassEventArgsToCommand="True"/>
+                        </dxmvvm:Interaction.Behaviors>
+                        <dxg:GridControl.Columns>
+                            <dxg:GridColumn AllowEditing="False"
+                                            Header="Код товара"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FixedWidth="True"
+                                            Width="120"
+                                            FieldName="ProductId"
+                                            ReadOnly="True"
+                                            AllowBestFit="True"
+                                            AllowResizing="False"
+                                            HeaderToolTip="Код товара">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn AllowEditing="False"
+                                            Header="Товар"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FixedWidth="false"
+                                            Width="475"
+                                            MinWidth="200"
+                                            FieldName="ProductName"
+                                            ReadOnly="True"
+                                            AllowBestFit="True"
+                                            AllowResizing="True"
+                                            HeaderToolTip="Название товара">
+                            </dxg:GridColumn>
+                            <dxg:GridColumn AllowEditing="False"
+                                            Header="Категория"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FixedWidth="False"
+                                            MinWidth="200"
+                                            FieldName="ParentCategoryName"
+                                            ReadOnly="True"
+                                            AllowBestFit="True"
+                                            AllowResizing="True"
+                                            HeaderToolTip="Категория товара">
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Св. остаток"
+                                            HeaderToolTip="Свободный остаток по выбранному складу"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="WarehouseQuantityFree"
+                                            FixedWidth="False"
+                                            Width="100"
+                                            ReadOnly="True"
+                                            MinWidth="80"
+                                            MaxWidth="150"
+                                            AllowBestFit="False"
+                                            AllowResizing="True"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Общий остаток"
+                                            HeaderToolTip="Общий остаток по выбранному складу"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="WarehouseQuantity"
+                                            FixedWidth="True"
+                                            Width="100"
+                                            MinWidth="80"
+                                            MaxWidth="150"
+                                            ReadOnly="True"
+                                            AllowBestFit="False"
+                                            AllowResizing="False"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Кол-во продаж"
+                                            HeaderToolTip="Количество продаж за 14 дней"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="SalesQuantity"
+                                            FixedWidth="False"
+                                            Width="100"
+                                            MinWidth="70"
+                                            MaxWidth="150"
+                                            AllowBestFit="False"
+                                            ReadOnly="True"
+                                            AllowResizing="True"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Продажи в конфиг."
+                                            HeaderToolTip="Количество продаж внутри конфигураций ПК за 14 дней"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="SalesQuantityInsideAssembledComputerRule"
+                                            FixedWidth="False"
+                                            Width="100"
+                                            MinWidth="70"
+                                            MaxWidth="150"
+                                            AllowBestFit="False"
+                                            AllowResizing="True"
+                                            ReadOnly="True"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Конфигураций"
+                                            HeaderToolTip="Количество конфигураций, в которых встречается товар"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="AssembledComputerRuleQuantity"
+                                            FixedWidth="False"
+                                            Width="100"
+                                            MinWidth="70"
+                                            MaxWidth="150"
+                                            AllowBestFit="False"
+                                            AllowResizing="True"
+                                            ReadOnly="True"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="НО"
+                                            HeaderToolTip="Несгораемый остаток"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            FieldName="MinLeftover"
+                                            FixedWidth="True"
+                                            Width="100"
+                                            MinWidth="70"
+                                            MaxWidth="150"
+                                            AllowBestFit="False"
+                                            ReadOnly="True"
+                                            AllowResizing="False"
+                                            AllowAutoFilter="False">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Резерв (план)"
+                                            FieldName="ReserveQuantity"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            Width="100"
+                                            MinWidth="70"
+                                            MaxWidth="150"
+                                            AllowEditing="True"
+                                            IsEnabled="True"
+                                            AllowResizing="True"
+                                            HeaderToolTip="Плановый резерв товара по выбранному складу"
+                                            FixedWidth="False">
+                                <dxg:GridColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <dxe:SpinEdit x:Name="PART_Editor"
+                                                      HorizontalContentAlignment="Center"
+                                                      IsFloatValue="False"
+                                                      MinValue="0"
+                                                      MaxValue="999"
+                                                      Increment="1" />
+                                    </DataTemplate>
+                                </dxg:GridColumn.CellTemplate>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Резерв (факт)"
+                                            FieldName="FactReserveQuantity"
+                                            HorizontalHeaderContentAlignment="Center"
+                                            Width="100"
+                                            MinWidth="70"
+                                            MaxWidth="150"
+                                            AllowEditing="True"
+                                            ReadOnly="True"
+                                            AllowResizing="True"
+                                            HeaderToolTip="Фактический резерв товара по выбранному складу"
+                                            FixedWidth="False">
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Склад"
+                                            HeaderToolTip="Склад резерва"
+                                            FieldName="WarehouseId"
+                                            FixedWidth="False"
+                                            Width="100"
+                                            ReadOnly="False"
+                                            AllowEditing="True"
+                                            MinWidth="70"
+                                            AllowBestFit="False"
+                                            AllowResizing="True"
+                                            AllowColumnFiltering="True"
+                                            AllowAutoFilter="False"
+                                            ColumnFilterMode="DisplayText"
+                                            FilterPopupMode="CheckedList">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Warehouses}"
+                                                              ValueMember="Id"
+                                                              DisplayMember="DisplayValue"
+                                                              HorizontalContentAlignment="Left" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                            <dxg:GridColumn Header="Создал"
+                                            HeaderToolTip="Создал"
+                                            FieldName="EmployeeId"
+                                            FixedWidth="False"
+                                            Width="100"
+                                            ReadOnly="True"
+                                            AllowEditing="False"
+                                            MinWidth="70"
+                                            AllowBestFit="False"
+                                            AllowResizing="True"
+                                            AllowColumnFiltering="True"
+                                            AllowAutoFilter="False"
+                                            ColumnFilterMode="DisplayText"
+                                            FilterPopupMode="CheckedList">
+                                <dxg:GridColumn.EditSettings>
+                                    <dxe:ComboBoxEditSettings ItemsSource="{Binding Path=Employees}"
+                                                              ValueMember="Id"
+                                                              DisplayMember="DisplayValue"
+                                                              HorizontalContentAlignment="Left" />
+                                </dxg:GridColumn.EditSettings>
+                            </dxg:GridColumn>
+                        </dxg:GridControl.Columns>
+                        <dxg:GridControl.View>
+                            <dxg:TableView AllowPerPixelScrolling="True"
+                                           ShowTotalSummary="False"
+                                           ShowIndicator="False"
+                                           ShowFixedTotalSummary="False"
+                                           ShowAutoFilterRow="False"
+                                           ShowSearchPanelMode="Never"
+                                           ShowGroupPanel="True"
+                                           IsColumnMenuEnabled="False"
+                                           ShowColumnHeaders="True"
+                                           AutoWidth="True"
+                                           NavigationStyle="Cell"
+                                           AllowResizing="True"
+                                           AllowEditing="True"
+                                           ValidatesOnNotifyDataErrors="True"
+                                           AllowGrouping="True"
+                                           AllowColumnMoving="True"
+                                           AllowColumnFiltering="False"
+                                           AllowSorting="True"
+                                           CustomRowAppearance="TableView_CustomRowAppearance"
+                                           CustomCellAppearance="TableView_CustomCellAppearance"
+                                           AllowMoveColumnToDropArea="False"
+                                           ErrorsWatchMode="All"
+                                           x:Name="ProductsTableView">
+                                <dxg:TableView.FormatConditions>
+                                    <dxg:FormatCondition Expression="[AssembledComputerRuleQuantity] = 0" FieldName="AssembledComputerRuleQuantity">
+                                        <dx:Format Foreground="Red"/>
+                                    </dxg:FormatCondition>
+                                </dxg:TableView.FormatConditions>
+                            </dxg:TableView>
+                        </dxg:GridControl.View>
+                    </dxg:GridControl>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup>
+                    <productInformation:ProductInformation DataContext="{Binding Path=ProductInformation, Mode=OneWay}"
+                                                           Width="300"
+                                                           dxmvvm:ViewModelExtensions.ParentViewModel="{Binding Path=DataContext, Mode=OneWay, ElementName=CurrentUserControl}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Name="BottomGroup"
+                              Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  Visibility="{Binding Path=IsVisible, Mode=OneWay, ElementName=BusyIndicatorLayoutGroup, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}">
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup x:Name="BusyIndicatorLayoutGroup"
+                                  Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center">
+                    <dxlc:LayoutGroup.Visibility>
+                        <MultiBinding Mode="OneWay"
+                                      Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                            <Binding Path="DeleteZeroReserveProductsCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="RefreshCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="ActualizeCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="AddProductCommand.IsExecuting"
+                                     Mode="OneWay" />
+                            <Binding Path="DeleteProductCommand.IsExecuting"
+                                     Mode="OneWay" />
+                        </MultiBinding>
+                    </dxlc:LayoutGroup.Visibility>
+                    <viewComponents:WaitImage HorizontalAlignment="Left"
+                                              VerticalAlignment="Center" />
+                    <TextBlock Text="Обработка..." />
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  VerticalAlignment="Bottom"
+                                  HorizontalAlignment="Right">
+                    <Button Content="OK"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}"
+                            IsTabStop="True"
+                            IsEnabled="{Binding Path=HasErrors, Mode=OneWay, ElementName=ProductsTableView, Converter={dxmvvm:BooleanNegationConverter}}" />
+                    <Button Content="Отмена"
+                            IsTabStop="True"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

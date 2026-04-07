@@ -1,0 +1,21 @@
+{
+  "execution_id": "28de9fdba64d49b6b2ef918d75592711",
+  "validation_status": "failed",
+  "validated": false,
+  "repair_attempted": true,
+  "repair_attempts": 2,
+  "repaired": false,
+  "apply_ready": false,
+  "apply_blockers": [
+    "validation failed after bounded repair attempts"
+  ],
+  "touched_files": [
+    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+    "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+    "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+    "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+    "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/ChangeDecisionServiceProduct.cs"
+  ],
+  "out_of_bounds_detected": false,
+  "diff_hash": "eedcd5ec0dbf581cc91ed4bd6fa2c0319ef74ac408ee770cee2609a1c75fcdd0"
+}

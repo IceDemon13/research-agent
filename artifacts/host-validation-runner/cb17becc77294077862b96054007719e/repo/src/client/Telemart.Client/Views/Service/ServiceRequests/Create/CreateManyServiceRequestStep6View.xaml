@@ -1,0 +1,155 @@
+﻿<UserControl x:Class="Telemart.Client.Views.Service.ServiceRequests.Create.CreateManyServiceRequestStep6View"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxco="http://schemas.devexpress.com/winfx/2008/xaml/controls"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:validation="clr-namespace:Telemart.Client.ViewModels.Validation"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRequests.Create"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             DataContext="{client:Container Type=viewModels:CreateManyServiceRequestStep6ViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CreateManyServiceRequestStep6ViewModel}}"
+             d:DesignWidth="600"
+             d:DesignHeight="280">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <DockPanel>
+        <dx:DialogFooter>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          Visibility="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxco:WizardButton Content="Назад"
+                                   dxco:Wizard.IsButtonBack="True"
+                                    Visibility="{Binding Path=Model.ValidationItems, Converter={converters:ObjectToVisibilityConverter}, Mode=OneWay}"/>
+                <dxco:WizardButton Content="Закрыть"
+                                   dxco:Wizard.IsButtonFinish="True">
+                </dxco:WizardButton>
+            </StackPanel>
+        </dx:DialogFooter>
+        <ContentPresenter DockPanel.Dock="Top"
+                          Content="{Binding}"
+                          ContentTemplate="{StaticResource WizardHeaderTemplate}" />
+        <Grid>
+            <StackPanel VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Visibility="{Binding Path=Model.ValidationItems, Mode=OneWay, Converter={converters:ObjectToVisibilityConverter Negate=True}}">
+            </StackPanel>
+            <dxg:GridControl ItemsSource="{Binding Path=Model.ValidationItems, Mode=OneWay}"
+                             Visibility="{Binding Path=Model.ValidationItems, Converter={converters:ObjectToVisibilityConverter}, Mode=OneWay}"
+                             Margin="8"
+                             DesignTimeDataObjectType="{x:Type validation:ValidationResultItem}"
+                             DesignTimeDataSourceRowCount="4">
+                <dxmvvm:Interaction.Behaviors>
+                    <behaviors:CopyCurrentCellToClipboardBehavior />
+                </dxmvvm:Interaction.Behaviors>
+                <dxg:GridControl.View>
+                    <dxg:TableView AllowSorting="False"
+                                   Style="{StaticResource ReadOnlyTableViewStyle}" />
+                </dxg:GridControl.View>
+                <dxg:GridColumn Header=" "
+                                FieldName="IsError"
+                                FixedWidth="True"
+                                AllowResizing="False"
+                                Width="24">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <dx:DXImage Source="{StaticResource WarningImage}"
+                                            Visibility="{Binding Path=RowData.Row.IsError, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=False, Inverse=True}}" />
+                                <dx:DXImage Source="{StaticResource ErrorImage}"
+                                            Visibility="{Binding Path=RowData.Row.IsError, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=False}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn Header="Сообщение"
+                                FieldName="Message">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings TextWrapping="Wrap" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+            </dxg:GridControl>
+            <dxg:GridControl x:Name="GridControl"
+                                         ItemsSource="{Binding Path=Model.CreatedServiceRequests, Mode=OneWay}"
+                                         Visibility="{Binding Path=Model.CreatedServiceRequests, Converter={converters:ObjectToVisibilityConverter}, Mode=OneWay}"
+                                         VerticalAlignment="Stretch"
+                                         HorizontalAlignment="Stretch"
+                                         SelectionMode="None">
+                <dxg:GridControl.Columns>
+                    
+                    <dxg:GridColumn Header="Код товара"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="ProductId"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="100"
+                                                ReadOnly="True"
+                                                AllowMoving="False" >
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Название"
+                                                HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                                FieldName="ProductName"
+                                                HorizontalHeaderContentAlignment="Center"
+                                                Width="498"
+                                                ReadOnly="True"
+                                                AllowSorting="false"
+                                                AllowMoving="False" >
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Left" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn Header="Номер СЗ"
+                                    HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                    FieldName="Id"
+                                    ReadOnly="True"
+                                    HorizontalHeaderContentAlignment="Center"
+                                    AllowMoving="False"
+                                    Width="100">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings HorizontalContentAlignment="Center" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView AllowResizing="False"
+                                   AllowPerPixelScrolling="True"
+                                   ShowGroupPanel="False"
+                                   ShowIndicator="False"
+                                   AllowGrouping="False">
+                        <dxmvvm:Interaction.Behaviors>
+                            <dxmvvm:EventToCommand EventName="RowDoubleClick"
+                                                   Command="{Binding Path=EditServiceRequestCommand, Mode=OneWay}"
+                                                   CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=GridControl}" />
+                        </dxmvvm:Interaction.Behaviors>
+                    </dxg:TableView>
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+        </Grid>
+    </DockPanel>
+</UserControl>

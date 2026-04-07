@@ -108,8 +108,51 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         self.assertEqual(self.service.resolve_provider_name("catalog_service"), "gitnexus_http")
         self.assertEqual(self.service.resolve_provider_name("catalog_service", "implementation_plan"), "gitnexus_http")
         self.assertEqual(self.service.resolve_provider_name("catalog_service", "pre_review"), "gitnexus_http")
-        self.assertEqual(self.service.resolve_provider_name("catalog_service", "analyze_task"), "native")
+        self.assertEqual(self.service.resolve_provider_name("catalog_service", "analyze_task"), "gitnexus_http")
         self.assertEqual(self.service.resolve_provider_name("catalog_service", "structure_task"), "native")
+
+    def test_gitnexus_provider_supports_analyze_task(self) -> None:
+        normalized = NormalizedRepoIntelligenceResult(
+            files=[
+                GitNexusQueryHit(
+                    kind="file",
+                    name="BonusController.cs",
+                    file_path="src/Catalog.Api/Controllers/BonusController.cs",
+                    score=0.91,
+                    reason="route match",
+                )
+            ],
+            symbols=[
+                GitNexusQueryHit(
+                    kind="symbol",
+                    name="GetBonusInfoHandler",
+                    score=0.82,
+                    reason="symbol match",
+                )
+            ],
+            contexts=[],
+            impacts=[],
+            changes=GitNexusChangesResult(changed_files=[]),
+            fallback_reason="",
+        )
+        with patch.object(
+            self.service._gitnexus_provider,
+            "_build_implementation_plan_result",
+            return_value=(normalized, {}),
+        ):
+            repo = self.registry.get_repo("catalog_service")
+            payload = self.service._gitnexus_provider.query_for_workflow(
+                repo,
+                type("Req", (), {
+                    "workflow_name": "analyze_task",
+                    "task_text": "Update bonus response text",
+                    "changed_files": [],
+                })(),
+            )
+
+        self.assertEqual(payload["provider_used"], "gitnexus_http")
+        self.assertFalse(payload["provider_fallback"])
+        self.assertEqual(payload["provider_reason"], "GitNexus MCP evidence was used for analyze_task.")
 
     def test_visibility_confirmed_promotes_repo_to_ready_in_same_run(self) -> None:
         self.registry.update_repo_metadata(
@@ -266,6 +309,46 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         self.assertEqual(self.index_service.rebuild_calls, ["catalog_service"])
         mocked_analyze.assert_called_once()
         self.assertEqual(result["provider"], "gitnexus_http")
+        self.assertEqual(result["gitnexus_index_status"], "ready")
+
+    def test_explicit_reindex_bootstraps_gitnexus_for_unlisted_repo(self) -> None:
+        other_root = self.workspace_root / "repos" / "telemart_catalog_test"
+        (other_root / ".git").mkdir(parents=True, exist_ok=True)
+        (other_root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        self.registry.register_repo(
+            root_path=str(other_root),
+            repo_id="telemart_catalog_test",
+            display_name="Telemart Catalog Test",
+            default_branch="main",
+            remote_url="https://bitbucket.org/acme/telemart_catalog_test.git",
+        )
+        self.registry.update_repo_metadata(
+            "telemart_catalog_test",
+            intelligence_provider="native",
+            gitnexus_indexed=False,
+            gitnexus_index_status="",
+        )
+
+        with patch.object(
+            self.service._gitnexus_index_service,
+            "_is_repo_path_addressable",
+            return_value=True,
+        ), patch.object(
+            self.service._gitnexus_index_service,
+            "analyze_repo",
+            return_value={
+                "provider": "gitnexus_http",
+                "success": True,
+                "gitnexus_index_status": "ready",
+                "gitnexus_index_error": "",
+                "gitnexus_indexed_at": "2026-03-23T11:00:00+00:00",
+            },
+        ) as mocked_analyze:
+            result = self.service.reindex_repo("telemart_catalog_test")
+
+        self.assertEqual(self.index_service.rebuild_calls[-1], "telemart_catalog_test")
+        mocked_analyze.assert_called_once()
+        self.assertTrue(mocked_analyze.call_args.kwargs["allow_unlisted"])
         self.assertEqual(result["gitnexus_index_status"], "ready")
 
     def test_query_falls_back_to_native_when_gitnexus_result_is_weak(self) -> None:

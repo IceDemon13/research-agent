@@ -182,6 +182,11 @@ class GitNexusMcpClient:
         self._debug_local.payload = {
             "mcp_initialize_attempted": False,
             "mcp_initialize_succeeded": False,
+            "mcp_session_created": False,
+            "mcp_initialize_sent": False,
+            "mcp_initialize_response_received": False,
+            "mcp_initialized_notification_sent": False,
+            "mcp_initialized_notification_response": "",
             "mcp_session_reused": False,
             "mcp_retry_after_initialize": False,
             "mcp_failure_stage": "",
@@ -194,6 +199,10 @@ class GitNexusMcpClient:
             "mcp_tools_list_status": 0,
             "mcp_tools_call_status": 0,
             "mcp_session_reset_count": 0,
+            "mcp_session_reset": False,
+            "mcp_first_tool_call_sent": False,
+            "mcp_lifecycle_last_reached": "",
+            "mcp_lifecycle_error_reason": "",
         }
 
     def _update_debug(self, **values: Any) -> None:
@@ -207,6 +216,15 @@ class GitNexusMcpClient:
     def _mark_failure_stage(self, stage: str) -> None:
         self._update_debug(mcp_failure_stage=_safe_text(stage))
 
+    def _mark_lifecycle(self, stage: str, **extra: Any) -> None:
+        payload = {"mcp_lifecycle_last_reached": _safe_text(stage)}
+        payload.update(extra)
+        self._update_debug(**payload)
+
+    def _mark_progress(self, progress_callback: Any | None, step: str, marker: str, **extra: Any) -> None:
+        if callable(progress_callback):
+            progress_callback(step, marker, **extra)
+
     def _reset_session_state(self, *, count_reset: bool = True) -> None:
         self._state.initialized = False
         self._state.session_id = ""
@@ -214,7 +232,9 @@ class GitNexusMcpClient:
             self._update_debug(
                 mcp_session_reset_count=int(self.last_debug_snapshot().get("mcp_session_reset_count", 0) or 0) + 1,
                 mcp_session_id_present=False,
+                mcp_session_reset=True,
             )
+            self._mark_lifecycle("mcp_session_reset")
 
     def _status_field_for_stage(self, stage: str) -> str:
         normalized = _safe_text(stage)
@@ -242,17 +262,32 @@ class GitNexusMcpClient:
                 return [dict(item or {}) for item in tools if isinstance(item, dict)]
         return []
 
-    def list_repos(self) -> Any:
+    def list_repos(self, *, progress_callback: Any | None = None) -> Any:
         self._reset_debug()
-        payload = self._request_with_lifecycle(
-            "tools/call",
-            params={
-                "name": "list_repos",
-                "arguments": {},
-            },
-            request_stage="tools/call",
-        )
-        return self._extract_tool_payload(payload)
+        self._mark_progress(progress_callback, "gitnexus_list_repos", "started")
+        try:
+            payload = self._request_with_lifecycle(
+                "tools/call",
+                params={
+                    "name": "list_repos",
+                    "arguments": {},
+                },
+                request_stage="tools/call",
+                progress_callback=progress_callback,
+            )
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_list_repos_response_parse", "started")
+            extracted = self._extract_tool_payload(payload)
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_list_repos_response_parse", "finished")
+            self._mark_progress(progress_callback, "gitnexus_list_repos", "finished")
+            return extracted
+        except Exception as exc:
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_list_repos",
+                "finished",
+                gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+            )
+            raise
 
     def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         self._reset_debug()
@@ -266,13 +301,18 @@ class GitNexusMcpClient:
         )
         return self._extract_tool_payload(payload)
 
-    def _ensure_initialized_locked(self, *, force: bool) -> dict[str, Any]:
+    def _ensure_initialized_locked(self, *, force: bool, progress_callback: Any | None = None) -> dict[str, Any]:
+        self._mark_progress(progress_callback, "gitnexus_lifecycle_ensure_initialized_locked", "started")
         if self._state.initialized and not force:
             self._update_debug(
                 mcp_session_reused=True,
                 mcp_initialize_succeeded=True,
                 mcp_session_id_present=bool(self._state.session_id),
             )
+            self._mark_lifecycle("mcp_session_reused", mcp_session_reused=True)
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_session_reuse", "started")
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_session_reuse", "finished")
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_ensure_initialized_locked", "finished")
             return {
                 "initialized": True,
                 "session_id": self._state.session_id,
@@ -284,7 +324,15 @@ class GitNexusMcpClient:
             if attempt > 0:
                 self._update_debug(mcp_retry_after_initialize=True)
                 self._reset_session_state()
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_lifecycle_initialize_attempt",
+                "started",
+                gitnexus_lifecycle_attempt=attempt + 1,
+                gitnexus_lifecycle_force_reinitialize=bool(force),
+            )
             try:
+                self._mark_lifecycle("mcp_initialize_sent", mcp_initialize_sent=True)
                 result = self._request(
                     "initialize",
                     params={
@@ -294,12 +342,26 @@ class GitNexusMcpClient:
                     },
                     include_session=False,
                     lifecycle_stage="initialize",
+                    progress_callback=progress_callback,
                 )
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_initialize_attempt", "finished")
+                self._mark_lifecycle("mcp_initialize_response_received", mcp_initialize_response_received=True)
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_initialize_session_extract", "started")
                 if isinstance(result, dict):
                     body_session_id = _safe_text(result.get("sessionId", "") or result.get("session_id", ""))
                     if body_session_id:
                         self._state.session_id = body_session_id
                 self._update_debug(mcp_session_id_present=bool(self._state.session_id))
+                self._mark_lifecycle(
+                    "mcp_session_created",
+                    mcp_session_created=bool(self._state.session_id),
+                )
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_lifecycle_initialize_session_extract",
+                    "finished",
+                    gitnexus_lifecycle_session_id_present=bool(self._state.session_id),
+                )
                 logger.debug(
                     "GitNexus MCP initialize lifecycle: session_id_present=%s session_id=%s",
                     bool(self._state.session_id),
@@ -312,7 +374,13 @@ class GitNexusMcpClient:
                         "lifecycle_stage=initialize session_id_present=false"
                     )
                 self._update_debug(mcp_session_id_present_before_notification=True)
-                self._notify_initialized()
+                self._mark_lifecycle(
+                    "mcp_initialized_notification_sent",
+                    mcp_initialized_notification_sent=True,
+                )
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_notifications_initialized", "started")
+                self._notify_initialized(progress_callback=progress_callback)
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_notifications_initialized", "finished")
                 self._state.initialized = True
                 self._update_debug(
                     mcp_initialize_succeeded=True,
@@ -320,52 +388,121 @@ class GitNexusMcpClient:
                     mcp_session_id_present=True,
                     mcp_notifications_initialized_accepted=True,
                     mcp_session_id_present_after_notification=bool(self._state.session_id),
+                    mcp_initialized_notification_response="accepted",
                 )
+                self._mark_lifecycle(
+                    "mcp_initialized_notification_response",
+                    mcp_initialized_notification_response="accepted",
+                )
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_ensure_initialized_locked", "finished")
                 if isinstance(result, dict):
                     return result
                 return {"initialized": True, "result": result}
             except RuntimeError as exc:
                 last_error = exc
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_lifecycle_initialize_attempt",
+                    "finished",
+                    gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+                )
+                self._mark_lifecycle(
+                    "mcp_lifecycle_error_reason",
+                    mcp_lifecycle_error_reason=_safe_text(exc),
+                    mcp_initialized_notification_response="error" if "notifications/initialized" in _safe_text(exc) else "",
+                )
                 stage = "notifications/initialized" if "notifications/initialized" in _safe_text(exc) else "initialize"
                 self._mark_failure_stage(stage)
                 if attempt == 0 and _is_server_not_initialized_error(exc):
                     continue
                 self._reset_session_state()
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_lifecycle_ensure_initialized_locked",
+                    "finished",
+                    gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+                )
                 raise
         self._reset_session_state()
+        self._mark_progress(progress_callback, "gitnexus_lifecycle_ensure_initialized_locked", "finished")
         raise last_error or RuntimeError("GitNexus MCP initialize failed.")
 
-    def _request_with_lifecycle(self, method: str, *, params: dict[str, Any], request_stage: str) -> Any:
+    def _request_with_lifecycle(
+        self,
+        method: str,
+        *,
+        params: dict[str, Any],
+        request_stage: str,
+        progress_callback: Any | None = None,
+    ) -> Any:
         with self._state.lock:
-            self._ensure_initialized_locked(force=False)
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_session_lock_acquired", "started")
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_session_lock_acquired", "finished")
+            self._ensure_initialized_locked(force=False, progress_callback=progress_callback)
             try:
+                self._mark_lifecycle("mcp_first_tool_call_sent", mcp_first_tool_call_sent=True)
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_lifecycle_list_repos_request_send",
+                    "started",
+                    gitnexus_lifecycle_request_stage=request_stage,
+                    gitnexus_lifecycle_method=method,
+                )
                 return self._request(
                     method,
                     params=params,
                     lifecycle_stage=request_stage,
+                    progress_callback=progress_callback,
                 )
             except RuntimeError as exc:
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_lifecycle_list_repos_request_send",
+                    "finished",
+                    gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+                )
                 if not _is_server_not_initialized_error(exc):
                     self._mark_failure_stage(request_stage)
                     raise
                 self._update_debug(mcp_retry_after_initialize=True)
                 self._reset_session_state()
                 try:
-                    self._ensure_initialized_locked(force=True)
+                    self._ensure_initialized_locked(force=True, progress_callback=progress_callback)
+                    self._mark_progress(
+                        progress_callback,
+                        "gitnexus_lifecycle_list_repos_request_send",
+                        "started",
+                        gitnexus_lifecycle_request_stage=f"{request_stage}:retry_after_initialize",
+                        gitnexus_lifecycle_method=method,
+                    )
                     result = self._request(
                         method,
                         params=params,
                         lifecycle_stage=f"{request_stage}:retry_after_initialize",
+                        progress_callback=progress_callback,
                     )
+                    self._mark_progress(progress_callback, "gitnexus_lifecycle_list_repos_request_send", "finished")
                     self._update_debug(mcp_failure_stage="")
                     return result
-                except RuntimeError:
+                except RuntimeError as retry_exc:
+                    self._mark_progress(
+                        progress_callback,
+                        "gitnexus_lifecycle_list_repos_request_send",
+                        "finished",
+                        gitnexus_lifecycle_timeout_reason=_safe_text(retry_exc),
+                    )
                     self._mark_failure_stage(f"{request_stage}:retry_after_initialize")
                     raise
 
-    def _notify_initialized(self) -> None:
+    def _notify_initialized(self, *, progress_callback: Any | None = None) -> None:
         try:
-            self._request("notifications/initialized", params={}, include_id=False, lifecycle_stage="notifications/initialized")
+            self._request(
+                "notifications/initialized",
+                params={},
+                include_id=False,
+                lifecycle_stage="notifications/initialized",
+                progress_callback=progress_callback,
+            )
         except RuntimeError:
             logger.debug("GitNexus MCP initialized notification failed.", exc_info=True)
             raise
@@ -378,6 +515,7 @@ class GitNexusMcpClient:
         include_id: bool = True,
         include_session: bool = True,
         lifecycle_stage: str = "",
+        progress_callback: Any | None = None,
     ) -> Any:
         if not self.enabled():
             raise RuntimeError("GitNexus MCP is disabled.")
@@ -411,14 +549,34 @@ class GitNexusMcpClient:
             headers=headers,
             method="POST",
         )
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_lifecycle_http_request_open",
+            "started",
+            gitnexus_lifecycle_stage=lifecycle_stage or method,
+        )
         try:
             with urllib.request.urlopen(request, timeout=self._config.timeout_seconds) as response:
+                self._mark_progress(
+                    progress_callback,
+                    "gitnexus_lifecycle_http_request_open",
+                    "finished",
+                    gitnexus_lifecycle_http_status=int(getattr(response, "status", 200) or 200),
+                )
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_first_response_byte", "started")
                 raw_payload = response.read().decode("utf-8", errors="replace")
+                self._mark_progress(progress_callback, "gitnexus_lifecycle_first_response_byte", "finished")
                 response_headers = getattr(response, "headers", {}) or {}
                 status_field = self._status_field_for_stage(lifecycle_stage or method)
                 if status_field:
                     self._update_debug(**{status_field: int(getattr(response, "status", 200) or 200)})
         except urllib.error.HTTPError as exc:
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_lifecycle_http_request_open",
+                "finished",
+                gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+            )
             error_headers = _headers_to_dict(getattr(exc, "headers", {}) or {})
             status_field = self._status_field_for_stage(lifecycle_stage or method)
             if status_field:
@@ -443,6 +601,12 @@ class GitNexusMcpClient:
                 f"raw_excerpt={_excerpt(error_body)}"
             ) from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_lifecycle_http_request_open",
+                "finished",
+                gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+            )
             raise RuntimeError(
                 f"{_safe_text(exc) or 'GitNexus MCP request failed.'} lifecycle_stage={lifecycle_stage or method}"
             ) from exc
@@ -455,6 +619,17 @@ class GitNexusMcpClient:
         if session_header:
             self._state.session_id = session_header
         self._update_debug(mcp_session_id_present=bool(self._state.session_id))
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_lifecycle_response_session_header_extract",
+            "started",
+        )
+        self._mark_progress(
+            progress_callback,
+            "gitnexus_lifecycle_response_session_header_extract",
+            "finished",
+            gitnexus_lifecycle_session_id_present=bool(self._state.session_id),
+        )
         content_type = ""
         try:
             content_type = _safe_text(response_headers.get("Content-Type", ""))
@@ -479,8 +654,16 @@ class GitNexusMcpClient:
                 )
                 return {"accepted": True}
         try:
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_response_parse", "started")
             parsed = _parse_mcp_http_payload(raw_payload, content_type=content_type)
+            self._mark_progress(progress_callback, "gitnexus_lifecycle_response_parse", "finished")
         except json.JSONDecodeError as exc:
+            self._mark_progress(
+                progress_callback,
+                "gitnexus_lifecycle_response_parse",
+                "finished",
+                gitnexus_lifecycle_timeout_reason=_safe_text(exc),
+            )
             logger.error(
                 "GitNexus MCP invalid JSON response. stage=%s content_type=%s raw_excerpt=%s",
                 lifecycle_stage or method,

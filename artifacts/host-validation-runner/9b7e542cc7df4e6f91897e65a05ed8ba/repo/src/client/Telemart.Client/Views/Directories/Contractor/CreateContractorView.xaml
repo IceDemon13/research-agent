@@ -1,0 +1,208 @@
+<UserControl x:Class="Telemart.Client.Views.Directories.Contractor.CreateContractorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Directories.Contractor"
+             Width="564"
+             Height="357"
+             DataContext="{client:Container Type=viewModels:CreateContractorViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CreateContractorViewModel}}">
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+        <dxmvvm:KeyToCommand KeyGesture="Ctrl+Enter"
+                             Command="{Binding Path=OkCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/Subdivision.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CommonImages.xaml" />
+                <ResourceDictionary>
+                </ResourceDictionary>
+                <ResourceDictionary>
+                    <system:Boolean x:Key="TrueValue">True</system:Boolean>
+                    <system:Boolean x:Key="FalseValue">False</system:Boolean>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutGroup Orientation="Vertical"
+                              VerticalAlignment="Stretch">
+                <dxlc:LayoutItem Label="Вид">
+                    <dxe:ComboBoxEdit EditValue="{Binding Path=IsCompetitor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={dxmvvm:BooleanNegationConverter}, ValidatesOnDataErrors=True}">
+                        <dxe:ComboBoxEdit.Items>
+                            <dxe:CustomItem  DisplayText="Контрагент"
+                                             EditValue="{StaticResource TrueValue}" />
+                            <dxe:CustomItem  DisplayText="Конкурент"
+                                             EditValue="{StaticResource FalseValue}" />
+                        </dxe:ComboBoxEdit.Items>
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Тип">
+                    <dxe:ComboBoxEdit EditValue="{Binding Path=IsRetail, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      IsEnabled="{Binding Path=IsCompetitor, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter} }">
+                        <dxe:ComboBoxEdit.Items>
+                            <dxe:CustomItem  DisplayText="Розничный"
+                                             EditValue="{StaticResource TrueValue}" />
+                            <dxe:CustomItem  DisplayText="Оптовый"
+                                             EditValue="{StaticResource FalseValue}" />
+                        </dxe:ComboBoxEdit.Items>
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Родитель">
+                    <dxg:LookUpEdit ItemsSource="{Binding Path=Contractors, Mode=OneWay}"
+                                    EditValue="{Binding Path=ParentId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                    DisplayMember="Name"
+                                    ValueMember="Id"
+                                    AutoPopulateColumns="False"
+                                    AutoComplete="False"
+                                    IncrementalFiltering="True"
+                                    FilterCondition="Like"
+                                    FindMode="Always"
+                                    ImmediatePopup="True"
+                                    IsPopupAutoWidth="True">
+                        <dxmvvm:Interaction.Behaviors>
+                            <dxmvvm:FocusBehavior />
+                        </dxmvvm:Interaction.Behaviors>
+                        <dxg:LookUpEdit.StyleSettings>
+                            <dxg:SearchLookUpEditStyleSettings />
+                        </dxg:LookUpEdit.StyleSettings>
+                        <dxg:LookUpEdit.PopupContentTemplate>
+                            <ControlTemplate>
+                                <dxg:GridControl Name="PART_GridControl">
+                                    <dxg:GridControl.Resources>
+                                        <Style TargetType="dxg:GridColumn"
+                                               BasedOn="{StaticResource GeneralGridColumnStyle}">
+                                        </Style>
+                                    </dxg:GridControl.Resources>
+                                    <dxg:GridControl.Columns>
+                                        <dxg:GridColumn FieldName="Name"
+                                                        Header="Папка"
+                                                        AllowResizing="False"
+                                                        FixedWidth="False" />
+                                    </dxg:GridControl.Columns>
+                                    <dxg:GridControl.View>
+                                        <dxg:TreeListView AutoWidth="True"
+                                                          AutoExpandAllNodes="True"
+                                                          KeyFieldName="Id"
+                                                          ParentFieldName="ParentId"
+                                                          ShowIndicator="False"
+                                                          UseEvenRowBackground="True"
+                                                          AlternationCount="2"
+                                                          AlternateRowBackground="{StaticResource AlternateRowBackgroundBrush}" />
+                                    </dxg:GridControl.View>
+                                </dxg:GridControl>
+                            </ControlTemplate>
+                        </dxg:LookUpEdit.PopupContentTemplate>
+                    </dxg:LookUpEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Название">
+                    <dxe:TextEdit EditValue="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  MaxLength="{x:Static viewModels:ContractorConstants.NameMaxLength}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Страна">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Countries, Mode=OneWay}"
+                                      EditValue="{Binding Path=SelectedCountryId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name"
+                                      ValueMember="Id"
+                                      IsTextEditable="True"
+                                      ImmediatePopup="True"
+                                      IncrementalFiltering="True"
+                                      ValidateOnTextInput="False" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Город">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Cities, Mode=OneWay}"
+                                      EditValue="{Binding Path=CityId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name"
+                                      ValueMember="Id"
+                                      IsTextEditable="True"
+                                      ImmediatePopup="True"
+                                      IncrementalFiltering="True"
+                                      ValidateOnTextInput="False" >
+                        <dxe:ComboBoxEdit.Buttons>
+                            <dxe:ButtonInfo GlyphKind="Plus"
+                                            IsEnabled="True"
+                                            Command="{Binding Path=DataContext.CreateForeignCityCommand, ElementName=LayoutControl}"/>
+                        </dxe:ComboBoxEdit.Buttons>
+                    </dxe:ComboBoxEdit>
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Подразделение">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Subdivisions, Mode=OneWay}"
+                                      EditValue="{Binding Path=Subdivision, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      DisplayMember="Name"
+                                      ItemTemplate="{StaticResource SubdivisionComboBoxItemTemplate}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Менеджер">
+                    <dxe:ComboBoxEdit ItemsSource="{Binding Path=Employees, Mode=OneWay}"
+                                      EditValue="{Binding Path=EmployeeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      ValueMember="Id"
+                                      DisplayMember="DisplayValue"
+                                      FilterCondition="Contains"
+                                      IsTextEditable="True"
+                                      ImmediatePopup="True"
+                                      IncrementalFiltering="True"
+                                      ValidateOnTextInput="False"
+                                      AllowNullInput="True"
+                                      NullValue="{x:Null}"
+                                      NullValueButtonPlacement="EditBox" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="ЄДРПОУ"
+                                 Visibility="{Binding Path=IsFolder, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter Inverse=True}}">
+                    <dxe:TextEdit EditValue="{Binding Path=Edrpou, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  Style="{StaticResource EdrpouTextEdit}" />
+                </dxlc:LayoutItem>
+                <dxlc:LayoutItem Label="Комментарий"
+                                 LabelVerticalAlignment="Top"
+                                 VerticalAlignment="Stretch">
+                    <dxe:TextEdit EditValue="{Binding Path=Comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                  MaxLength="{x:Static viewModels:ContractorConstants.CommentMaxLength}"
+                                  TextWrapping="Wrap"
+                                  AcceptsReturn="True"
+                                  AcceptsTab="True"
+                                  VerticalContentAlignment="Top"
+                                  VerticalScrollBarVisibility="Auto" />
+                </dxlc:LayoutItem>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal">
+                <viewComponents:WaitImage HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          BusyText="Обработка..."
+                                          Visibility="{Binding Path=OkCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center">
+                    <Button Content="Создать"
+                            Command="{Binding Path=OkCommand, Mode=OneTime}"
+                            IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), ElementName=LayoutControl, Converter={dx:NegationConverter}}" />
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneTime}" />
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+
+</UserControl>

@@ -1,0 +1,113 @@
+﻿<UserControl x:Class="Telemart.Client.Views.SupplierBill.Create.CreateSupplierBillMatchingPageView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxco="http://schemas.devexpress.com/winfx/2008/xaml/controls"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+             xmlns:behaviors="clr-namespace:Telemart.Client.Common.Behaviors"
+             xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+             xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.SupplierBill.Create"
+             DataContext="{client:Container Type=viewModels:CreateSupplierBillMatchingPageViewModel}"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type viewModels:CreateSupplierBillMatchingPageViewModel}}"
+             d:DesignWidth="800"
+             d:DesignHeight="450">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <DockPanel>
+        <dx:DialogFooter>
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <viewComponents:WaitImage VerticalAlignment="Center"
+                                          Visibility="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}" />
+                <dxco:WizardButton Content="Назад"
+                                   dxco:Wizard.IsButtonBack="True" />
+                <dxco:WizardButton Content="Далее"
+                                   dxco:Wizard.IsButtonNext="True">
+                    <dxco:WizardButton.IsEnabled>
+                        <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                            <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                     ElementName="LayoutControl" />
+                            <Binding Path="IsLongOperationInProgress" />
+                        </MultiBinding>
+                    </dxco:WizardButton.IsEnabled>
+                </dxco:WizardButton>
+                <dxco:WizardButton Content="Отмена"
+                                   dxco:Wizard.IsButtonCancel="True" />
+            </StackPanel>
+        </dx:DialogFooter>
+        <ContentPresenter DockPanel.Dock="Top"
+                          Content="{Binding}"
+                          ContentTemplate="{StaticResource WizardHeaderTemplate}" />
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            IsEnabled="{Binding Path=IsLongOperationInProgress, Mode=OneWay, Converter={dxmvvm:BooleanNegationConverter}}">
+            <dxlc:LayoutGroup Orientation="Vertical">
+                <dxg:GridControl x:Name="GridControl"
+                                 ItemsSource="{Binding Path=Model.Products, Mode=OneWay}"
+                                 SelectionMode="None"
+                                 DesignTimeDataObjectType="{x:Type viewModels:CreateSupplierBillProductModel}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <behaviors:CopyCurrentCellToClipboardBehavior />
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxg:GridColumn FieldName="Name"
+                                    Header="Название"
+                                    HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                    MinWidth="80" />
+                    <dxg:GridColumn FieldName="ProductName"
+                                    Header="Товар"
+                                    HeaderToolTip="{Binding Path=Header, Mode=OneWay, RelativeSource={RelativeSource Self}}"
+                                    MinWidth="80">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <dxe:TextEdit x:Name="PART_Editor"
+                                                  Grid.Column="0"
+                                                  TextWrapping="NoWrap"
+                                                  ShowTooltipForTrimmedText="True" />
+                                    <dx:SimpleButton Grid.Column="1"
+                                                     Command="{Binding Path=DataContext.SelectProductCommand, Mode=OneWay, ElementName=LayoutControl}"
+                                                     CommandParameter="{Binding Path=CurrentItem, Mode=OneWay, ElementName=GridControl}"
+                                                     Content="..."
+                                                     Width="20"
+                                                     MinWidth="20"
+                                                     Height="20"
+                                                     Padding="1" />
+                                </Grid>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridControl.View>
+                        <dxg:TableView Style="{StaticResource ReadOnlyTableViewStyle}" />
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </DockPanel>
+
+</UserControl>

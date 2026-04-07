@@ -1,0 +1,59 @@
+<UserControl x:Class="Telemart.Client.Views.Backlog.BacklogTaskJiraView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:client="clr-namespace:Telemart.Client"
+             xmlns:dialogs="clr-namespace:Telemart.Client.ViewModels.Backlog"
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             DataContext="{client:Container Type=dialogs:BacklogTaskJiraViewModel}"
+             Width="350"
+             Height="110"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance IsDesignTimeCreatable=True, Type={x:Type dialogs:BacklogTaskJiraViewModel}}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand Event="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneWay}" />
+        <dxmvvm:KeyToCommand KeyGesture="Esc"
+                             Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+    </dxmvvm:Interaction.Behaviors>
+    <dxlc:LayoutControl x:Name="ValidationContainer"
+                        Orientation="Vertical"
+                        dxe:ValidationService.IsValidationContainer="True"
+                        ItemStyle="{StaticResource LayoutItemStyle}">
+        <dxlc:LayoutGroup Orientation="Vertical">
+            <dxlc:LayoutItem Label="Jira">
+                <dxe:TextEdit EditValue="{Binding Path=JiraId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}">
+                </dxe:TextEdit>
+            </dxlc:LayoutItem>
+            <dxlc:LayoutItem Label="Estimate">
+                <dxe:TextEdit EditValue="{Binding Path=Estimate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                              MaskType="Numeric"
+                              Mask="F0"
+                              EditValueType="{x:Type system:Int32}">
+                </dxe:TextEdit>
+            </dxlc:LayoutItem>
+        </dxlc:LayoutGroup>
+        <dxlc:LayoutGroup Orientation="Horizontal"
+                          VerticalAlignment="Bottom"
+                          HorizontalAlignment="Right">
+            <Button Content="OK"
+                    Command="{Binding Path=OkCommand, Mode=OneWay}"
+                    IsTabStop="True"
+                    IsEnabled="{Binding Path=(dxe:ValidationService.HasValidationError), Mode=OneWay, ElementName=ValidationContainer, Converter={dxmvvm:BooleanNegationConverter}}" />
+            <Button Content="Отмена"
+                    IsTabStop="True"
+                    Command="{Binding Path=CancelCommand, Mode=OneWay}" />
+        </dxlc:LayoutGroup>
+    </dxlc:LayoutControl>
+</UserControl>

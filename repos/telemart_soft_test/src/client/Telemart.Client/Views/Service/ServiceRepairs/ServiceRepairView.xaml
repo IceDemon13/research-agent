@@ -1,0 +1,324 @@
+<controls:TelemartUserControl x:Class="Telemart.Client.Views.Service.ServiceRepairs.ServiceRepairView"
+                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                              xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                              xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                              xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                              xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                              xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                              xmlns:client="clr-namespace:Telemart.Client"
+                              xmlns:common="clr-namespace:Telemart.Client.Views.Common"
+                              xmlns:converters="clr-namespace:Telemart.Client.Common.Converters"
+                              xmlns:viewComponents="clr-namespace:Telemart.Client.ViewComponents"
+                              xmlns:viewModels="clr-namespace:Telemart.Client.ViewModels.Service.ServiceRepairs"
+                              xmlns:common1="clr-namespace:Telemart.Client.Common"
+                              xmlns:controls="clr-namespace:Telemart.Client.Common.Controls"
+                              DataContext="{client:Container Type=viewModels:ServiceRepairViewModel}"
+                              Width="630"
+                              Height="380"
+                              mc:Ignorable="d"
+                              d:DataContext="{d:DesignInstance Type=viewModels:ServiceRepairViewModel, IsDesignTimeCreatable=True}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Telemart.Client;component/Style/MainStyle.xaml" />
+                <ResourceDictionary Source="/Telemart.Client;component/Style/CommonImages.xaml" />
+                <ResourceDictionary>
+                    <Style x:Key="ReadOnlyConditionsStyle"
+                           TargetType="dxe:BaseEdit">
+                        <Setter Property="IsReadOnly"
+                                Value="True" />
+                        <Setter Property="Opacity"
+                                Value="{StaticResource DisabledElementOpacity}" />
+                        <Style.Triggers>
+                            <DataTrigger Value="True">
+                                <DataTrigger.Binding>
+                                    <MultiBinding Converter="{converters:BooleanOrMultiValueConverter}">
+                                        <Binding Path="IsLockedByCurrentEmployee"
+                                                 Mode="OneWay" />
+                                    </MultiBinding>
+                                </DataTrigger.Binding>
+                                <Setter Property="IsReadOnly"
+                                        Value="False" />
+                                <Setter Property="Opacity"
+                                        Value="{StaticResource EnabledElementOpacity}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                    <Style x:Key="ReadOnlyConditionsComboBoxStyle"
+                           TargetType="{x:Type dxe:ComboBoxEdit}"
+                           BasedOn="{StaticResource ReadOnlyConditionsStyle}">
+                        <Setter Property="AllowDefaultButton"
+                                Value="{Binding Path=IsReadOnly, Converter={dxmvvm:BooleanNegationConverter}, RelativeSource={RelativeSource Self}}" />
+                        <Setter Property="IsTextEditable"
+                                Value="{Binding Path=IsReadOnly, RelativeSource={RelativeSource Self}}" />
+                    </Style>
+                </ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <dxmvvm:Interaction.Behaviors>
+        <dxmvvm:EventToCommand EventName="Loaded"
+                               Command="{Binding Path=HandleLoadedCommand, Mode=OneTime}" />
+    </dxmvvm:Interaction.Behaviors>
+
+    <dx:LoadingDecorator IsSplashScreenShown="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay}"
+                         OwnerLock="LoadingContent">
+        <dxlc:LayoutControl x:Name="LayoutControl"
+                            Orientation="Vertical"
+                            ItemStyle="{StaticResource LayoutItemStyle}"
+                            dxe:ValidationService.IsValidationContainer="True"
+                            Visibility="{Binding Path=HandleLoadedCommand.IsExecuting, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter HiddenInsteadOfCollapsed=True, Inverse=True}}">
+            <dxlc:LayoutControl.IsEnabled>
+                <MultiBinding Converter="{converters:BooleanOrMultiValueConverter Inverse=True}">
+                    <Binding Path="SaveCommand.IsExecuting" />
+                    <Binding Path="OkCommand.IsExecuting" />
+                    <Binding Path="LockCommand.IsExecuting" />
+                </MultiBinding>
+            </dxlc:LayoutControl.IsEnabled>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Stretch">
+                <dxlc:LayoutGroup Orientation="Vertical">
+                    <dxlc:LayoutItem Label="Заявка">
+                        <dxe:ButtonEdit EditValue="{Binding Path=Model.ServiceRequestId, Mode=OneWay}"
+                                        AllowDefaultButton="False"
+                                        Style="{StaticResource ReadOnlyEditorStyle}">
+                            <dxe:ButtonInfo GlyphKind="Search"
+                                            Command="{Binding Path=ShowServiceRequestCommand, Mode=OneWay}"
+                                            CommandParameter="{Binding Path=Model.ServiceRequestId, Mode=OneWay}" />
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                     Command="{Binding Path=ShowServiceRequestCommand, Mode=OneWay}"
+                                                     CommandParameter="{Binding Path=Model.ServiceRequestId, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ButtonEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Товар">
+                        <dxe:ButtonEdit EditValue="{Binding Path=Model.DisplayProductName, Mode=OneWay}"
+                                        AllowDefaultButton="False"
+                                        Style="{StaticResource ReadOnlyEditorStyle}">
+                            <dxe:ButtonInfo GlyphKind="Search"
+                                            Command="{Binding Path=DocumentCommands.ShowProductCardCommand, Mode=OneWay}"
+                                            CommandParameter="{Binding Path=Model.ProductId, Mode=OneWay}" />
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                     Command="{Binding Path=ShowProductCardCommand, Mode=OneWay}"
+                                                     CommandParameter="{Binding Path=Model.ProductId, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ButtonEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Дефект">
+                        <dxe:TextEdit EditValue="{Binding Path=Model.Defect, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      Style="{StaticResource ReadOnlyConditionsStyle}" />
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="SN">
+                        <dxe:ButtonEdit EditValue="{Binding Path=Model.SerialNumber, Mode=OneWay}"
+                                        AllowDefaultButton="False"
+                                        Style="{StaticResource ReadOnlyEditorStyle}">
+                            <dxe:ButtonInfo GlyphKind="Search"
+                                            Command="{Binding Path=DocumentCommands.ShowSerialNumberHistoryCommand, Mode=OneWay}"
+                                            CommandParameter="{Binding Path=Model.SerialNumber, Mode=OneWay}" />
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                     Command="{Binding Path=DocumentCommands.ShowSerialNumberHistoryCommand, Mode=OneWay}"
+                                                     CommandParameter="{Binding Path=Model.SerialNumber, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ButtonEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="СЦ">
+                        <StackPanel>
+                            <dxe:ComboBoxEdit ItemsSource="{Binding Path=ServiceCenters, Mode=OneWay}"
+                                              EditValue="{Binding Path=SelectedServiceCenter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              DisplayMember="DisplayValue"
+                                              AllowNullInput="True"
+                                              NullValueButtonPlacement="EditBox"
+                                              Style="{StaticResource SearchableComboBoxStyle}"
+                                              Visibility="{Binding IsLockedByCurrentEmployee, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter}}">
+                            </dxe:ComboBoxEdit>
+                            <dxe:ButtonEdit EditValue="{Binding Path=SelectedServiceCenter.DisplayValue, Mode=OneWay}"
+                                            AllowDefaultButton="False"
+                                            IsReadOnly="True"
+                                            Opacity="{StaticResource DisabledElementOpacity}"
+                                            Visibility="{Binding IsLockedByCurrentEmployee, Mode=OneWay, Converter={dx:BooleanToVisibilityConverter Invert=True}}">
+                                <dxe:ButtonInfo GlyphKind="Search"
+                                                Command="{Binding Path=ShowServiceCenterCommand, Mode=OneWay}"
+                                                CommandParameter="{Binding Path=Model.ServiceCenterId, Mode=OneWay}" />
+                                <dxmvvm:Interaction.Behaviors>
+                                    <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                         Command="{Binding Path=ShowServiceCenterCommand, Mode=OneWay}"
+                                                         CommandParameter="{Binding Path=Model.ServiceCenterId, Mode=OneWay}" />
+                                </dxmvvm:Interaction.Behaviors>
+                            </dxe:ButtonEdit>
+                        </StackPanel>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Накладная">
+                        <dxe:ButtonEdit EditValue="{Binding Path=Model.ServiceInvoiceId, Mode=OneWay}"
+                                        NullText="{StaticResource NullTextValue}"
+                                        AllowDefaultButton="False"
+                                        Style="{StaticResource ReadOnlyEditorStyle}">
+                            <dxe:ButtonInfo GlyphKind="Search"
+                                            Command="{Binding Path=ShowServiceInvoiceCommand, Mode=OneWay}"
+                                            CommandParameter="{Binding Path=Model.ServiceInvoiceId, Mode=OneWay}" />
+                            <dxmvvm:Interaction.Behaviors>
+                                <dxmvvm:KeyToCommand KeyGesture="Enter"
+                                                     Command="{Binding Path=ShowServiceInvoiceCommand, Mode=OneWay}"
+                                                     CommandParameter="{Binding Path=Model.ServiceInvoiceId, Mode=OneWay}" />
+                            </dxmvvm:Interaction.Behaviors>
+                        </dxe:ButtonEdit>
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Комментарий"
+                                     LabelVerticalAlignment="Top"
+                                     VerticalAlignment="Stretch">
+                        <dxe:TextEdit EditValue="{Binding Path=Model.Comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      AcceptsReturn="True"
+                                      TextWrapping="Wrap"
+                                      VerticalContentAlignment="Top"
+                                      VerticalScrollBarVisibility="Auto"
+                                      Style="{StaticResource ReadOnlyConditionsStyle}" />
+                    </dxlc:LayoutItem>
+                    <dxlc:LayoutItem Label="Вывод АСЦ"
+                                     LabelVerticalAlignment="Top"
+                                     VerticalAlignment="Stretch">
+                        <dxe:TextEdit EditValue="{Binding Path=Model.ServiceCenterConclusion, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
+                                      IsReadOnly="True"
+                                      AcceptsReturn="True"
+                                      TextWrapping="Wrap"
+                                      VerticalContentAlignment="Top"
+                                      VerticalScrollBarVisibility="Auto"
+                                      Style="{StaticResource ReadOnlyConditionsStyle}" />
+                    </dxlc:LayoutItem>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup Orientation="Vertical">
+                    <dxlc:LayoutGroup x:Name="InfoPropertiesLayoutGroup"
+                                    Orientation="Vertical"
+                                    Width="240">
+                        <common:SummaryItemsView SummaryItems="{Binding Path=SummaryItems, Mode=OneWay}"
+                                                LabelColumnWidth="*"
+                                                ContentColumnWidth="2*" />
+                    </dxlc:LayoutGroup>
+                    <dxlc:LayoutGroup x:Name="ServiceInvoiceInfoPropertiesLayoutGroup"
+                                      Orientation="Vertical"
+                                      Width="240"
+                                      Visibility="{Binding Path=IsVisibleServiceInvoiceInfo, Mode=OneWay, Converter={dxmvvm:BooleanToVisibilityConverter}}">
+                        <dxlc:LayoutItem Label="Серв. накладная"
+                                         AddColonToLabel="False"> </dxlc:LayoutItem>
+                        <common:SummaryItemsView SummaryItems="{Binding Path=ServiceInvoiceSummaryItems, Mode=OneWay}"
+                                                 LabelColumnWidth="*"
+                                                 ContentColumnWidth="2*" />
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+            <dxlc:LayoutGroup Orientation="Horizontal"
+                              VerticalAlignment="Bottom">
+                <TextBlock Text="{Binding Path=Model.EmployeeLockName, Mode=OneWay, StringFormat={}Редактирует: {0}}"
+                           Foreground="Red"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Left">
+                    <TextBlock.Visibility>
+                        <MultiBinding Converter="{converters:BooleanAndMultiValueConverter ToVisibility=True}">
+                            <Binding Path="Model.EmployeeLockId"
+                                     Mode="OneWay"
+                                     Converter="{dxmvvm:ObjectToBooleanConverter}" />
+                            <Binding Path="IsLockedByCurrentEmployee"
+                                     Mode="OneWay"
+                                     Converter="{dxmvvm:BooleanNegationConverter}" />
+                        </MultiBinding>
+                    </TextBlock.Visibility>
+                </TextBlock>
+                <dxlc:LayoutGroup Orientation="Horizontal"
+                                  HorizontalAlignment="Left"
+                                  UseLayoutRounding="True"
+                                  Height="22">
+                    <viewComponents:EditCommentButton Command="{Binding Path=EditCommentCommand, Mode=OneWay}"
+                                                      Style="{StaticResource VisibilityBasedOnEnabledButtonStyle}" />
+                    <dx:SimpleButton Content="Редактировать"
+                                     Glyph="/Images/CategoryOptions/pencil.png"
+                                     Command="{Binding Path=LockCommand, Mode=OneWay}"
+                                     Style="{StaticResource VisibilityBasedOnEnabledButtonStyle}" />
+                    <dx:DropDownButton Content="Обработать"
+                                       Glyph="../../../Images/Common/lightning_16x16.png">
+                        <dx:DropDownButton.Visibility>
+                            <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                                <Binding Path="IsEnabled"
+                                         ElementName="CancelButton" />
+                                <Binding Path="CancelRepairCommand.IsExecuting" />
+                            </MultiBinding>
+                        </dx:DropDownButton.Visibility>
+                        <dxb:PopupMenu>
+                            <dxb:BarButtonItem Content="Новый"
+                                               Glyph="../../../Images/Common/new_16x16.png"
+                                               Command="{Binding Path=ReconfirmCommand, Mode=OneWay}"
+                                               IsVisible="{Binding Path=IsEnabled, RelativeSource={RelativeSource Self}}"/>
+                            <dxb:BarButtonItem Content="Согласовать"
+                                               Glyph="../../../Images/Common/tick.png"
+                                               Command="{Binding Path=ConfirmCommand, Mode=OneWay}"
+                                               IsVisible="{Binding Path=IsEnabled, RelativeSource={RelativeSource Self}}"/>
+                            <dxb:BarButtonItem x:Name="CancelButton"
+                                               Content="Отменить"
+                                               Glyph="../../../Images/Common/canceled.png"
+                                               Command="{Binding Path=CancelRepairCommand, Mode=OneWay}"/>
+                        </dxb:PopupMenu>
+                    </dx:DropDownButton>
+                    <dx:SimpleButton Content="Принять из СЦ"
+                                     Command="{Binding Path=TakeFromServiceCenterCommand, Mode=OneWay}"
+                                     Glyph="{StaticResource HouseBack16}">
+                        <dx:SimpleButton.Visibility>
+                            <MultiBinding Converter="{converters:BooleanOrMultiValueConverter ToVisibility=True}">
+                                <Binding Path="IsEnabled"
+                                         RelativeSource="{RelativeSource Self}" />
+                                <Binding Path="TakeFromServiceCenterCommand.IsExecuting" />
+                            </MultiBinding>
+                        </dx:SimpleButton.Visibility>
+                    </dx:SimpleButton>
+                </dxlc:LayoutGroup>
+                <dxlc:LayoutGroup HorizontalAlignment="Right">
+                    <Button x:Name="OkButton"
+                            Content="ОК"
+                            Command="{Binding Path=OkCommand, Mode=OneWay}">
+                        <Button.Style>
+                            <Style TargetType="{x:Type Button}"
+                                   BasedOn="{StaticResource {x:Type Button}}">
+                                <Setter Property="IsEnabled"
+                                        Value="True" />
+                                <Style.Triggers>
+                                    <DataTrigger Value="True">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{converters:BooleanOrMultiValueConverter}">
+                                                <Binding Path="(dxe:ValidationService.HasValidationError)"
+                                                         Mode="OneWay"
+                                                         ElementName="LayoutControl" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="IsEnabled"
+                                                Value="False" />
+                                    </DataTrigger>
+                                    <DataTrigger Value="True">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{converters:BooleanAndMultiValueConverter}">
+                                                <Binding Path="IsLockedByCurrentEmployee"
+                                                         Mode="OneWay"
+                                                         Converter="{dxmvvm:BooleanNegationConverter}" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="IsEnabled"
+                                                Value="False" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="Сохранить"
+                            Command="{Binding Path=SaveCommand, Mode=OneWay}"
+                            IsEnabled="{Binding Path=IsEnabled, Mode=OneWay, ElementName=OkButton}">
+                    </Button>
+                    <Button Content="Отмена"
+                            Command="{Binding Path=CancelCommand, Mode=OneWay}">
+                    </Button>
+                </dxlc:LayoutGroup>
+            </dxlc:LayoutGroup>
+        </dxlc:LayoutControl>
+    </dx:LoadingDecorator>
+</controls:TelemartUserControl>

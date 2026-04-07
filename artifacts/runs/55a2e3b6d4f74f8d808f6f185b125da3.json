@@ -1,0 +1,52 @@
+{
+  "run_id": "55a2e3b6d4f74f8d808f6f185b125da3",
+  "goal": "TEL-13508 Analyze this Jira task content and return concrete missing details, task text:\nTitle: Service request: change of text and printed form “Receipt” p.2\nDescription:\nПотреба:\nВ друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст\n“Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\"\n\nhttps://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715\n\ntechnical risks, and direct follow-up questions. Avoid generic wording. If a repo is supplied, state whether the task matches that repo and why.",
+  "status": "failed",
+  "started_at": "2026-04-06T20:17:47.670784+00:00",
+  "attempt_index": 1,
+  "total_attempts": 1,
+  "parent_run_id": "",
+  "repo_id": "telemart_soft_test",
+  "actor_context": {
+    "actor_id": "diag-1",
+    "actor_type": "user",
+    "role": "techlead",
+    "source_channel": "web",
+    "display_name": "Diag User",
+    "repo_allowlist": [],
+    "repo_denylist": [],
+    "jira_project_allowlist": [],
+    "jira_project_denylist": [],
+    "dry_run_only": false
+  },
+  "finished_at": "2026-04-06T20:17:47.678787+00:00",
+  "steps": [
+    {
+      "name": "spec",
+      "status": "failed",
+      "started_at": "2026-04-06T20:17:47.671787+00:00",
+      "finished_at": "2026-04-06T20:17:47.678787+00:00",
+      "message": "",
+      "error": {
+        "type": "unexpected",
+        "message": "'Unknown repo_id: telemart_soft_test'",
+        "step": "spec",
+        "details": {
+          "exception_type": "KeyError"
+        }
+      }
+    }
+  ],
+  "policy_decisions": [],
+  "log_path": "artifacts/runs/55a2e3b6d4f74f8d808f6f185b125da3.json",
+  "scm": {},
+  "pr_url": "",
+  "review_url": "",
+  "decision": "pending",
+  "decided_at": "",
+  "decided_by": "",
+  "decision_note": "",
+  "retry_note": "",
+  "retry_context_summary": "",
+  "retry_context": {}
+}
