@@ -1,0 +1,37 @@
+{
+  "overall_status": "failed",
+  "outcome_type": "build_compile_error",
+  "failure_reason_guess": "build_compile_error",
+  "restore_pass": true,
+  "restore_command": "dotnet restore \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-d5df0a4f/repo/src/Telemart.sln\" --nologo",
+  "build_passed": false,
+  "targeted_test_attempted": true,
+  "passed": false,
+  "errors": [
+    "Validation step failed: build (exit_code=1)",
+    "Validation step failed: test (exit_code=1)"
+  ],
+  "step_summaries": [
+    {
+      "name": "restore",
+      "status": "success",
+      "exit_code": 0,
+      "command": "dotnet restore \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-d5df0a4f/repo/src/Telemart.sln\" --nologo",
+      "stderr_excerpt": ""
+    },
+    {
+      "name": "build",
+      "status": "failed",
+      "exit_code": 1,
+      "command": "dotnet build \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-d5df0a4f/repo/src/Telemart.sln\" --nologo",
+      "stderr_excerpt": ""
+    },
+    {
+      "name": "test",
+      "status": "failed",
+      "exit_code": 1,
+      "command": "dotnet test \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-d5df0a4f/repo/src/client/Telemart.Client.Tests/Telemart.Client.Tests.csproj\" --nologo --no-build",
+      "stderr_excerpt": "[xUnit.net 00:00:00.77]     Telemart.Client.Tests.OrderFilteringItemTests.BuildParametersTest [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.ProductImagesDirectoryProcessorTests.NonExistingDirectoryTest [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.NovaposhtaBillTest.NovapostaBillImportEngineTests.ImportTest1 [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.ObservableR"
+    }
+  ]
+}

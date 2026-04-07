@@ -49,21 +49,22 @@ class ValidationService:
         normalized = list(commands or [])
         return bool(normalized) and all(str(item.command or "").strip().startswith("dotnet ") for item in normalized)
 
-    @staticmethod
-    def _runner_only_repo_ids() -> set[str]:
-        return {"telemart_soft_test"}
-
     def _should_block_local_runner_fallback(
         self,
         *,
         repo_id: str,
+        repo_root: Path,
         commands: list[ValidationCommand] | None,
         validation_runner_available: bool,
     ) -> bool:
-        normalized_repo_id = str(repo_id or "").strip().lower()
+        environment_info = self._repo_validation_service._detect_validation_environment(
+            repo_id=repo_id,
+            repo_path=repo_root,
+            commands=list(commands or []),
+        )
         return (
             validation_runner_available
-            and normalized_repo_id in self._runner_only_repo_ids()
+            and str(environment_info.get("validation_environment", "") or "") == "windows_required"
             and self._commands_are_runner_dotnet(commands)
         )
 
@@ -126,6 +127,12 @@ class ValidationService:
         validation_endpoint_url = ""
         validation_endpoint_source = ""
         validation_runner_mode = ""
+        validation_environment = ""
+        validation_environment_reason = ""
+        required_runner_type = ""
+        validation_runner_fallback_used = False
+        validation_environment_unavailable = False
+        validation_environment_unavailable_reason = ""
         validation_connection_attempted = False
         validation_connection_refused = False
         validation_target_reachable = False
@@ -227,6 +234,14 @@ class ValidationService:
             validation_endpoint_url = str(runner_payload.get("validation_endpoint_url", "") or "")
             validation_endpoint_source = str(runner_payload.get("validation_endpoint_source", "") or "")
             validation_runner_mode = str(runner_payload.get("validation_runner_mode", "") or "")
+            validation_environment = str(runner_payload.get("validation_environment", "") or "")
+            validation_environment_reason = str(runner_payload.get("validation_environment_reason", "") or "")
+            required_runner_type = str(runner_payload.get("required_runner_type", "") or "")
+            validation_runner_fallback_used = bool(runner_payload.get("validation_runner_fallback_used", False))
+            validation_environment_unavailable = bool(runner_payload.get("validation_environment_unavailable", False))
+            validation_environment_unavailable_reason = str(
+                runner_payload.get("validation_environment_unavailable_reason", "") or ""
+            )
             validation_connection_attempted = bool(runner_payload.get("validation_connection_attempted", False))
             validation_connection_refused = bool(runner_payload.get("validation_connection_refused", False))
             validation_target_reachable = bool(runner_payload.get("validation_target_reachable", False))
@@ -411,6 +426,12 @@ class ValidationService:
                     validation_endpoint_url=validation_endpoint_url,
                     validation_endpoint_source=validation_endpoint_source,
                     validation_runner_mode=validation_runner_mode,
+                    validation_environment=validation_environment,
+                    validation_environment_reason=validation_environment_reason,
+                    required_runner_type=required_runner_type,
+                    validation_runner_fallback_used=validation_runner_fallback_used,
+                    validation_environment_unavailable=validation_environment_unavailable,
+                    validation_environment_unavailable_reason=validation_environment_unavailable_reason,
                     validation_connection_attempted=validation_connection_attempted,
                     validation_connection_refused=validation_connection_refused,
                     validation_target_reachable=validation_target_reachable,
@@ -420,6 +441,7 @@ class ValidationService:
                 )
             if self._should_block_local_runner_fallback(
                 repo_id=repo_id,
+                repo_root=repo_root,
                 commands=command_list,
                 validation_runner_available=validation_runner_available,
             ):
@@ -483,6 +505,12 @@ class ValidationService:
                     validation_endpoint_url=validation_endpoint_url,
                     validation_endpoint_source=validation_endpoint_source,
                     validation_runner_mode=validation_runner_mode,
+                    validation_environment=validation_environment,
+                    validation_environment_reason=validation_environment_reason,
+                    required_runner_type=required_runner_type,
+                    validation_runner_fallback_used=validation_runner_fallback_used,
+                    validation_environment_unavailable=validation_environment_unavailable,
+                    validation_environment_unavailable_reason=validation_environment_unavailable_reason,
                     validation_connection_attempted=validation_connection_attempted,
                     validation_connection_refused=validation_connection_refused,
                     validation_target_reachable=validation_target_reachable,
@@ -667,6 +695,12 @@ class ValidationService:
             validation_endpoint_url=validation_endpoint_url,
             validation_endpoint_source=validation_endpoint_source,
             validation_runner_mode=validation_runner_mode,
+            validation_environment=validation_environment,
+            validation_environment_reason=validation_environment_reason,
+            required_runner_type=required_runner_type,
+            validation_runner_fallback_used=validation_runner_fallback_used,
+            validation_environment_unavailable=validation_environment_unavailable,
+            validation_environment_unavailable_reason=validation_environment_unavailable_reason,
             validation_connection_attempted=validation_connection_attempted,
             validation_connection_refused=validation_connection_refused,
             validation_target_reachable=validation_target_reachable,

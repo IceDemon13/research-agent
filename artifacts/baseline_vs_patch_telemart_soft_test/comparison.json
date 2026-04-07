@@ -1,0 +1,17 @@
+{
+  "baseline": {
+    "overall_status": "failed",
+    "outcome_type": "test_failure",
+    "build_status": "success",
+    "test_status": "failed",
+    "test_stderr_excerpt": "[xUnit.net 00:00:02.16]     Telemart.Client.Tests.Converters.BooleanAndMultiValueConverterTests.ValuesNullTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.NavigationMenuBuilderTests.NullRolesTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OrderRulesTests.CanEditOrderPositiveTest(orderStatusId: 0) [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OurServiceBarcodeTests.RecognizeBarcodeTest(barcodeText: \"SR-16000\", valid: True, serviceRequestId: 16000) [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OrderViewModelTests.IsInheritedFromIDataErrorInfoTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OrderFilteringItemTests.BuildParametersTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.BulkAddTextProcessorTests.EmptyTextTest(text: \"\") [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.Converters.BooleanOrMultiValueConverterTests.FailureTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OrderPackCellViewModelTests.RecognizeBarcodeViewModelOnFinished_AddsSuccessfulScanOnce_AndFlagsDuplicate [FAIL]\n[xUnit.net 00:00:02.23]     Telemart.Client.Tests.BulkAddTextProcessorTests.EmptyTextTest(text: \"    \") [FAIL"
+  },
+  "patched": {
+    "overall_status": "failed",
+    "outcome_type": "build_compile_error",
+    "build_status": "failed",
+    "test_status": "failed",
+    "test_stderr_excerpt": "[xUnit.net 00:00:00.77]     Telemart.Client.Tests.OrderFilteringItemTests.BuildParametersTest [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.ProductImagesDirectoryProcessorTests.NonExistingDirectoryTest [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.NovaposhtaBillTest.NovapostaBillImportEngineTests.ImportTest1 [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.ObservableRangeCollectionTests.AddRangeTest [FAIL]\n[xUnit.net 00:00:00.77]     Telemart.Client.Tests.OrderPackCellViewModelTests.HandleLoadedAsync_HydratesSelectedCellIdsFromExistingWarehouseCellsAsync [FAIL]\n[xUnit.net 00:00:00.78]     Telemart.Client.Tests.BulkAddTextProcessorTests.EmptyTextTest(text: \"    \") [FAIL]\n[xUnit.net 00:00:00.78]     Telemart.Client.Tests.ProductImagesDirectoryProcessorTests.DirectoryNameShoudNotBeNullOrEmpty(directoryName: null) [FAIL]\n[xUnit.net 00:00:00.78]     Telemart.Client.Tests.OrderRulesTests.CanEditOrderNegativeTest(orderStatusId: 5) [FAIL]\n[xUnit.net 00:00:00.78]     Telemart.Client.Tests.OrderPackCellViewModelTests.RecognizeBarcodeViewModelOnFinished_AddsSuccessfulScanOnce_AndFlagsDuplicate [FAIL]\n[xUnit.net 00:00:00.78]     Telemart.Client.Tests.ProductImages"
+  },
+  "classification": "patch_regression"
+}

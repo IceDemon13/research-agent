@@ -149,6 +149,7 @@ class DraftPatchRepairAttemptRecord(BaseModel):
     failure_type: str = ""
     retry_strategy: str = ""
     retry_strategy_reason: str = ""
+    targeted_regressions: list[str] = Field(default_factory=list)
     failed_test_names: list[str] = Field(default_factory=list)
     change_summary_lines: list[str] = Field(default_factory=list)
     status: str = ""
@@ -157,8 +158,44 @@ class DraftPatchRepairAttemptRecord(BaseModel):
     repaired_files: list[str] = Field(default_factory=list)
     validation_status: str = ""
     validation_summary: str = ""
+    invalidated: bool = False
+    invalidated_reason: str = ""
 
     model_config = {"extra": "ignore"}
+
+
+class DraftPatchValidationSnapshot(BaseModel):
+    restore: str = "unknown"
+    build: str = "unknown"
+    test: str = "unknown"
+    overall_status: str = ""
+    passed: bool = False
+    outcome_type: str = ""
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("restore", "build", "test")
+    @classmethod
+    def _normalize_stage_status(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower() or "unknown"
+        allowed = {"success", "failed", "skipped", "unknown"}
+        if normalized not in allowed:
+            return "unknown"
+        return normalized
+
+
+class DraftPatchRegressionMap(BaseModel):
+    restore: bool = False
+    build: bool = False
+    test: bool = False
+    targeted_stages: list[str] = Field(default_factory=list)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("targeted_stages")
+    @classmethod
+    def _normalize_targeted_stages(cls, value: list[str]) -> list[str]:
+        return _normalize_items(value)
 
 
 class DraftPatchExecutionResult(BaseModel):
@@ -168,6 +205,9 @@ class DraftPatchExecutionResult(BaseModel):
     jira_ticket: str
     repo_id: str
     allowed_files: list[str]
+    baseline_validation: DraftPatchValidationSnapshot = Field(default_factory=DraftPatchValidationSnapshot)
+    patched_validation: DraftPatchValidationSnapshot = Field(default_factory=DraftPatchValidationSnapshot)
+    regression_map: DraftPatchRegressionMap = Field(default_factory=DraftPatchRegressionMap)
     validated: bool = False
     validation_status: str = ""
     validation_summary: str = ""
@@ -236,4 +276,6 @@ class DraftPatchExecutionResult(BaseModel):
         validation_failed = str(self.validation_status or "").strip().lower() == "failed"
         if validation_failed and not self.repair_successful and self.apply_ready:
             raise ValueError("failed validation with exhausted repair must not be apply_ready.")
+        if self.baseline_validation.build == "success" and self.patched_validation.build == "success" and self.regression_map.build:
+            raise ValueError("regression_map.build cannot be true when baseline and patched build are both successful.")
         return self

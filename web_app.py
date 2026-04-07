@@ -4003,6 +4003,9 @@ def _overlay_draft_patch_execution_result(
         "contract_version": str(record.contract_version or "").strip(),
         "invariant_check_passed": bool(record.invariant_check_passed),
         "out_of_bounds_detected": bool(record.out_of_bounds_detected),
+        "baseline_validation": record.baseline_validation.model_dump() if hasattr(record.baseline_validation, "model_dump") else {},
+        "patched_validation": record.patched_validation.model_dump() if hasattr(record.patched_validation, "model_dump") else {},
+        "regression_map": record.regression_map.model_dump() if hasattr(record.regression_map, "model_dump") else {},
     }
     result.technical_details = technical_details
     return result

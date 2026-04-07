@@ -5,6 +5,7 @@ import shlex
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,7 +16,18 @@ from contracts.validation_contract import ValidationCommand, ValidationStepResul
 class RepoValidationService:
     _ALLOWED_ACTIONS = {"build", "test", "restore"}
     _FORBIDDEN_TOKENS = {";", "&&", "||", "|", ">", "<", "$(", "`"}
-    _WINDOWS_DESKTOP_REPO_IDS = {"telemart_soft_test"}
+    _WINDOWS_TARGETING_MARKERS = (
+        "net6.0-windows",
+        "net7.0-windows",
+        "net8.0-windows",
+        "net9.0-windows",
+        "net10.0-windows",
+        "usewpf",
+        "usewindowsforms",
+        "microsoft.net.sdk.windowsdesktop",
+        "presentationframework",
+        "windowsdesktop",
+    )
 
     def __init__(
         self,
@@ -142,7 +154,46 @@ class RepoValidationService:
             "timeout_seconds": int(timeout_seconds or self._timeout_seconds),
             "allowed_roots": list(self._allowed_roots),
         }
-        selected_base_url = self._select_base_url(repo_id=repo_id, commands=list(commands or []))
+        environment_info = self._detect_validation_environment(
+            repo_id=repo_id,
+            repo_path=repo_path,
+            commands=list(commands or []),
+        )
+        selected_base_url, runner_selection = self._select_base_url(
+            environment_info=environment_info,
+        )
+        validation_environment = str(environment_info.get("validation_environment", "") or "unsupported")
+        validation_environment_reason = str(environment_info.get("validation_environment_reason", "") or "")
+        required_runner_type = str(environment_info.get("required_runner_type", "") or "")
+        validation_runner_fallback_used = bool(runner_selection.get("validation_runner_fallback_used", False))
+        validation_environment_unavailable = bool(runner_selection.get("validation_environment_unavailable", False))
+        validation_environment_unavailable_reason = str(
+            runner_selection.get("validation_environment_unavailable_reason", "") or ""
+        )
+        if validation_environment_unavailable or not selected_base_url:
+            return {
+                "ok": False,
+                "error": validation_environment_unavailable_reason or "No compatible validation runner is available.",
+                "steps": [],
+                "validation_runner_available": self.is_available(),
+                "validation_runner_type": self._runner_type,
+                "validation_timeout_seconds": int(timeout_seconds or self._timeout_seconds),
+                "validation_environment": validation_environment,
+                "validation_environment_reason": validation_environment_reason,
+                "required_runner_type": required_runner_type,
+                "validation_runner_fallback_used": validation_runner_fallback_used,
+                "validation_environment_unavailable": True,
+                "validation_environment_unavailable_reason": validation_environment_unavailable_reason or "No compatible validation runner is available.",
+                "validation_endpoint_url": "",
+                "validation_endpoint_source": "",
+                "validation_runner_mode": "",
+                "validation_connection_attempted": False,
+                "validation_connection_refused": False,
+                "validation_target_reachable": False,
+                "working_host_validation_path": str(self._windows_desktop_base_url or "").rstrip("/"),
+                "official_pipeline_validation_path": "",
+                "validation_path_match": False,
+            }
         target_url = f"{selected_base_url}/validate"
         endpoint_source = (
             "validation_runner_windows_desktop_base_url"
@@ -155,6 +206,12 @@ class RepoValidationService:
             "validation_endpoint_url": target_url,
             "validation_endpoint_source": endpoint_source,
             "validation_runner_mode": runner_mode,
+            "validation_environment": validation_environment,
+            "validation_environment_reason": validation_environment_reason,
+            "required_runner_type": required_runner_type,
+            "validation_runner_fallback_used": validation_runner_fallback_used,
+            "validation_environment_unavailable": validation_environment_unavailable,
+            "validation_environment_unavailable_reason": validation_environment_unavailable_reason,
             "validation_connection_attempted": True,
             "validation_connection_refused": False,
             "validation_target_reachable": bool(target_reachable),
@@ -178,6 +235,8 @@ class RepoValidationService:
             validation_runner_command_count=len(list(commands or [])),
             validation_endpoint_source=endpoint_source,
             validation_runner_mode=runner_mode,
+            validation_environment=validation_environment,
+            required_runner_type=required_runner_type,
             validation_target_reachable=bool(target_reachable),
         )
         _emit(
@@ -190,6 +249,8 @@ class RepoValidationService:
             validation_runner_command_count=len(list(commands or [])),
             validation_endpoint_source=endpoint_source,
             validation_runner_mode=runner_mode,
+            validation_environment=validation_environment,
+            required_runner_type=required_runner_type,
             validation_target_reachable=bool(target_reachable),
         )
         _emit(
@@ -559,18 +620,181 @@ class RepoValidationService:
             return ""
         return text.rstrip("/")
 
-    def _select_base_url(self, *, repo_id: str, commands: list[ValidationCommand]) -> str:
-        normalized_repo_id = str(repo_id or "").strip().lower()
-        if self._requires_windows_desktop_runner(repo_id=normalized_repo_id, commands=commands):
-            if self._windows_desktop_base_url:
-                return self._windows_desktop_base_url
-        return self._base_url
+    def _select_base_url(self, *, environment_info: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        validation_environment = str(environment_info.get("validation_environment", "") or "unsupported")
+        required_runner_type = str(environment_info.get("required_runner_type", "") or "")
+        if validation_environment == "windows_required":
+            if self._windows_desktop_base_url and self._endpoint_reachable(self._windows_desktop_base_url):
+                return self._windows_desktop_base_url, {
+                    "validation_runner_fallback_used": False,
+                    "validation_environment_unavailable": False,
+                    "validation_environment_unavailable_reason": "",
+                }
+            return "", {
+                "validation_runner_fallback_used": False,
+                "validation_environment_unavailable": True,
+                "validation_environment_unavailable_reason": (
+                    f"Required validation environment '{required_runner_type or 'windows'}' is unavailable."
+                ),
+            }
+        if validation_environment == "linux_supported":
+            if self._base_url and self._endpoint_reachable(self._base_url):
+                return self._base_url, {
+                    "validation_runner_fallback_used": False,
+                    "validation_environment_unavailable": False,
+                    "validation_environment_unavailable_reason": "",
+                }
+            return "", {
+                "validation_runner_fallback_used": False,
+                "validation_environment_unavailable": True,
+                "validation_environment_unavailable_reason": (
+                    f"Required validation environment '{required_runner_type or 'linux'}' is unavailable."
+                ),
+            }
+        return "", {
+            "validation_runner_fallback_used": False,
+            "validation_environment_unavailable": True,
+            "validation_environment_unavailable_reason": "Repository validation environment is unsupported or could not be determined.",
+        }
 
-    def _requires_windows_desktop_runner(self, *, repo_id: str, commands: list[ValidationCommand]) -> bool:
-        if repo_id in self._WINDOWS_DESKTOP_REPO_IDS:
-            return True
+    def _detect_validation_environment(
+        self,
+        *,
+        repo_id: str,
+        repo_path: str | Path,
+        commands: list[ValidationCommand],
+    ) -> dict[str, Any]:
+        repo_root = Path(str(repo_path or "")).resolve()
+        command_paths = self._extract_command_project_paths(repo_root=repo_root, commands=commands)
+        candidate_files = list(command_paths)
+        if not candidate_files:
+            candidate_files = self._discover_project_files(repo_root)
+        windows_signals = self._collect_windows_signals(candidate_files)
+        if windows_signals:
+            return {
+                "validation_environment": "windows_required",
+                "validation_environment_reason": (
+                    f"Windows desktop targeting detected for repo '{str(repo_id or '').strip()}' via: {', '.join(windows_signals[:4])}"
+                ),
+                "required_runner_type": "windows_desktop",
+            }
+        if candidate_files:
+            return {
+                "validation_environment": "linux_supported",
+                "validation_environment_reason": "Managed .NET project files detected without Windows desktop targeting signals.",
+                "required_runner_type": "linux_dotnet",
+            }
+        return {
+            "validation_environment": "unsupported",
+            "validation_environment_reason": "No supported project metadata was found to classify a validation runtime.",
+            "required_runner_type": "unknown",
+        }
+
+    def _extract_command_project_paths(
+        self,
+        *,
+        repo_root: Path,
+        commands: list[ValidationCommand],
+    ) -> list[Path]:
+        paths: list[Path] = []
         for command in list(commands or []):
-            text = str(getattr(command, "command", "") or "").lower()
-            if "telemart.client.tests.csproj" in text:
-                return True
-        return False
+            text = str(getattr(command, "command", "") or "").strip()
+            if not text:
+                continue
+            try:
+                tokens = shlex.split(text, posix=True)
+            except ValueError:
+                continue
+            for token in tokens[2:]:
+                lowered = token.lower()
+                if not lowered.endswith((".csproj", ".fsproj", ".vbproj", ".sln")):
+                    continue
+                candidate = Path(token)
+                if not candidate.is_absolute():
+                    candidate = (repo_root / candidate).resolve()
+                else:
+                    candidate = candidate.resolve()
+                if candidate.exists() and candidate.is_file():
+                    paths.append(candidate)
+        return paths
+
+    def _discover_project_files(self, repo_root: Path) -> list[Path]:
+        try:
+            project_files = sorted(repo_root.rglob("*.csproj"))
+            solution_files = sorted(repo_root.rglob("*.sln"))
+        except OSError:
+            return []
+        if project_files:
+            return project_files[:64]
+        return solution_files[:16]
+
+    def _collect_windows_signals(self, candidate_files: list[Path]) -> list[str]:
+        signals: list[str] = []
+        for candidate in list(candidate_files or []):
+            if not candidate.exists() or not candidate.is_file():
+                continue
+            suffix = candidate.suffix.lower()
+            if suffix == ".sln":
+                text = self._safe_read_text(candidate).lower()
+                if any(marker in text for marker in ("telemart.client", "wpf", "windows")):
+                    signals.append(f"{candidate.name}: solution references windows desktop projects")
+                continue
+            text = self._safe_read_text(candidate)
+            if not text:
+                continue
+            lowered = text.lower()
+            tfm_values = self._extract_xml_values(text, "TargetFramework") + self._extract_xml_values(text, "TargetFrameworks")
+            if any("-windows" in item.lower() for item in tfm_values):
+                signals.append(f"{candidate.name}: TargetFramework contains -windows")
+            if any(item.strip().lower() == "true" for item in self._extract_xml_values(text, "UseWPF")):
+                signals.append(f"{candidate.name}: UseWPF=true")
+            if any(item.strip().lower() == "true" for item in self._extract_xml_values(text, "UseWindowsForms")):
+                signals.append(f"{candidate.name}: UseWindowsForms=true")
+            sdk_value = self._extract_project_sdk(text).lower()
+            if "windowsdesktop" in sdk_value:
+                signals.append(f"{candidate.name}: Microsoft.NET.Sdk.WindowsDesktop")
+            if "presentationframework" in lowered:
+                signals.append(f"{candidate.name}: PresentationFramework reference")
+            if any(marker in lowered for marker in self._WINDOWS_TARGETING_MARKERS):
+                if not any(candidate.name in existing for existing in signals):
+                    signals.append(f"{candidate.name}: windows desktop build markers")
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for item in signals:
+            if item in seen:
+                continue
+            seen.add(item)
+            deduped.append(item)
+        return deduped
+
+    @staticmethod
+    def _safe_read_text(path: Path) -> str:
+        try:
+            return path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+
+    @staticmethod
+    def _extract_xml_values(text: str, tag_name: str) -> list[str]:
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError:
+            return []
+        values: list[str] = []
+        tag_name_lower = tag_name.lower()
+        for element in root.iter():
+            local_name = str(element.tag or "").split("}", 1)[-1].lower()
+            if local_name != tag_name_lower:
+                continue
+            value = str(element.text or "").strip()
+            if value:
+                values.extend(part.strip() for part in value.split(";") if part.strip())
+        return values
+
+    @staticmethod
+    def _extract_project_sdk(text: str) -> str:
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError:
+            return ""
+        return str(root.attrib.get("Sdk", "") or "").strip()

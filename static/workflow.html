@@ -503,6 +503,11 @@
       const blockers = Array.isArray(safe.apply_blockers) ? safe.apply_blockers.filter(Boolean) : [];
       const reviewState = String(safe.review_state || "pending").trim() || "pending";
       const canApply = Boolean(safe.apply_ready) && reviewState === "approved" && !draftPatchActionInFlight;
+      const executionDetails = safe.technical_details && typeof safe.technical_details === "object" ? safe.technical_details.draft_patch_execution || {} : {};
+      const baselineValidation = executionDetails && typeof executionDetails === "object" ? executionDetails.baseline_validation || {} : {};
+      const patchedValidation = executionDetails && typeof executionDetails === "object" ? executionDetails.patched_validation || {} : {};
+      const regressionMap = executionDetails && typeof executionDetails === "object" ? executionDetails.regression_map || {} : {};
+      const regressionTargets = Array.isArray(regressionMap.targeted_stages) ? regressionMap.targeted_stages.filter(Boolean) : [];
       const supportedModes = Array.isArray(safe.apply_modes_supported) ? safe.apply_modes_supported.filter(Boolean) : [];
       const modeOptions = [
         ...supportedModes.map((mode) => {
@@ -521,6 +526,12 @@
         <p><strong>Review state:</strong> ${auth.escapeHtml(reviewState)}</p>
         <p><strong>Validation status:</strong> ${auth.escapeHtml(String(safe.validation_status || "pending") || "pending")}</p>
         <p><strong>Validation summary:</strong> ${auth.escapeHtml(String(safe.validation_summary || "-") || "-")}</p>
+        ${(baselineValidation.restore || baselineValidation.build || baselineValidation.test) ? `<div><strong>Baseline vs patched:</strong><ul>
+          <li>Restore: ${auth.escapeHtml(String(baselineValidation.restore || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.restore || "unknown"))}</li>
+          <li>Build: ${auth.escapeHtml(String(baselineValidation.build || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.build || "unknown"))}</li>
+          <li>Test: ${auth.escapeHtml(String(baselineValidation.test || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.test || "unknown"))}</li>
+        </ul></div>` : ""}
+        ${regressionTargets.length ? `<div><strong>Repair targets:</strong><ul>${regressionTargets.map((item) => `<li>${auth.escapeHtml(String(item || "-"))}</li>`).join("")}</ul></div>` : `<p><strong>Repair targets:</strong> none</p>`}
         <p><strong>Summary:</strong> ${auth.escapeHtml(safe.patch_summary || "-")}</p>
         <p><strong>Confidence / Novelty:</strong> ${Number(safe.confidence_score || 0)} / ${Number(safe.novelty_score || 0)}</p>
         <p><strong>Diff hash:</strong> <code>${auth.escapeHtml(safe.diff_hash || "-")}</code></p>

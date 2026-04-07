@@ -1,0 +1,39 @@
+{
+  "task": "TEL-13508",
+  "repo_id": "telemart_soft_test",
+  "review_id": "1ff35aa31aaa4c80beee30df14db1292",
+  "execution_id": "e4fd4076fc86409588da863043df1296",
+  "baseline_validation": {
+    "restore": "unknown",
+    "build": "unknown",
+    "test": "unknown",
+    "overall_status": "failed",
+    "passed": false,
+    "outcome_type": "validation_runner_no_steps"
+  },
+  "patched_validation": {
+    "restore": "unknown",
+    "build": "unknown",
+    "test": "unknown",
+    "overall_status": "failed",
+    "passed": false,
+    "outcome_type": "validation_runner_no_steps"
+  },
+  "regression_map": {
+    "restore": false,
+    "build": false,
+    "test": false,
+    "targeted_stages": []
+  },
+  "repair_attempted": false,
+  "repair_attempts": 0,
+  "repair_attempt_statuses": [],
+  "repair_successful": false,
+  "repaired": false,
+  "validation_status": "failed",
+  "validated": false,
+  "apply_ready": false,
+  "apply_blockers": [
+    "validation matches baseline failures; no patch regressions detected for repair"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "overall_status": "failed",
+  "outcome_type": "test_failure",
+  "failure_reason_guess": "test_failure",
+  "restore_pass": true,
+  "restore_command": "dotnet restore \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-dda6ed05/repo/src/Telemart.sln\" --nologo",
+  "build_passed": true,
+  "targeted_test_attempted": true,
+  "passed": false,
+  "errors": [
+    "Validation step failed: test (exit_code=1)"
+  ],
+  "step_summaries": [
+    {
+      "name": "restore",
+      "status": "success",
+      "exit_code": 0,
+      "command": "dotnet restore \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-dda6ed05/repo/src/Telemart.sln\" --nologo",
+      "stderr_excerpt": ""
+    },
+    {
+      "name": "build",
+      "status": "success",
+      "exit_code": 0,
+      "command": "dotnet build \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-dda6ed05/repo/src/Telemart.sln\" --nologo",
+      "stderr_excerpt": ""
+    },
+    {
+      "name": "test",
+      "status": "failed",
+      "exit_code": 1,
+      "command": "dotnet test \"C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-dda6ed05/repo/src/client/Telemart.Client.Tests/Telemart.Client.Tests.csproj\" --nologo --no-build",
+      "stderr_excerpt": "[xUnit.net 00:00:02.16]     Telemart.Client.Tests.Converters.BooleanAndMultiValueConverterTests.ValuesNullTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.NavigationMenuBuilderTests.NullRolesTest [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OrderRulesTests.CanEditOrderPositiveTest(orderStatusId: 0) [FAIL]\n[xUnit.net 00:00:02.17]     Telemart.Client.Tests.OurServiceBarcodeT"
+    }
+  ]
+}

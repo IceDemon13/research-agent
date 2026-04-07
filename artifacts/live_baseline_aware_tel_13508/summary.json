@@ -1,0 +1,18 @@
+{
+  "task": "TEL-13508",
+  "repo_id": "telemart_soft_test",
+  "review_id": "d20d9c06e2e8464e8f782f2de112c1cf",
+  "execution_id": "",
+  "baseline_validation": {},
+  "patched_validation": {},
+  "regression_map": {},
+  "repair_attempted": false,
+  "repair_attempts": 0,
+  "repair_attempt_statuses": [],
+  "repair_successful": false,
+  "repaired": false,
+  "validation_status": "",
+  "validated": false,
+  "apply_ready": false,
+  "apply_blockers": []
+}

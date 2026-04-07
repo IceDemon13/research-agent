@@ -10,7 +10,9 @@ from contracts.apply_contract import ApplyInput, ApplyOperation
 from contracts.draft_patch_execution_contract import (
     ApplyInputPayload,
     DraftPatchExecutionHandoff,
+    DraftPatchRegressionMap,
     DraftPatchExecutionResult,
+    DraftPatchValidationSnapshot,
 )
 from contracts.draft_set import DraftSet
 from contracts.file_draft import FileDraft
@@ -96,11 +98,16 @@ class DraftPatchExecutionServiceTests(unittest.TestCase):
         self.assertIn("+++ b/src/app.py", record.generated_diff)
 
     def test_execute_approved_draft_uses_repair_path_before_validation_success(self) -> None:
+        baseline = ValidationResult(repo_id="sample", overall_status="passed", passed=True, build_passed=True)
         validation_results = [
             ValidationResult(repo_id="sample", overall_status="failed", passed=False, errors=["build failed"]),
             ValidationResult(repo_id="sample", overall_status="passed", passed=True),
         ]
         with patch.object(
+            self.service,
+            "_run_validation_in_workspace",
+            return_value=baseline,
+        ), patch.object(
             self.service,
             "_apply_and_validate_in_workspace",
             side_effect=validation_results,
@@ -125,7 +132,12 @@ class DraftPatchExecutionServiceTests(unittest.TestCase):
         self.assertIn("print('repaired')", record.apply_input.operations[0].new_content)
 
     def test_execute_approved_draft_blocks_apply_when_repairs_are_exhausted(self) -> None:
+        baseline = ValidationResult(repo_id="sample", overall_status="passed", passed=True, build_passed=True)
         with patch.object(
+            self.service,
+            "_run_validation_in_workspace",
+            return_value=baseline,
+        ), patch.object(
             self.service,
             "_apply_and_validate_in_workspace",
             return_value=ValidationResult(repo_id="sample", overall_status="failed", passed=False, errors=["build failed"]),
@@ -142,6 +154,76 @@ class DraftPatchExecutionServiceTests(unittest.TestCase):
         self.assertFalse(record.validated)
         self.assertFalse(record.apply_ready)
         self.assertIn("validation failed after bounded repair attempts", record.apply_blockers)
+
+    def test_execute_approved_draft_skips_repair_when_failures_match_baseline(self) -> None:
+        baseline = ValidationResult(
+            repo_id="sample",
+            overall_status="failed",
+            passed=False,
+            build_passed=True,
+            failed_tests=1,
+            targeted_test_attempted=True,
+            errors=["Validation step failed: test (exit_code=1)"],
+        )
+        patched = ValidationResult(
+            repo_id="sample",
+            overall_status="failed",
+            passed=False,
+            build_passed=True,
+            failed_tests=1,
+            targeted_test_attempted=True,
+            errors=["Validation step failed: test (exit_code=1)"],
+        )
+        with patch.object(self.service, "_run_validation_in_workspace", return_value=baseline), patch.object(
+            self.service,
+            "_apply_and_validate_in_workspace",
+            return_value=patched,
+        ), patch.object(self.service, "_run_repair_attempt") as repair_mock:
+            record = self.service.execute_approved_draft(self.handoff)
+
+        self.assertFalse(record.validated)
+        self.assertFalse(record.repair_attempted)
+        self.assertFalse(repair_mock.called)
+        self.assertEqual(record.baseline_validation.build, "success")
+        self.assertEqual(record.patched_validation.build, "success")
+        self.assertEqual(record.regression_map.targeted_stages, [])
+        self.assertIn("validation matches baseline failures; no patch regressions detected for repair", record.apply_blockers)
+
+    def test_execute_approved_draft_allows_repair_for_patch_regressions(self) -> None:
+        baseline = ValidationResult(repo_id="sample", overall_status="passed", passed=True, build_passed=True)
+        patched = ValidationResult(repo_id="sample", overall_status="failed", passed=False, errors=["build failed"])
+        with patch.object(self.service, "_run_validation_in_workspace", return_value=baseline), patch.object(
+            self.service,
+            "_apply_and_validate_in_workspace",
+            side_effect=[patched, ValidationResult(repo_id="sample", overall_status="passed", passed=True, build_passed=True)],
+        ), patch.object(
+            self.service,
+            "_run_repair_attempt",
+            return_value={
+                "attempt_index": 1,
+                "status": "repaired",
+                "retry_strategy": "strict",
+                "draft_set": DraftSet(
+                    goal="repair",
+                    files=[FileDraft(path="src/app.py", why="repair", content="print('repaired')\n", operation="update")],
+                ),
+            },
+        ) as repair_mock:
+            record = self.service.execute_approved_draft(self.handoff)
+
+        self.assertTrue(repair_mock.called)
+        self.assertEqual(record.regression_map.targeted_stages, ["build"])
+        self.assertTrue(record.validated)
+
+    def test_invalidated_repair_is_rejected_when_it_introduces_new_regression(self) -> None:
+        reason = self.service._invalidated_repair_reason(
+            original_regression_map=DraftPatchRegressionMap(test=True, targeted_stages=["test"]),
+            candidate_regression_map=DraftPatchRegressionMap(build=True, test=True, targeted_stages=["build", "test"]),
+            baseline_snapshot=DraftPatchValidationSnapshot(build="success", test="failed"),
+            patched_snapshot=DraftPatchValidationSnapshot(build="success", test="failed"),
+            repaired_files=["src/app.py"],
+        )
+        self.assertIn("build", reason)
 
     def test_handoff_contract_fails_fast_when_allowed_files_empty(self) -> None:
         with self.assertRaises(Exception):

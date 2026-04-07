@@ -18,7 +18,9 @@ from contracts.draft_patch_execution_contract import (
     ApplyInputPayload,
     DraftPatchExecutionHandoff,
     DraftPatchExecutionResult,
+    DraftPatchRegressionMap,
     DraftPatchRepairAttemptRecord,
+    DraftPatchValidationSnapshot,
 )
 from contracts.diff_contract import DiffResult
 from contracts.draft_set import DraftSet
@@ -78,6 +80,9 @@ class DraftPatchExecutionService:
             jira_ticket=_safe_text(handoff.jira_ticket),
             repo_id=normalized_repo_id,
             allowed_files=normalized_allowed_files,
+            baseline_validation=DraftPatchValidationSnapshot(),
+            patched_validation=DraftPatchValidationSnapshot(),
+            regression_map=DraftPatchRegressionMap(),
             validated=False,
             validation_status="pending",
             validation_summary="",
@@ -103,6 +108,14 @@ class DraftPatchExecutionService:
         )
         context = self._temp_workspace_service.create_workspace(normalized_repo_id)
         try:
+            baseline_validation_result = self._run_validation_in_workspace(
+                workspace_registry_path=context.registry_path,
+                repo_id=normalized_repo_id,
+                allowed_files=normalized_allowed_files,
+            )
+            baseline_snapshot = self._snapshot_from_validation(baseline_validation_result)
+            record.baseline_validation = baseline_snapshot
+            record.technical_details["baseline_validation_result"] = baseline_validation_result.to_dict()
             current_temp_apply_input = self._clone_apply_input(
                 self._apply_input_from_payload(handoff.initial_apply_input),
                 repo_id=normalized_repo_id,
@@ -119,9 +132,14 @@ class DraftPatchExecutionService:
                 apply_input=current_temp_apply_input,
                 allowed_files=normalized_allowed_files,
             )
+            patched_snapshot = self._snapshot_from_validation(validation_result)
+            regression_map = self._compute_regression_map(baseline_snapshot, patched_snapshot)
+            record.patched_validation = patched_snapshot
+            record.regression_map = regression_map
             record.validation_status = str(validation_result.overall_status or "").strip() or "unknown"
             record.validation_summary = self._validation_summary(validation_result)
             record.technical_details["validation_result"] = validation_result.to_dict()
+            record.technical_details["regression_map"] = regression_map.model_dump()
             if validation_result.passed:
                 finalized = self._finalize_success(
                     record=record,
@@ -129,6 +147,16 @@ class DraftPatchExecutionService:
                     normalized_repo_id=normalized_repo_id,
                 )
                 return finalized
+
+            if not self._has_regression(regression_map):
+                record.apply_ready = False
+                record.apply_blockers = _dedupe(list(record.apply_blockers or []) + ["validation matches baseline failures; no patch regressions detected for repair"])
+                record.validation_status = str(record.validation_status or "failed").strip()
+                record.finished_at = _now_iso()
+                record.technical_details["invariant_check_passed"] = True
+                record.technical_details["repair_targeted_regressions"] = []
+                self._write_record(record)
+                return record
 
             previous_attempts: list[dict[str, Any]] = []
             for attempt_index in range(1, max(1, int(max_repair_attempts or 0)) + 1):
@@ -139,6 +167,9 @@ class DraftPatchExecutionService:
                     allowed_files=normalized_allowed_files,
                     file_rationales=[item.model_dump() for item in list(handoff.file_rationales or [])],
                     seed_context=dict(handoff.seed_context or {}),
+                    baseline_snapshot=baseline_snapshot,
+                    patched_snapshot=patched_snapshot,
+                    regression_map=regression_map,
                     validation_result=validation_result,
                     previous_attempts=previous_attempts,
                     attempt_index=attempt_index,
@@ -162,9 +193,31 @@ class DraftPatchExecutionService:
                     apply_input=repaired_apply_input,
                     allowed_files=normalized_allowed_files,
                 )
+                repaired_snapshot = self._snapshot_from_validation(validation_result)
+                repaired_regression_map = self._compute_regression_map(baseline_snapshot, repaired_snapshot)
                 repair_attempt["validation_result"] = validation_result.to_dict()
                 repair_attempt["validation_status"] = str(validation_result.overall_status or "").strip()
                 repair_attempt["validation_summary"] = self._validation_summary(validation_result)
+                repair_attempt["repaired_validation"] = repaired_snapshot.model_dump()
+                repair_attempt["repaired_regression_map"] = repaired_regression_map.model_dump()
+                invalidated_reason = self._invalidated_repair_reason(
+                    original_regression_map=regression_map,
+                    candidate_regression_map=repaired_regression_map,
+                    baseline_snapshot=baseline_snapshot,
+                    patched_snapshot=patched_snapshot,
+                    repaired_files=list(repair_attempt.get("repaired_files", []) or []),
+                )
+                if invalidated_reason:
+                    repair_attempt["status"] = "invalid"
+                    repair_attempt["invalidated"] = True
+                    repair_attempt["invalidated_reason"] = invalidated_reason
+                    repair_attempt["error_summary"] = invalidated_reason
+                    self._apply_in_workspace(
+                        workspace_registry_path=context.registry_path,
+                        apply_input=current_temp_apply_input,
+                    )
+                    record.repair_attempts = [DraftPatchRepairAttemptRecord.model_validate(item) for item in list(previous_attempts)]
+                    continue
                 record.repair_attempts = [DraftPatchRepairAttemptRecord.model_validate(item) for item in list(previous_attempts)]
                 record.validation_status = str(validation_result.overall_status or "").strip() or "unknown"
                 record.validation_summary = self._validation_summary(validation_result)
@@ -184,6 +237,10 @@ class DraftPatchExecutionService:
                         normalized_repo_id=normalized_repo_id,
                     )
                     return finalized
+                self._apply_in_workspace(
+                    workspace_registry_path=context.registry_path,
+                    apply_input=current_temp_apply_input,
+                )
 
             record.apply_ready = False
             blockers = list(record.apply_blockers or [])
@@ -244,8 +301,10 @@ class DraftPatchExecutionService:
         apply_input: ApplyInput,
         allowed_files: list[str],
     ) -> ValidationResult:
-        temp_apply_service = ApplyService(storage_path=workspace_registry_path)
-        apply_result = temp_apply_service.apply(apply_input, allow_real_writes=True)
+        apply_result = self._apply_in_workspace(
+            workspace_registry_path=workspace_registry_path,
+            apply_input=apply_input,
+        )
         if not apply_result.applied and apply_result.errors:
             return ValidationResult(
                 repo_id=repo_id,
@@ -262,6 +321,24 @@ class DraftPatchExecutionService:
             changed_files=list(allowed_files or []),
         )
 
+    def _run_validation_in_workspace(
+        self,
+        *,
+        workspace_registry_path: str,
+        repo_id: str,
+        allowed_files: list[str],
+    ) -> ValidationResult:
+        temp_validation_service = ValidationService(storage_path=workspace_registry_path)
+        return temp_validation_service.run_validation(
+            repo_id,
+            changed_files=list(allowed_files or []),
+        )
+
+    @staticmethod
+    def _apply_in_workspace(*, workspace_registry_path: str, apply_input: ApplyInput):
+        temp_apply_service = ApplyService(storage_path=workspace_registry_path)
+        return temp_apply_service.apply(apply_input, allow_real_writes=True)
+
     def _run_repair_attempt(
         self,
         *,
@@ -271,6 +348,9 @@ class DraftPatchExecutionService:
         allowed_files: list[str],
         file_rationales: list[dict[str, Any]],
         seed_context: dict[str, Any],
+        baseline_snapshot: DraftPatchValidationSnapshot,
+        patched_snapshot: DraftPatchValidationSnapshot,
+        regression_map: DraftPatchRegressionMap,
         validation_result: ValidationResult,
         previous_attempts: list[dict[str, Any]],
         attempt_index: int,
@@ -313,11 +393,22 @@ class DraftPatchExecutionService:
             "failure_type": failure_type,
             "retry_strategy": retry_strategy,
             "retry_strategy_reason": retry_strategy_reason,
+            "targeted_regressions": list(regression_map.targeted_stages or []),
             "failed_test_names": [str(item.name or "").strip() for item in list(validation_result.failed_test_cases or []) if str(item.name or "").strip()],
             "change_summary_lines": current_change_summary,
             "status": "blocked",
             "root_cause_summary": self._validation_summary(validation_result),
         }
+        if not self._has_regression(regression_map):
+            attempt_record["status"] = "skipped"
+            attempt_record["error_summary"] = "repair skipped because validation failures match the baseline"
+            return attempt_record
+        if baseline_snapshot.build == "success" and patched_snapshot.build == "success":
+            restricted_files = [item for item in list(current_change_summary or []) if self._is_build_configuration_file(item)]
+            if restricted_files:
+                attempt_record["status"] = "skipped"
+                attempt_record["error_summary"] = "repair skipped because build is not regressed and build-configuration files must not be targeted"
+                return attempt_record
         repair_result = run_repair_agent(
             original_request=spec.goal,
             spec=spec,
@@ -344,6 +435,106 @@ class DraftPatchExecutionService:
         attempt_record["draft_set"] = repaired_draft_set
         attempt_record["repaired_files"] = [str(item.path or "").strip() for item in list(repaired_draft_set.files or []) if str(item.path or "").strip()]
         return attempt_record
+
+    @staticmethod
+    def _stage_status(validation_result: ValidationResult, stage_name: str) -> str:
+        normalized_stage_name = str(stage_name or "").strip().lower()
+        matches = [
+            str(step.status or "").strip().lower()
+            for step in list(validation_result.steps or [])
+            if str(step.name or "").strip().lower() == normalized_stage_name
+        ]
+        if matches:
+            if any(item == "failed" for item in matches):
+                return "failed"
+            if any(item == "success" for item in matches):
+                return "success"
+            if any(item == "skipped" for item in matches):
+                return "skipped"
+        if normalized_stage_name == "restore":
+            if bool(validation_result.restore_pass) or bool(validation_result.restore_passed):
+                return "success"
+        if normalized_stage_name == "build":
+            if bool(validation_result.build_passed):
+                return "success"
+            if any("build" in str(item or "").strip().lower() for item in list(validation_result.errors or [])):
+                return "failed"
+        if normalized_stage_name == "test":
+            if bool(validation_result.failed_tests or validation_result.failed_test_cases):
+                return "failed"
+            if bool(validation_result.targeted_test_attempted) and not bool(validation_result.failed_tests or validation_result.failed_test_cases):
+                return "success"
+        return "unknown"
+
+    def _snapshot_from_validation(self, validation_result: ValidationResult) -> DraftPatchValidationSnapshot:
+        return DraftPatchValidationSnapshot(
+            restore=self._stage_status(validation_result, "restore"),
+            build=self._stage_status(validation_result, "build"),
+            test=self._stage_status(validation_result, "test"),
+            overall_status=str(validation_result.overall_status or "").strip(),
+            passed=bool(validation_result.passed),
+            outcome_type=str(validation_result.outcome_type or "").strip(),
+        )
+
+    @staticmethod
+    def _compute_regression_map(
+        baseline_snapshot: DraftPatchValidationSnapshot,
+        candidate_snapshot: DraftPatchValidationSnapshot,
+    ) -> DraftPatchRegressionMap:
+        regressions = {
+            "restore": baseline_snapshot.restore == "success" and candidate_snapshot.restore == "failed",
+            "build": baseline_snapshot.build == "success" and candidate_snapshot.build == "failed",
+            "test": baseline_snapshot.test == "success" and candidate_snapshot.test == "failed",
+        }
+        return DraftPatchRegressionMap(
+            restore=bool(regressions["restore"]),
+            build=bool(regressions["build"]),
+            test=bool(regressions["test"]),
+            targeted_stages=[name for name, value in regressions.items() if value],
+        )
+
+    @staticmethod
+    def _has_regression(regression_map: DraftPatchRegressionMap) -> bool:
+        return any(bool(item) for item in [regression_map.restore, regression_map.build, regression_map.test])
+
+    @staticmethod
+    def _is_build_configuration_file(path: str) -> bool:
+        normalized = str(path or "").strip().lower().replace("\\", "/")
+        if not normalized:
+            return False
+        build_suffixes = (
+            ".sln",
+            ".csproj",
+            ".vbproj",
+            ".fsproj",
+            ".props",
+            ".targets",
+            "packages.config",
+            "nuget.config",
+        )
+        return normalized.endswith(build_suffixes) or normalized.endswith("directory.build.props") or normalized.endswith("directory.build.targets")
+
+    def _invalidated_repair_reason(
+        self,
+        *,
+        original_regression_map: DraftPatchRegressionMap,
+        candidate_regression_map: DraftPatchRegressionMap,
+        baseline_snapshot: DraftPatchValidationSnapshot,
+        patched_snapshot: DraftPatchValidationSnapshot,
+        repaired_files: list[str],
+    ) -> str:
+        new_regressions = [
+            stage_name
+            for stage_name in ("restore", "build", "test")
+            if bool(getattr(candidate_regression_map, stage_name, False)) and not bool(getattr(original_regression_map, stage_name, False))
+        ]
+        if new_regressions:
+            return f"repair introduced new regression(s): {', '.join(new_regressions)}"
+        if baseline_snapshot.build == "success" and patched_snapshot.build == "success":
+            build_related_files = [item for item in list(repaired_files or []) if self._is_build_configuration_file(item)]
+            if build_related_files:
+                return "repair attempted to modify build-configuration files even though build was not regressed"
+        return ""
 
     def _draft_set_from_rationales(self, *, repo_id: str, file_rationales: list[dict[str, Any]]) -> DraftSet:
         repo = self._registry_service.resolve_repo(repo_id=repo_id)

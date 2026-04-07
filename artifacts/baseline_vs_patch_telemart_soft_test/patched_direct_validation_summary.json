@@ -1,0 +1,73 @@
+{
+  "apply_result": {
+    "repo_id": "telemart_soft_test",
+    "root_path": "C:/work/my repositories/research-agent/artifacts/temp-workspaces/telemartso-94ef904b/repo",
+    "dry_run": false,
+    "applied_files": [
+      {
+        "relative_path": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+        "operation_type": "update",
+        "status": "applied",
+        "message": "File written.",
+        "expected_hash": "66af3b99ea41fc80ab37d45caee7a39167b8c469614935560221056455b5c059",
+        "previous_hash": "66af3b99ea41fc80ab37d45caee7a39167b8c469614935560221056455b5c059",
+        "current_hash": "66af3b99ea41fc80ab37d45caee7a39167b8c469614935560221056455b5c059",
+        "new_hash": "4fb8cb8b26692828c69238a2a290f8d96d60069d8f391f2e9d6f2d066376f38f"
+      },
+      {
+        "relative_path": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+        "operation_type": "update",
+        "status": "applied",
+        "message": "File written.",
+        "expected_hash": "e32046d7df5d3a68c00c891c1a50dfd072300cef2f3b1917b55c8b70085a2d52",
+        "previous_hash": "e32046d7df5d3a68c00c891c1a50dfd072300cef2f3b1917b55c8b70085a2d52",
+        "current_hash": "e32046d7df5d3a68c00c891c1a50dfd072300cef2f3b1917b55c8b70085a2d52",
+        "new_hash": "fabc1af2c47d245407daec7ae6fb0470419dd0d186d40f9f88b990f27f9864b0"
+      },
+      {
+        "relative_path": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+        "operation_type": "update",
+        "status": "applied",
+        "message": "File written.",
+        "expected_hash": "582caaa6d0138daab84482c0c244cfd03899fba2cd66003d7c23dde49f65f42f",
+        "previous_hash": "582caaa6d0138daab84482c0c244cfd03899fba2cd66003d7c23dde49f65f42f",
+        "current_hash": "582caaa6d0138daab84482c0c244cfd03899fba2cd66003d7c23dde49f65f42f",
+        "new_hash": "67f3964bf1e96aec3716aadadcd298dfc6e7648a218862da10a9252c63fe2312"
+      },
+      {
+        "relative_path": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+        "operation_type": "update",
+        "status": "applied",
+        "message": "File written.",
+        "expected_hash": "285771681335313b5bfae09df323200587c477eaff2d9ff78d666e732dd1ea1e",
+        "previous_hash": "285771681335313b5bfae09df323200587c477eaff2d9ff78d666e732dd1ea1e",
+        "current_hash": "285771681335313b5bfae09df323200587c477eaff2d9ff78d666e732dd1ea1e",
+        "new_hash": "50d07d0212afc8a5aad4baab4d31f4663957a9aec2ddcad93df9271f51fd3867"
+      },
+      {
+        "relative_path": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/ChangeDecisionServiceProduct.cs",
+        "operation_type": "update",
+        "status": "applied",
+        "message": "File written.",
+        "expected_hash": "de06d24109726c99842d5d4fd69dd31fbdd70c99bcae4e426045f99197cfe273",
+        "previous_hash": "de06d24109726c99842d5d4fd69dd31fbdd70c99bcae4e426045f99197cfe273",
+        "current_hash": "de06d24109726c99842d5d4fd69dd31fbdd70c99bcae4e426045f99197cfe273",
+        "new_hash": "e490ea2f7bf4be99ad97f549b8ee0eda0ce21c3adc12a21eee0a746fc61b614f"
+      }
+    ],
+    "skipped_files": [],
+    "applied": true,
+    "files_written": 5,
+    "files_failed": 0,
+    "skipped": false,
+    "skip_reason": "",
+    "warnings": [],
+    "errors": []
+  },
+  "restore_returncode": 0,
+  "build_returncode": 0,
+  "test_returncode": 1,
+  "restore_stderr_excerpt": "",
+  "build_stderr_excerpt": "",
+  "test_stderr_excerpt": "[xUnit.net 00:00:02.42]     Telemart.Client.Tests.EnumerableExtensionsTests.GroupByTest [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.Converters.StringToPhoneConverterTests.ConvertTest [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.ProductImagesDirectoryProcessorTests.CtorTest [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.BulkAddTextProcessorTests.EmptyTextTest(text: \"\") [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.NavigationMenuBuilderTests.NullRolesTest [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.OrderFilteringItemTests.BuildParametersTest [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.Converters.BooleanOrMultiValueConverterTests.ValuesEmptyTest [FAIL]\n[xUnit.net 00:00:02.42]     Telemart.Client.Tests.NovaposhtaBillTest.NovapostaBillImportEngineTests.ImportTest1 [FAIL]\n[xUnit.net 00:00:02.47]     Telemart.Client.Tests.ProductImagesDirectoryProcessorTests.EmptyDirectoryTest [FAIL]\n[xUnit.net 00:00:02.47]     Telemart.Client.Tests.BulkAddTextProcessorTests.EmptyTextTest(text: \"    \") [FAIL]\n[xUnit.net 00:00:02.47]     Telemart.Client.Tests.Converters.StringToPhoneConverterTests.ConvertNullTest [FAIL]\n[xUnit.net 00:0"
+}

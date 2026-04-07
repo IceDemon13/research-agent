@@ -1,0 +1,4208 @@
+{
+  "workflow": "analyze_task",
+  "run_id": "a54d7cfde92d49198d40ab9de1cfa3be",
+  "result": {
+    "task_quality_summary": "Історичні Jira-дані вказують на telemart_soft_test; ймовірні файли змін: src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs, src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx.",
+    "quality_score": 45,
+    "confidence_score": 90,
+    "novelty_score": 30,
+    "domain_novelty_score": 35,
+    "repo_novelty_score": 25,
+    "repo_confidence": 90,
+    "file_confidence": 100,
+    "task_confidence": 80,
+    "quality_state": "reasonably_specified",
+    "quality_breakdown": {
+      "jira": 0,
+      "attachments": 10,
+      "repo": 35
+    },
+    "novelty_level": "low",
+    "analysis_mode": "reuse",
+    "advisory_block_title": "Що перевірити перед реалізацією",
+    "missing_details": [
+      "У задачі немає acceptance criteria, тому точний user-visible результат після зміни ще не зафіксований."
+    ],
+    "concrete_questions": [
+      "Чи має фінальний UI/друк збігатися з прикріпленими скріншотами буквально, включно з відступами та переносами рядків?",
+      "Чи повинні .Designer.cs і .resx залишатися синхронними для одного й того самого service-request output?"
+    ],
+    "decision_questions": [
+      "Це зміна існуючого шаблону друку/звіту чи створення нового варіанту для окремого сценарію?",
+      "Історичні Jira-збіги ведуть до одного шляху реалізації чи до кількох варіантів, які потрібно розділити?",
+      "Починати реалізацію з історично змінених файлів чи спершу ще раз перевірити ownership перед редагуванням?"
+    ],
+    "risks": [],
+    "suggested_additions": [
+      "Звірте фінальний текст, відступи, переноси та layout зі скріншотами."
+    ],
+    "repo_match": {
+      "status": "match",
+      "confidence": 0.9,
+      "reason": "Вибраний репозиторій telemart_soft_test має історичні сигнали для цієї сім'ї задач."
+    },
+    "selected_repos": [
+      {
+        "repo_id": "telemart_soft_test",
+        "score": 2.4,
+        "reasons": [
+          "historical_change_memory"
+        ],
+        "historical_match_count": 6,
+        "top_historical_matches": [
+          {
+            "repo_id": "telemart_soft_test",
+            "jira_key": "TEL-13508",
+            "commit_hash": "b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+            "branch_name": "",
+            "committed_at": "2026-03-04T18:49:34+02:00",
+            "changed_files": [
+              "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+              "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"
+            ],
+            "score": 2.1,
+            "reasons": [
+              "exact_jira_key",
+              "historical_task_similarity"
+            ]
+          },
+          {
+            "repo_id": "telemart_soft_test",
+            "jira_key": "TEL-12695",
+            "commit_hash": "1de87c50151fa115cefba1b88fc58bad2e692227",
+            "branch_name": "",
+            "committed_at": "2024-11-07T17:26:18+02:00",
+            "changed_files": [],
+            "score": 0.75,
+            "reasons": [
+              "historical_task_similarity"
+            ]
+          },
+          {
+            "repo_id": "telemart_soft_test",
+            "jira_key": "TEL-10585",
+            "commit_hash": "87ed70ea081467567d4100bea4488cccc68c81fe",
+            "branch_name": "",
+            "committed_at": "2023-08-21T12:45:15+03:00",
+            "changed_files": [],
+            "score": 0.75,
+            "reasons": [
+              "historical_task_similarity"
+            ]
+          }
+        ],
+        "top_historical_changed_files": [
+          "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+          "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+          "src/Telemart.Client.Protos/product.proto",
+          "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+          "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs",
+          "src/client/Telemart.Client.TransferObjects/OrderProductLogisticsDto.cs",
+          "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReportData.cs"
+        ]
+      }
+    ],
+    "top_historical_matches": [
+      {
+        "repo_id": "telemart_soft_test",
+        "jira_key": "TEL-13508",
+        "commit_hash": "b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+        "branch_name": "",
+        "committed_at": "2026-03-04T18:49:34+02:00",
+        "changed_files": [
+          "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+          "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"
+        ],
+        "score": 2.1,
+        "reasons": [
+          "exact_jira_key",
+          "historical_task_similarity"
+        ]
+      },
+      {
+        "repo_id": "telemart_soft_test",
+        "jira_key": "TEL-12695",
+        "commit_hash": "1de87c50151fa115cefba1b88fc58bad2e692227",
+        "branch_name": "",
+        "committed_at": "2024-11-07T17:26:18+02:00",
+        "changed_files": [],
+        "score": 0.75,
+        "reasons": [
+          "historical_task_similarity"
+        ]
+      },
+      {
+        "repo_id": "telemart_soft_test",
+        "jira_key": "TEL-10585",
+        "commit_hash": "87ed70ea081467567d4100bea4488cccc68c81fe",
+        "branch_name": "",
+        "committed_at": "2023-08-21T12:45:15+03:00",
+        "changed_files": [],
+        "score": 0.75,
+        "reasons": [
+          "historical_task_similarity"
+        ]
+      }
+    ],
+    "top_historical_changed_files": [
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+      "src/Telemart.Client.Protos/product.proto",
+      "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+      "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs",
+      "src/client/Telemart.Client.TransferObjects/OrderProductLogisticsDto.cs",
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReportData.cs"
+    ],
+    "candidate_files_count": 12,
+    "selected_files_count": 5,
+    "top_candidate_files": [
+      {
+        "name": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+        "confidence": 1.0,
+        "reason": "historical_similarity, path_domain, symbol_overlap"
+      },
+      {
+        "name": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+        "confidence": 1.0,
+        "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap"
+      },
+      {
+        "name": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+        "confidence": 1.0,
+        "reason": "historical_similarity, path_domain, symbol_overlap"
+      }
+    ],
+    "implementation_plan_preview": [
+      {
+        "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+        "action": "modify",
+        "reason": "Історичні Jira-дані вказують на ServiceRequestReport.Designer.cs.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      },
+      {
+        "file": "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+        "action": "modify",
+        "reason": "Історичні Jira-дані вказують на ServiceRequestReport.resx.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      },
+      {
+        "file": "src/Telemart.Client.Protos/product.proto",
+        "action": "modify",
+        "reason": "Історичні Jira-дані вказують на product.proto.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      },
+      {
+        "file": "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+        "action": "modify",
+        "reason": "Історичні Jira-дані вказують на IOrderProduct.cs.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      },
+      {
+        "file": "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs",
+        "action": "modify",
+        "reason": "Історичні Jira-дані вказують на OrderDeliveryCalculator.cs.",
+        "likely_changes": "Оновити текст відображення, шаблон або прив'язані presentation-поля для цього сценарію.",
+        "risk": "Є ризик розсинхронізації друкованого шаблону та пов'язаних generated-ресурсів."
+      }
+    ],
+    "implementation_plan_branches": [
+      {
+        "decision": "Це зміна існуючого шаблону друку/звіту чи створення нового варіанту для окремого сценарію?",
+        "options": [
+          {
+            "option": "A",
+            "plan": [
+              "Почніть з ServiceRequestReport.Designer.cs і перевикористайте наявний шлях реалізації, який уже підказує історія.",
+              "Внесіть потрібну зміну тексту або поведінки в ServiceRequestReport.Designer.cs без створення паралельного варіанту.",
+              "Перевірте, що суміжні generated/resource-артефакти залишаються синхронними після точкової зміни."
+            ]
+          },
+          {
+            "option": "B",
+            "plan": [
+              "Використайте ServiceRequestReport.Designer.cs як стартову точку, але ізолюйте новий варіант або сценарій окремим шляхом.",
+              "Додайте нову гілку з явними межами, щоб поточний сценарій не змінився побічно.",
+              "Перевірте, які допоміжні файли/ресурси потребують окремого оновлення для нової гілки."
+            ]
+          }
+        ]
+      },
+      {
+        "decision": "Історичні Jira-збіги ведуть до одного шляху реалізації чи до кількох варіантів, які потрібно розділити?",
+        "options": [
+          {
+            "option": "A",
+            "plan": [
+              "Почніть з ServiceRequestReport.resx і перевикористайте наявний шлях реалізації, який уже підказує історія.",
+              "Внесіть потрібну зміну тексту або поведінки в ServiceRequestReport.resx без створення паралельного варіанту.",
+              "Перевірте, що суміжні generated/resource-артефакти залишаються синхронними після точкової зміни."
+            ]
+          },
+          {
+            "option": "B",
+            "plan": [
+              "Використайте ServiceRequestReport.resx як стартову точку, але ізолюйте новий варіант або сценарій окремим шляхом.",
+              "Додайте нову гілку з явними межами, щоб поточний сценарій не змінився побічно.",
+              "Перевірте, які допоміжні файли/ресурси потребують окремого оновлення для нової гілки."
+            ]
+          }
+        ]
+      }
+    ],
+    "patch_generation_ready": true,
+    "patch_generation_blockers": [],
+    "patch_generation_allowed_files": [
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+      "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+      "src/Telemart.Client.Protos/product.proto",
+      "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+      "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs"
+    ],
+    "recommendation": "Почніть перевірку з src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs, src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx і звірте сценарій друку квитанції в telemart_soft_test.",
+    "technical_details": {
+      "workflow_name": "analyze_task",
+      "workflow_type": "analyze_task",
+      "request_input_text": "TEL-13508",
+      "request_input_length": 9,
+      "jira_fetch_attempted": true,
+      "jira_fetch_succeeded": true,
+      "jira_auth_present": true,
+      "resolved_jira_title": "Service request: change of text and printed form “Receipt” p.2",
+      "resolved_jira_text_length": 671,
+      "final_workflow_input": "Title: Service request: change of text and printed form “Receipt” p.2\nDescription:\nПотреба:\nВ друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст\n“Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\"\n\nhttps://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715",
+      "final_workflow_input_hash": "ff4c681eff39193ed92555d4b53dfcc4f205098d30df99a1e73fc0a022b4d730",
+      "prompt_task_text_length": 671,
+      "acceptance_criteria_count": 0,
+      "acceptance_criteria_source": "customfield_11145",
+      "acceptance_criteria_included_in_workflow_input": false,
+      "raw_jira_fields": {
+        "acceptance_criteria_field_id": "customfield_11145",
+        "acceptance_criteria_field_present": true,
+        "available_field_names": {}
+      },
+      "supplemental_jira_evidence_text": "",
+      "supplemental_jira_evidence_text_length": 0,
+      "jira_title_present": true,
+      "jira_description_present": true,
+      "acceptance_criteria_present": true,
+      "comments_count": 2,
+      "comments_used_in_context": false,
+      "attachments_count": 1,
+      "attachment_types": [],
+      "attachments_used_count": 0,
+      "attachment_text_chars": 0,
+      "attachment_image_summaries_count": 0,
+      "attachment_signal_used_in_planning": false,
+      "attachment_signal_used_in_codegen": false,
+      "attachment_signal_used_in_routing": false,
+      "attachment_signal_used_in_targeting": false,
+      "image_attachment_runtime_available": false,
+      "raw_jira_text_length": 671,
+      "parsed_jira_sections": {
+        "line_count": 6,
+        "bullet_count": 0,
+        "question_count": 1,
+        "jira_keys": [],
+        "first_line": "Title: Service request: change of text and printed form “Receipt” p.2",
+        "acceptance_criteria_count": 0,
+        "has_acceptance_criteria_section": false
+      },
+      "normalized_task_text": "Title: Service request: change of text and printed form “Receipt” p.2 Description: Потреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715",
+      "baseline_summary": "Базове розуміння задачі: Title: Service request: change of text and printed form “Receipt” p.2 Description: Потреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715.",
+      "retrieval_query_text": "Title: Service request: change of text and printed form “Receipt” p.2 Description: Потреба: В друкованій формі квитанції для СЗ (шлях:Сервісна заявка-Печать-Квитанція) замінити текст “Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння!” на new “Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту.\" https://bitrix.telemart.com.ua/workgroups/group/167/tasks/task/view/189581/?MID=1075715#com1075715",
+      "configured_provider": "gitnexus_http",
+      "repo_metadata_provider": "gitnexus_http",
+      "provider_used": "gitnexus_http",
+      "provider_fallback": false,
+      "provider_reason": "GitNexus MCP evidence was used for analyze_task.",
+      "mcp_initialize_attempted": false,
+      "mcp_initialize_succeeded": true,
+      "mcp_session_reused": true,
+      "mcp_retry_after_initialize": false,
+      "mcp_failure_stage": "",
+      "mcp_session_id_present": true,
+      "mcp_notifications_initialized_accepted": false,
+      "mcp_session_id_present_before_notification": false,
+      "mcp_session_id_present_after_notification": false,
+      "mcp_initialize_http_status": 0,
+      "mcp_notifications_initialized_status": 0,
+      "mcp_tools_list_status": 0,
+      "mcp_tools_call_status": 200,
+      "mcp_session_reset_count": 0,
+      "gitnexus_tool_name": "query",
+      "gitnexus_query_payload": "Title: Service request: change of text and printed form “Receipt” p.2 | Receipt | Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння! | Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту. | Title request change | request change text",
+      "gitnexus_tool_arguments_sent": {
+        "query": "Title: Service request: change of text and printed form “Receipt” p.2 | Receipt | Кожен індивідуальний строк гарантійного ремонту залежить від безпекової та енергетичної ситуації в країні! Сподіваємось на Ваше розуміння! | Споживач підтверджує свою згоду на можливе подовження строку ремонту в разі виникнення обставин непереборної сили, зумовлених безпековою ситуацією або енергетичною нестабільністю, що унеможливлюють дотримання стандартних термінів ремонту. | Title request change | request change text",
+        "repo": "telemart_soft_test"
+      },
+      "gitnexus_raw_result_excerpt": "{\"text\": \"{\\n  \\\"processes\\\": [\\n    {\\n      \\\"id\\\": \\\"proc_4_refreshasync\\\",\\n      \\\"summary\\\": \\\"RefreshAsync → FetchPageAsync\\\",\\n      \\\"priority\\\": 0.016,\\n      \\\"symbol_count\\\": 1,\\n      \\\"process_type\\\": \\\"cross_community\\\",\\n      \\\"step_count\\\": 6\\n    },\\n    {\\n      \\\"id\\\": \\\"proc_57_printasync\\\",\\n      \\\"summary\\\": \\\"PrintAsync → FetchPageAsync\\\",\\n      \\\"priority\\\": 0.016,\\n      \\\"symbol_count\\\": 1,\\n      \\\"process_type\\\": \\\"cross_community\\\",\\n      \\\"step_count\\\": 4\\n    }\\n  ],\\n  \\\"process_symbols\\\": [\\n    {\\n      \\\"id\\\": \\\"Function:src/client/Telemart.Client/WebCli...[truncated]",
+      "gitnexus_unwrapped_result_excerpt": "{\"processes\": [{\"id\": \"proc_4_refreshasync\", \"summary\": \"RefreshAsync → FetchPageAsync\", \"priority\": 0.016, \"symbol_count\": 1, \"process_type\": \"cross_community\", \"step_count\": 6}, {\"id\": \"proc_57_printasync\", \"summary\": \"PrintAsync → FetchPageAsync\", \"priority\": 0.016, \"symbol_count\": 1, \"process_type\": \"cross_community\", \"step_count\": 4}], \"process_symbols\": [{\"id\": \"Function:src/client/Telemart.Client/WebClient/TelemartWebClient.cs:FetchPageAsync\", \"name\": \"FetchPageAsync\", \"filePath\": \"src/client/Telemart.Client/WebClient/TelemartWebClient.cs\", \"startLine\": 412, \"endLine\": 422, \"process_id\"...[truncated]",
+      "gitnexus_raw_hit_count": 2,
+      "gitnexus_raw_hit_kinds": [
+        "process"
+      ],
+      "gitnexus_unwrapped_hit_count": 2,
+      "gitnexus_unwrapped_hit_kinds": [
+        "process"
+      ],
+      "normalization_source_shape": "dict:text->dict:processes,process_symbols,definitions",
+      "normalization_drop_reasons": [],
+      "raw_hit_count": 2,
+      "normalized_file_count": 8,
+      "normalized_symbol_count": 6,
+      "normalized_module_count": 10,
+      "dropped_hit_count": 0,
+      "evidence_mapping_reason": "resolved GitNexus process->symbol->definition evidence into concrete files and modules",
+      "resolved_process_count": 2,
+      "resolved_symbol_count": 20,
+      "resolved_definition_count": 20,
+      "resolved_file_count": 9,
+      "evidence_resolution_reason": "resolved concrete files from processes, process_symbols, and definitions",
+      "backend_repo_visible_after_analyze": true,
+      "backend_visible_repo_count": 24,
+      "backend_visible_repo_ids_or_paths": [
+        "/repos/telemart_soft_test",
+        "telemart_soft_test",
+        "c2eb1cb0b4962f3b6c1abccedbc40c6e9fe0e193",
+        "/repos/telemart_service_test",
+        "telemart_service_test",
+        "a300de106d0c75e2e3370f36ffd99f772b4480ff",
+        "/repos/telemart_parser_service_test",
+        "telemart_parser_service_test",
+        "7986c916ef3c44ae0288b9292c67abfe28fb06c8",
+        "/repos/telemart_jobs_test",
+        "telemart_jobs_test",
+        "ab5e2b72a679995adeff8c11a3fb3be71017c2cb",
+        "/repos/telemart_catalog_test",
+        "telemart_catalog_test",
+        "36b49f10dcefdd6f998fbd2a466ba6975272fbe9",
+        "/repos/telemart_gateway_test",
+        "telemart_gateway_test",
+        "f68d649d3fb55097b16417e43428d2c6222ea343",
+        "/repos/telemart_libraries_test",
+        "telemart_libraries_test"
+      ],
+      "gitnexus_home_used_for_analyze": "/gitnexus",
+      "gitnexus_home_used_for_backend": "/gitnexus",
+      "raw_list_repos_result_excerpt": "{\"text\": \"[\\n  {\\n    \\\"name\\\": \\\"telemart_soft_test\\\",\\n    \\\"path\\\": \\\"/repos/telemart_soft_test\\\",\\n    \\\"indexedAt\\\": \\\"2026-04-07T01:00:06.042Z\\\",\\n    \\\"lastCommit\\\": \\\"c2eb1cb0b4962f3b6c1abccedbc40c6e9fe0e193\\\",\\n    \\\"stats\\\": {\\n      \\\"files\\\": 5763,\\n      \\\"nodes\\\": 52439,\\n      \\\"edges\\\": 814139,\\n      \\\"communities\\\": 1134,\\n      \\\"processes\\\": 300,\\n      \\\"embeddings\\\": 0\\n    }\\n  },\\n  {\\n    \\\"name\\\": \\\"telemart_service_test\\\",\\n    \\\"path\\\": \\\"/repos/telemart_service_test\\\",\\n    \\\"indexedAt\\\": \\\"2026-04-03T12:56:47.690Z\\\",\\n    \\\"lastCommit\\\": \\\"a300de106d0c75e2e3370f36",
+      "visibility_match_reason": "matched exact normalized path or repo id from GitNexus list_repos",
+      "normalized_repo_visibility_targets": [
+        "/repos/telemart_soft_test",
+        "telemart_soft_test"
+      ],
+      "candidate_repos_count": 5,
+      "candidate_repos": [
+        {
+          "repo_id": "telemart_soft_test",
+          "score": 2.4,
+          "reasons": [
+            "historical_change_memory"
+          ],
+          "historical_match_count": 6,
+          "top_historical_matches": [
+            {
+              "repo_id": "telemart_soft_test",
+              "jira_key": "TEL-13508",
+              "commit_hash": "b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+              "branch_name": "",
+              "committed_at": "2026-03-04T18:49:34+02:00",
+              "changed_files": [
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"
+              ],
+              "score": 2.1,
+              "reasons": [
+                "exact_jira_key",
+                "historical_task_similarity"
+              ]
+            },
+            {
+              "repo_id": "telemart_soft_test",
+              "jira_key": "TEL-12695",
+              "commit_hash": "1de87c50151fa115cefba1b88fc58bad2e692227",
+              "branch_name": "",
+              "committed_at": "2024-11-07T17:26:18+02:00",
+              "changed_files": [],
+              "score": 0.75,
+              "reasons": [
+                "historical_task_similarity"
+              ]
+            },
+            {
+              "repo_id": "telemart_soft_test",
+              "jira_key": "TEL-10585",
+              "commit_hash": "87ed70ea081467567d4100bea4488cccc68c81fe",
+              "branch_name": "",
+              "committed_at": "2023-08-21T12:45:15+03:00",
+              "changed_files": [],
+              "score": 0.75,
+              "reasons": [
+                "historical_task_similarity"
+              ]
+            }
+          ],
+          "top_historical_changed_files": [
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+            "src/Telemart.Client.Protos/product.proto",
+            "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+            "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs",
+            "src/client/Telemart.Client.TransferObjects/OrderProductLogisticsDto.cs",
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReportData.cs"
+          ]
+        },
+        {
+          "repo_id": "telemart_service_test",
+          "score": 1.161,
+          "reasons": [
+            "historical_change_memory"
+          ],
+          "historical_match_count": 9,
+          "top_historical_matches": [
+            {
+              "repo_id": "telemart_service_test",
+              "jira_key": "TEL-12695",
+              "commit_hash": "1c7d27ef2d33118c37ce0bfd19458ba9c49a839f",
+              "branch_name": "",
+              "committed_at": "2024-11-13T10:05:23+02:00",
+              "changed_files": [
+                "src/Telemart.Service.Common/Telemart.Service.Common.csproj",
+                "src/Telemart.Service/Telemart.Service.csproj",
+                "test/Telemart.Service.Tests/Telemart.Service.Tests.csproj"
+              ],
+              "score": 0.861,
+              "reasons": [
+                "historical_task_similarity",
+                "changed_file_overlap"
+              ]
+            },
+            {
+              "repo_id": "telemart_service_test",
+              "jira_key": "TEL-12695",
+              "commit_hash": "01e4a9f0ac821a60f7aa1b8c76b244e0f268d2bf",
+              "branch_name": "",
+              "committed_at": "2024-11-13T12:41:16+02:00",
+              "changed_files": [
+                "src/Telemart.Service/Application/Commands/MaintenanceCommands/AutoConfirmOrdersCommandHandler.cs",
+                "src/Telemart.Service.Common/Telemart.Service.Common.csproj",
+                "src/Telemart.Service/HostedServices/EventProcessHostedService.cs",
+                "src/Telemart.Service/Telemart.Service.csproj",
+                "test/Telemart.Service.Tests/Telemart.Service.Tests.csproj"
+              ],
+              "score": 0.841,
+              "reasons": [
+                "historical_task_similarity",
+                "changed_file_overlap"
+              ]
+            },
+            {
+              "repo_id": "telemart_service_test",
+              "jira_key": "TEL-12695",
+              "commit_hash": "beff9b221a5ea687ba6c65ab0c486b226a95f4be",
+              "branch_name": "",
+              "committed_at": "2024-11-04T13:33:39+02:00",
+              "changed_files": [
+                "src/Telemart.Service/Application/Commands/AssemblyServiceCommands/DefectAssemblyHandler.cs",
+                "src/Telemart.Service/Application/DeliveryEngine/AdditionalService/AdditionalServiceDeliveryRouteCalculator.cs",
+                "src/Telemart.Service/Application/IWorkContext.cs",
+                "src/Telemart.Service/Application/Logistics/LogisticsProductRequest.cs",
+                "src/Telemart.Service/Application/Logistics/ProductLogisticsEngine.cs",
+                "src/Telemart.Service/Application/WorkContext.cs",
+                "src/Telemart.Service.Common/Telemart.Service.Common.csproj",
+                "src/Telemart.Service/Program.cs",
+                "src/Telemart.Service/Startup.cs",
+                "src/Telemart.Service/Telemart.Service.csproj",
+                "test/Telemart.Service.Tests/Telemart.Service.Tests.csproj"
+              ],
+              "score": 0.809,
+              "reasons": [
+                "historical_task_similarity",
+                "changed_file_overlap"
+              ]
+            }
+          ],
+          "top_historical_changed_files": [
+            "src/Telemart.Service.Common/Telemart.Service.Common.csproj",
+            "src/Telemart.Service/Telemart.Service.csproj",
+            "test/Telemart.Service.Tests/Telemart.Service.Tests.csproj",
+            "src/Telemart.Service/Application/Commands/MaintenanceCommands/AutoConfirmOrdersCommandHandler.cs",
+            "src/Telemart.Service/HostedServices/EventProcessHostedService.cs",
+            "src/Telemart.Service/Application/Commands/AssemblyServiceCommands/DefectAssemblyHandler.cs",
+            "src/Telemart.Service/Application/DeliveryEngine/AdditionalService/AdditionalServiceDeliveryRouteCalculator.cs",
+            "src/Telemart.Service/Application/IWorkContext.cs"
+          ]
+        },
+        {
+          "repo_id": "telemart_jobs_test",
+          "score": 1.106,
+          "reasons": [
+            "historical_change_memory"
+          ],
+          "historical_match_count": 14,
+          "top_historical_matches": [
+            {
+              "repo_id": "telemart_jobs_test",
+              "jira_key": "TEL-10585",
+              "commit_hash": "ad4f9a0ec5184f8a770aa0862b590ec5dadab738",
+              "branch_name": "",
+              "committed_at": "2023-07-17T14:23:14+03:00",
+              "changed_files": [
+                "src/Parsers/Telemart.Parser.Colorway/appsettings.json",
+                "src/Parsers/Telemart.Parser.Colorway/ColorwayOptions.cs",
+                "src/Parsers/Telemart.Parser.Colorway/ColorwayParser.cs",
+                "src/Parsers/Telemart.Parser.Colorway/Dockerfile",
+                "src/Parsers/Telemart.Parser.Colorway/IColorwayApi.cs",
+                "src/Parsers/Telemart.Parser.Colorway/Items/ColorwayDescription.cs",
+                "src/Parsers/Telemart.Parser.Colorway/Items/ColorwayProduct.cs",
+                "src/Parsers/Telemart.Parser.Colorway/Items/ColorwayResponse.cs",
+                "src/Parsers/Telemart.Parser.Colorway/Program.cs",
+                "src/Parsers/Telemart.Parser.Colorway/Telemart.Parser.Colorway.csproj",
+                "Telemart.Jobs.sln"
+              ],
+              "score": 0.806,
+              "reasons": [
+                "historical_task_similarity",
+                "changed_file_overlap"
+              ]
+            },
+            {
+              "repo_id": "telemart_jobs_test",
+              "jira_key": "TEL-10591",
+              "commit_hash": "e658696804c70117ae60b87e447ec92f874b64f8",
+              "branch_name": "",
+              "committed_at": "2023-07-17T17:18:07+03:00",
+              "changed_files": [
+                "docker-compose.yml",
+                "src/Parsers/Telemart.Parser.PcCooler/appsettings.json",
+                "src/Parsers/Telemart.Parser.PcCooler/Dockerfile",
+                "src/Parsers/Telemart.Parser.PcCooler/IPcCoolerApi.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/Items/Catalog.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/Items/Offer.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/PcCoolerOptions.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/PcCoolerParser.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/Program.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/Telemart.Parser.PcCooler.csproj",
+                "src/Protos/parser_settings.proto",
+                "Telemart.Jobs.sln"
+              ],
+              "score": 0.798,
+              "reasons": [
+                "historical_task_similarity",
+                "changed_file_overlap"
+              ]
+            },
+            {
+              "repo_id": "telemart_jobs_test",
+              "jira_key": "TEL-10591",
+              "commit_hash": "0e2a0c7f9493141c5d914dc452be106e6d777fa3",
+              "branch_name": "",
+              "committed_at": "2023-07-17T17:39:48+03:00",
+              "changed_files": [
+                "src/Parsers/Telemart.Parser.Artline/Telemart.Parser.Artline.csproj",
+                "src/Parsers/Telemart.Parser.Asbis/Telemart.Parser.Asbis.csproj",
+                "src/Parsers/Telemart.Parser.Diwave/Telemart.Parser.Diwave.csproj",
+                "src/Parsers/Telemart.Parser.ItLink/Telemart.Parser.ItLink.csproj",
+                "src/Parsers/Telemart.Parser.KarmaDigital/Telemart.Parser.KarmaDigital.csproj",
+                "src/Parsers/Telemart.Parser.Mental/Telemart.Parser.Mental.csproj",
+                "src/Parsers/Telemart.Parser.PcCooler/Items/Offer.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/PcCoolerParser.cs",
+                "src/Parsers/Telemart.Parser.PcCooler/Telemart.Parser.PcCooler.csproj"
+              ],
+              "score": 0.75,
+              "reasons": [
+                "historical_task_similarity"
+              ]
+            }
+          ],
+          "top_historical_changed_files": [
+            "src/Parsers/Telemart.Parser.Colorway/appsettings.json",
+            "src/Parsers/Telemart.Parser.Colorway/ColorwayOptions.cs",
+            "src/Parsers/Telemart.Parser.Colorway/ColorwayParser.cs",
+            "src/Parsers/Telemart.Parser.Colorway/Dockerfile",
+            "src/Parsers/Telemart.Parser.Colorway/IColorwayApi.cs",
+            "src/Parsers/Telemart.Parser.Colorway/Items/ColorwayDescription.cs",
+            "src/Parsers/Telemart.Parser.Colorway/Items/ColorwayProduct.cs",
+            "src/Parsers/Telemart.Parser.Colorway/Items/ColorwayResponse.cs"
+          ]
+        },
+        {
+          "repo_id": "telemart_parser_service_test",
+          "score": 0.81,
+          "reasons": [
+            "historical_change_memory"
+          ],
+          "historical_match_count": 1,
+          "top_historical_matches": [
+            {
+              "repo_id": "telemart_parser_service_test",
+              "jira_key": "TEL-10585",
+              "commit_hash": "eadd4e26a3caffa720565da98ebd033f27635ad8",
+              "branch_name": "",
+              "committed_at": "2023-08-10T16:37:19+03:00",
+              "changed_files": [
+                "src/Telemart.Parser.Service/Protos/product.proto"
+              ],
+              "score": 0.75,
+              "reasons": [
+                "historical_task_similarity"
+              ]
+            }
+          ],
+          "top_historical_changed_files": [
+            "src/Telemart.Parser.Service/Protos/product.proto"
+          ]
+        },
+        {
+          "repo_id": "self",
+          "score": 0.0,
+          "reasons": [],
+          "historical_match_count": 0,
+          "top_historical_matches": [],
+          "top_historical_changed_files": []
+        }
+      ],
+      "selected_repos": [
+        {
+          "repo_id": "telemart_soft_test",
+          "score": 2.4,
+          "reasons": [
+            "historical_change_memory"
+          ],
+          "historical_match_count": 6,
+          "top_historical_matches": [
+            {
+              "repo_id": "telemart_soft_test",
+              "jira_key": "TEL-13508",
+              "commit_hash": "b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+              "branch_name": "",
+              "committed_at": "2026-03-04T18:49:34+02:00",
+              "changed_files": [
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+                "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"
+              ],
+              "score": 2.1,
+              "reasons": [
+                "exact_jira_key",
+                "historical_task_similarity"
+              ]
+            },
+            {
+              "repo_id": "telemart_soft_test",
+              "jira_key": "TEL-12695",
+              "commit_hash": "1de87c50151fa115cefba1b88fc58bad2e692227",
+              "branch_name": "",
+              "committed_at": "2024-11-07T17:26:18+02:00",
+              "changed_files": [],
+              "score": 0.75,
+              "reasons": [
+                "historical_task_similarity"
+              ]
+            },
+            {
+              "repo_id": "telemart_soft_test",
+              "jira_key": "TEL-10585",
+              "commit_hash": "87ed70ea081467567d4100bea4488cccc68c81fe",
+              "branch_name": "",
+              "committed_at": "2023-08-21T12:45:15+03:00",
+              "changed_files": [],
+              "score": 0.75,
+              "reasons": [
+                "historical_task_similarity"
+              ]
+            }
+          ],
+          "top_historical_changed_files": [
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+            "src/Telemart.Client.Protos/product.proto",
+            "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+            "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs",
+            "src/client/Telemart.Client.TransferObjects/OrderProductLogisticsDto.cs",
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReportData.cs"
+          ]
+        }
+      ],
+      "repo_routing_reason": "Selected telemart_soft_test from historical multi-repo evidence.",
+      "historical_match_count": 6,
+      "top_historical_matches": [
+        {
+          "repo_id": "telemart_soft_test",
+          "jira_key": "TEL-13508",
+          "commit_hash": "b3bdbf740ac65bad73e1474cbf5b9e99e9ca973d",
+          "branch_name": "",
+          "committed_at": "2026-03-04T18:49:34+02:00",
+          "changed_files": [
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+            "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx"
+          ],
+          "score": 2.1,
+          "reasons": [
+            "exact_jira_key",
+            "historical_task_similarity"
+          ]
+        },
+        {
+          "repo_id": "telemart_soft_test",
+          "jira_key": "TEL-12695",
+          "commit_hash": "1de87c50151fa115cefba1b88fc58bad2e692227",
+          "branch_name": "",
+          "committed_at": "2024-11-07T17:26:18+02:00",
+          "changed_files": [],
+          "score": 0.75,
+          "reasons": [
+            "historical_task_similarity"
+          ]
+        },
+        {
+          "repo_id": "telemart_soft_test",
+          "jira_key": "TEL-10585",
+          "commit_hash": "87ed70ea081467567d4100bea4488cccc68c81fe",
+          "branch_name": "",
+          "committed_at": "2023-08-21T12:45:15+03:00",
+          "changed_files": [],
+          "score": 0.75,
+          "reasons": [
+            "historical_task_similarity"
+          ]
+        }
+      ],
+      "top_historical_changed_files": [
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+        "src/Telemart.Client.Protos/product.proto",
+        "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+        "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs",
+        "src/client/Telemart.Client.TransferObjects/OrderProductLogisticsDto.cs",
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReportData.cs"
+      ],
+      "candidate_files_count": 12,
+      "selected_files_count": 5,
+      "total_candidate_file_count": 12,
+      "total_selected_file_count": 5,
+      "top_candidate_files": [
+        {
+          "name": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+          "confidence": 1.0,
+          "reason": "historical_similarity, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 57.148,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.0,
+          "lexical_overlap_score": 0.0,
+          "path_domain_score": 1.58,
+          "symbol_overlap_score": 6.12,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 45.332,
+          "raw_score_after_penalties": 45.332,
+          "raw_score_before_normalization": 45.332,
+          "final_score": 45.332,
+          "ranking_position": 1,
+          "triggered_penalties": [],
+          "source_signals": [
+            "historical_similarity",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+          "confidence": 1.0,
+          "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 10.611,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.16,
+          "lexical_overlap_score": 0.16,
+          "path_domain_score": 4.12,
+          "symbol_overlap_score": 3.96,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 18.789,
+          "raw_score_after_penalties": 18.789,
+          "raw_score_before_normalization": 18.789,
+          "final_score": 18.789,
+          "ranking_position": 2,
+          "triggered_penalties": [],
+          "source_signals": [
+            "historical_similarity",
+            "lexical_overlap",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+          "confidence": 1.0,
+          "reason": "historical_similarity, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 19.682,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.0,
+          "lexical_overlap_score": 0.0,
+          "path_domain_score": 1.58,
+          "symbol_overlap_score": 2.04,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 16.584,
+          "raw_score_after_penalties": 16.584,
+          "raw_score_before_normalization": 16.584,
+          "final_score": 16.584,
+          "ranking_position": 3,
+          "triggered_penalties": [],
+          "source_signals": [
+            "historical_similarity",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+          "confidence": 1.0,
+          "reason": "lexical_overlap, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.32,
+          "lexical_overlap_score": 0.32,
+          "path_domain_score": 10.92,
+          "symbol_overlap_score": 1.2,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 14.675,
+          "raw_score_after_penalties": 14.675,
+          "raw_score_before_normalization": 14.675,
+          "final_score": 14.675,
+          "ranking_position": 4,
+          "triggered_penalties": [],
+          "source_signals": [
+            "lexical_overlap",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        },
+        {
+          "name": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+          "confidence": 1.0,
+          "reason": "lexical_overlap, path_domain, symbol_overlap",
+          "surviving_score": 0.0,
+          "historical_score": 0.0,
+          "provider_score": 0.0,
+          "lexical_task_overlap_score": 0.16,
+          "lexical_overlap_score": 0.16,
+          "path_domain_score": 10.92,
+          "symbol_overlap_score": 0.72,
+          "graph_neighbor_score": 0.0,
+          "infra_penalty": 0.0,
+          "test_penalty": 0.0,
+          "generated_penalty": 0.0,
+          "raw_score_before_penalties": 14.439,
+          "raw_score_after_penalties": 14.439,
+          "raw_score_before_normalization": 14.439,
+          "final_score": 14.439,
+          "ranking_position": 5,
+          "triggered_penalties": [],
+          "source_signals": [
+            "lexical_overlap",
+            "path_domain",
+            "symbol_overlap"
+          ]
+        }
+      ],
+      "top_candidate_symbols": [
+        {
+          "name": "Id",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        },
+        {
+          "name": "HandleLoadedAsync",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        },
+        {
+          "name": "HandleRowDoubleClick",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        },
+        {
+          "name": "BuildMetadata",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        },
+        {
+          "name": "SetCreateTitle",
+          "confidence": 1.0,
+          "reason": "module evidence"
+        }
+      ],
+      "top_closest_areas": [
+        {
+          "area": "src/client/Telemart.Client/Reports/ServiceRequest",
+          "confidence": 0.35,
+          "reason": "derived from GitNexus file selection"
+        },
+        {
+          "area": "src/client/Telemart.Client/Reports/Order",
+          "confidence": 0.35,
+          "reason": "derived from GitNexus file selection"
+        },
+        {
+          "area": "src/client/Telemart.Client/ViewModels/Store/Order/PackList",
+          "confidence": 0.35,
+          "reason": "derived from GitNexus file selection"
+        }
+      ],
+      "candidate_files_by_repo": {
+        "telemart_soft_test": [
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 57.148,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 9.67,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 6.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 45.332,
+            "raw_score_after_penalties": 45.332,
+            "raw_score_before_normalization": 45.332,
+            "final_score": 45.332,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "order"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 10.611,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 35.04,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.96,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 4.12,
+            "role_path_score": 0.48,
+            "benchmark_confusion_boost": 1.35,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 18.789,
+            "raw_score_after_penalties": 18.789,
+            "raw_score_before_normalization": 18.789,
+            "final_score": 18.789,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "request"
+            ],
+            "matched_path_segments": [
+              "servicerequests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "request"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/service/servicerequests/servicerequestviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 19.682,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 2.72,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 2.04,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.762,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 16.584,
+            "raw_score_after_penalties": 16.584,
+            "raw_score_before_normalization": 16.584,
+            "final_score": 16.584,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "edit",
+              "trade"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 2.88,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 1.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.995,
+            "lexical_task_overlap_score": 0.32,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 14.675,
+            "raw_score_after_penalties": 14.675,
+            "raw_score_before_normalization": 14.675,
+            "final_score": 14.675,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "changeproductservicerequest.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature",
+              "products"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 4
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 4.32,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.72,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 1.399,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 14.439,
+            "raw_score_after_penalties": 14.439,
+            "raw_score_before_normalization": 14.439,
+            "final_score": 14.439,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "requests",
+              "supplierchangeserviceproduct.cs"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 5
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/ChangeDecisionServiceProduct.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.152,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 0.96,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.48,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.458,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 13.352,
+            "raw_score_after_penalties": 13.352,
+            "raw_score_before_normalization": 13.352,
+            "final_score": 13.352,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "changedecisionserviceproduct.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 6
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/Setting/ChangeTradeInAutoEvaluation.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.176,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 0.64,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.305,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.82,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 12.875,
+            "raw_score_after_penalties": 12.875,
+            "raw_score_before_normalization": 12.875,
+            "final_score": 12.875,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "changetradeinautoevaluation.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "request",
+              "get",
+              "trade",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 7
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/Products/Actions/SetProductDescription.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 0.64,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.305,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 12.865,
+            "raw_score_after_penalties": 12.865,
+            "raw_score_before_normalization": 12.865,
+            "final_score": 12.865,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "description",
+              "request"
+            ],
+            "matched_path_segments": [
+              "requests",
+              "setproductdescription.cs"
+            ],
+            "matched_understanding_entities": [
+              "request",
+              "description",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature",
+              "products"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 8
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/Setting/QueryWarehouseTagFormats.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.152,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 0.64,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.305,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.82,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 12.86,
+            "raw_score_after_penalties": 12.86,
+            "raw_score_before_normalization": 12.86,
+            "final_score": 12.86,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "form",
+              "request"
+            ],
+            "matched_path_segments": [
+              "querywarehousetagformats.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "request",
+              "form",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "query",
+              "request",
+              "warehouse",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 9
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/Warehouse/QueryWarehousePerformancePatterns.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.147,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 0.64,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.24,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.305,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.82,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 12.856,
+            "raw_score_after_penalties": 12.856,
+            "raw_score_before_normalization": 12.856,
+            "final_score": 12.856,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "form",
+              "request"
+            ],
+            "matched_path_segments": [
+              "querywarehouseperformancepatterns.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "request",
+              "form",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "query",
+              "request",
+              "warehouse",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 10
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceInvoice/FormServiceInvoiceRequest.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 1.92,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.84,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.727,
+            "lexical_task_overlap_score": 0.32,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 9.02,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 12.147,
+            "raw_score_after_penalties": 12.147,
+            "raw_score_before_normalization": 12.147,
+            "final_score": 12.147,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "form",
+              "request"
+            ],
+            "matched_path_segments": [
+              "formserviceinvoicerequest.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "form",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "invoice",
+              "request",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 11
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ConfirmChangeServiceRequest.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 0.96,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.48,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.458,
+            "lexical_task_overlap_score": 0.32,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 9.02,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 11.518,
+            "raw_score_after_penalties": 11.518,
+            "raw_score_before_normalization": 11.518,
+            "final_score": 11.518,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "confirmchangeservicerequest.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "request",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 12
+          }
+        ]
+      },
+      "candidate_diagnostics_by_repo": {
+        "telemart_soft_test": {
+          "candidate_count_before_dedupe": 20817,
+          "candidate_count_after_dedupe": 4474,
+          "recall_source_summary": {
+            "filename_recall": {
+              "raw_hits": 1967,
+              "unique_candidates": 1967
+            },
+            "glossary_recall": {
+              "raw_hits": 48,
+              "unique_candidates": 48
+            },
+            "historical_recall": {
+              "raw_hits": 10943,
+              "unique_candidates": 2998
+            },
+            "provider_recall": {
+              "raw_hits": 21,
+              "unique_candidates": 8
+            },
+            "provider_symbol_recall": {
+              "raw_hits": 21,
+              "unique_candidates": 6
+            },
+            "symbol_recall": {
+              "raw_hits": 7817,
+              "unique_candidates": 2434
+            }
+          },
+          "candidates_dropped_by_admission_gate": 0,
+          "dropped_generic_candidates_count": 0,
+          "dropped_by_channel": {},
+          "kept_by_channel": {
+            "filename_recall": 1967,
+            "glossary_recall": 48,
+            "historical_recall": 2998,
+            "provider_recall": 8,
+            "provider_symbol_recall": 6,
+            "symbol_recall": 2434
+          },
+          "final_pool_size_per_repo": 12,
+          "targeting_experimental_enabled": false,
+          "adjacent_false_positive_suppressor_enabled": false,
+          "candidate_pool_size_limit": 12,
+          "selected_file_limit": 5,
+          "structural_expansion_limit": 0,
+          "structural_expansion_added_count": 0,
+          "structural_expansion_added_files": [],
+          "adjacent_false_positive_suppressor_family": "",
+          "adjacent_false_positive_suppression_count": 0,
+          "adjacent_false_positive_suppressions": [],
+          "diagnostic_frontier_depth": 0,
+          "diagnostic_ranked_frontier_count": 0,
+          "diagnostic_ranked_frontier_files": [],
+          "recall_diversification_enabled": false,
+          "support_family_recall_enabled": false,
+          "blended_top_candidates_before_diversification": [],
+          "lexical_lane_candidates": [],
+          "final_candidate_pool_after_diversification": [],
+          "pool_construction_summary": {},
+          "blended_top_candidates_before_support_lane": [],
+          "support_family_lane_candidates": [],
+          "final_candidate_pool_after_support_lane": [],
+          "support_pool_construction_summary": {},
+          "dropped_candidates": {},
+          "repo_knowledge_used": true,
+          "repo_knowledge_used_for_enrichment": true,
+          "enriched_entities_added": [
+            "telemart",
+            "request"
+          ],
+          "enriched_path_hints_added": [
+            "Reports",
+            "Print",
+            "Documents",
+            "Commands",
+            "Telemart.Client/Order",
+            "Telemart.Client/Reports",
+            "Telemart.Client/Directories",
+            "Telemart.Client/Messages",
+            "Telemart.Client/Business",
+            "Telemart.Client/ServiceRequests",
+            "Telemart.Client/Warehouse",
+            "Telemart.Client.Data/Order"
+          ],
+          "enrichment_overlap_source": [
+            "entity_vocabulary_overlap",
+            "task_family_overlap",
+            "feature_area_overlap"
+          ],
+          "failure_mining_used_for_enrichment": true,
+          "failure_mined_entities_added": [],
+          "failure_mined_path_hints_added": [
+            "ViewModels",
+            "Views",
+            "Requests"
+          ],
+          "failure_mined_overlap_source": [
+            "failure_mined_path_overlap",
+            "failure_mined_suffix_overlap"
+          ],
+          "expected_files_recalled_due_to_enrichment_count": 0
+        }
+      },
+      "selected_files_by_repo": {
+        "telemart_soft_test": [
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 57.148,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 9.67,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 6.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 45.332,
+            "raw_score_after_penalties": 45.332,
+            "raw_score_before_normalization": 45.332,
+            "final_score": 45.332,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "order"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 10.611,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 35.04,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.96,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 4.12,
+            "role_path_score": 0.48,
+            "benchmark_confusion_boost": 1.35,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 18.789,
+            "raw_score_after_penalties": 18.789,
+            "raw_score_before_normalization": 18.789,
+            "final_score": 18.789,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "request"
+            ],
+            "matched_path_segments": [
+              "servicerequests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "request"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/service/servicerequests/servicerequestviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 19.682,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 2.72,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 2.04,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.762,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 16.584,
+            "raw_score_after_penalties": 16.584,
+            "raw_score_before_normalization": 16.584,
+            "final_score": 16.584,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "edit",
+              "trade"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 2.88,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 1.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.995,
+            "lexical_task_overlap_score": 0.32,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 14.675,
+            "raw_score_after_penalties": 14.675,
+            "raw_score_before_normalization": 14.675,
+            "final_score": 14.675,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "changeproductservicerequest.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature",
+              "products"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 4
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 4.32,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.72,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 1.399,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 14.439,
+            "raw_score_after_penalties": 14.439,
+            "raw_score_before_normalization": 14.439,
+            "final_score": 14.439,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "requests",
+              "supplierchangeserviceproduct.cs"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 5
+          }
+        ]
+      },
+      "top_candidate_files_by_repo": {
+        "telemart_soft_test": [
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 57.148,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 9.67,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 6.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 45.332,
+            "raw_score_after_penalties": 45.332,
+            "raw_score_before_normalization": 45.332,
+            "final_score": 45.332,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "order"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 10.611,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 35.04,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.96,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 4.12,
+            "role_path_score": 0.48,
+            "benchmark_confusion_boost": 1.35,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 18.789,
+            "raw_score_after_penalties": 18.789,
+            "raw_score_before_normalization": 18.789,
+            "final_score": 18.789,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "request"
+            ],
+            "matched_path_segments": [
+              "servicerequests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "request"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/service/servicerequests/servicerequestviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 19.682,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 2.72,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 2.04,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.762,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 16.584,
+            "raw_score_after_penalties": 16.584,
+            "raw_score_before_normalization": 16.584,
+            "final_score": 16.584,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "edit",
+              "trade"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          }
+        ]
+      },
+      "top_candidate_symbols_by_repo": {
+        "telemart_soft_test": [
+          {
+            "name": "Id",
+            "confidence": 1.0,
+            "final_score": 23.52,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/MoveAdditionalService.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AdditionalService/Actions/MoveAdditionalServiceGroup.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/UpdateAdditionalServiceProductDate.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/UpdateAdditionalServiceProductEmployee.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AdditionalServiceProduct/Actions/UpdateAdditionalServiceProductWarehouse.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/Actions/DefectAssemblyServiceProduct.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/Actions/UpdateAssemblyServiceDate.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/Actions/UpdateAssemblyServiceEmployee.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AssemblyService/Actions/UpdateAssemblyServicePlaces.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/AssemblyTest/Actions/MoveAssemblyTestGroup.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/BankPayment/Actions/PayBankPayment.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Bitrix/Actions/MoveBitrixTask.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Bitrix/UpdateBitrixTask.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Call/Actions/MakeCall.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Catalog/ComplectationGeneratorDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CatalogCategoryDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/CheckCompatibility/CategoryDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/Filter/FilterDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/Filter/FilterGroupDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Catalog/TransferObjects/Filter/LabelDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Invoice/Actions/SetInvoiceAutoReserve.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Movement/Actions/SendMovement.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Novaposhta/Actions/CreateNpTtnByMovement.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Novaposhta/Actions/CreateNpTtnByReturnInvoice.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Novaposhta/Actions/CreateNpTtnByServiceInvoice.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Novaposhta/Actions/CreateNpTtnByServiceMovement.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/CanEditOrderAdditionalService.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/CanEditOrderAssembly.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/OrderSetManager.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/SetOrderExternalOrder.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/SplitOrderFolder.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/Actions/UpdateOrderPrice.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Order/ExpireOrder.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/PrivatBank/PrivatBankPhoneDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Products/UpdateProductDimensions.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/DataSourceDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/DataSourceItemDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportDatabaseDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportExecutionResultDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportParamsDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportSaveDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Report/TransferObjects/ReportSimpleDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ReportLayout/TransferObjects/ReportLayoutDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ReportLayout/TransferObjects/ReportLayoutSaveDto.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ReturnInvoice/Actions/SendReturnInvoice.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ReturnInvoice/Actions/SetReturnInvoiceSenderNpContractor.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/DiscountServiceProduct.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/OnUtilizationServiceProduct.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierRemoveFromRegisterServiceProduct.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/CancelServiceRequest.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/CompleteServiceRequest.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ConfirmRepairServiceRequest.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/UpdateServiceRequestDiscussion.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Showcase/UpdateShowcase.cs",
+              "src/client/Telemart.Client.Data/Requests/Features/Sms/SendSmsTemplate.cs",
+              "src/client/Telemart.Client.FiscalRegistrar.Programmical/TransferObjects/CashCollectionRequest.cs",
+              "src/client/Telemart.Client.FiscalRegistrar.Programmical/TransferObjects/PrintChequeRequest.cs",
+              "src/client/Telemart.Client.FiscalRegistrar.Programmical/TransferObjects/PrintReportRequest.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceGroupDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceGroupPositionDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceProductConsumableDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceProductConsumableSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceProductDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceProductSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceProvideRuleDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceProvideRuleSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceSlaveCategoryDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AdditionalServiceSlaveCategorySaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AssemblyService/AssemblyServiceDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AssemblyService/AssemblyServiceProductDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AssemblyService/AssemblyServiceProductSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/AssemblyService/AssemblyServiceSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/Catalog/ProductMovingRequest.cs",
+              "src/client/Telemart.Client.TransferObjects/Complaint/ComplaintChangeStateDto.cs",
+              "src/client/Telemart.Client.TransferObjects/OrderProductChangeStateDto.cs",
+              "src/client/Telemart.Client.TransferObjects/OrderStateChangeReasonDto.cs",
+              "src/client/Telemart.Client.TransferObjects/OwnershipFormDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ProductAdditionalServiceDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ProductAdditionalServiceGroupDto.cs",
+              "src/client/Telemart.Client.TransferObjects/PromoCode/CheckPromoCodeProductRequest.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceCenterDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceCenterSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceInvoiceDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceInvoiceProductDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceMovement/ServiceMovementProductDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceMovement/ServiceMovementSimpleDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceProduct/ServiceProductDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceProduct/ServiceProductSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceProductMoveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRepairDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRepairSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRepairTakeFromServiceCenterDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestChangeRequirementDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestConfirmReturnDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestCreateDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestCreateTrackNumberDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestDiscussionDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestDocumentSimpleDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestDocumentSimpleSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestRejectDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestSaveDto.cs",
+              "src/client/Telemart.Client.TransferObjects/ServiceRequestTakeDto.cs",
+              "src/client/Telemart.Client.TransferObjects/TagFormatDto.cs",
+              "src/client/Telemart.Client.TransferObjects/Warehouse/Perfomance/WarehousePerformanceDto.cs",
+              "src/client/Telemart.Client.TransferObjects/Warehouse/Route/WarehouseServiceCenterRouteDto.cs",
+              "src/client/Telemart.Client.TransferObjects/Warehouse/WarehousePerformancePatternDto.cs",
+              "src/client/Telemart.Client.TransferObjects/WarehouseTagFormatDto.cs",
+              "src/client/Telemart.Client/ViewModels/SupplierBill/Requests/BillProductRequest.cs",
+              "src/client/Telemart.Client/ViewModels/SupplierBill/Requests/BillRequest.cs"
+            ],
+            "ranking_position": 1
+          },
+          {
+            "name": "HandleLoadedAsync",
+            "confidence": 1.0,
+            "final_score": 18.56,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServicesViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalService/SelectAdditionalServicesViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductClientProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductDefectViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServiceDefectViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServiceTestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServicesViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Backlog/ChangeEstimateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Backlog/ChangeResponsibleViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Cities/SelectDeliveryServiceCityViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Common/ChangeCarryViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Common/ShowTextViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Content/ProductDescription/ProductDescriptionsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Dialogs/ChangeDateTimeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Dialogs/ChangeItemViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Dialogs/GetTextFromUserViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Directories/ProductsPrices/ProductPricePropertyChangesViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceCenters/ServiceCenterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceCenters/ServiceCentersViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/CompleteServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/CreateServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/SendServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/ServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/ServiceInvoicesViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementCreateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/GetServiceProductWarehouseViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductDiscountCreateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductDiscountViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductSupplierChangeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductSupplierRemoveFromRegisterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductUtilizeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/FormInvoice/SearchRequestsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/FormInvoice/SelectRequestsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/FormInvoice/SelectServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/ServiceRepairViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/ServiceRepairsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/TakeFromServiceCenterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ChangeRequirementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/CompensateServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/CompleteServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/ChangePageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestStep1ViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestStep2ViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestStep3ViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestStep4ChangeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestStep5ViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestStep6ViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/DeclarantPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/LogisticsPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/RepairPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/SelectOrderPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/SelectProductPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/SrFinishPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/ConfirmProductReturnPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/ConfirmRepairPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/DiagnoseFinishPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/RejectPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/ResolutionPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/ServiceRequestNomenclatureSeriesViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestChangeProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/TakeServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Call/ChangeCallStateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Order/ChangeMoneyBackAmountViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Order/ProductInformation/HotlineCompetitorViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Order/ProductInformation/HotlineCompetitorsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/ReturnInvoice/ChangeAddressReturnInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/SupplierBill/Create/CreateSupplierBillTextPageViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Tools/ChangeLegalEntity/ChangeLegalEntityViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Tools/ChangeStateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/WorkSchedule/WorkScheduleChangeTypeViewModel.cs"
+            ],
+            "ranking_position": 2
+          },
+          {
+            "name": "HandleRowDoubleClick",
+            "confidence": 1.0,
+            "final_score": 12.71,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Comment/CommentAnswersViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Layouts/ModuleLayoutsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Money/Receive/BankPayment/BankPaymentsConfirmViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Nomenclature/NomenclatureViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Reporting/ReportLayoutsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Reporting/ReportSelectionViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Reporting/ReportViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/ServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Showcase/ShowcaseCategoryViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Order/OrderPackViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/ReturnInvoice/ReturnInvoiceConfirmViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/ReturnInvoice/ReturnInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/Movement/MovementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/Movement/MovementsMassScanViewModel.cs"
+            ],
+            "ranking_position": 3
+          },
+          {
+            "name": "BuildMetadata",
+            "confidence": 1.0,
+            "final_score": 11.2,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceGroupSimpleViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductClientProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductsFilterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServiceViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServicesFilterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Backlog/ChangeEstimateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Backlog/ChangeResponsibleViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Common/ChangeCarryViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Content/ProductDescription/ProductDescriptionViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Dialogs/ChangeDateTimeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Dialogs/ChangeItemViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Dialogs/GetTextFromUserViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/RobotProperties/ValidationTextValueWrapper.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceCenters/ServiceCenterViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/CreateServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/SendServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementCreateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementsFilterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/GetServiceProductWarehouseViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductDiscountCreateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductDiscountViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductFilterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductSupplierChangeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductSupplierRemoveFromRegisterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductUtilizeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/FormInvoice/FormInvoiceModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/ServiceRepairViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/ServiceRepairViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/ServiceRepairsFilterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/TakeFromServiceCenterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ChangeRequirementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/CompensateServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/CompleteServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateManyServiceRequestModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/CreateServiceRequestModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Create/ServiceRequestProductSnViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/CreateServiceRequestTrackNumberSourceViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/DiagnoseServiceRequestModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/Diagnostics/ServiceRequestNomenclatureSeriesProductViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestChangeProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewItem.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestsFilterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/TakeServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Call/ChangeCallStateViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Order/ChangeMoneyBackAmountViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Order/ProductInformation/HotlineCompetitorViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/ReturnInvoice/ChangeAddressReturnInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Tools/ChangeLegalEntity/ChangeLegalEntityViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Tools/ChangeStateViewModel.cs"
+            ],
+            "ranking_position": 4
+          },
+          {
+            "name": "SetCreateTitle",
+            "confidence": 1.0,
+            "final_score": 10.36,
+            "reason": "module evidence",
+            "source_signals": [
+              "symbol_recall"
+            ],
+            "related_files": [
+              "src/client/Telemart.Client/ViewModels/Accessory/AccessoryViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceGroupViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalService/AdditionalServiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AdditionalServiceProduct/AdditionalServiceProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Area/AreaViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssembledComputerRule/AssembledComputerRuleViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyFullRule/AssemblyFullRuleViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyService/AssemblyServiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyTest/AssemblyTestGroupViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/AssemblyTest/AssemblyTestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Backlog/BacklogTaskEditViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Base/TelemartEditorViewModelBase.cs",
+              "src/client/Telemart.Client/ViewModels/Carry/CarryPriceEditViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Cashbox/CashboxViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Cities/CityViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/CompanyStructure/DepartmentEditViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Complaint/ComplaintViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Content/ProductFeatureGroups/FeatureViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Customer/CustomerViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Directories/Contractor/ContractorViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Directories/Contractor/ParserSettings/ParserSettingsViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Directories/Employee/UpdateEmployeeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Directories/Organization/OrganizationViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Discussions/DiscussionViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/District/DistrictViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Locations/ClusterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Locations/LocationViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Money/Refund/RefundViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Payments/PaymentViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/ProductCompatibility/ProductCompatibilityViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/PromoCode/PromoCodeViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Reporting/ReportEditorViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/RobotProperties/RobotPropertyViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Segment/SegmentViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceCenters/ServiceCenterViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceInvoices/ServiceInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceMovements/ServiceMovementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceProducts/ServiceProductViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRepairs/ServiceRepairViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Showcase/ShowcaseViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Call/CallViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/Invoice/AdditionalCostViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Store/ReturnInvoice/ReturnInvoiceViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/SupplierBill/SupplierBillViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Tasks/TaskViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/TradeInSegment/TradeInSegmentViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/Movement/MovementViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/WarehouseCellViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/WarehouseDeliveryEditViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/WarehousePerfomanceEditViewModel.cs",
+              "src/client/Telemart.Client/ViewModels/Warehouse/WarehouseViewModel.cs"
+            ],
+            "ranking_position": 5
+          }
+        ]
+      },
+      "repo_file_match_reason_by_repo": {
+        "telemart_soft_test": "analyze_task: top file src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs from historical_similarity, path_domain, symbol_overlap"
+      },
+      "repo_file_match_quality_by_repo": {
+        "telemart_soft_test": "exact"
+      },
+      "multi_repo_file_targeting_summary": "Top file targets by repo: telemart_soft_test -> src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs, src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs, src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs.",
+      "execution_mode": "plan_only",
+      "writable_repo_id": "",
+      "writable_files": [],
+      "readonly_repo_ids": [
+        "telemart_soft_test"
+      ],
+      "readonly_files_by_repo": {
+        "telemart_soft_test": [
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 57.148,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 9.67,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 6.12,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 45.332,
+            "raw_score_after_penalties": 45.332,
+            "raw_score_before_normalization": 45.332,
+            "final_score": 45.332,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "order"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/store/order/orderviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 1
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 10.611,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.36,
+            "symbol_recall_score": 35.04,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 3.96,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 2.2,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.42,
+            "path_domain_score": 4.12,
+            "role_path_score": 0.48,
+            "benchmark_confusion_boost": 1.35,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 18.789,
+            "raw_score_after_penalties": 18.789,
+            "raw_score_before_normalization": 18.789,
+            "final_score": 18.789,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "request"
+            ],
+            "matched_path_segments": [
+              "servicerequests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "request"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/service/servicerequests/servicerequestviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 2
+          },
+          {
+            "file": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+            "surviving_score": 0.0,
+            "historical_score": 19.682,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.0,
+            "symbol_recall_score": 2.72,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 2.04,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "historical_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "historical_similarity",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.762,
+            "lexical_task_overlap_score": 0.0,
+            "exact_domain_overlap_score": 0.0,
+            "path_domain_score": 1.58,
+            "role_path_score": 0.0,
+            "benchmark_confusion_boost": 0.0,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 16.584,
+            "raw_score_after_penalties": 16.584,
+            "raw_score_before_normalization": 16.584,
+            "final_score": 16.584,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [],
+            "matched_path_segments": [],
+            "matched_understanding_entities": [
+              "telemart",
+              "view"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "model",
+              "edit",
+              "trade"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "repo_knowledge_false_positive_hits": [
+              "src/client/telemart.client/viewmodels/tradein/tradeineditviewmodel.cs"
+            ],
+            "task_understanding_bonus": 1.5,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "historical_similarity, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 3
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 2.88,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 1.2,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 0.995,
+            "lexical_task_overlap_score": 0.32,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 14.675,
+            "raw_score_after_penalties": 14.675,
+            "raw_score_before_normalization": 14.675,
+            "final_score": 14.675,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "changeproductservicerequest.cs",
+              "requests"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature",
+              "products"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 4
+          },
+          {
+            "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+            "surviving_score": 0.0,
+            "historical_score": 0.0,
+            "provider_score": 0.0,
+            "filename_recall_score": 0.54,
+            "symbol_recall_score": 4.32,
+            "glossary_recall_score": 0.0,
+            "profile_recall_score": 0.0,
+            "symbol_overlap_score": 0.72,
+            "graph_neighbor_score": 0.0,
+            "recall_channels": [
+              "filename_recall",
+              "symbol_recall"
+            ],
+            "source_signals": [
+              "lexical_overlap",
+              "path_domain",
+              "symbol_overlap"
+            ],
+            "reason_fragments": [],
+            "recall_bonus": 1.399,
+            "lexical_task_overlap_score": 0.16,
+            "exact_domain_overlap_score": 0.84,
+            "path_domain_score": 10.92,
+            "role_path_score": 3.2,
+            "benchmark_confusion_boost": 0.4,
+            "benchmark_confusion_penalty": 0.0,
+            "missed_feature_family_boost": 0.0,
+            "same_jira_penalty": 0.0,
+            "repo_knowledge_bonus": 0.0,
+            "repo_knowledge_penalty": 0.0,
+            "infra_penalty": 0.0,
+            "test_penalty": 0.0,
+            "generated_penalty": 0.0,
+            "generic_noise_penalty": 0.0,
+            "evidence_multiplier": 0.62,
+            "raw_score_before_penalties": 14.439,
+            "raw_score_after_penalties": 14.439,
+            "raw_score_before_normalization": 14.439,
+            "final_score": 14.439,
+            "confidence": 1.0,
+            "inferred_task_family": "command_handler",
+            "repo_knowledge_used": true,
+            "matched_task_tokens": [
+              "change",
+              "request"
+            ],
+            "matched_path_segments": [
+              "requests",
+              "supplierchangeserviceproduct.cs"
+            ],
+            "matched_understanding_entities": [
+              "service",
+              "request",
+              "change",
+              "telemart"
+            ],
+            "matched_repo_knowledge_entities": [
+              "telemart",
+              "product",
+              "request",
+              "feature"
+            ],
+            "matched_repo_knowledge_feature_areas": [],
+            "matched_repo_knowledge_path_hints": [
+              "src"
+            ],
+            "repo_knowledge_true_positive_hits": [],
+            "repo_knowledge_false_positive_hits": [],
+            "task_understanding_bonus": 1.6,
+            "feature_family_boosts": [],
+            "mismatch_penalties": [],
+            "false_positive_memory_penalty": 0.0,
+            "reason": "lexical_overlap, path_domain, symbol_overlap",
+            "triggered_penalties": [],
+            "ranking_position": 5
+          }
+        ]
+      },
+      "implementation_scope_summary": "Plan-only scope across 1 selected repos with no writable files.",
+      "scope_enforcement_reason": "Plan-only mode produces structured file-by-file intent without applying code changes.",
+      "scope_blocked": false,
+      "scope_execution_ready": false,
+      "writable_file_count": 0,
+      "readonly_repo_count": 1,
+      "readonly_file_count": 5,
+      "attempted_out_of_scope_files": [],
+      "blocked_out_of_scope_files": [],
+      "writable_file_plan": [
+        {
+          "file": "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+          "intended_action": "modify",
+          "why_this_file": "historical_similarity, path_domain, symbol_overlap Symbol references: OrderViewModel, store, Order.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "OrderViewModel",
+            "store"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 2,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 5,
+          "candidate_specific_anchor_count_after_filter": 2,
+          "discriminative_anchor_count": 2,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "telemart",
+            "client",
+            "viewmodels"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "telemart",
+            "client",
+            "viewmodels"
+          ],
+          "symbol_anchors": [
+            "OrderViewModel",
+            "store"
+          ],
+          "likely_symbols": [
+            "OrderViewModel",
+            "Order"
+          ],
+          "why_this_file_symbol_references": [
+            "OrderViewModel",
+            "store",
+            "Order"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "OrderViewModel",
+            "OrderHistoryFilterItem"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "HandleLoadedAsync",
+            "IsAllProductsWithNoneOrNoProductSource",
+            "GetOrderProducts",
+            "GetOrderPayments",
+            "GetBonusesQuantity",
+            "GetBonusesToChargeQuantity",
+            "InitializeAddAsync",
+            "InitializeEditAsync",
+            "OnClose",
+            "OnDestroy",
+            "RefreshPaymentInfo",
+            "RefreshSummaryItems",
+            "OrderProductsChanged",
+            "GetGiftOrderProducts",
+            "GetChildOrderProducts",
+            "GetAdditionalServiceOrderProductsAndAdditionalServiceConsumableProducts",
+            "OnInitializeInDesignMode",
+            "PaymentOnNonVirtualCashbox",
+            "PaymentOnVirtualCashbox",
+            "IsOrderReadyToPack",
+            "IsAssemblyOrAssembledComputerRuleFolder",
+            "IsOrderReadyToGive",
+            "CanGetDeliveryDate",
+            "MapBonuses",
+            "GetSortedCalls",
+            "CanSendSms",
+            "IsOrderProductReadyToPack",
+            "MapToSaveDto",
+            "MapToOrderFolderSaveDto",
+            "MapToOrderProductSave",
+            "MapToCreateDto",
+            "Call",
+            "InitializeAsync",
+            "OnInitializeCompleted",
+            "AddProduct",
+            "BulkAddProduct",
+            "CanPrintBillInvoice",
+            "CanAddProduct",
+            "CanCreateAssemblyWithProducts",
+            "CanCalculateAssemblyServiceProductPrice"
+          ],
+          "candidate_local_members": [
+            "PostProcessProductsMode",
+            "DocumentOwner",
+            "OrderPaymentViewModel",
+            "Title",
+            "CarryTypes",
+            "Cities",
+            "Contractors",
+            "SelectedProducts",
+            "Payments",
+            "Subdivisions",
+            "Warehouses",
+            "AssemblyWarehouses",
+            "BufferWarehouses",
+            "AdditionalServiceWarehouses",
+            "Organizations",
+            "Employees",
+            "ContractorTemplates",
+            "ClientContactsHistoryItems",
+            "SelectedClientContact",
+            "ContractorContacts",
+            "Cashboxes",
+            "Warranties",
+            "AssemblyServices",
+            "ProductAssemblyServices",
+            "ProductPromos",
+            "AdditionalServiceProducts",
+            "ProductAdditionalServiceProducts",
+            "LegalEntities",
+            "OrderSources",
+            "OrderDocumentViewItems",
+            "OrderDocumentTypes",
+            "Top",
+            "Left",
+            "CurrentOrderProduct",
+            "AuditEntries",
+            "PromoCodes",
+            "PromoCodeTypes",
+            "Bonuses",
+            "ExternalPayments",
+            "SelectedExternalPayment"
+          ],
+          "candidate_local_namespace_tokens": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "store",
+            "order",
+            "src",
+            "orderviewmodel"
+          ],
+          "candidate_local_anchor_summary": [
+            "OrderViewModel",
+            "telemart",
+            "client",
+            "viewmodels",
+            "store"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [
+            "OrderViewModel"
+          ],
+          "why_this_file_grounded_namespace_refs": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "store"
+          ],
+          "grounded_anchor_count_per_file": 5,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [
+            "External integration behavior may need follow-up validation."
+          ],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+          "intended_action": "modify",
+          "why_this_file": "historical_similarity, lexical_overlap, path_domain, symbol_overlap Symbol references: ServiceRequestViewModel, ServiceRequest.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "ServiceRequestViewModel"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 5,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "service"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "telemart",
+            "client",
+            "viewmodels"
+          ],
+          "symbol_anchors": [
+            "ServiceRequestViewModel"
+          ],
+          "likely_symbols": [
+            "ServiceRequestViewModel",
+            "ServiceRequest"
+          ],
+          "why_this_file_symbol_references": [
+            "ServiceRequestViewModel",
+            "ServiceRequest"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "ServiceRequestViewModel"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "BuildMetadata",
+            "OnDestroy",
+            "AfterSetData",
+            "CreateEntityAsync",
+            "CreateEntityMessage",
+            "GetEntityAsync",
+            "GetMembersToIgnore",
+            "HandleLoadedAsync",
+            "LockEntityAsync",
+            "UnlockEntityAsync",
+            "CanEdit",
+            "OnInitializeInDesignMode",
+            "SetCreateTitle",
+            "SetEditTitle",
+            "UpdateEntityAsync",
+            "GetSortedCalls",
+            "GetSortedRepairs",
+            "AddCall",
+            "AddDiscussionAsync",
+            "AddDocument",
+            "ShowRequisites",
+            "AddComplaint",
+            "CanAddDiscussion",
+            "CanCancelRequest",
+            "CancelCallAsync",
+            "CancelRequestAsync",
+            "ChangeProductAsync",
+            "CanChangeRequirement",
+            "CanCompensateRequest",
+            "CanCompleteRequest",
+            "CanDiagnoseRequest",
+            "CanReopen",
+            "CanReset",
+            "CanSendSms",
+            "CanTakeRequest",
+            "ChangeRequirementAsync",
+            "CanCloseDiscussion",
+            "CloseDiscussionAsync",
+            "CompensateRequestAsync",
+            "CompleteRequestAsync"
+          ],
+          "candidate_local_members": [
+            "ShowDocumentsBotQrCommand",
+            "AddCallCommand",
+            "AddDiscussionCommand",
+            "AddDocumentCommand",
+            "CancelCallCommand",
+            "CancelRequestCommand",
+            "ChangeRequirementCommand",
+            "CloseDiscussionCommand",
+            "CompleteRequestCommand",
+            "ShowRequisitesCommand",
+            "CompensateRequestCommand",
+            "ShowMoneyRefundCommand",
+            "DiagnoseRequestCommand",
+            "EditCallCommand",
+            "CallCommand",
+            "EditDiscussionCommand",
+            "EditRepairCommand",
+            "HandleSelectionChangedCommand",
+            "OpenOrderCommand",
+            "PrintDocumentCommand",
+            "RefreshAuditEntriesCommand",
+            "RefreshCallsCommand",
+            "RefreshDiscussionsCommand",
+            "RefreshDocumentsCommand",
+            "RefreshRepairsCommand",
+            "RemoveDocumentCommand",
+            "ReopenRequestCommand",
+            "ResetRequestCommand",
+            "RecomplectCommand",
+            "SendSmsCommand",
+            "TakeRequestCommand",
+            "RefreshCrmCommand",
+            "OpenRequirementOnHistoryCommand",
+            "ShowInvoiceCommand",
+            "PrintAktCommand",
+            "PrintSerialNumberCommand",
+            "PrintWarrantyCardCommand",
+            "PrintDefectivenessActCommand",
+            "PrintChequeCommand",
+            "PrintIssuanceCertificateCommand"
+          ],
+          "candidate_local_namespace_tokens": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "service",
+            "servicerequests",
+            "src",
+            "servicerequestviewmodel"
+          ],
+          "candidate_local_anchor_summary": [
+            "ServiceRequestViewModel",
+            "telemart",
+            "client",
+            "viewmodels",
+            "service"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [
+            "ServiceRequestViewModel"
+          ],
+          "why_this_file_grounded_namespace_refs": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "service"
+          ],
+          "grounded_anchor_count_per_file": 5,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [
+            "External integration behavior may need follow-up validation."
+          ],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+          "intended_action": "modify",
+          "why_this_file": "historical_similarity, path_domain, symbol_overlap Symbol references: TradeInEditViewModel, tradein, TradeInEdit.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "TradeInEditViewModel",
+            "tradein"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 2,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 5,
+          "candidate_specific_anchor_count_after_filter": 2,
+          "discriminative_anchor_count": 2,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "telemart",
+            "client",
+            "viewmodels"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "telemart",
+            "client",
+            "viewmodels"
+          ],
+          "symbol_anchors": [
+            "TradeInEditViewModel",
+            "tradein"
+          ],
+          "likely_symbols": [
+            "TradeInEditViewModel",
+            "TradeInEdit"
+          ],
+          "why_this_file_symbol_references": [
+            "TradeInEditViewModel",
+            "tradein",
+            "TradeInEdit"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "TradeInEditViewModel"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "HandleLoadedAsync",
+            "SaveAsync",
+            "AfterSetData",
+            "CreateEntityAsync",
+            "GetEntityAsync",
+            "LockEntityAsync",
+            "UnlockEntityAsync",
+            "CreateEntityMessage",
+            "SetCreateTitle",
+            "SetEditTitle",
+            "UpdateEntityAsync",
+            "CanEdit",
+            "OnModelPropertyChangedInternal",
+            "RefreshCrmAsync",
+            "LoadTradeInIndicatorValuesAsync",
+            "LoadCategoriesAsync",
+            "LoadWarehousesAsync",
+            "LoadEmployeesAsync",
+            "LoadManufactorsAsync",
+            "LoadDocumentsAsync",
+            "LoadEDocumentsAsync",
+            "LoadTradeInCoefAsync",
+            "LoadCitiesAsync",
+            "GetSummaryItems",
+            "CustomerSearchAsync",
+            "SearchOrderAsync",
+            "RemoveOrder",
+            "GetOrderAsync",
+            "EvaluateRequestAsync",
+            "EvaluateAsync",
+            "CanEvaluate",
+            "CanOverEvaluate",
+            "CanSearchClient",
+            "CanSearchOrder",
+            "CanRemoveOrder",
+            "CanChangeProduct",
+            "CreateTaskAsync",
+            "CanCreateTask",
+            "CompleteRequestAsync",
+            "CanComplete"
+          ],
+          "candidate_local_members": [
+            "SelectedCategory",
+            "CustomerClass",
+            "CustomerWarranty",
+            "CustomerPack",
+            "DocumentsCount",
+            "EDocumentsCount",
+            "Products",
+            "TradeInDocumentItems",
+            "TradeInEDocumentViewItems",
+            "TradeInClassValues",
+            "TradeInWarrantyValues",
+            "TradeInPackageValues",
+            "Categories",
+            "Warehouses",
+            "CarryTypes",
+            "SummaryItems",
+            "Employees",
+            "Statuses",
+            "TradeInDocumentTypes",
+            "CurrentCategoryManufactors",
+            "AllManufactors",
+            "SerialNumbers",
+            "Cities",
+            "ClientContactsHistoryItems",
+            "Complaints",
+            "CustomerUpdated",
+            "ShowDocumentsBotQrCommand",
+            "CustomerSearchCommand",
+            "SearchOrderCommand",
+            "RemoveOrderCommand",
+            "PrintActCommand",
+            "RemoveProductCommand",
+            "RefreshCrmCommand",
+            "SelectProductCommand",
+            "EvaluateRequestCommand",
+            "ReceiveCommand",
+            "CompleteRequestCommand",
+            "CancelRequestCommand",
+            "TestRequestCommand",
+            "ProductEditValueChangedCommand"
+          ],
+          "candidate_local_namespace_tokens": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "tradein",
+            "src",
+            "tradeineditviewmodel"
+          ],
+          "candidate_local_anchor_summary": [
+            "TradeInEditViewModel",
+            "telemart",
+            "client",
+            "viewmodels",
+            "tradein"
+          ],
+          "why_this_file_grounded_method_refs": [],
+          "why_this_file_grounded_class_refs": [
+            "TradeInEditViewModel"
+          ],
+          "why_this_file_grounded_namespace_refs": [
+            "telemart",
+            "client",
+            "viewmodels",
+            "tradein"
+          ],
+          "grounded_anchor_count_per_file": 5,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [
+            "External integration behavior may need follow-up validation."
+          ],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+          "intended_action": "modify",
+          "why_this_file": "lexical_overlap, path_domain, symbol_overlap Symbol references: ChangeProductServiceRequest.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "ChangeProductServiceRequest"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 5,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "symbol_anchors": [
+            "ChangeProductServiceRequest"
+          ],
+          "likely_symbols": [
+            "ChangeProductServiceRequest"
+          ],
+          "why_this_file_symbol_references": [
+            "ChangeProductServiceRequest"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "ChangeProductServiceRequest",
+            "ChangeProductServiceRequestDto"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "ChangeProductServiceRequest",
+            "base",
+            "ChangeProductServiceRequestDto",
+            "JsonProperty"
+          ],
+          "candidate_local_members": [
+            "ChangeProductServiceRequestDto",
+            "ServiceRequestId",
+            "ProductId"
+          ],
+          "candidate_local_namespace_tokens": [
+            "telemart",
+            "client",
+            "data",
+            "requests",
+            "features",
+            "servicerequest",
+            "actions",
+            "src",
+            "changeproductservicerequest"
+          ],
+          "candidate_local_anchor_summary": [
+            "ChangeProductServiceRequest",
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "why_this_file_grounded_method_refs": [
+            "ChangeProductServiceRequest"
+          ],
+          "why_this_file_grounded_class_refs": [
+            "ChangeProductServiceRequest"
+          ],
+          "why_this_file_grounded_namespace_refs": [
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "grounded_anchor_count_per_file": 5,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [
+            "External integration behavior may need follow-up validation."
+          ],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        },
+        {
+          "file": "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs",
+          "intended_action": "modify",
+          "why_this_file": "lexical_overlap, path_domain, symbol_overlap Symbol references: SupplierChangeServiceProduct.",
+          "task_understanding_symbol_entities": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "task_symbol_anchors": [
+            "bitrix.telemart",
+            "com.ua"
+          ],
+          "propagated_plan_symbol_anchors": [
+            "SupplierChangeServiceProduct"
+          ],
+          "propagated_plan_symbol_anchor_source": "candidate_local_grounding",
+          "propagated_plan_symbol_anchor_mode": "candidate_specific",
+          "candidate_specific_anchor_count": 1,
+          "task_global_anchor_count": 0,
+          "candidate_specific_anchor_count_before_filter": 5,
+          "candidate_specific_anchor_count_after_filter": 1,
+          "discriminative_anchor_count": 1,
+          "filtered_shared_namespace_tokens": [],
+          "filtered_shared_path_tokens": [
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "dropped_neighbor_overlap_tokens": [
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "symbol_anchors": [
+            "SupplierChangeServiceProduct"
+          ],
+          "likely_symbols": [
+            "SupplierChangeServiceProduct"
+          ],
+          "why_this_file_symbol_references": [
+            "SupplierChangeServiceProduct"
+          ],
+          "shared_task_symbol_not_grounded_count": 2,
+          "why_this_file_grounded_only": false,
+          "candidate_local_classes": [
+            "SupplierChangeServiceProduct",
+            "SupplierChangeServiceProductDto"
+          ],
+          "candidate_local_interfaces": [],
+          "candidate_local_methods": [
+            "SupplierChangeServiceProduct",
+            "base",
+            "JsonProperty"
+          ],
+          "candidate_local_members": [
+            "SupplierChangeServiceProductDto",
+            "ChangeOnProductId",
+            "ChangeOnProductSerial",
+            "Amount",
+            "CurrencyId",
+            "Date",
+            "Comment"
+          ],
+          "candidate_local_namespace_tokens": [
+            "telemart",
+            "client",
+            "data",
+            "requests",
+            "features",
+            "serviceproduct",
+            "actions",
+            "src",
+            "supplierchangeserviceproduct"
+          ],
+          "candidate_local_anchor_summary": [
+            "SupplierChangeServiceProduct",
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "why_this_file_grounded_method_refs": [
+            "SupplierChangeServiceProduct"
+          ],
+          "why_this_file_grounded_class_refs": [
+            "SupplierChangeServiceProduct"
+          ],
+          "why_this_file_grounded_namespace_refs": [
+            "telemart",
+            "client",
+            "data",
+            "requests"
+          ],
+          "grounded_anchor_count_per_file": 5,
+          "symbol_anchor_source": "task_understanding+task_snippet+candidate_file",
+          "dependent_readonly_context_files": [],
+          "risk_notes": [
+            "External integration behavior may need follow-up validation."
+          ],
+          "propagated_anchor_overlap_with_neighbor_count": 0
+        }
+      ],
+      "readonly_plan_by_repo": {
+        "telemart_soft_test": {
+          "supporting_context_files": [
+            "src/client/Telemart.Client/ViewModels/Store/Order/OrderViewModel.cs",
+            "src/client/Telemart.Client/ViewModels/Service/ServiceRequests/ServiceRequestViewModel.cs",
+            "src/client/Telemart.Client/ViewModels/TradeIn/TradeInEditViewModel.cs",
+            "src/client/Telemart.Client.Data/Requests/Features/ServiceRequest/Actions/ChangeProductServiceRequest.cs",
+            "src/client/Telemart.Client.Data/Requests/Features/ServiceProduct/Actions/SupplierChangeServiceProduct.cs"
+          ],
+          "why_readonly": "Default bounded implementation mode allows writes only in the top-ranked repository.",
+          "future_cross_repo_follow_up_may_be_needed": true
+        }
+      },
+      "implementation_file_plan": [],
+      "dropped_candidates_reasons": [],
+      "final_merge_strategy": "repo_intelligence_first",
+      "repo_routing_audit": [
+        {
+          "repo_id": "telemart_soft_test",
+          "configured_provider": "gitnexus_http",
+          "repo_metadata_provider": "gitnexus_http",
+          "allowlist_match": true,
+          "gitnexus_enabled": true,
+          "gitnexus_index_status": "ready",
+          "selection_decision": "selected_gitnexus_http",
+          "accepted": true,
+          "provider_used": "gitnexus_http"
+        }
+      ],
+      "spec_snapshot": {
+        "goal_length": 0,
+        "context_length": 0,
+        "requirements_count": 0,
+        "acceptance_criteria_count": 0,
+        "risks_count": 0
+      },
+      "quality_score": 45,
+      "quality_breakdown": {
+        "jira": 0,
+        "attachments": 10,
+        "repo": 35
+      },
+      "confidence_score": 90,
+      "novelty_score": 30,
+      "domain_novelty_score": 35,
+      "repo_novelty_score": 25,
+      "repo_confidence": 90,
+      "file_confidence": 100,
+      "task_confidence": 80,
+      "novelty_level": "low",
+      "analysis_mode": "reuse",
+      "patch_generation_ready": true,
+      "patch_generation_blockers": [],
+      "patch_generation_allowed_files": [
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.Designer.cs",
+        "src/client/Telemart.Client/Reports/ServiceRequest/ServiceRequestReport.resx",
+        "src/Telemart.Client.Protos/product.proto",
+        "src/client/Telemart.Client/Business/Order/IOrderProduct.cs",
+        "src/client/Telemart.Client/Business/Order/OrderDeliveryCalculator.cs"
+      ],
+      "advisory_suggestions_debug": [
+        {
+          "text": "Звірте фінальний текст, відступи, переноси та layout зі скріншотами.",
+          "source": "attachment"
+        }
+      ]
+    },
+    "technical_run": {
+      "run_id": "a54d7cfde92d49198d40ab9de1cfa3be",
+      "status": "success",
+      "run_detail_url": "/ui/run.html?id=a54d7cfde92d49198d40ab9de1cfa3be"
+    }
+  }
+}

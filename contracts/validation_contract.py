@@ -169,6 +169,12 @@ class ValidationResult:
     validation_endpoint_url: str = ""
     validation_endpoint_source: str = ""
     validation_runner_mode: str = ""
+    validation_environment: str = ""
+    validation_environment_reason: str = ""
+    required_runner_type: str = ""
+    validation_runner_fallback_used: bool = False
+    validation_environment_unavailable: bool = False
+    validation_environment_unavailable_reason: str = ""
     validation_connection_attempted: bool = False
     validation_connection_refused: bool = False
     validation_target_reachable: bool = False
@@ -291,6 +297,12 @@ class ValidationResult:
             "validation_endpoint_url": self.validation_endpoint_url,
             "validation_endpoint_source": self.validation_endpoint_source,
             "validation_runner_mode": self.validation_runner_mode,
+            "validation_environment": self.validation_environment,
+            "validation_environment_reason": self.validation_environment_reason,
+            "required_runner_type": self.required_runner_type,
+            "validation_runner_fallback_used": self.validation_runner_fallback_used,
+            "validation_environment_unavailable": self.validation_environment_unavailable,
+            "validation_environment_unavailable_reason": self.validation_environment_unavailable_reason,
             "validation_connection_attempted": self.validation_connection_attempted,
             "validation_connection_refused": self.validation_connection_refused,
             "validation_target_reachable": self.validation_target_reachable,
