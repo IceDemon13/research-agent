@@ -4,6 +4,7 @@ import shutil
 import threading
 import time
 import tempfile
+import urllib.error
 import urllib.request
 import unittest
 import uuid
@@ -446,6 +447,104 @@ class ValidationRunnerServerTests(unittest.TestCase):
             server.server_close()
             server_thread.join(timeout=2)
 
+    def test_capabilities_endpoint_returns_runner_metadata(self) -> None:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), validation_runner_server._Handler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{server.server_port}/capabilities", timeout=5) as response:
+                body = validation_runner_server.json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status, 200)
+            self.assertTrue(body["ok"])
+            self.assertEqual(body["runner_type"], "http_dotnet_sdk")
+            self.assertIn("restore", body["allowed_actions"])
+            self.assertIn("supports", body)
+        finally:
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=2)
+
+    def test_validate_rejects_missing_token_when_auth_enabled(self) -> None:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), validation_runner_server._Handler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        original_token = validation_runner_server.DEFAULT_AUTH_TOKEN
+        validation_runner_server.DEFAULT_AUTH_TOKEN = "runner-secret"
+        try:
+            payload = {
+                "repo_id": "sample",
+                "repo_path": self.repo_root.as_posix(),
+                "commands": [{"name": "build", "command": f'dotnet build "{(self.repo_root / "Sample.sln").as_posix()}" --nologo'}],
+                "timeout_seconds": 10,
+                "allowed_roots": [self.workspace_root.as_posix()],
+            }
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/validate",
+                data=validation_runner_server.json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as context:
+                urllib.request.urlopen(request, timeout=5)
+            self.assertEqual(context.exception.code, 401)
+        finally:
+            validation_runner_server.DEFAULT_AUTH_TOKEN = original_token
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=2)
+
+    def test_validate_accepts_token_when_auth_enabled(self) -> None:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), validation_runner_server._Handler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        original_token = validation_runner_server.DEFAULT_AUTH_TOKEN
+        original_run_validation_job = validation_runner_server._run_validation_job
+        validation_runner_server.DEFAULT_AUTH_TOKEN = "runner-secret"
+
+        def _fake_run_validation_job(job_id: str) -> None:
+            validation_runner_server._update_validation_job(
+                job_id,
+                status="completed",
+                current_step="validate_final_result_ready",
+                last_step_reached="validate_final_result_ready",
+                result={
+                    "http_status": 200,
+                    "ok": True,
+                    "steps": [],
+                    "validate_response_mode": "accepted_poll",
+                    "validate_accepted_early": True,
+                    "validate_progress_channel_used": "polling",
+                    "validate_final_result_collected": True,
+                },
+                validate_final_result_collected=True,
+            )
+
+        validation_runner_server._run_validation_job = _fake_run_validation_job
+        try:
+            payload = {
+                "repo_id": "sample",
+                "repo_path": self.repo_root.as_posix(),
+                "commands": [{"name": "build", "command": f'dotnet build "{(self.repo_root / "Sample.sln").as_posix()}" --nologo'}],
+                "timeout_seconds": 10,
+                "allowed_roots": [self.workspace_root.as_posix()],
+            }
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/validate",
+                data=validation_runner_server.json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "X-Validation-Token": "runner-secret"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
+                body = validation_runner_server.json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status, 202)
+            self.assertTrue(body["accepted"])
+        finally:
+            validation_runner_server.DEFAULT_AUTH_TOKEN = original_token
+            validation_runner_server._run_validation_job = original_run_validation_job
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=2)
+
     def test_prepare_execution_repo_path_copies_from_container_when_missing_locally(self) -> None:
         original_container = validation_runner_server.DEFAULT_SOURCE_CONTAINER
         original_root = validation_runner_server.DEFAULT_HOST_EXECUTION_ROOT
@@ -518,6 +617,21 @@ class ValidationRunnerServerTests(unittest.TestCase):
         self.assertTrue(metadata["host_runner_sanitized_path_used"])
         self.assertTrue(metadata["host_runner_path_has_spaces_before"])
         self.assertFalse(metadata["host_runner_path_has_spaces_after"])
+
+    def test_prune_runtime_copy_tree_removes_gitnexus_and_build_outputs(self) -> None:
+        (self.repo_root / ".gitnexus").mkdir(parents=True, exist_ok=True)
+        (self.repo_root / ".gitnexus" / "cache.bin").write_bytes(b"x" * 32)
+        (self.repo_root / "bin").mkdir(parents=True, exist_ok=True)
+        (self.repo_root / "bin" / "tool.bin").write_bytes(b"x" * 16)
+        (self.repo_root / "obj").mkdir(parents=True, exist_ok=True)
+        (self.repo_root / "obj" / "tool.obj").write_bytes(b"x" * 16)
+
+        summary = validation_runner_server._prune_runtime_copy_tree(self.repo_root)
+
+        self.assertTrue(summary["runtime_prune_applied"])
+        self.assertFalse((self.repo_root / ".gitnexus").exists())
+        self.assertFalse((self.repo_root / "bin").exists())
+        self.assertFalse((self.repo_root / "obj").exists())
 
     def test_build_command_env_sets_roll_forward_for_desktop_test_runs(self) -> None:
         env = validation_runner_server._build_command_env(

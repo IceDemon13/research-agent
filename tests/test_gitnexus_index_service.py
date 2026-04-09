@@ -362,6 +362,28 @@ class GitNexusIndexServiceTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(refreshed.gitnexus_index_status, "ready")
 
+    def test_temporary_runtime_repo_does_not_trigger_gitnexus_indexing(self) -> None:
+        temp_root = self.workspace_root / "artifacts" / "temp-workspaces" / "catalog-temp" / "repo"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        temp_repo = RepoMetadata(
+            repo_id="catalog_service",
+            root_path=temp_root.as_posix(),
+            local_path=temp_root.as_posix(),
+            display_name="Catalog Service Temp",
+            default_branch="main",
+            indexed_at="",
+            status="registered",
+            workspace_creation_mode="copytree_ignore_dotgit",
+            workspace_git_identity_expected="copied_files_only_non_git",
+            workspace_is_git_checkout=False,
+        )
+
+        result = self.service.analyze_repo(temp_repo, force=True, allow_unlisted=True)
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["gitnexus_index_status"], "disabled")
+        self.assertIn("temporary runtime copies", result["gitnexus_index_error"])
+
 
 if __name__ == "__main__":
     unittest.main()

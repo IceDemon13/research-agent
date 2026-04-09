@@ -1,3 +1,0 @@
-dotnet build .\client\Telemart.Client.Tests\Telemart.Client.Tests.csproj -c Release -p:Platform=x64 -p:Version=3.37.0.2478 -p:PackageVersion=3.37.0 -p:EnvironmentName=Test
-dotnet test .\client\Telemart.Client.Tests\Telemart.Client.Tests.csproj -c Release --no-build -p:Platform=x64 -p:EnvironmentName=Test
-dotnet publish .\client\Telemart.Client\Telemart.Client.csproj --no-build -c Release -p:Platform=x64 -p:Version=3.37.0.2478 -p:PackageVersion=3.37.0 -p:EnvironmentName=Test

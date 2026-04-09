@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 import unittest
 import uuid
 from pathlib import Path
@@ -26,12 +27,26 @@ class TempWorkspaceServiceTests(unittest.TestCase):
             repo_id="sample",
             display_name="Sample Repo",
         )
+        self._init_git_repo()
 
     def tearDown(self) -> None:
         shutil.rmtree(self.workspace_root, ignore_errors=True)
 
+    def _init_git_repo(self) -> None:
+        if shutil.which("git") is None:
+            self.skipTest("git is not available")
+        subprocess.run(["git", "init"], cwd=self.repo_root, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=self.repo_root, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=self.repo_root, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "add", "."], cwd=self.repo_root, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "commit", "-m", "initial"], cwd=self.repo_root, check=True, capture_output=True, text=True)
+
     def test_temp_workspace_is_created_with_isolated_registry_and_cleaned_up(self) -> None:
         service = TempWorkspaceService(storage_path=self.registry_path)
+        (self.repo_root / ".gitnexus").mkdir(parents=True, exist_ok=True)
+        (self.repo_root / ".gitnexus" / "cache.bin").write_bytes(b"x" * 32)
+        (self.repo_root / "bin").mkdir(parents=True, exist_ok=True)
+        (self.repo_root / "bin" / "tool.bin").write_bytes(b"x" * 16)
 
         context = service.create_workspace("sample")
 
@@ -54,6 +69,9 @@ class TempWorkspaceServiceTests(unittest.TestCase):
         self.assertEqual(temp_repo.workspace_git_identity_expected, "copied_files_only_non_git")
         self.assertFalse(temp_repo.workspace_is_git_checkout)
         self.assertFalse((Path(context.workspace_repo_root) / ".git").exists())
+        self.assertFalse((Path(context.workspace_repo_root) / ".gitnexus").exists())
+        self.assertFalse((Path(context.workspace_repo_root) / "bin").exists())
+        self.assertTrue((Path(context.workspace_root_path) / ".ra_runtime_workspace.json").exists())
 
         warnings = service.cleanup_workspace(context)
 
@@ -65,6 +83,15 @@ class TempWorkspaceServiceTests(unittest.TestCase):
 
         self.assertLessEqual(len(name), 19)
         self.assertTrue(name.startswith("telemartso-"))
+
+    def test_apply_workspace_is_git_checkout(self) -> None:
+        service = TempWorkspaceService(storage_path=self.registry_path)
+
+        context = service.create_apply_workspace("sample")
+
+        self.assertTrue((Path(context.workspace_repo_root) / ".git").exists())
+        self.assertTrue(context.workspace_is_git_checkout)
+        self.assertEqual(context.workspace_creation_mode, "git_clone_no_hardlinks")
 
 
 if __name__ == "__main__":

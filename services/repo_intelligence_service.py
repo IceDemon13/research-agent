@@ -1765,6 +1765,8 @@ class RepoIntelligenceService:
     def _can_bootstrap_gitnexus_via_explicit_reindex(self, repo: RepoMetadata | None) -> bool:
         if repo is None or not bool(self._repo_settings.gitnexus_enabled):
             return False
+        if self._gitnexus_index_service._is_runtime_temporary_repo(repo):
+            return False
         normalized_repo_id = normalize_repo_id(getattr(repo, "repo_id", "") or "")
         if normalized_repo_id in {"", "self"}:
             return False

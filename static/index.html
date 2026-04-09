@@ -2,7 +2,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TELEMART AI Delivery Workflows</title>
+  <title>TELEMART AI Delivery Flow</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./config.js"></script>
 </head>
@@ -18,6 +18,7 @@
             <option value="en">English</option>
           </select>
         </label>
+        <a href="./runs.html">Runs</a>
         <a href="./admin/index.html" id="adminLink" data-i18n="common.admin">Адмін</a>
         <a href="./login.html" id="loginLink" data-i18n="common.login">Вхід</a>
         <a href="#" id="logoutLink" data-i18n="common.logout">Вийти</a>
@@ -25,8 +26,37 @@
     </div>
 
     <div class="page-header">
-      <h1 data-i18n="index.title">TELEMART AI Delivery Workflows</h1>
-      <p class="muted" data-i18n="index.subtitle">Почніть із бізнес-орієнтованого workflow, а технічний run відкривайте лише коли потрібні деталі.</p>
+      <h1>TELEMART AI Delivery Flow</h1>
+      <p class="muted">Один product-grade шлях для Analyze, Plan, Draft, Review та Apply без перемикання між окремими інструментами.</p>
+    </div>
+
+    <section class="card workflow-card">
+      <h2>AI Delivery Flow</h2>
+      <p>Почніть лише з Jira ticket. Система сама визначить repo, збере implementation plan, підготує bounded draft patch, проведе review та дозволить безпечний workspace apply.</p>
+      <div class="actions">
+        <a class="button-primary" href="./workflow.html">Відкрити AI Delivery Flow</a>
+        <a href="./runs.html">Runs Dashboard</a>
+        <a href="./repos.html">Репозиторії</a>
+      </div>
+    </section>
+
+    <section class="card recent-runs-card">
+      <div class="runs-list-head">
+        <h2>Recent runs</h2>
+        <p class="muted">Останні 5 запусків AI Delivery Flow. Відкрийте потрібний run і продовжуйте роботу з його поточного кроку.</p>
+      </div>
+      <div id="recentRunsList" class="recent-runs-list" aria-live="polite">
+        <div class="run-row run-row-skeleton" aria-hidden="true">
+          <div class="skeleton-line wide"></div>
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="page-header" style="margin-top: 28px;">
+      <h2>Legacy Tools</h2>
+      <p class="muted">Окремі workflow залишаються доступними для backward compatibility та debugging, але основний сценарій тепер проходить через AI Delivery Flow.</p>
     </div>
 
     <div class="grid workflow-grid">
@@ -53,19 +83,96 @@
     </div>
 
     <div class="actions">
-      <a href="./runs.html" data-i18n="common.technical_runs">Технічні run-и</a>
+      <a href="./runs.html" data-i18n="common.technical_runs">Runs Dashboard</a>
       <a href="./repos.html" data-i18n="common.repositories">Репозиторії</a>
       <a href="./create.html" data-i18n="common.create_technical_run">Створити технічний run</a>
     </div>
   </div>
   <script>
     const auth = window.AuthUI;
+    function escapeHtml(value) {
+      return auth.escapeHtml(String(value || ""));
+    }
+
+    function normalizeStatus(value) {
+      return String(value || "running").toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+    }
+
+    function statusLabel(status) {
+      const labels = {
+        running: "Running",
+        awaiting_review: "Awaiting review",
+        ready_to_apply: "Ready to apply",
+        completed: "Completed",
+        blocked: "Blocked",
+        failed: "Failed",
+        rejected: "Rejected",
+      };
+      return labels[normalizeStatus(status)] || status || "Unknown";
+    }
+
+    function recentActionLabel(run) {
+      const status = normalizeStatus(run?.normalized_status);
+      if (status === "awaiting_review") return "Open Review";
+      if (status === "ready_to_apply") return "Apply";
+      if (status === "blocked" || status === "failed") return "Fix blockers";
+      return "Continue";
+    }
+
+    function renderRecentRuns(runs) {
+      const list = document.getElementById("recentRunsList");
+      if (!Array.isArray(runs) || !runs.length) {
+        list.innerHTML = `
+          <article class="empty-state-card">
+            <p class="muted">Ще немає запусків. Після першого flow тут з’явиться історія.</p>
+          </article>
+        `;
+        return;
+      }
+      list.innerHTML = runs.slice(0, 5).map((run) => `
+        <article class="run-row status-${escapeHtml(normalizeStatus(run.normalized_status))}">
+          <div class="run-row-main">
+            <div class="run-row-title">
+              <strong>${escapeHtml(run.jira_ticket || "Без Jira")}</strong>
+              <span class="status-badge status-${escapeHtml(normalizeStatus(run.normalized_status))}">${escapeHtml(statusLabel(run.normalized_status))}</span>
+              <span class="run-step-chip">Step: ${escapeHtml(run.current_step || "-")}</span>
+            </div>
+            <div class="run-row-meta">
+              <span>Repo: ${escapeHtml(run.repo_id || "-")}</span>
+              <span>Updated: ${escapeHtml(auth.formatDateTime(run.updated_at) || "-")}</span>
+            </div>
+          </div>
+          <div class="run-row-actions">
+            <a class="button-primary" href="./workflow.html?run_id=${encodeURIComponent(run.run_id || "")}">${escapeHtml(recentActionLabel(run))}</a>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    async function loadRecentRuns() {
+      try {
+        const payload = await auth.fetchJson("/flow-runs");
+        renderRecentRuns(payload?.runs || []);
+      } catch (error) {
+        document.getElementById("recentRunsList").innerHTML = `
+          <article class="error-panel compact">
+            <strong>Не вдалося завантажити recent runs.</strong>
+            <div class="muted">${escapeHtml(error.message)}</div>
+            <div class="actions">
+              <a class="button-primary" href="./runs.html">Відкрити dashboard</a>
+            </div>
+          </article>
+        `;
+      }
+    }
+
     auth.requireLogin({ redirectTo: "/ui/login.html" }).then((me) => {
       if (!me) return;
       auth.applySessionNavigation({ me, loginLinkId: "loginLink", logoutLinkId: "logoutLink", adminLinkId: "adminLink" });
       document.getElementById("userBox").textContent = auth.t("index.signed_in_as", {
         name: me.user.display_name || me.user.username || "-"
       });
+      loadRecentRuns();
     });
     document.getElementById("logoutLink").addEventListener("click", (event) => {
       event.preventDefault();

@@ -1,1 +1,0 @@
-# Telemart Desktop Client

@@ -18,12 +18,13 @@
             <option value="en">English</option>
           </select>
         </label>
+        <a href="./runs.html">Runs</a>
         <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
       </div>
     </div>
     <div class="toolbar">
       <a href="./index.html" data-i18n="common.home">Головна</a>
-      <a href="./runs.html" data-i18n="common.technical_runs">Технічні run-и</a>
+      <a href="./runs.html" data-i18n="common.technical_runs">Технічні запуски</a>
     </div>
 
     <div class="page-header">
@@ -31,12 +32,101 @@
       <p id="workflowDescription" class="muted"></p>
     </div>
 
-    <form id="workflowForm" class="card" novalidate>
+    <form id="workflowForm" class="card flow-input-form" novalidate>
+      <div id="continueRunBanner" class="flow-banner" hidden>
+        <div>
+          <strong>Продовжити останній запуск</strong>
+          <div id="continueRunText" class="muted">Можна продовжити останній збережений flow.</div>
+        </div>
+        <div class="actions">
+          <button id="continueRunButton" type="button" class="primary">Продовжити</button>
+          <button id="discardRunButton" type="button" class="secondary">Скинути</button>
+        </div>
+      </div>
       <div id="dynamicFields"></div>
       <div class="toolbar">
-        <button id="runWorkflowButton" class="primary" type="button" disabled data-i18n="common.run_workflow">Запустити workflow</button>
+        <button id="runWorkflowButton" class="primary" type="button" disabled>Запустити flow</button>
       </div>
     </form>
+
+    <section id="aiDeliveryFlowCard" class="card" hidden>
+      <div class="flow-header-row">
+        <div class="flow-intro">
+          <h2 style="margin-bottom: 6px;">TELEMART AI Delivery Flow</h2>
+          <p id="flowHeadline" class="muted" style="margin: 0;">Побудова та безпечне застосування змін по Jira задачі.</p>
+        </div>
+        <div class="flow-meta">
+          <div><strong>Detected repo:</strong> <span id="flowDetectedRepo">-</span></div>
+          <div><strong>Current step:</strong> <span id="flowCurrentStep">Input</span></div>
+          <div><strong>Flow status:</strong> <span id="flowStatusLabel">Idle</span></div>
+        </div>
+      </div>
+      <div class="flow-summary-grid">
+        <article class="flow-summary-card repo">
+          <span class="flow-summary-label">Detected Repo</span>
+          <strong id="flowMetricRepo">-</strong>
+          <span class="flow-summary-foot">Auto-detected from Jira and repo intelligence</span>
+        </article>
+        <article class="flow-summary-card quality">
+          <span class="flow-summary-label">Task Quality</span>
+          <strong id="flowMetricQuality">-</strong>
+          <span class="flow-summary-foot">Signal strength for task clarity</span>
+        </article>
+        <article class="flow-summary-card confidence">
+          <span class="flow-summary-label">Task Confidence</span>
+          <strong id="flowMetricConfidence">-</strong>
+          <span class="flow-summary-foot">Repo and file grounding confidence</span>
+        </article>
+        <article class="flow-summary-card novelty">
+          <span class="flow-summary-label">Task Novelty</span>
+          <strong id="flowMetricNovelty">-</strong>
+          <span class="flow-summary-foot">How familiar the change pattern looks</span>
+        </article>
+        <article class="flow-summary-card status">
+          <span class="flow-summary-label">Current Step</span>
+          <strong id="flowMetricStep">Input</strong>
+          <span id="flowMetricStatusText" class="flow-summary-foot">Ready to start</span>
+        </article>
+      </div>
+      <div class="flow-progress-shell" aria-hidden="true">
+        <div id="flowProgressBar" class="flow-progress-bar"></div>
+      </div>
+      <div id="flowStepRail" class="flow-step-rail"></div>
+      <div id="flowNextAction" class="flow-next-action muted"></div>
+      <section id="supplementalContextCard" class="supplemental-context-card">
+        <div class="supplemental-context-head">
+          <div>
+            <h3>Additional context for next step</h3>
+            <p class="muted">Add focused notes for this run without changing Jira source data.</p>
+          </div>
+          <div id="supplementalContextRunHint" class="muted supplemental-context-hint">Save becomes available after the run is created.</div>
+        </div>
+        <div class="supplemental-context-grid">
+          <label for="supplementalNotes">
+            <span>Notes</span>
+            <textarea id="supplementalNotes" placeholder="Short notes for this run"></textarea>
+          </label>
+          <label for="supplementalConstraints">
+            <span>Constraints</span>
+            <textarea id="supplementalConstraints" placeholder="One constraint per line"></textarea>
+          </label>
+          <label for="supplementalSuggestedFiles">
+            <span>Suggested files</span>
+            <textarea id="supplementalSuggestedFiles" placeholder="One file path per line"></textarea>
+          </label>
+          <label for="supplementalValidationHints">
+            <span>Validation hints</span>
+            <textarea id="supplementalValidationHints" placeholder="One hint per line"></textarea>
+          </label>
+        </div>
+        <div class="supplemental-context-actions">
+          <button id="saveSupplementalContextButton" type="button" class="secondary">Save context</button>
+          <span id="supplementalContextStatus" class="muted"></span>
+        </div>
+        <div id="supplementalContextSaved" class="supplemental-context-saved"></div>
+      </section>
+      <div id="flowStepPanels" class="flow-step-panels"></div>
+    </section>
 
     <div id="errorBox" class="error"></div>
     <div id="workflowLoadingPanel" class="loading-panel" hidden aria-live="polite" aria-busy="false">
@@ -52,19 +142,31 @@
     </div>
 
     <div id="resultCard" class="card" hidden>
-      <h2 data-i18n="workflow.result.result">Результат</h2>
-      <div id="resultSummary"></div>
-      <div id="resultBody"></div>
-      <div class="toolbar">
-        <button id="openImplementationPlanButton" type="button" hidden>Open Implementation Plan</button>
-        <button id="generateDraftPatchButton" type="button" hidden>Generate Draft Patch</button>
-        <button id="fixAndRetryButton" type="button" hidden data-i18n="workflow.result.fix_and_retry">Виправити проблеми і повторити</button>
-        <a id="technicalRunLink" href="./runs.html" hidden data-i18n="common.open_technical_run">Відкрити технічний run</a>
+      <div class="flow-result-shell">
+        <div class="flow-result-head">
+          <div>
+            <h2 style="margin-bottom: 6px;">Flow Output</h2>
+            <p class="muted" style="margin: 0;">Поточні review, apply та bounded execution відображаються тут. Нижче legacy-секція лишається вторинною для debug.</p>
+          </div>
+          <div class="flow-result-links">
+            <a id="technicalRunLink" href="./runs.html" hidden data-i18n="common.open_technical_run">Відкрити технічний run</a>
+          </div>
+        </div>
       </div>
       <div id="actionStatus" class="muted"></div>
       <details id="draftPatchPanel" hidden>
         <summary>Draft Patch (Review Required)</summary>
         <div id="draftPatchBody"></div>
+      </details>
+      <details id="legacyOutputDetails">
+        <summary>Legacy output</summary>
+        <div id="resultSummary"></div>
+        <div id="resultBody"></div>
+        <div class="toolbar">
+          <button id="openImplementationPlanButton" type="button" hidden>Open Implementation Plan</button>
+          <button id="generateDraftPatchButton" type="button" hidden>Generate Draft Patch</button>
+          <button id="fixAndRetryButton" type="button" hidden data-i18n="workflow.result.fix_and_retry">Виправити проблеми і повторити</button>
+        </div>
       </details>
       <details>
         <summary data-i18n="common.technical_details">Технічні деталі</summary>
@@ -75,14 +177,56 @@
 
   <script>
     const auth = window.AuthUI;
-    const workflowType = new URLSearchParams(window.location.search).get("type") || "analyze_task";
+    const workflowType = new URLSearchParams(window.location.search).get("type") || "ai_delivery_flow";
     let workflowFieldsReady = false;
     let currentRenderedWorkflow = workflowType;
     let workflowRequestInFlight = false;
     let currentDraftPatchContext = null;
     let draftPatchActionInFlight = false;
+    let currentFlowPayload = null;
+    let inlineRunningMessage = "";
+    let aiDeliveryStateRestoreAttempted = false;
+    const aiDeliveryState = {
+      runId: "",
+      jiraTicket: "",
+      detectedRepo: "",
+      supplementalContext: null,
+      analyzePayload: null,
+      planPayload: null,
+      draftResult: null,
+      reviewRecord: null,
+      executionRecord: null,
+      applyRecord: null,
+    };
+    let supplementalContextDraft = {
+      notes: "",
+      constraints: [],
+      suggested_files: [],
+      validation_hints: [],
+    };
+    const AI_DELIVERY_STORAGE_KEY = "ai_delivery_flow:last_state";
+    const AI_DELIVERY_STEPS = [
+      { key: "input", label: "Input" },
+      { key: "analyze", label: "Analyze" },
+      { key: "plan", label: "Plan" },
+      { key: "draft", label: "Draft" },
+      { key: "review", label: "Review" },
+      { key: "apply", label: "Apply" },
+    ];
+    const AI_DELIVERY_UI_STATE_KEY = "ai_delivery_flow:ui_state";
+    let aiDeliveryUiState = { expandedSteps: {} };
 
     const workflowConfig = {
+      ai_delivery_flow: {
+        titleKey: "workflow.analyze_task.title",
+        descriptionKey: "workflow.analyze_task.description",
+        endpoint: "/workflows/analyze-task",
+        autoDetectRepo: true,
+        autoDetectHint: "Repository is auto-detected. This page now guides a single AI Delivery Flow from Jira ticket to workspace apply.",
+        fields: [
+          { id: "jira_ticket", labelKey: "workflow.field.jira_ticket", type: "text", required: true, placeholderKey: "workflow.placeholder.jira_ticket" }
+        ]
+      },
       analyze_task: {
         titleKey: "workflow.analyze_task.title",
         descriptionKey: "workflow.analyze_task.description",
@@ -122,10 +266,1600 @@
       }
     };
 
+    function isUnifiedFlowMode() {
+      return workflowType === "ai_delivery_flow";
+    }
+
+    function hasValidContinueState(state = aiDeliveryState) {
+      return Boolean(
+        state
+        && String(state.jiraTicket || "").trim()
+        && (state.analyzePayload || state.planPayload || state.draftResult || state.reviewRecord || state.applyRecord)
+      );
+    }
+
+    function ensureDraftPatchContext() {
+      if (currentDraftPatchContext?.jiraTicket && currentDraftPatchContext?.repoId && currentDraftPatchContext?.result) {
+        return true;
+      }
+      if (!aiDeliveryState.draftResult || !aiDeliveryState.jiraTicket) {
+        return false;
+      }
+      const repoId = getCanonicalDetectedRepo() || "";
+      if (!repoId) {
+        return false;
+      }
+      currentDraftPatchContext = {
+        jiraTicket: aiDeliveryState.jiraTicket,
+        repoId,
+        seedContext: buildFlowSeedContextFromAnalyzeResult(getCanonicalAnalyzeResult()),
+        result: aiDeliveryState.draftResult || {},
+      };
+      return true;
+    }
+
+    function loadAiDeliveryUiState() {
+      try {
+        const raw = window.sessionStorage.getItem(AI_DELIVERY_UI_STATE_KEY);
+        if (!raw) {
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && parsed.expandedSteps && typeof parsed.expandedSteps === "object") {
+          aiDeliveryUiState = { expandedSteps: { ...parsed.expandedSteps } };
+        }
+      } catch (_) {
+      }
+    }
+
+    function persistAiDeliveryUiState() {
+      try {
+        window.sessionStorage.setItem(AI_DELIVERY_UI_STATE_KEY, JSON.stringify(aiDeliveryUiState));
+      } catch (_) {
+      }
+    }
+
+    function getDefaultStepExpanded(stepKey, state) {
+      if (state === "running") {
+        return true;
+      }
+      if (stepKey === getPrimaryActiveStepKey(getAiDeliveryStepStates()) && state !== "idle") {
+        return true;
+      }
+      if (state === "failed" || state === "blocked") {
+        return true;
+      }
+      return false;
+    }
+
+    function isFlowStepExpanded(stepKey, state) {
+      if (Object.prototype.hasOwnProperty.call(aiDeliveryUiState.expandedSteps, stepKey)) {
+        return Boolean(aiDeliveryUiState.expandedSteps[stepKey]);
+      }
+      return getDefaultStepExpanded(stepKey, state);
+    }
+
+    function setFlowStepExpanded(stepKey, expanded) {
+      aiDeliveryUiState.expandedSteps[stepKey] = Boolean(expanded);
+      persistAiDeliveryUiState();
+      renderAiDeliveryFlowState();
+    }
+
+    function snapshotAiDeliveryState() {
+      const states = getAiDeliveryStepStates();
+      return {
+        runId: aiDeliveryState.runId || "",
+        jiraTicket: aiDeliveryState.jiraTicket || "",
+        detectedRepo: getCanonicalDetectedRepo() || "",
+        supplementalContext: aiDeliveryState.supplementalContext || null,
+        analyzePayload: aiDeliveryState.analyzePayload || null,
+        planPayload: aiDeliveryState.planPayload || null,
+        draftResult: aiDeliveryState.draftResult || null,
+        reviewRecord: aiDeliveryState.reviewRecord || null,
+        executionRecord: aiDeliveryState.executionRecord || null,
+        applyRecord: aiDeliveryState.applyRecord || null,
+        currentDraftPatchContext: currentDraftPatchContext || null,
+        currentStepKey: getPrimaryActiveStepKey(states),
+      };
+    }
+
+    function persistAiDeliveryState() {
+      if (!isUnifiedFlowMode()) {
+        return;
+      }
+      if (!aiDeliveryStateRestoreAttempted) {
+        return;
+      }
+      try {
+        if (!hasValidContinueState()) {
+          window.localStorage.removeItem(AI_DELIVERY_STORAGE_KEY);
+          return;
+        }
+        window.localStorage.setItem(AI_DELIVERY_STORAGE_KEY, JSON.stringify(snapshotAiDeliveryState()));
+      } catch (_) {
+      }
+    }
+
+    function restoreAiDeliveryState() {
+      if (!isUnifiedFlowMode()) {
+        return false;
+      }
+      aiDeliveryStateRestoreAttempted = true;
+      try {
+        const raw = window.localStorage.getItem(AI_DELIVERY_STORAGE_KEY);
+        if (!raw) {
+          return false;
+        }
+        const saved = JSON.parse(raw);
+        if (!saved || typeof saved !== "object") {
+          return false;
+        }
+        hydrateAiDeliveryState({
+          runId: saved.runId || "",
+          jiraTicket: saved.jiraTicket || "",
+          detectedRepo: saved.detectedRepo || "",
+          supplementalContext: saved.supplementalContext || null,
+          analyzePayload: saved.analyzePayload || null,
+          planPayload: saved.planPayload || null,
+          draftResult: saved.draftResult || null,
+          reviewRecord: saved.reviewRecord || null,
+          executionRecord: saved.executionRecord || null,
+          applyRecord: saved.applyRecord || null,
+          currentDraftPatchContext: saved.currentDraftPatchContext || null,
+        });
+        if (!hasValidContinueState(saved)) {
+          resetAiDeliveryState();
+          return false;
+        }
+        ensureDraftPatchContext();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function resetAiDeliveryState() {
+      aiDeliveryState.runId = "";
+      aiDeliveryState.jiraTicket = "";
+      aiDeliveryState.detectedRepo = "";
+      aiDeliveryState.supplementalContext = null;
+      aiDeliveryState.analyzePayload = null;
+      aiDeliveryState.planPayload = null;
+      aiDeliveryState.draftResult = null;
+      aiDeliveryState.reviewRecord = null;
+      aiDeliveryState.executionRecord = null;
+      aiDeliveryState.applyRecord = null;
+      supplementalContextDraft = {
+        notes: "",
+        constraints: [],
+        suggested_files: [],
+        validation_hints: [],
+      };
+      currentDraftPatchContext = null;
+      aiDeliveryStateRestoreAttempted = true;
+      try {
+        window.localStorage.removeItem(AI_DELIVERY_STORAGE_KEY);
+      } catch (_) {
+      }
+    }
+
+    function buildFlowSeedContextFromAnalyzeResult(result) {
+      return {
+        final_workflow_input: result?.technical_details?.final_workflow_input || "",
+        prompt_task_text: result?.technical_details?.final_workflow_input || "",
+        selected_repos: result?.selected_repos || [],
+        top_candidate_files: result?.top_candidate_files || [],
+        top_historical_matches: result?.top_historical_matches || [],
+        top_historical_changed_files: result?.top_historical_changed_files || [],
+        candidate_files_count: Number(result?.candidate_files_count || 0),
+        selected_files_count: Number(result?.selected_files_count || 0),
+        implementation_plan_preview: result?.implementation_plan_preview || [],
+        implementation_plan_branches: result?.implementation_plan_branches || [],
+        decision_questions: result?.decision_questions || [],
+        technical_details: result?.technical_details || {},
+        provider_used: result?.technical_details?.provider_used || "",
+        configured_provider: result?.technical_details?.configured_provider || "",
+        repo_metadata_provider: result?.technical_details?.repo_metadata_provider || "",
+        provider_reason: result?.technical_details?.provider_reason || "",
+        final_merge_strategy: result?.technical_details?.final_merge_strategy || "",
+        recommendation: result?.recommendation || "",
+        repo_confidence: Number(result?.repo_confidence || 0),
+        file_confidence: Number(result?.file_confidence || 0),
+        novelty_score: Number(result?.novelty_score || 0),
+        analysis_mode: result?.analysis_mode || "",
+      };
+    }
+
+    function isWorkflowResultObject(payload) {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return false;
+      }
+      return Boolean(
+        payload.repo_id
+        || payload.writable_repo_id
+        || payload.selected_repos
+        || payload.quality_score !== undefined
+        || payload.confidence_score !== undefined
+        || payload.novelty_score !== undefined
+        || payload.recommendation
+      );
+    }
+
+    function hasWorkflowResultPayload(payload) {
+      return Boolean(
+        (payload?.result && typeof payload.result === "object" && Object.keys(payload.result).length)
+        || isWorkflowResultObject(payload)
+      );
+    }
+
+    function getWorkflowResult(payload) {
+      if (payload?.result && typeof payload.result === "object") {
+        return payload.result;
+      }
+      return isWorkflowResultObject(payload) ? payload : {};
+    }
+
+    function detectRepoFromPayload(payload, fallbackRepo = aiDeliveryState.detectedRepo) {
+      const result = payload?.result || {};
+      return String(
+        result?.repo_id
+        || result?.writable_repo_id
+        || result?.selected_repos?.[0]?.repo_id
+        || fallbackRepo
+        || ""
+      ).trim();
+    }
+
+    // Canonical Analyze->UI hydration fields come from payload.result:
+    // repo_id / writable_repo_id / selected_repos[0].repo_id plus quality/confidence/novelty.
+    function getCanonicalAnalyzePayload(state = aiDeliveryState) {
+      return hasWorkflowResultPayload(state?.analyzePayload) ? state.analyzePayload : null;
+    }
+
+    function getCanonicalAnalyzeResult(state = aiDeliveryState) {
+      return getWorkflowResult(getCanonicalAnalyzePayload(state));
+    }
+
+    function getCanonicalDetectedRepo(state = aiDeliveryState) {
+      return String(
+        state?.detectedRepo
+        || detectRepoFromPayload(getCanonicalAnalyzePayload(state) || {}, "")
+        || getWorkflowResult(state?.planPayload)?.repo_id
+        || state?.draftResult?.repo_id
+        || state?.currentDraftPatchContext?.repoId
+        || ""
+      ).trim();
+    }
+
+    function normalizeSupplementalContext(raw) {
+      if (!raw || typeof raw !== "object") {
+        return null;
+      }
+      const notes = String(raw.notes || "").trim();
+      const toList = (value) => {
+        if (Array.isArray(value)) {
+          return value.map((item) => String(item || "").trim()).filter(Boolean);
+        }
+        if (typeof value === "string") {
+          return value
+            .split(/\r?\n/)
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+        }
+        return [];
+      };
+      const normalized = {
+        notes,
+        constraints: toList(raw.constraints),
+        suggested_files: toList(raw.suggested_files ?? raw.suggestedFiles),
+        validation_hints: toList(raw.validation_hints ?? raw.validationHints),
+      };
+      return (normalized.notes || normalized.constraints.length || normalized.suggested_files.length || normalized.validation_hints.length)
+        ? normalized
+        : null;
+    }
+
+    function cloneSupplementalContext(raw) {
+      const normalized = normalizeSupplementalContext(raw);
+      return normalized
+        ? {
+            notes: normalized.notes,
+            constraints: [...normalized.constraints],
+            suggested_files: [...normalized.suggested_files],
+            validation_hints: [...normalized.validation_hints],
+          }
+        : {
+            notes: "",
+            constraints: [],
+            suggested_files: [],
+            validation_hints: [],
+          };
+    }
+
+    function buildSupplementalContextFromInputs() {
+      return normalizeSupplementalContext({
+        notes: document.getElementById("supplementalNotes")?.value || "",
+        constraints: document.getElementById("supplementalConstraints")?.value || "",
+        suggested_files: document.getElementById("supplementalSuggestedFiles")?.value || "",
+        validation_hints: document.getElementById("supplementalValidationHints")?.value || "",
+      });
+    }
+
+    function getSupplementalContextForRequest() {
+      return normalizeSupplementalContext(supplementalContextDraft) || normalizeSupplementalContext(aiDeliveryState.supplementalContext);
+    }
+
+    function hydrateAiDeliveryState(nextState = {}) {
+      const normalizedContext = ("currentDraftPatchContext" in nextState)
+        ? (nextState.currentDraftPatchContext || null)
+        : currentDraftPatchContext;
+      const normalizedState = {
+        runId: String(nextState.runId ?? aiDeliveryState.runId ?? "").trim(),
+        jiraTicket: String(nextState.jiraTicket ?? aiDeliveryState.jiraTicket ?? "").trim(),
+        detectedRepo: String(nextState.detectedRepo ?? aiDeliveryState.detectedRepo ?? "").trim(),
+        supplementalContext: ("supplementalContext" in nextState)
+          ? normalizeSupplementalContext(nextState.supplementalContext)
+          : normalizeSupplementalContext(aiDeliveryState.supplementalContext),
+        analyzePayload: ("analyzePayload" in nextState)
+          ? (
+              hasWorkflowResultPayload(nextState.analyzePayload)
+                ? (nextState.analyzePayload?.result ? nextState.analyzePayload : { result: getWorkflowResult(nextState.analyzePayload) })
+                : null
+            )
+          : aiDeliveryState.analyzePayload,
+        planPayload: ("planPayload" in nextState)
+          ? (
+              hasWorkflowResultPayload(nextState.planPayload)
+                ? (nextState.planPayload?.result ? nextState.planPayload : { result: getWorkflowResult(nextState.planPayload) })
+                : null
+            )
+          : aiDeliveryState.planPayload,
+        draftResult: ("draftResult" in nextState)
+          ? (nextState.draftResult && typeof nextState.draftResult === "object" && Object.keys(nextState.draftResult).length ? nextState.draftResult : null)
+          : aiDeliveryState.draftResult,
+        reviewRecord: ("reviewRecord" in nextState)
+          ? (nextState.reviewRecord && typeof nextState.reviewRecord === "object" && Object.keys(nextState.reviewRecord).length ? nextState.reviewRecord : null)
+          : aiDeliveryState.reviewRecord,
+        executionRecord: ("executionRecord" in nextState)
+          ? (nextState.executionRecord && typeof nextState.executionRecord === "object" && Object.keys(nextState.executionRecord).length ? nextState.executionRecord : null)
+          : aiDeliveryState.executionRecord,
+        applyRecord: ("applyRecord" in nextState)
+          ? (nextState.applyRecord && typeof nextState.applyRecord === "object" && Object.keys(nextState.applyRecord).length ? nextState.applyRecord : null)
+          : aiDeliveryState.applyRecord,
+        currentDraftPatchContext: normalizedContext,
+      };
+      normalizedState.detectedRepo = getCanonicalDetectedRepo(normalizedState);
+      Object.assign(aiDeliveryState, {
+        runId: normalizedState.runId,
+        jiraTicket: normalizedState.jiraTicket,
+        detectedRepo: normalizedState.detectedRepo,
+        supplementalContext: normalizedState.supplementalContext,
+        analyzePayload: normalizedState.analyzePayload,
+        planPayload: normalizedState.planPayload,
+        draftResult: normalizedState.draftResult,
+        reviewRecord: normalizedState.reviewRecord,
+        executionRecord: normalizedState.executionRecord,
+        applyRecord: normalizedState.applyRecord,
+      });
+      if ("supplementalContext" in nextState || !normalizeSupplementalContext(supplementalContextDraft)) {
+        supplementalContextDraft = cloneSupplementalContext(normalizedState.supplementalContext);
+      }
+      currentDraftPatchContext = normalizedContext;
+      return aiDeliveryState;
+    }
+
+    function getAiDeliveryStepStates() {
+      const analyzeReady = hasWorkflowResultPayload(aiDeliveryState.analyzePayload);
+      const planReady = hasWorkflowResultPayload(aiDeliveryState.planPayload);
+      const draftReady = Boolean(aiDeliveryState.draftResult);
+      const reviewDone = Boolean(aiDeliveryState.reviewRecord);
+      const reviewApproved = aiDeliveryState.reviewRecord?.decision === "approved";
+      const reviewRejected = aiDeliveryState.reviewRecord?.decision === "rejected";
+      const applyDone = Boolean(aiDeliveryState.applyRecord);
+      const applyReady = Boolean(aiDeliveryState.draftResult?.apply_ready);
+      const realApplyBlocked = Boolean(draftReady && reviewApproved && !applyReady && Array.isArray(aiDeliveryState.draftResult?.apply_blockers) && aiDeliveryState.draftResult.apply_blockers.length);
+      const reviewActionRunning = draftPatchActionInFlight && draftReady && !reviewDone;
+      const applyActionRunning = draftPatchActionInFlight && reviewApproved && !applyDone;
+      return {
+        input: analyzeReady ? "success" : aiDeliveryState.jiraTicket ? "ready" : "idle",
+        analyze: workflowRequestInFlight && !analyzeReady ? "running" : analyzeReady ? "success" : aiDeliveryState.jiraTicket ? "ready" : "idle",
+        plan: workflowRequestInFlight && analyzeReady && !planReady ? "running" : planReady ? "success" : analyzeReady ? "ready" : "idle",
+        draft: workflowRequestInFlight && planReady && !draftReady ? "running" : draftReady ? "success" : planReady ? "ready" : "idle",
+        review: draftReady ? (reviewActionRunning ? "running" : reviewRejected ? "failed" : reviewDone ? "success" : "ready") : "idle",
+        apply: applyDone ? "success" : applyActionRunning ? "running" : realApplyBlocked ? "blocked" : reviewApproved ? "ready" : "idle",
+      };
+    }
+
+    function getAiDeliveryProgressIndex() {
+      if (aiDeliveryState.applyRecord) return 5;
+      if (aiDeliveryState.reviewRecord?.decision === "approved") return 4;
+      if (aiDeliveryState.draftResult) return 3;
+      if (hasWorkflowResultPayload(aiDeliveryState.planPayload)) return 2;
+      if (hasWorkflowResultPayload(aiDeliveryState.analyzePayload)) return 1;
+      return 0;
+    }
+
+    function getAiDeliveryCurrentStepLabel() {
+      const states = getAiDeliveryStepStates();
+      return AI_DELIVERY_STEPS.find((step) => states[step.key] === "running" || states[step.key] === "ready")?.label
+        || (aiDeliveryState.applyRecord ? "Apply" : "Input");
+    }
+
+    function getAiDeliveryNextActionLabel() {
+      if (!aiDeliveryState.jiraTicket) return "Введіть Jira ticket, щоб запустити delivery flow.";
+      if (!aiDeliveryState.analyzePayload) return "Наступна дія: запустити Analyze і автоматично визначити repo.";
+      if (!aiDeliveryState.planPayload) return "Наступна дія: побудувати implementation plan.";
+      if (!aiDeliveryState.draftResult) return "Наступна дія: згенерувати bounded draft patch.";
+      if (!aiDeliveryState.reviewRecord) return "Наступна дія: переглянути draft patch, approve або reject.";
+      if (aiDeliveryState.reviewRecord?.decision === "rejected") return "Draft відхилено. Потрібен новий або оновлений draft.";
+      if (!aiDeliveryState.draftResult?.apply_ready) return "Apply заблокований, поки validation або post-approval checks не завершаться успішно.";
+      if (!aiDeliveryState.applyRecord) return "Наступна дія: виконати workspace_apply у clean workspace.";
+      return "Flow завершено. Артефакти execution та apply доступні в Technical details.";
+    }
+
+    function getRequestedFlowRunId() {
+      return String(new URLSearchParams(window.location.search).get("run_id") || "").trim();
+    }
+
+    async function restoreAiDeliveryStateFromRunId(runId) {
+      const normalizedRunId = String(runId || "").trim();
+      if (!normalizedRunId || !isUnifiedFlowMode()) {
+        return false;
+      }
+      aiDeliveryStateRestoreAttempted = true;
+      try {
+        const payload = await auth.fetchJson(`/flow-runs/${encodeURIComponent(normalizedRunId)}`);
+        const run = payload?.run;
+        console.log("RESTORE PAYLOAD", run);
+        const saved = run?.workflow_state;
+        if ((!saved || typeof saved !== "object") && (!run || typeof run !== "object")) {
+          return false;
+        }
+        const analyzeSummary = run?.analyze_summary || {};
+        const restoreState = {
+          runId: saved?.runId || run?.run_id || normalizedRunId,
+          jiraTicket: saved?.jiraTicket || run?.jira_ticket || "",
+          detectedRepo: saved?.detectedRepo || run?.repo_id || analyzeSummary?.detected_repo || "",
+          supplementalContext: saved?.supplementalContext || run?.supplemental_context || null,
+          analyzePayload: saved?.analyzePayload || (
+            Object.keys(analyzeSummary || {}).length
+              ? {
+                  workflow: "analyze_task",
+                  run_id: run?.run_id || normalizedRunId,
+                  result: {
+                    repo_id: analyzeSummary?.detected_repo || run?.repo_id || "",
+                    quality_score: analyzeSummary?.quality_score,
+                    confidence_score: analyzeSummary?.confidence_score,
+                    novelty_score: analyzeSummary?.novelty_score,
+                    task_quality_summary: analyzeSummary?.summary || "",
+                    recommendation: analyzeSummary?.recommendation || "",
+                  },
+                }
+              : null
+          ),
+          planPayload: saved?.planPayload || null,
+          draftResult: saved?.draftResult || null,
+          reviewRecord: saved?.reviewRecord || null,
+          executionRecord: saved?.executionRecord || null,
+          applyRecord: saved?.applyRecord || null,
+          currentDraftPatchContext: saved?.currentDraftPatchContext || null,
+        };
+        hydrateAiDeliveryState(restoreState);
+        if (!hasValidContinueState(restoreState)) {
+          return false;
+        }
+        ensureDraftPatchContext();
+        persistAiDeliveryState();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function getInlineRunningStepMessage(stepKey) {
+      const defaults = {
+        analyze: "Йде аналіз Jira задачі та визначення repo.",
+        plan: "Будую implementation plan для вибраного repo.",
+        draft: "Генерую bounded draft patch.",
+        review: "Зберігаю review-рішення та запускаю post-approval перевірки.",
+        apply: "Виконую workspace_apply у clean workspace.",
+      };
+      return inlineRunningMessage || defaults[stepKey] || "Виконується поточний крок flow.";
+    }
+
+    function renderFlowStatusBadge(state) {
+      const labels = { idle: "Idle", ready: "Ready", running: "Running", success: "Success", failed: "Failed", blocked: "Blocked" };
+      return `<span class="status-badge status-${auth.escapeHtml(state)}">${auth.escapeHtml(labels[state] || state)}</span>`;
+    }
+
+    function getPrimaryActiveStepKey(states) {
+      return AI_DELIVERY_STEPS.find((step) => states[step.key] === "running" || states[step.key] === "ready")?.key
+        || (aiDeliveryState.applyRecord ? "apply" : "analyze");
+    }
+
+    function formatMetricValue(value, suffix = "") {
+      if (value === null || value === undefined || value === "") {
+        return "-";
+      }
+      return `${value}${suffix}`;
+    }
+
+    function normalizeDetailItems(value) {
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => {
+            if (typeof item === "string") {
+              return item.trim();
+            }
+            if (item && typeof item === "object") {
+              return String(item.file || item.name || item.label || item.title || "").trim();
+            }
+            return String(item || "").trim();
+          })
+          .filter(Boolean);
+      }
+      if (typeof value === "string") {
+        const text = value.trim();
+        if (!text) {
+          return [];
+        }
+        if (text.includes("\n")) {
+          return text.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+        }
+        if (text.includes(" | ")) {
+          return text.split(" | ").map((item) => item.trim()).filter(Boolean);
+        }
+        return [text];
+      }
+      return [];
+    }
+
+    function renderDetailBlock(title, body, extraClass = "") {
+      if (!body) {
+        return "";
+      }
+      return `
+        <section class="flow-detail-block ${extraClass}">
+          <div class="flow-detail-label">${auth.escapeHtml(title)}</div>
+          <div class="flow-detail-value">${body}</div>
+        </section>
+      `;
+    }
+
+    function renderDetailText(title, value, options = {}) {
+      const text = String(value || "").trim();
+      if (!text) {
+        return "";
+      }
+      const multiline = Boolean(options.multiline);
+      const className = multiline ? "flow-detail-text multiline" : "flow-detail-text";
+      return renderDetailBlock(title, `<p class="${className}">${auth.escapeHtml(text)}</p>`, options.extraClass || "");
+    }
+
+    function renderDetailList(title, value, options = {}) {
+      const items = normalizeDetailItems(value);
+      if (!items.length) {
+        return "";
+      }
+      const tag = options.ordered ? "ol" : "ul";
+      const listClass = options.filePaths ? "flow-detail-list file-path-list" : "flow-detail-list";
+      return renderDetailBlock(
+        title,
+        `<${tag} class="${listClass}">${items.map((item) => `<li>${options.filePaths ? `<code>${auth.escapeHtml(item)}</code>` : auth.escapeHtml(item)}</li>`).join("")}</${tag}>`,
+        options.extraClass || ""
+      );
+    }
+
+    function renderAppliedSupplementalContext(raw) {
+      const context = normalizeSupplementalContext(raw);
+      const constraints = normalizeDetailItems(context?.constraints);
+      const suggestedFiles = normalizeDetailItems(context?.suggested_files);
+      if (!constraints.length && !suggestedFiles.length) {
+        return "";
+      }
+      const summaryBits = [];
+      if (constraints.length) {
+        summaryBits.push(`constraints: ${constraints.length}`);
+      }
+      if (suggestedFiles.length) {
+        summaryBits.push(`suggested files: ${suggestedFiles.length}`);
+      }
+      return renderDetailBlock(
+        "User context applied",
+        `
+          <details class="flow-inline-details">
+            <summary>${auth.escapeHtml(summaryBits.join(" • ") || "context applied")}</summary>
+            ${renderDetailList("Constraints used", constraints)}
+            ${renderDetailList("Suggested files used", suggestedFiles, { filePaths: true })}
+          </details>
+        `,
+        "flow-detail-block-compact"
+      );
+    }
+
+    function renderDetailKeyValues(items) {
+      const pairs = Array.isArray(items)
+        ? items.filter((item) => item && item.value !== undefined && item.value !== null && String(item.value).trim() !== "")
+        : [];
+      if (!pairs.length) {
+        return "";
+      }
+      return `
+        <div class="flow-mini-grid">
+          ${pairs.map((item) => `
+            <div class="flow-mini-stat">
+              <div class="flow-mini-stat-label">${auth.escapeHtml(item.label || "-")}</div>
+              <div class="flow-mini-stat-value">${auth.escapeHtml(String(item.value || "-"))}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function extractDraftChangedFiles(draft, apply) {
+      const rationaleFiles = Array.isArray(draft?.file_rationales)
+        ? draft.file_rationales.map((item) => String(item?.file || "").trim()).filter(Boolean)
+        : [];
+      const touchedFiles = Array.isArray(apply?.touched_files)
+        ? apply.touched_files.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const allowedFiles = Array.isArray(draft?.allowed_files)
+        ? draft.allowed_files.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const boundedFiles = Array.isArray(draft?.patch_generation_allowed_files)
+        ? draft.patch_generation_allowed_files.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      return Array.from(new Set([...rationaleFiles, ...touchedFiles, ...allowedFiles, ...boundedFiles])).filter(Boolean);
+    }
+
+    function parseUnifiedDiffByFile(diffText) {
+      const safeDiff = String(diffText || "").replace(/\r\n/g, "\n").trim();
+      if (!safeDiff) {
+        return [];
+      }
+      const lines = safeDiff.split("\n");
+      const files = [];
+      let current = null;
+      const pushCurrent = () => {
+        if (!current || !current.lines.length) {
+          return;
+        }
+        files.push({
+          ...current,
+          additions: current.lines.filter((line) => line.type === "add").length,
+          removals: current.lines.filter((line) => line.type === "remove").length,
+        });
+      };
+      const ensureCurrent = () => {
+        if (!current) {
+          current = { filePath: "Patch preview", oldPath: "", newPath: "", lines: [] };
+        }
+      };
+      lines.forEach((line) => {
+        if (line.startsWith("diff --git ")) {
+          pushCurrent();
+          const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+          current = {
+            filePath: match?.[2] || match?.[1] || "Patch preview",
+            oldPath: match?.[1] || "",
+            newPath: match?.[2] || "",
+            lines: [{ type: "meta", text: line }],
+          };
+          return;
+        }
+        ensureCurrent();
+        if (line.startsWith("--- ")) {
+          current.oldPath = line.replace(/^---\s+(?:a\/)?/, "").trim();
+          current.lines.push({ type: "meta", text: line });
+          return;
+        }
+        if (line.startsWith("+++ ")) {
+          current.newPath = line.replace(/^\+\+\+\s+(?:b\/)?/, "").trim();
+          if (!current.filePath || current.filePath === "Patch preview") {
+            current.filePath = current.newPath || current.oldPath || current.filePath;
+          }
+          current.lines.push({ type: "meta", text: line });
+          return;
+        }
+        if (line.startsWith("@@")) {
+          current.lines.push({ type: "hunk", text: line });
+          return;
+        }
+        if (line.startsWith("+") && !line.startsWith("+++")) {
+          current.lines.push({ type: "add", text: line });
+          return;
+        }
+        if (line.startsWith("-") && !line.startsWith("---")) {
+          current.lines.push({ type: "remove", text: line });
+          return;
+        }
+        current.lines.push({ type: "context", text: line });
+      });
+      pushCurrent();
+      return files;
+    }
+
+    function renderDiffPreview(title, diffText) {
+      const files = parseUnifiedDiffByFile(diffText);
+      if (!files.length) {
+        return "";
+      }
+      return renderDetailBlock(
+        title,
+        `
+          <div class="flow-diff-preview">
+            ${files.map((file, index) => {
+              const heading = file.filePath || file.newPath || file.oldPath || `File ${index + 1}`;
+              const stats = [];
+              if (file.additions) stats.push(`+${file.additions}`);
+              if (file.removals) stats.push(`-${file.removals}`);
+              return `
+                <details class="flow-diff-file" ${index === 0 ? "open" : ""}>
+                  <summary>
+                    <span class="flow-diff-file-path">${auth.escapeHtml(heading)}</span>
+                    ${stats.length ? `<span class="flow-diff-file-stats">${auth.escapeHtml(stats.join(" / "))}</span>` : ""}
+                  </summary>
+                  <div class="flow-diff-lines" role="region" aria-label="${auth.escapeHtml(heading)} diff preview">
+                    ${file.lines.map((line) => `<div class="diff-line diff-${auth.escapeHtml(line.type)}"><code>${auth.escapeHtml(line.text || " ")}</code></div>`).join("")}
+                  </div>
+                </details>
+              `;
+            }).join("")}
+          </div>
+        `,
+      );
+    }
+
+    function collectValidationSignals(execution, draft) {
+      const baseline = execution?.baseline_validation || {};
+      const patched = execution?.patched_validation || {};
+      const targetedStages = normalizeDetailItems(execution?.regression_map?.targeted_stages);
+      const statusPairs = [
+        baseline.restore || patched.restore ? `Restore: ${String(baseline.restore || "-")} -> ${String(patched.restore || "-")}` : "",
+        baseline.build || patched.build ? `Build: ${String(baseline.build || "-")} -> ${String(patched.build || "-")}` : "",
+        baseline.test || patched.test ? `Test: ${String(baseline.test || "-")} -> ${String(patched.test || "-")}` : "",
+      ].filter(Boolean);
+      return {
+        statusPairs,
+        targetedStages,
+        summary: String(draft?.validation_summary || execution?.validation_summary || "").trim(),
+      };
+    }
+
+    function renderApplyOutcome(details) {
+      const {
+        draft,
+        apply,
+        execution,
+        blockers,
+        touchedFiles,
+        statusText,
+        technicalLinks,
+        states,
+      } = details;
+      const validation = collectValidationSignals(execution, draft);
+      const applied = Boolean(apply?.commit_hash || apply?.commit_id);
+      const blocked = !applied && (!draft?.apply_ready || blockers.length);
+      const reason = applied
+        ? "Approved draft patch was applied successfully."
+        : blockers[0]
+          || validation.summary
+          || statusText
+          || "Apply is waiting for a clean validated execution artifact.";
+      const retryDisabled = draftPatchActionInFlight || !draft?.apply_ready || applied;
+      return `
+        ${renderDetailKeyValues([
+          { label: "Status", value: applied ? "Success" : blocked ? "Blocked" : "Pending" },
+          { label: "Validated", value: String(Boolean(draft?.validated)) },
+          { label: "Apply ready", value: String(Boolean(draft?.apply_ready)) },
+          { label: "Commit hash", value: String(apply?.commit_hash || apply?.commit_id || "") },
+        ])}
+        ${renderDetailText("Reason", reason, { multiline: true })}
+        ${renderDetailList("Validation", validation.statusPairs)}
+        ${renderDetailText("Validation summary", validation.summary, { multiline: true })}
+        ${renderDetailList("Regression map", validation.targetedStages.length ? validation.targetedStages : ["No regressions recorded"])}
+        ${renderDetailList("Blockers", blockers)}
+        ${renderDetailList("Touched files", touchedFiles, { filePaths: true })}
+        <div class="flow-technical-links">${technicalLinks || "<span class=\"muted\">Artifacts will appear here after execution/apply.</span>"}</div>
+        <div id="flowApplyStatus" class="muted">${auth.escapeHtml(String(
+          applied
+            ? "Approved draft patch applied in clean workspace and committed."
+            : draftPatchActionInFlight && states.apply === "running"
+              ? "Applying approved draft patch..."
+              : statusText || "-"
+        ))}</div>
+        <div class="flow-step-cta-row flow-step-cta-row-secondary">
+          <button type="button" class="secondary" data-flow-step-action="apply-retry" ${retryDisabled ? "disabled" : ""}>Retry</button>
+          <button type="button" class="secondary" data-flow-step-action="back-to-draft">Back to Draft</button>
+        </div>
+        ${states.apply === "running"
+          ? `<div class="flow-inline-running" role="status" aria-live="polite">${auth.escapeHtml(getInlineRunningStepMessage("apply"))}</div>`
+          : ""}
+      `;
+    }
+
+    function renderFlowPanel(stepKey, title, state, summary, details, actions = "", compact = false, expanded = false) {
+      const toggleLabel = expanded ? "Згорнути" : "Розгорнути";
+      return `
+        <section class="flow-step-panel ${compact ? "compact" : "expanded"} state-${auth.escapeHtml(state)}">
+          <div class="flow-step-panel-head">
+            <h3>${auth.escapeHtml(title)}</h3>
+            <div class="actions">
+              ${renderFlowStatusBadge(state)}
+              <button type="button" class="secondary flow-step-toggle" data-flow-step-toggle="${auth.escapeHtml(stepKey)}" aria-expanded="${expanded ? "true" : "false"}">${toggleLabel}</button>
+            </div>
+          </div>
+          <div class="flow-step-panel-body">
+            <div class="flow-step-summary">${summary}</div>
+            ${actions ? `<div class="flow-step-cta-row">${actions}</div>` : ""}
+            <div class="flow-step-details" ${expanded ? "" : "hidden"}>${details}</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderCompactFlowPanelBody(stepKey, state) {
+      const summaryByStep = {
+        analyze: {
+          idle: "Заповніть Jira ticket, щоб розпочати аналіз.",
+          ready: "Готово до запуску аналізу Jira та авто-визначення repo.",
+          success: aiDeliveryState.detectedRepo ? `Repo визначено: ${aiDeliveryState.detectedRepo}.` : "Аналіз завершено.",
+        },
+        plan: {
+          idle: "Стане доступним після успішного Analyze.",
+          ready: "План готовий до побудови на основі результатів Analyze.",
+          success: "План побудовано.",
+        },
+        draft: {
+          idle: "Стане доступним після побудови плану.",
+          ready: "Можна генерувати bounded draft patch.",
+          success: "Draft patch згенеровано.",
+        },
+        review: {
+          idle: "Стане доступним після генерації draft patch.",
+          ready: "Draft готовий до review.",
+          success: aiDeliveryState.reviewRecord?.decision === "approved" ? "Draft patch approved." : "Review завершено.",
+          failed: "Draft patch rejected. Потрібен оновлений draft.",
+        },
+        apply: {
+          idle: "Стане доступним після approve та validation.",
+          ready: "Apply готовий до запуску.",
+          success: "Apply завершено.",
+          blocked: "Apply заблоковано реальним blocker-ом від backend.",
+        },
+      };
+      const fallback = state === "running"
+        ? getInlineRunningStepMessage(stepKey)
+        : state === "blocked"
+          ? "Потрібно усунути blocker перед продовженням."
+          : state === "failed"
+            ? "Крок завершився помилкою."
+            : "Крок ще не активний.";
+      return `<p class="muted">${auth.escapeHtml(summaryByStep[stepKey]?.[state] || fallback)}</p>`;
+    }
+
+    function renderStepCTA(stepKey, state, label, tone = "primary") {
+      const disabled = !(state === "ready");
+      return `<button type="button" class="${tone}" data-flow-step-action="${auth.escapeHtml(stepKey)}" ${disabled ? "disabled" : ""}>${auth.escapeHtml(label)}</button>`;
+    }
+
+    // Unified flow uses the canonical hydrated payloads below to render readable list-based step details.
+    function renderAiDeliveryStepPanels() {
+      const container = document.getElementById("flowStepPanels");
+      if (!container) {
+        return;
+      }
+      const states = getAiDeliveryStepStates();
+      const activeStepKey = getPrimaryActiveStepKey(states);
+      const analyze = getCanonicalAnalyzeResult();
+      const plan = getWorkflowResult(aiDeliveryState.planPayload);
+      const draft = aiDeliveryState.draftResult || {};
+      const execution = draft?.technical_details?.draft_patch_execution || {};
+      const baseline = execution?.baseline_validation || {};
+      const patched = execution?.patched_validation || {};
+      const regression = execution?.regression_map || {};
+      const apply = aiDeliveryState.applyRecord || {};
+      const runningNotice = (stepKey) => states[stepKey] === "running"
+        ? `<div class="flow-inline-running" role="status" aria-live="polite">${auth.escapeHtml(getInlineRunningStepMessage(stepKey))}</div>`
+        : "";
+      const candidateFileNames = Array.isArray(analyze?.top_candidate_files) ? analyze.top_candidate_files.map((item) => item?.name || item).filter(Boolean).slice(0, 5) : [];
+      const likelyFiles = Array.isArray(plan?.likely_files) ? plan.likely_files.filter(Boolean).slice(0, 5) : [];
+      const allowedFiles = Array.isArray(draft?.patch_generation_allowed_files) ? draft.patch_generation_allowed_files.filter(Boolean) : [];
+      const applyTouched = Array.isArray(apply?.touched_files) ? apply.touched_files.filter(Boolean) : [];
+      const changedFiles = extractDraftChangedFiles(draft, apply);
+      const analyzeSummary = states.analyze === "success"
+        ? `<p>${auth.escapeHtml(`Repo: ${detectRepoFromPayload(aiDeliveryState.analyzePayload) || "-"}. Quality: ${Math.round(Number(analyze?.quality_score || 0))}/100.`)}</p>`
+        : `<p>${auth.escapeHtml(renderCompactFlowPanelBody("analyze", states.analyze).replace(/<[^>]+>/g, ""))}</p>`;
+      const planSummary = states.plan === "success"
+        ? `<p>${auth.escapeHtml(String(plan?.recommendation || "Plan built."))}</p>`
+        : `<p>${auth.escapeHtml(renderCompactFlowPanelBody("plan", states.plan).replace(/<[^>]+>/g, ""))}</p>`;
+      const draftSummary = states.draft === "success"
+        ? `<p>${auth.escapeHtml(String(draft?.patch_summary || "Draft patch generated."))}</p>`
+        : `<p>${auth.escapeHtml(renderCompactFlowPanelBody("draft", states.draft).replace(/<[^>]+>/g, ""))}</p>`;
+      const technicalLinks = [
+        execution?.execution_id ? `Execution: ${auth.escapeHtml(String(execution.execution_id))}` : "",
+        apply?.apply_id ? `Apply: ${auth.escapeHtml(String(apply.apply_id))}` : "",
+        draft?.technical_run?.run_id ? `<a href="./run.html?id=${encodeURIComponent(draft.technical_run.run_id)}">Technical run</a>` : "",
+      ].filter(Boolean).join(" | ");
+      const panelExpanded = (key, state) => isFlowStepExpanded(key, state);
+      const panelCompact = (key, state) => !panelExpanded(key, state);
+      const reviewStateValue = String(draft?.review_state || "pending").trim() || "pending";
+      const reviewStatusText = aiDeliveryState.reviewRecord?.decision === "approved"
+        ? "Draft patch approved."
+        : aiDeliveryState.reviewRecord?.decision === "rejected"
+          ? "Draft patch rejected."
+          : draft?.patch_summary
+            ? "Draft patch готовий до review."
+            : "Review стане доступним після генерації draft patch.";
+      const applyStatusText = apply?.commit_hash || apply?.commit_id
+        ? `Commit: ${apply.commit_hash || apply.commit_id}`
+        : draft?.apply_ready
+          ? "Workspace apply готовий до запуску."
+          : (draft?.apply_blockers || []).join(" | ") || "Apply стане доступним після approve та validation.";
+      const reviewActions = `
+        <button type="button" class="primary" data-flow-step-action="review-approve" ${(!draft || draftPatchActionInFlight || aiDeliveryState.reviewRecord?.decision === "approved") ? "disabled" : ""}>Approve</button>
+        <button type="button" class="secondary" data-flow-step-action="review-reject" ${(!draft || draftPatchActionInFlight || aiDeliveryState.reviewRecord?.decision === "rejected") ? "disabled" : ""}>Reject</button>
+      `;
+      const applyModeOptions = Array.isArray(draft?.apply_modes_supported) && draft.apply_modes_supported.length
+        ? draft.apply_modes_supported.map((mode) => {
+            const label = mode === "workspace_apply" ? "Workspace apply" : mode === "dry_apply" ? "Dry apply" : mode === "local_apply" ? "Local apply" : mode;
+            const selected = mode === ((isUnifiedFlowMode() && draft.apply_modes_supported.includes("workspace_apply")) ? "workspace_apply" : (draft.apply_mode || "dry_apply")) ? "selected" : "";
+            return `<option value="${auth.escapeHtml(mode)}" ${selected}>${auth.escapeHtml(label)}</option>`;
+          }).join("")
+        : `<option value="dry_apply">Dry apply</option>`;
+      const applyActions = `
+        <label class="flow-apply-mode">
+          <span>Apply mode</span>
+          <select id="flowStepApplyMode" ${draftPatchActionInFlight ? "disabled" : ""}>${applyModeOptions}</select>
+        </label>
+        <button type="button" class="primary" data-flow-step-action="apply" ${(draftPatchActionInFlight || !draft?.apply_ready || Boolean(aiDeliveryState.applyRecord)) ? "disabled" : ""}>Застосувати зміни</button>
+      `;
+      container.innerHTML = [
+        renderFlowPanel(
+          "analyze",
+          "1. Analyze",
+          states.analyze,
+          analyzeSummary,
+          `
+            ${renderDetailKeyValues([
+              { label: "Task quality", value: `${Math.round(Number(analyze?.quality_score || 0))}/100` },
+              { label: "Task confidence", value: `${Math.round(Number(analyze?.confidence_score || 0))}` },
+              { label: "Task novelty", value: `${Math.round(Number(analyze?.novelty_score || 0))}` },
+              { label: "Candidate / selected files", value: `${Number(analyze?.candidate_files_count || 0)} / ${Number(analyze?.selected_files_count || 0)}` },
+            ])}
+            ${renderDetailText("Summary", analyze?.task_quality_summary, { multiline: true })}
+            ${renderDetailText("Recommendation", analyze?.recommendation, { multiline: true })}
+            ${renderDetailText("Detected repo", detectRepoFromPayload(aiDeliveryState.analyzePayload))}
+            ${renderDetailText("Why this repo", analyze?.repo_match?.reason || analyze?.top_historical_matches?.[0]?.jira_key)}
+            ${renderAppliedSupplementalContext(aiDeliveryState.supplementalContext || analyze?.supplemental_context)}
+            ${renderDetailList("Missing details", analyze?.missing_details)}
+            ${renderDetailList("Concrete questions", analyze?.concrete_questions)}
+            ${renderDetailList("Decision questions", analyze?.decision_questions)}
+            ${renderDetailList("Candidate files", candidateFileNames, { filePaths: true })}
+            ${renderDetailList("Plan preview", (analyze?.implementation_plan_preview || []).map((item) => `${item.file || "-"}: ${item.likely_changes || item.reason || item.action || ""}`))}
+            ${runningNotice("analyze")}
+          `,
+          renderStepCTA("analyze", states.analyze, "Запустити аналіз"),
+          panelCompact("analyze", states.analyze),
+          panelExpanded("analyze", states.analyze)
+        ),
+        renderFlowPanel(
+          "plan",
+          "2. Plan",
+          states.plan,
+          `
+            <p>${auth.escapeHtml(states.plan === "success" ? (String(plan?.recommendation || "План побудовано.")) : renderCompactFlowPanelBody("plan", states.plan).replace(/<[^>]+>/g, ""))}</p>
+          `,
+          `
+            <p><strong>Plan summary:</strong> ${auth.escapeHtml(String(plan?.recommendation || plan?.repo_match_reason || "-"))}</p>
+            <p><strong>Likely changed files:</strong> ${auth.escapeHtml(likelyFiles.join(", ") || "-")}</p>
+            <p><strong>Risks:</strong> ${auth.escapeHtml((plan?.risks || []).slice(0, 3).join(" | ") || "-")}</p>
+            <p><strong>Validation intent:</strong> ${auth.escapeHtml((plan?.validation_plan || []).slice(0, 3).join(" | ") || "-")}</p>
+            ${runningNotice("plan")}
+          `,
+          renderStepCTA("plan", states.plan, "Побудувати план"),
+          panelCompact("plan", states.plan),
+          panelExpanded("plan", states.plan)
+        ),
+        renderFlowPanel(
+          "draft",
+          "3. Draft",
+          states.draft,
+          `
+            <p>${auth.escapeHtml(states.draft === "success" ? (draft?.patch_summary || "Draft patch згенеровано.") : renderCompactFlowPanelBody("draft", states.draft).replace(/<[^>]+>/g, ""))}</p>
+          `,
+          `
+            <p><strong>Draft readiness:</strong> ${draft?.patch_generation_ready ? "Ready" : "Blocked"}</p>
+            <p><strong>Blockers:</strong> ${auth.escapeHtml((draft?.patch_generation_blockers || []).join(" | ") || "-")}</p>
+            <p><strong>Bounded allowed files:</strong> ${auth.escapeHtml(allowedFiles.join(", ") || "-")}</p>
+            <p><strong>File rationales:</strong> ${auth.escapeHtml((draft?.file_rationales || []).slice(0, 2).map((item) => `${item.file}: ${item.why}`).join(" | ") || "-")}</p>
+            <p><strong>Diff preview:</strong> ${auth.escapeHtml(String(draft?.patch_summary || draft?.generated_diff?.slice(0, 180) || "-"))}</p>
+            ${runningNotice("draft")}
+          `,
+          renderStepCTA("draft", states.draft, "Згенерувати draft"),
+          panelCompact("draft", states.draft),
+          panelExpanded("draft", states.draft)
+        ),
+        renderFlowPanel(
+          "review",
+          "4. Review",
+          states.review,
+          `
+            <p>${auth.escapeHtml(reviewStatusText)}</p>
+            <p><strong>Review state:</strong> ${auth.escapeHtml(reviewStateValue)}</p>
+          `,
+          `
+            <p><strong>What changed:</strong> ${auth.escapeHtml(String(draft?.patch_summary || "-"))}</p>
+            <p><strong>Why:</strong> ${auth.escapeHtml((draft?.file_rationales || []).slice(0, 2).map((item) => `${item.file}: ${item.why}`).join(" | ") || "-")}</p>
+            <p><strong>Is it safe:</strong> ${auth.escapeHtml(String(draft?.validation_summary || "-"))}</p>
+            <p><strong>Baseline vs patched:</strong> restore ${auth.escapeHtml(String(baseline?.restore || "-"))} -> ${auth.escapeHtml(String(patched?.restore || "-"))}, build ${auth.escapeHtml(String(baseline?.build || "-"))} -> ${auth.escapeHtml(String(patched?.build || "-"))}, test ${auth.escapeHtml(String(baseline?.test || "-"))} -> ${auth.escapeHtml(String(patched?.test || "-"))}</p>
+            <p><strong>Regression map:</strong> ${auth.escapeHtml(((regression?.targeted_stages || []).join(", ")) || "No regressions")}</p>
+            <div id="flowReviewStatus" class="muted">${auth.escapeHtml(String(
+              aiDeliveryState.reviewRecord?.decision === "approved"
+                ? "Draft patch approved."
+                : aiDeliveryState.reviewRecord?.decision === "rejected"
+                  ? "Draft patch rejected."
+                  : draftPatchActionInFlight && states.review === "running"
+                    ? "Виконується review action..."
+                    : document.getElementById("flowReviewStatus")?.textContent || document.getElementById("draftPatchStatus")?.textContent || "-"
+            ))}</div>
+            ${runningNotice("review")}
+          `,
+          reviewActions,
+          panelCompact("review", states.review),
+          panelExpanded("review", states.review)
+        ),
+        renderFlowPanel(
+          "apply",
+          "5. Apply",
+          states.apply,
+          `
+            <p>${auth.escapeHtml(applyStatusText)}</p>
+            <p><strong>Apply ready:</strong> ${auth.escapeHtml(String(Boolean(draft?.apply_ready)))}</p>
+          `,
+          `
+            <p><strong>Validated:</strong> ${auth.escapeHtml(String(Boolean(draft?.validated)))}</p>
+            <p><strong>Apply ready:</strong> ${auth.escapeHtml(String(Boolean(draft?.apply_ready)))}</p>
+            <p><strong>Blockers:</strong> ${auth.escapeHtml((draft?.apply_blockers || []).join(" | ") || "-")}</p>
+            <p><strong>Touched files:</strong> ${auth.escapeHtml(applyTouched.join(", ") || "-")}</p>
+            <p><strong>Commit hash:</strong> ${auth.escapeHtml(String(apply?.commit_hash || apply?.commit_id || "-"))}</p>
+            <div class="flow-technical-links">${technicalLinks || "<span class=\"muted\">Artifacts will appear here after execution/apply.</span>"}</div>
+            <div id="flowApplyStatus" class="muted">${auth.escapeHtml(String(
+              apply?.commit_hash || apply?.commit_id
+                ? "Approved draft patch applied in clean workspace and committed."
+                : draftPatchActionInFlight && states.apply === "running"
+                  ? "Виконується apply action..."
+                  : document.getElementById("flowApplyStatus")?.textContent || document.getElementById("draftPatchStatus")?.textContent || "-"
+            ))}</div>
+            ${runningNotice("apply")}
+          `,
+          applyActions,
+          panelCompact("apply", states.apply),
+          panelExpanded("apply", states.apply)
+        ),
+      ].join("");
+    }
+
+    function renderAiDeliveryStepPanels() {
+      const container = document.getElementById("flowStepPanels");
+      if (!container) {
+        return;
+      }
+      const states = getAiDeliveryStepStates();
+      const analyze = getCanonicalAnalyzeResult();
+      const plan = getWorkflowResult(aiDeliveryState.planPayload);
+      const draft = aiDeliveryState.draftResult || {};
+      const execution = draft?.technical_details?.draft_patch_execution || {};
+      const baseline = execution?.baseline_validation || {};
+      const patched = execution?.patched_validation || {};
+      const regression = execution?.regression_map || {};
+      const apply = aiDeliveryState.applyRecord || {};
+      const candidateFileNames = Array.isArray(analyze?.top_candidate_files) ? analyze.top_candidate_files.map((item) => item?.name || item).filter(Boolean).slice(0, 5) : [];
+      const likelyFiles = Array.isArray(plan?.likely_files) ? plan.likely_files.filter(Boolean).slice(0, 5) : [];
+      const allowedFiles = Array.isArray(draft?.patch_generation_allowed_files) ? draft.patch_generation_allowed_files.filter(Boolean) : [];
+      const applyTouched = Array.isArray(apply?.touched_files) ? apply.touched_files.filter(Boolean) : [];
+      const changedFiles = extractDraftChangedFiles(draft, apply);
+      const runningNotice = (stepKey) => states[stepKey] === "running"
+        ? `<div class="flow-inline-running" role="status" aria-live="polite">${auth.escapeHtml(getInlineRunningStepMessage(stepKey))}</div>`
+        : "";
+      const technicalLinks = [
+        execution?.execution_id ? `Execution: ${auth.escapeHtml(String(execution.execution_id))}` : "",
+        apply?.apply_id ? `Apply: ${auth.escapeHtml(String(apply.apply_id))}` : "",
+        draft?.technical_run?.run_id ? `<a href="./run.html?id=${encodeURIComponent(draft.technical_run.run_id)}">Technical run</a>` : "",
+      ].filter(Boolean).join(" | ");
+      const panelExpanded = (key, state) => isFlowStepExpanded(key, state);
+      const panelCompact = (key, state) => !panelExpanded(key, state);
+      const reviewStateValue = String(draft?.review_state || "pending").trim() || "pending";
+      const reviewStatusText = aiDeliveryState.reviewRecord?.decision === "approved"
+        ? "Draft patch approved."
+        : aiDeliveryState.reviewRecord?.decision === "rejected"
+          ? "Draft patch rejected."
+          : draft?.patch_summary
+            ? "Draft patch ready for review."
+            : "Review becomes available after draft generation.";
+      const applyBlockers = normalizeDetailItems(draft?.apply_blockers);
+      const applyStatusText = apply?.commit_hash || apply?.commit_id
+        ? `Commit: ${apply.commit_hash || apply.commit_id}`
+        : draft?.apply_ready
+          ? "Workspace apply is ready to run."
+          : applyBlockers.join(" | ") || "Apply becomes available after approval and validation.";
+      const analyzeSummary = states.analyze === "success"
+        ? `<p>${auth.escapeHtml(`Repo: ${detectRepoFromPayload(aiDeliveryState.analyzePayload) || "-"}. Quality: ${Math.round(Number(analyze?.quality_score || 0))}/100.`)}</p>`
+        : `<p>${auth.escapeHtml(renderCompactFlowPanelBody("analyze", states.analyze).replace(/<[^>]+>/g, ""))}</p>`;
+      const planSummary = states.plan === "success"
+        ? `<p>${auth.escapeHtml(String(plan?.recommendation || "Plan built."))}</p>`
+        : `<p>${auth.escapeHtml(renderCompactFlowPanelBody("plan", states.plan).replace(/<[^>]+>/g, ""))}</p>`;
+      const draftSummary = states.draft === "success"
+        ? `<p>${auth.escapeHtml(String(draft?.patch_summary || "Draft patch generated."))}</p>`
+        : `<p>${auth.escapeHtml(renderCompactFlowPanelBody("draft", states.draft).replace(/<[^>]+>/g, ""))}</p>`;
+      const reviewActions = `
+        <button type="button" class="primary" data-flow-step-action="review-approve" ${(!draft || draftPatchActionInFlight || aiDeliveryState.reviewRecord?.decision === "approved") ? "disabled" : ""}>Approve</button>
+        <button type="button" class="secondary" data-flow-step-action="review-reject" ${(!draft || draftPatchActionInFlight || aiDeliveryState.reviewRecord?.decision === "rejected") ? "disabled" : ""}>Reject</button>
+      `;
+      const applyModeOptions = Array.isArray(draft?.apply_modes_supported) && draft.apply_modes_supported.length
+        ? draft.apply_modes_supported.map((mode) => {
+            const label = mode === "workspace_apply" ? "Workspace apply" : mode === "dry_apply" ? "Dry apply" : mode === "local_apply" ? "Local apply" : mode;
+            const selected = mode === ((isUnifiedFlowMode() && draft.apply_modes_supported.includes("workspace_apply")) ? "workspace_apply" : (draft.apply_mode || "dry_apply")) ? "selected" : "";
+            return `<option value="${auth.escapeHtml(mode)}" ${selected}>${auth.escapeHtml(label)}</option>`;
+          }).join("")
+        : `<option value="dry_apply">Dry apply</option>`;
+      const applyActions = `
+        <label class="flow-apply-mode">
+          <span>Apply mode</span>
+          <select id="flowStepApplyMode" ${draftPatchActionInFlight ? "disabled" : ""}>${applyModeOptions}</select>
+        </label>
+        <button type="button" class="primary" data-flow-step-action="apply" ${(draftPatchActionInFlight || !draft?.apply_ready || Boolean(aiDeliveryState.applyRecord)) ? "disabled" : ""}>Р—Р°СЃС‚РѕСЃСѓРІР°С‚Рё Р·РјС–РЅРё</button>
+      `;
+      container.innerHTML = [
+        renderFlowPanel(
+          "analyze",
+          "1. Analyze",
+          states.analyze,
+          analyzeSummary,
+          `
+            ${renderDetailKeyValues([
+              { label: "Task quality", value: `${Math.round(Number(analyze?.quality_score || 0))}/100` },
+              { label: "Task confidence", value: `${Math.round(Number(analyze?.confidence_score || 0))}` },
+              { label: "Task novelty", value: `${Math.round(Number(analyze?.novelty_score || 0))}` },
+              { label: "Candidate / selected files", value: `${Number(analyze?.candidate_files_count || 0)} / ${Number(analyze?.selected_files_count || 0)}` },
+            ])}
+            ${renderDetailText("Summary", analyze?.task_quality_summary, { multiline: true })}
+            ${renderDetailText("Recommendation", analyze?.recommendation, { multiline: true })}
+            ${renderDetailText("Detected repo", detectRepoFromPayload(aiDeliveryState.analyzePayload))}
+            ${renderDetailText("Why this repo", analyze?.repo_match?.reason || analyze?.top_historical_matches?.[0]?.jira_key)}
+            ${renderDetailList("Missing details", analyze?.missing_details)}
+            ${renderDetailList("Concrete questions", analyze?.concrete_questions)}
+            ${renderDetailList("Decision questions", analyze?.decision_questions)}
+            ${renderDetailList("Candidate files", candidateFileNames, { filePaths: true })}
+            ${renderDetailList("Plan preview", (analyze?.implementation_plan_preview || []).map((item) => `${item.file || "-"}: ${item.likely_changes || item.reason || item.action || ""}`))}
+            ${runningNotice("analyze")}
+          `,
+          renderStepCTA("analyze", states.analyze, "Р—Р°РїСѓСЃС‚РёС‚Рё Р°РЅР°Р»С–Р·"),
+          panelCompact("analyze", states.analyze),
+          panelExpanded("analyze", states.analyze)
+        ),
+        renderFlowPanel(
+          "plan",
+          "2. Plan",
+          states.plan,
+          planSummary,
+          `
+            ${renderDetailText("Plan summary", plan?.recommendation || plan?.repo_match_reason, { multiline: true })}
+            ${renderAppliedSupplementalContext(aiDeliveryState.supplementalContext || plan?.supplemental_context)}
+            ${renderDetailList("Likely changed files", likelyFiles, { filePaths: true })}
+            ${renderDetailList("Risks", plan?.risks)}
+            ${renderDetailList("Validation intent", plan?.validation_plan)}
+            ${runningNotice("plan")}
+          `,
+          renderStepCTA("plan", states.plan, "РџРѕР±СѓРґСѓРІР°С‚Рё РїР»Р°РЅ"),
+          panelCompact("plan", states.plan),
+          panelExpanded("plan", states.plan)
+        ),
+        renderFlowPanel(
+          "draft",
+          "3. Draft",
+          states.draft,
+          draftSummary,
+          `
+            ${renderDetailKeyValues([
+              { label: "Draft readiness", value: draft?.patch_generation_ready ? "Ready" : "Blocked" },
+              { label: "Diff hash", value: draft?.diff_hash || "" },
+            ])}
+            ${renderDetailText("Draft summary", draft?.patch_summary, { multiline: true })}
+            ${renderAppliedSupplementalContext(aiDeliveryState.supplementalContext || draft?.supplemental_context)}
+            ${renderDetailList("Changed files", changedFiles, { filePaths: true })}
+            ${renderDetailList("Bounded allowed files", allowedFiles, { filePaths: true })}
+            ${renderDetailList("Blockers", draft?.patch_generation_blockers)}
+            ${renderDetailList("Why this change", (draft?.file_rationales || []).map((item) => `${item.file}: ${item.why}${item.expected_effect ? ` -> ${item.expected_effect}` : ""}`))}
+            ${renderDiffPreview("Diff preview", draft?.generated_diff)}
+            ${runningNotice("draft")}
+          `,
+          renderStepCTA("draft", states.draft, "Р—РіРµРЅРµСЂСѓРІР°С‚Рё draft"),
+          panelCompact("draft", states.draft),
+          panelExpanded("draft", states.draft)
+        ),
+        renderFlowPanel(
+          "review",
+          "4. Review",
+          states.review,
+          `
+            <p>${auth.escapeHtml(reviewStatusText)}</p>
+            <p><strong>Review state:</strong> ${auth.escapeHtml(reviewStateValue)}</p>
+          `,
+          `
+            ${renderDetailText("What changed", draft?.patch_summary, { multiline: true })}
+            ${renderDetailList("Why", (draft?.file_rationales || []).map((item) => `${item.file}: ${item.why}`))}
+            ${renderDetailText("Is it safe", draft?.validation_summary, { multiline: true })}
+            ${renderDetailKeyValues([
+              { label: "Restore", value: `${String(baseline?.restore || "-")} -> ${String(patched?.restore || "-")}` },
+              { label: "Build", value: `${String(baseline?.build || "-")} -> ${String(patched?.build || "-")}` },
+              { label: "Test", value: `${String(baseline?.test || "-")} -> ${String(patched?.test || "-")}` },
+            ])}
+            ${renderDetailList("Regression map", regression?.targeted_stages || ["No regressions"])}
+            <div id="flowReviewStatus" class="muted">${auth.escapeHtml(String(
+              aiDeliveryState.reviewRecord?.decision === "approved"
+                ? "Draft patch approved."
+                : aiDeliveryState.reviewRecord?.decision === "rejected"
+                  ? "Draft patch rejected."
+                  : draftPatchActionInFlight && states.review === "running"
+                    ? "Р’РёРєРѕРЅСѓС”С‚СЊСЃСЏ review action..."
+                    : document.getElementById("flowReviewStatus")?.textContent || document.getElementById("draftPatchStatus")?.textContent || "-"
+            ))}</div>
+            ${runningNotice("review")}
+          `,
+          reviewActions,
+          panelCompact("review", states.review),
+          panelExpanded("review", states.review)
+        ),
+        renderFlowPanel(
+          "apply",
+          "5. Apply",
+          states.apply,
+          `
+            <p>${auth.escapeHtml(applyStatusText)}</p>
+            <p><strong>Apply ready:</strong> ${auth.escapeHtml(String(Boolean(draft?.apply_ready)))}</p>
+          `,
+          renderApplyOutcome({
+            draft,
+            apply,
+            execution,
+            blockers: applyBlockers,
+            touchedFiles: applyTouched,
+            statusText: document.getElementById("flowApplyStatus")?.textContent || document.getElementById("draftPatchStatus")?.textContent || applyStatusText,
+            technicalLinks,
+            states,
+          }),
+          applyActions,
+          panelCompact("apply", states.apply),
+          panelExpanded("apply", states.apply)
+        ),
+      ].join("");
+      applyFlowStepLabelOverrides(container, states);
+    }
+
+    function applyFlowStepLabelOverrides(container, states) {
+      if (!container) {
+        return;
+      }
+      const labelMap = {
+        analyze: "Запустити аналіз",
+        plan: "Побудувати план",
+        draft: "Згенерувати draft",
+        apply: "Застосувати зміни",
+        "apply-retry": "Повторити apply",
+        "back-to-draft": "Назад до Draft",
+        "review-approve": "Approve",
+        "review-reject": "Reject",
+      };
+      let html = String(container.innerHTML || "");
+      Object.entries(labelMap).forEach(([action, label]) => {
+        const pattern = new RegExp(`(<button[^>]*data-flow-step-action="${action}"[^>]*>)([\\s\\S]*?)(</button>)`, "g");
+        html = html.replace(pattern, `$1${auth.escapeHtml(label)}$3`);
+      });
+      html = html.replace(/(<button[^>]*class="secondary flow-step-toggle"[^>]*aria-expanded="true"[^>]*>)([\s\S]*?)(<\/button>)/g, `$1Згорнути$3`);
+      html = html.replace(/(<button[^>]*class="secondary flow-step-toggle"[^>]*aria-expanded="false"[^>]*>)([\s\S]*?)(<\/button>)/g, `$1Розгорнути$3`);
+      container.innerHTML = html;
+      Object.entries(labelMap).forEach(([action, label]) => {
+        const button = container.querySelector(`[data-flow-step-action="${action}"]`);
+        if (button) {
+          button.textContent = label;
+        }
+      });
+      const toggleButtons = container.querySelectorAll("[data-flow-step-toggle]");
+      toggleButtons.forEach((button) => {
+        const expanded = String(button.getAttribute("aria-expanded") || "").trim() === "true";
+        button.textContent = expanded ? "Згорнути" : "Розгорнути";
+      });
+      const reviewStatus = document.getElementById("flowReviewStatus");
+      if (reviewStatus && draftPatchActionInFlight && states.review === "running") {
+        reviewStatus.textContent = "Виконується дія review...";
+      }
+    }
+
+    function renderCompactFlowPanelBody(stepKey, state) {
+      const summaryByStep = {
+        analyze: {
+          idle: "Заповніть Jira ticket, щоб розпочати аналіз.",
+          ready: "Готово до запуску аналізу Jira та автовизначення repo.",
+          success: aiDeliveryState.detectedRepo ? `Repo визначено: ${aiDeliveryState.detectedRepo}.` : "Аналіз завершено.",
+        },
+        plan: {
+          idle: "Стане доступним після успішного Analyze.",
+          ready: "План готовий до побудови на основі результатів Analyze.",
+          success: "План побудовано.",
+        },
+        draft: {
+          idle: "Стане доступним після побудови плану.",
+          ready: "Можна генерувати bounded draft patch.",
+          success: "Draft patch згенеровано.",
+        },
+        review: {
+          idle: "Стане доступним після генерації draft patch.",
+          ready: "Draft готовий до review.",
+          success: aiDeliveryState.reviewRecord?.decision === "approved" ? "Draft patch approved." : "Review завершено.",
+          failed: "Draft patch rejected. Потрібен оновлений draft.",
+        },
+        apply: {
+          idle: "Стане доступним після approve та validation.",
+          ready: "Apply готовий до запуску.",
+          success: "Apply завершено.",
+          blocked: "Apply заблоковано реальним blocker-ом від backend.",
+        },
+      };
+      const fallback = state === "running"
+        ? getInlineRunningStepMessage(stepKey)
+        : state === "blocked"
+          ? "Потрібно усунути blocker перед продовженням."
+          : state === "failed"
+            ? "Крок завершився помилкою."
+            : "Крок ще не активний.";
+      return `<p class="muted">${auth.escapeHtml(summaryByStep[stepKey]?.[state] || fallback)}</p>`;
+    }
+
+    function updateRunButtonForFlow() {
+      const button = document.getElementById("runWorkflowButton");
+      if (!button || !isUnifiedFlowMode()) {
+        return;
+      }
+      let label = "Запустити flow";
+      let disabled = !workflowFieldsReady || workflowRequestInFlight;
+      if (aiDeliveryState.applyRecord) {
+        label = "Flow завершено";
+        disabled = true;
+      } else if (aiDeliveryState.reviewRecord?.decision === "approved") {
+        label = aiDeliveryState.draftResult?.apply_ready ? "Застосувати зміни" : "Очікуємо validation";
+        disabled = workflowRequestInFlight || !aiDeliveryState.draftResult?.apply_ready;
+      } else if (aiDeliveryState.draftResult) {
+        label = "Очікуємо review";
+        disabled = true;
+      } else if (hasWorkflowResultPayload(aiDeliveryState.planPayload)) {
+        label = "Згенерувати draft";
+      } else if (hasWorkflowResultPayload(aiDeliveryState.analyzePayload)) {
+        label = "Побудувати план";
+      } else if (aiDeliveryState.jiraTicket) {
+        label = "Запустити аналіз";
+      }
+      button.textContent = label;
+      button.disabled = disabled;
+    }
+
+    function updateRunButtonForFlow() {
+      const button = document.getElementById("runWorkflowButton");
+      if (!button || !isUnifiedFlowMode()) {
+        return;
+      }
+      let label = "Запустити flow";
+      let disabled = !workflowFieldsReady || workflowRequestInFlight;
+      if (aiDeliveryState.applyRecord) {
+        label = "Flow завершено";
+        disabled = true;
+      } else if (aiDeliveryState.reviewRecord?.decision === "approved") {
+        label = aiDeliveryState.draftResult?.apply_ready ? "Застосувати зміни" : "Очікуємо validation";
+        disabled = workflowRequestInFlight || !aiDeliveryState.draftResult?.apply_ready;
+      } else if (aiDeliveryState.draftResult) {
+        label = "Очікуємо review";
+        disabled = true;
+      } else if (hasWorkflowResultPayload(aiDeliveryState.planPayload)) {
+        label = "Згенерувати draft";
+      } else if (hasWorkflowResultPayload(aiDeliveryState.analyzePayload)) {
+        label = "Побудувати план";
+      } else if (aiDeliveryState.jiraTicket) {
+        label = "Запустити аналіз";
+      }
+      button.textContent = label;
+      button.disabled = disabled;
+    }
+
+    function renderAiDeliveryFlowState() {
+      if (!isUnifiedFlowMode()) {
+        return;
+      }
+      const card = document.getElementById("aiDeliveryFlowCard");
+      const rail = document.getElementById("flowStepRail");
+      const progressBar = document.getElementById("flowProgressBar");
+      const detectedRepo = document.getElementById("flowDetectedRepo");
+      const currentStep = document.getElementById("flowCurrentStep");
+      const nextAction = document.getElementById("flowNextAction");
+      const statusLabel = document.getElementById("flowStatusLabel");
+      const metricRepo = document.getElementById("flowMetricRepo");
+      const metricQuality = document.getElementById("flowMetricQuality");
+      const metricConfidence = document.getElementById("flowMetricConfidence");
+      const metricNovelty = document.getElementById("flowMetricNovelty");
+      const metricStep = document.getElementById("flowMetricStep");
+      const metricStatusText = document.getElementById("flowMetricStatusText");
+      card.hidden = false;
+      const currentIndex = getAiDeliveryProgressIndex();
+      const states = getAiDeliveryStepStates();
+      const analyze = getCanonicalAnalyzeResult();
+      console.log("CANONICAL ANALYZE", analyze);
+      const detectedRepoValue = getCanonicalDetectedRepo();
+      const activeState = states[getPrimaryActiveStepKey(states)] || "idle";
+      detectedRepo.textContent = detectedRepoValue || "-";
+      currentStep.textContent = getAiDeliveryCurrentStepLabel();
+      statusLabel.textContent = activeState;
+      nextAction.textContent = getAiDeliveryNextActionLabel();
+      metricRepo.textContent = detectedRepoValue || "-";
+      metricQuality.textContent = analyze?.quality_score !== undefined ? formatMetricValue(Math.round(Number(analyze.quality_score)), "/100") : "-";
+      metricConfidence.textContent = analyze?.confidence_score !== undefined ? formatMetricValue(Math.round(Number(analyze.confidence_score))) : "-";
+      metricNovelty.textContent = analyze?.novelty_score !== undefined ? formatMetricValue(Math.round(Number(analyze.novelty_score))) : "-";
+      metricStep.textContent = getAiDeliveryCurrentStepLabel();
+      metricStatusText.textContent = getAiDeliveryNextActionLabel();
+      progressBar.style.width = `${(currentIndex / (AI_DELIVERY_STEPS.length - 1)) * 100}%`;
+      rail.innerHTML = AI_DELIVERY_STEPS.map((step, index) => {
+        const stateClass = states[step.key] || "idle";
+        return `
+          <div class="flow-step ${stateClass}">
+            <div class="flow-step-index">${index + 1}</div>
+            <div class="flow-step-label">${auth.escapeHtml(step.label)}</div>
+          </div>
+        `;
+      }).join("");
+      renderSupplementalContextSection();
+      renderAiDeliveryStepPanels();
+      updateRunButtonForFlow();
+      persistAiDeliveryState();
+      renderContinueRunBanner();
+    }
+
+    function renderSupplementalContextSection() {
+      const notesInput = document.getElementById("supplementalNotes");
+      const constraintsInput = document.getElementById("supplementalConstraints");
+      const suggestedFilesInput = document.getElementById("supplementalSuggestedFiles");
+      const validationHintsInput = document.getElementById("supplementalValidationHints");
+      const saveButton = document.getElementById("saveSupplementalContextButton");
+      const statusBox = document.getElementById("supplementalContextStatus");
+      const savedBox = document.getElementById("supplementalContextSaved");
+      const runHint = document.getElementById("supplementalContextRunHint");
+      if (!notesInput || !constraintsInput || !suggestedFilesInput || !validationHintsInput || !saveButton || !statusBox || !savedBox || !runHint) {
+        return;
+      }
+      notesInput.value = String(supplementalContextDraft.notes || "");
+      constraintsInput.value = Array.isArray(supplementalContextDraft.constraints) ? supplementalContextDraft.constraints.join("\n") : "";
+      suggestedFilesInput.value = Array.isArray(supplementalContextDraft.suggested_files) ? supplementalContextDraft.suggested_files.join("\n") : "";
+      validationHintsInput.value = Array.isArray(supplementalContextDraft.validation_hints) ? supplementalContextDraft.validation_hints.join("\n") : "";
+      saveButton.disabled = workflowRequestInFlight || draftPatchActionInFlight || !String(aiDeliveryState.runId || "").trim();
+      runHint.textContent = String(aiDeliveryState.runId || "").trim()
+        ? `Run ID: ${aiDeliveryState.runId}`
+        : "Save becomes available after the run is created.";
+      const saved = normalizeSupplementalContext(aiDeliveryState.supplementalContext);
+      if (!saved) {
+        savedBox.innerHTML = `<div class="supplemental-context-empty muted">No saved supplemental context yet.</div>`;
+        if (!statusBox.textContent) {
+          statusBox.textContent = "";
+        }
+        return;
+      }
+      savedBox.innerHTML = `
+        <div class="supplemental-context-display">
+          ${saved.notes ? `<div class="supplemental-context-block"><div class="supplemental-context-label">Notes</div><p>${auth.escapeHtml(saved.notes)}</p></div>` : ""}
+          ${saved.constraints.length ? `<div class="supplemental-context-block"><div class="supplemental-context-label">Constraints</div><ul>${saved.constraints.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+          ${saved.suggested_files.length ? `<div class="supplemental-context-block"><div class="supplemental-context-label">Suggested files</div><ul>${saved.suggested_files.map((item) => `<li><code>${auth.escapeHtml(item)}</code></li>`).join("")}</ul></div>` : ""}
+          ${saved.validation_hints.length ? `<div class="supplemental-context-block"><div class="supplemental-context-label">Validation hints</div><ul>${saved.validation_hints.map((item) => `<li>${auth.escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+        </div>
+      `;
+    }
+
+    async function saveSupplementalContext() {
+      const statusBox = document.getElementById("supplementalContextStatus");
+      supplementalContextDraft = cloneSupplementalContext(buildSupplementalContextFromInputs());
+      if (!String(aiDeliveryState.runId || "").trim()) {
+        if (statusBox) {
+          statusBox.textContent = "Create the run first, then save context.";
+        }
+        renderSupplementalContextSection();
+        return;
+      }
+      const payload = getSupplementalContextForRequest() || { notes: "", constraints: [], suggested_files: [], validation_hints: [] };
+      if (statusBox) {
+        statusBox.textContent = "Saving context...";
+      }
+      try {
+        const response = await auth.fetchJson(`/flow-runs/${encodeURIComponent(aiDeliveryState.runId)}/context`, {
+          method: "POST",
+          body: {
+            notes: payload.notes || "",
+            constraints: payload.constraints || [],
+            suggested_files: payload.suggested_files || [],
+            validation_hints: payload.validation_hints || [],
+          }
+        });
+        const run = response?.run || {};
+        hydrateAiDeliveryState({
+          runId: run?.workflow_state?.runId || aiDeliveryState.runId,
+          jiraTicket: run?.jira_ticket || aiDeliveryState.jiraTicket,
+          detectedRepo: run?.repo_id || aiDeliveryState.detectedRepo,
+          supplementalContext: run?.supplemental_context || run?.workflow_state?.supplementalContext || payload,
+        });
+        if (statusBox) {
+          statusBox.textContent = "Context saved.";
+        }
+      } catch (error) {
+        if (statusBox) {
+          statusBox.textContent = error.message;
+        }
+      } finally {
+        renderAiDeliveryFlowState();
+      }
+    }
+
+    function renderContinueRunBanner() {
+      const banner = document.getElementById("continueRunBanner");
+      const text = document.getElementById("continueRunText");
+      if (!banner || !text || !isUnifiedFlowMode()) {
+        return;
+      }
+      const hasUnfinishedRun = hasValidContinueState() && !aiDeliveryState.applyRecord;
+      banner.hidden = !hasUnfinishedRun;
+      if (hasUnfinishedRun) {
+        const repoText = aiDeliveryState.detectedRepo ? ` Repo: ${aiDeliveryState.detectedRepo}.` : "";
+        text.textContent = `Ticket ${aiDeliveryState.jiraTicket} збережено.${repoText} Поточний крок: ${getAiDeliveryCurrentStepLabel()}. ${getAiDeliveryNextActionLabel()}`;
+      }
+    }
+
+    async function continueAiDeliveryRun() {
+      if (workflowRequestInFlight || draftPatchActionInFlight) {
+        return;
+      }
+      renderAiDeliveryFlowState();
+      const states = getAiDeliveryStepStates();
+      const readyStepKey = getPrimaryActiveStepKey(states);
+      if (aiDeliveryState.applyRecord) {
+        document.getElementById("resultCard").hidden = false;
+        document.getElementById("resultCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (aiDeliveryState.draftResult && !aiDeliveryState.reviewRecord) {
+        document.getElementById("resultCard").hidden = false;
+        const panel = document.getElementById("draftPatchPanel");
+        if (panel) {
+          panel.hidden = false;
+          panel.open = true;
+        }
+        document.getElementById("resultCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (aiDeliveryState.reviewRecord?.decision === "approved" && aiDeliveryState.draftResult?.apply_ready) {
+        document.getElementById("resultCard").hidden = false;
+        document.getElementById("applyDraftPatchButton")?.focus();
+        document.getElementById("resultCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      const readyButton = document.querySelector(`[data-flow-step-action="${readyStepKey}"]`);
+      if (readyButton) {
+        readyButton.focus();
+        readyButton.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      document.getElementById("runWorkflowButton")?.focus();
+    }
+
     function renderFields() {
-      const configItem = workflowConfig[workflowType] || workflowConfig.analyze_task;
-      document.getElementById("workflowTitle").textContent = auth.t(configItem.titleKey);
-      document.getElementById("workflowDescription").textContent = auth.t(configItem.descriptionKey);
+      const configItem = workflowConfig[workflowType] || workflowConfig.ai_delivery_flow;
+      document.getElementById("workflowTitle").textContent = isUnifiedFlowMode() ? "TELEMART AI Delivery Flow" : auth.t(configItem.titleKey);
+      document.getElementById("workflowDescription").textContent = isUnifiedFlowMode()
+        ? "Побудова та безпечне застосування змін по Jira задачі."
+        : auth.t(configItem.descriptionKey);
+      document.getElementById("aiDeliveryFlowCard").hidden = !isUnifiedFlowMode();
       const container = document.getElementById("dynamicFields");
       container.innerHTML = "";
       if (configItem.autoDetectRepo) {
@@ -150,7 +1884,25 @@
         });
         container.appendChild(details);
       }
+      if (isUnifiedFlowMode() && aiDeliveryState.jiraTicket) {
+        const jiraInput = document.getElementById("jira_ticket");
+        if (jiraInput) {
+          jiraInput.value = aiDeliveryState.jiraTicket;
+        }
+      }
       workflowFieldsReady = true;
+      document.getElementById("resultCard").hidden = true;
+      if (isUnifiedFlowMode() && aiDeliveryState.draftResult && ensureDraftPatchContext()) {
+        document.getElementById("resultCard").hidden = false;
+        renderDraftPatchResult(aiDeliveryState.draftResult);
+      } else if (!isUnifiedFlowMode()) {
+        const payload = aiDeliveryState.planPayload || aiDeliveryState.analyzePayload;
+        if (payload) {
+          document.getElementById("resultCard").hidden = false;
+          renderResult(payload);
+        }
+      }
+      renderAiDeliveryFlowState();
       setWorkflowLoadingState(false);
     }
 
@@ -282,12 +2034,31 @@
       const button = document.getElementById("runWorkflowButton");
       const loadingPanel = document.getElementById("workflowLoadingPanel");
       const loadingVideo = document.getElementById("workflowLoadingVideo");
+      const loadingTitle = document.getElementById("workflowLoadingTitle");
+      const loadingText = document.getElementById("workflowLoadingText");
       form.setAttribute("aria-busy", isLoading ? "true" : "false");
-      loadingPanel.hidden = !isLoading;
+      if (isUnifiedFlowMode()) {
+        const flowCard = document.getElementById("aiDeliveryFlowCard");
+        const nextAction = document.getElementById("flowNextAction");
+        if (flowCard && nextAction && loadingPanel.parentElement !== flowCard) {
+          nextAction.insertAdjacentElement("afterend", loadingPanel);
+        }
+        loadingPanel.hidden = !isLoading;
+      } else {
+        loadingPanel.hidden = !isLoading;
+      }
       loadingPanel.setAttribute("aria-busy", isLoading ? "true" : "false");
       button.disabled = isLoading || !workflowFieldsReady;
       button.classList.toggle("is-loading", Boolean(isLoading));
-      button.textContent = isLoading ? "Виконується..." : "Запустити workflow";
+      button.textContent = isLoading ? "Виконується..." : (isUnifiedFlowMode() ? "Запустити flow" : "Запустити workflow");
+      if (loadingTitle) {
+        loadingTitle.textContent = isLoading ? `Виконується: ${getAiDeliveryCurrentStepLabel()}` : "Виконується...";
+      }
+      if (loadingText) {
+        loadingText.textContent = isLoading
+          ? getInlineRunningStepMessage(getPrimaryActiveStepKey(getAiDeliveryStepStates()))
+          : "Аналізую задачу та збираю сигнали з Jira і repo...";
+      }
       if (isLoading) {
         loadingVideo?.play?.().catch(() => {});
       } else {
@@ -509,46 +2280,59 @@
       const regressionMap = executionDetails && typeof executionDetails === "object" ? executionDetails.regression_map || {} : {};
       const regressionTargets = Array.isArray(regressionMap.targeted_stages) ? regressionMap.targeted_stages.filter(Boolean) : [];
       const supportedModes = Array.isArray(safe.apply_modes_supported) ? safe.apply_modes_supported.filter(Boolean) : [];
+      const preferredApplyMode = isUnifiedFlowMode() && supportedModes.includes("workspace_apply")
+        ? "workspace_apply"
+        : String(safe.apply_mode || "").trim();
       const modeOptions = [
         ...supportedModes.map((mode) => {
-          const label = mode === "local_apply" ? "Local apply" : mode === "dry_apply" ? "Dry apply" : mode;
+          const label = mode === "local_apply" ? "Local apply" : mode === "workspace_apply" ? "Workspace apply" : mode === "dry_apply" ? "Dry apply" : mode;
           return `<option value="${auth.escapeHtml(mode)}">${auth.escapeHtml(label)}</option>`;
         }),
         !supportedModes.includes("branch_create")
           ? `<option value="branch_create" disabled>Branch create (coming soon)</option>`
           : ""
       ].join("");
-      panel.hidden = false;
-      panel.open = true;
+      panel.hidden = isUnifiedFlowMode();
+      panel.open = !isUnifiedFlowMode();
       body.innerHTML = `
-        <p><strong>Repository:</strong> ${auth.escapeHtml(safe.repo_id || "-")}</p>
-        <p><strong>Status:</strong> ${safe.patch_generation_ready ? "Ready" : "Blocked"}</p>
-        <p><strong>Review state:</strong> ${auth.escapeHtml(reviewState)}</p>
-        <p><strong>Validation status:</strong> ${auth.escapeHtml(String(safe.validation_status || "pending") || "pending")}</p>
-        <p><strong>Validation summary:</strong> ${auth.escapeHtml(String(safe.validation_summary || "-") || "-")}</p>
-        ${(baselineValidation.restore || baselineValidation.build || baselineValidation.test) ? `<div><strong>Baseline vs patched:</strong><ul>
-          <li>Restore: ${auth.escapeHtml(String(baselineValidation.restore || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.restore || "unknown"))}</li>
-          <li>Build: ${auth.escapeHtml(String(baselineValidation.build || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.build || "unknown"))}</li>
-          <li>Test: ${auth.escapeHtml(String(baselineValidation.test || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.test || "unknown"))}</li>
-        </ul></div>` : ""}
-        ${regressionTargets.length ? `<div><strong>Repair targets:</strong><ul>${regressionTargets.map((item) => `<li>${auth.escapeHtml(String(item || "-"))}</li>`).join("")}</ul></div>` : `<p><strong>Repair targets:</strong> none</p>`}
-        <p><strong>Summary:</strong> ${auth.escapeHtml(safe.patch_summary || "-")}</p>
-        <p><strong>Confidence / Novelty:</strong> ${Number(safe.confidence_score || 0)} / ${Number(safe.novelty_score || 0)}</p>
-        <p><strong>Diff hash:</strong> <code>${auth.escapeHtml(safe.diff_hash || "-")}</code></p>
-        ${Array.isArray(safe.patch_generation_blockers) && safe.patch_generation_blockers.length ? `<div><strong>Blockers:</strong><ul>${safe.patch_generation_blockers.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : ""}
-        ${blockers.length ? `<div><strong>Apply blockers:</strong><ul>${blockers.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : "<p><strong>Apply blockers:</strong> none</p>"}
-        ${Array.isArray(safe.repair_attempts) && safe.repair_attempts.length ? `<div><strong>Repair attempts:</strong><ul>${safe.repair_attempts.map((item) => `<li>Attempt ${Number(item.attempt_index || 0)}: ${auth.escapeHtml(String(item.status || "-"))}${item.retry_strategy ? `, strategy ${auth.escapeHtml(String(item.retry_strategy))}` : ""}${item.error_summary ? `<br><span class="muted">${auth.escapeHtml(String(item.error_summary))}</span>` : ""}</li>`).join("")}</ul></div>` : ""}
-        ${Array.isArray(safe.file_rationales) && safe.file_rationales.length ? `<div><strong>File rationales:</strong><ul>${safe.file_rationales.map((item) => `<li><strong>${auth.escapeHtml(item.file || "-")}</strong><br><span>${auth.escapeHtml(item.why || "-")}</span><br><span class="muted">${auth.escapeHtml(item.expected_effect || "-")}</span></li>`).join("")}</ul></div>` : ""}
-        ${Array.isArray(safe.validation_plan) && safe.validation_plan.length ? `<div><strong>Validation intent:</strong><ul>${safe.validation_plan.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : ""}
-        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 16px 0;">
+        <section class="flow-detail-section">
+          <h3>What Changed</h3>
+          <p><strong>Repository:</strong> ${auth.escapeHtml(safe.repo_id || "-")}</p>
+          <p><strong>Status:</strong> ${safe.patch_generation_ready ? "Ready" : "Blocked"}</p>
+          <p><strong>Summary:</strong> ${auth.escapeHtml(safe.patch_summary || "-")}</p>
+          <p><strong>Confidence / Novelty:</strong> ${Number(safe.confidence_score || 0)} / ${Number(safe.novelty_score || 0)}</p>
+          <p><strong>Diff hash:</strong> <code>${auth.escapeHtml(safe.diff_hash || "-")}</code></p>
+          ${Array.isArray(safe.file_rationales) && safe.file_rationales.length ? `<div><strong>Why:</strong><ul>${safe.file_rationales.map((item) => `<li><strong>${auth.escapeHtml(item.file || "-")}</strong><br><span>${auth.escapeHtml(item.why || "-")}</span><br><span class="muted">${auth.escapeHtml(item.expected_effect || "-")}</span></li>`).join("")}</ul></div>` : ""}
+        </section>
+        <section class="flow-detail-section">
+          <h3>Is It Safe</h3>
+          <p><strong>Review state:</strong> ${auth.escapeHtml(reviewState)}</p>
+          <p><strong>Validation status:</strong> ${auth.escapeHtml(String(safe.validation_status || "pending") || "pending")}</p>
+          <p><strong>Validation summary:</strong> ${auth.escapeHtml(String(safe.validation_summary || "-") || "-")}</p>
+          ${(baselineValidation.restore || baselineValidation.build || baselineValidation.test) ? `<div><strong>Baseline vs patched:</strong><ul>
+            <li>Restore: ${auth.escapeHtml(String(baselineValidation.restore || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.restore || "unknown"))}</li>
+            <li>Build: ${auth.escapeHtml(String(baselineValidation.build || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.build || "unknown"))}</li>
+            <li>Test: ${auth.escapeHtml(String(baselineValidation.test || "unknown"))} -> ${auth.escapeHtml(String(patchedValidation.test || "unknown"))}</li>
+          </ul></div>` : ""}
+          ${regressionTargets.length ? `<div><strong>Regression targets:</strong><ul>${regressionTargets.map((item) => `<li>${auth.escapeHtml(String(item || "-"))}</li>`).join("")}</ul></div>` : `<p><strong>Regression targets:</strong> none</p>`}
+          ${Array.isArray(safe.validation_plan) && safe.validation_plan.length ? `<div><strong>Validation intent:</strong><ul>${safe.validation_plan.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : ""}
+        </section>
+        <section class="flow-detail-section">
+          <h3>What Happens Next</h3>
+          ${Array.isArray(safe.patch_generation_blockers) && safe.patch_generation_blockers.length ? `<div><strong>Draft blockers:</strong><ul>${safe.patch_generation_blockers.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : ""}
+          ${blockers.length ? `<div><strong>Apply blockers:</strong><ul>${blockers.map((item) => `<li>${auth.escapeHtml(item || "-")}</li>`).join("")}</ul></div>` : "<p><strong>Apply blockers:</strong> none</p>"}
+          ${Array.isArray(safe.repair_attempts) && safe.repair_attempts.length ? `<div><strong>Repair attempts:</strong><ul>${safe.repair_attempts.map((item) => `<li>Attempt ${Number(item.attempt_index || 0)}: ${auth.escapeHtml(String(item.status || "-"))}${item.retry_strategy ? `, strategy ${auth.escapeHtml(String(item.retry_strategy))}` : ""}${item.error_summary ? `<br><span class="muted">${auth.escapeHtml(String(item.error_summary))}</span>` : ""}</li>`).join("")}</ul></div>` : ""}
+        </section>
+        ${isUnifiedFlowMode() ? "" : `
+        <div class="flow-action-bar">
           <button id="approveDraftPatchButton" type="button" ${draftPatchActionInFlight ? "disabled" : ""}>Approve</button>
-          <button id="rejectDraftPatchButton" type="button" ${draftPatchActionInFlight ? "disabled" : ""}>Reject</button>
-          <label style="display:flex; flex-direction:column; gap:4px; min-width:180px;">
+          <button id="rejectDraftPatchButton" class="secondary" type="button" ${draftPatchActionInFlight ? "disabled" : ""}>Reject</button>
+          <label class="flow-apply-mode">
             <span>Apply mode</span>
             <select id="draftPatchApplyMode">${modeOptions}</select>
           </label>
-          <button id="applyDraftPatchButton" type="button" ${canApply ? "" : "disabled"}>Apply</button>
-        </div>
+          <button id="applyDraftPatchButton" class="primary" type="button" ${canApply ? "" : "disabled"}>Apply</button>
+        </div>`}
         <div id="draftPatchStatus" class="muted">${auth.escapeHtml(String(safe.applied ? "Draft patch applied." : safe.review_state === "approved" && safe.validated ? "Approved, validated, and ready for apply." : safe.review_state === "approved" ? "Approved, but validation/repair must complete before apply." : safe.review_state === "rejected" ? "Rejected. Apply remains blocked." : "Review required before apply."))}</div>
         <pre>${auth.escapeHtml(safe.generated_diff || "")}</pre>
       `;
@@ -559,82 +2343,274 @@
       return currentDraftPatchContext?.seedContext || {};
     }
 
+    function getDraftPatchStatusTargets(kind) {
+      const unifiedId = kind === "apply" ? "flowApplyStatus" : "flowReviewStatus";
+      const statusBox = document.getElementById(unifiedId) || document.getElementById("draftPatchStatus");
+      const actionStatus = document.getElementById("actionStatus");
+      return { statusBox, actionStatus };
+    }
+
+    async function runUnifiedFlowNextStep() {
+      const jiraTicket = String(document.getElementById("jira_ticket")?.value || "").trim();
+      if (!jiraTicket) {
+        document.getElementById("errorBox").textContent = `${auth.t("workflow.field.jira_ticket")}: ${auth.t("common.empty")}`;
+        document.getElementById("jira_ticket")?.focus();
+        return;
+      }
+      aiDeliveryState.jiraTicket = jiraTicket;
+      workflowRequestInFlight = true;
+      setWorkflowLoadingState(true);
+      document.getElementById("errorBox").textContent = "";
+      try {
+        if (!aiDeliveryState.analyzePayload) {
+          const supplementalContext = getSupplementalContextForRequest();
+          const payload = await auth.fetchJson("/workflows/analyze-task", {
+            method: "POST",
+            body: { jira_ticket: jiraTicket, repo_id: "", run_id: aiDeliveryState.runId || "", supplemental_context: supplementalContext }
+          });
+          hydrateAiDeliveryState({
+            runId: String(payload?.delivery_run_id || aiDeliveryState.runId || "").trim(),
+            jiraTicket,
+            supplementalContext: payload?.result?.supplemental_context || supplementalContext || null,
+            analyzePayload: payload,
+          });
+          renderResult(payload);
+          return;
+        }
+        if (!aiDeliveryState.planPayload) {
+          const analyzeResult = getCanonicalAnalyzeResult();
+          const supplementalContext = getSupplementalContextForRequest();
+          const payload = await auth.fetchJson("/workflows/implementation-plan", {
+            method: "POST",
+            body: {
+              jira_ticket: jiraTicket,
+              repo_id: getCanonicalDetectedRepo(),
+              run_id: aiDeliveryState.runId || "",
+              seed_context: buildFlowSeedContextFromAnalyzeResult(analyzeResult),
+              supplemental_context: supplementalContext,
+            }
+          });
+          hydrateAiDeliveryState({
+            runId: String(payload?.delivery_run_id || aiDeliveryState.runId || "").trim(),
+            jiraTicket,
+            supplementalContext: payload?.result?.supplemental_context || supplementalContext || null,
+            planPayload: payload,
+          });
+          renderResult(payload);
+          return;
+        }
+        if (!aiDeliveryState.draftResult) {
+          const analyzeResult = getCanonicalAnalyzeResult();
+          const seedContext = buildFlowSeedContextFromAnalyzeResult(analyzeResult);
+          const supplementalContext = getSupplementalContextForRequest();
+          const patchPayload = await auth.fetchJson("/workflows/generate-draft-patch", {
+            method: "POST",
+            body: {
+              jira_ticket: jiraTicket,
+              repo_id: getCanonicalDetectedRepo(),
+              run_id: aiDeliveryState.runId || "",
+              seed_context: seedContext,
+              supplemental_context: supplementalContext,
+            }
+          });
+          const nextDraftPatchContext = {
+            jiraTicket,
+            repoId: getCanonicalDetectedRepo(),
+            seedContext,
+            result: patchPayload?.result || {}
+          };
+          hydrateAiDeliveryState({
+            runId: String(patchPayload?.delivery_run_id || aiDeliveryState.runId || "").trim(),
+            jiraTicket,
+            supplementalContext: patchPayload?.result?.supplemental_context || supplementalContext || null,
+            draftResult: patchPayload?.result || null,
+            currentDraftPatchContext: nextDraftPatchContext,
+          });
+          renderDraftPatchResult(patchPayload?.result || {});
+          renderResult(aiDeliveryState.analyzePayload);
+          return;
+        }
+        if (aiDeliveryState.reviewRecord?.decision === "approved" && aiDeliveryState.draftResult?.apply_ready && !aiDeliveryState.applyRecord) {
+          const supplementalContext = getSupplementalContextForRequest();
+          const applyPayload = await auth.fetchJson("/workflows/apply-draft-patch", {
+            method: "POST",
+            body: {
+              jira_ticket: jiraTicket,
+              repo_id: aiDeliveryState.detectedRepo,
+              run_id: aiDeliveryState.runId || "",
+              review_id: String(aiDeliveryState.draftResult?.review_id || "").trim(),
+              apply_mode: "workspace_apply",
+              seed_context: draftPatchSeedContext(),
+              supplemental_context: supplementalContext,
+            }
+          });
+          hydrateAiDeliveryState({
+            runId: String(applyPayload?.delivery_run_id || aiDeliveryState.runId || "").trim(),
+            supplementalContext: applyPayload?.result?.supplemental_context || supplementalContext || null,
+            applyRecord: applyPayload?.apply || null,
+            draftResult: applyPayload?.result || aiDeliveryState.draftResult,
+          });
+          renderDraftPatchResult(aiDeliveryState.draftResult || {});
+          renderResult(aiDeliveryState.analyzePayload);
+        }
+      } catch (error) {
+        document.getElementById("errorBox").textContent = error.message;
+      } finally {
+        workflowRequestInFlight = false;
+        setWorkflowLoadingState(false);
+        renderAiDeliveryFlowState();
+      }
+    }
+
+    function setDraftPatchActionBusy(isBusy, result) {
+      draftPatchActionInFlight = Boolean(isBusy);
+      const approveButton = document.getElementById("approveDraftPatchButton");
+      const rejectButton = document.getElementById("rejectDraftPatchButton");
+      const applyButton = document.getElementById("applyDraftPatchButton");
+      const applyMode = document.getElementById("draftPatchApplyMode");
+      if (approveButton) approveButton.disabled = isBusy;
+      if (rejectButton) rejectButton.disabled = isBusy;
+      if (applyMode) applyMode.disabled = isBusy;
+      if (applyButton) {
+        applyButton.disabled = isBusy || !(Boolean(result?.apply_ready) && String(result?.review_state || "").trim() === "approved");
+      }
+      renderAiDeliveryFlowState();
+    }
+
+    async function submitDraftPatchReviewDecision(decision) {
+      const { statusBox, actionStatus } = getDraftPatchStatusTargets("review");
+      if (!statusBox || !actionStatus || !ensureDraftPatchContext()) {
+        const message = "Не вдалося відновити контекст draft patch для review-дії.";
+        document.getElementById("errorBox").textContent = message;
+        if (statusBox) {
+          statusBox.textContent = message;
+        }
+        if (actionStatus) {
+          actionStatus.textContent = message;
+        }
+        document.getElementById("resultCard").hidden = false;
+        return;
+      }
+      inlineRunningMessage = decision === "approved"
+        ? "Зберігаю approval та запускаю validation / execution."
+        : "Зберігаю reject-рішення для draft patch.";
+      setDraftPatchActionBusy(true, currentDraftPatchContext.result);
+      statusBox.textContent = decision === "approved" ? "Recording approval..." : "Recording rejection...";
+      actionStatus.textContent = statusBox.textContent;
+      try {
+        const payload = await auth.fetchJson("/workflows/review-draft-patch", {
+          method: "POST",
+          body: {
+            jira_ticket: currentDraftPatchContext.jiraTicket,
+            repo_id: currentDraftPatchContext.repoId,
+            run_id: aiDeliveryState.runId || "",
+            decision,
+            seed_context: draftPatchSeedContext(),
+            supplemental_context: getSupplementalContextForRequest(),
+          }
+        });
+        currentDraftPatchContext.result = payload?.result || {};
+        hydrateAiDeliveryState({
+          runId: String(payload?.delivery_run_id || aiDeliveryState.runId || "").trim(),
+          reviewRecord: payload?.review || null,
+          executionRecord: payload?.execution || null,
+          draftResult: payload?.result || currentDraftPatchContext.result,
+          detectedRepo: currentDraftPatchContext.repoId || aiDeliveryState.detectedRepo,
+          supplementalContext: payload?.result?.supplemental_context || getSupplementalContextForRequest() || null,
+          currentDraftPatchContext,
+        });
+        renderDraftPatchResult(currentDraftPatchContext.result);
+        statusBox.textContent = decision === "approved" ? "Draft patch approved." : "Draft patch rejected.";
+        actionStatus.textContent = statusBox.textContent;
+      } catch (error) {
+        statusBox.textContent = error.message;
+        actionStatus.textContent = error.message;
+      } finally {
+        inlineRunningMessage = "";
+        setDraftPatchActionBusy(false, currentDraftPatchContext?.result || aiDeliveryState.draftResult || {});
+      }
+    }
+
+    async function submitDraftPatchApply(selectedMode) {
+      const { statusBox, actionStatus } = getDraftPatchStatusTargets("apply");
+      if (!statusBox || !actionStatus || !ensureDraftPatchContext()) {
+        const message = "Не вдалося відновити контекст draft patch для apply-дії.";
+        document.getElementById("errorBox").textContent = message;
+        if (statusBox) {
+          statusBox.textContent = message;
+        }
+        if (actionStatus) {
+          actionStatus.textContent = message;
+        }
+        document.getElementById("resultCard").hidden = false;
+        return;
+      }
+      const confirmationText = selectedMode === "local_apply"
+        ? "Apply this approved draft patch to the local repository and create a commit?"
+        : selectedMode === "workspace_apply"
+          ? "Apply this approved draft patch in a clean workspace and create a bounded commit there?"
+          : "Run a dry apply for this approved draft patch?";
+      if (!window.confirm(confirmationText)) {
+        return;
+      }
+      inlineRunningMessage = selectedMode === "workspace_apply"
+        ? "Виконую workspace_apply у clean workspace."
+        : selectedMode === "local_apply"
+          ? "Застосовую approved draft patch у локальний repo."
+          : "Запускаю dry_apply для approved draft patch.";
+      setDraftPatchActionBusy(true, currentDraftPatchContext.result);
+      statusBox.textContent = selectedMode === "local_apply" ? "Applying approved draft patch..." : selectedMode === "workspace_apply" ? "Applying approved draft patch in clean workspace..." : "Running dry apply...";
+      actionStatus.textContent = statusBox.textContent;
+      try {
+        const payload = await auth.fetchJson("/workflows/apply-draft-patch", {
+          method: "POST",
+          body: {
+            jira_ticket: currentDraftPatchContext.jiraTicket,
+            repo_id: currentDraftPatchContext.repoId,
+            run_id: aiDeliveryState.runId || "",
+            review_id: String(currentDraftPatchContext.result?.review_id || "").trim(),
+            apply_mode: selectedMode,
+            seed_context: draftPatchSeedContext(),
+            supplemental_context: getSupplementalContextForRequest(),
+          }
+        });
+        currentDraftPatchContext.result = payload?.result || {};
+        hydrateAiDeliveryState({
+          runId: String(payload?.delivery_run_id || aiDeliveryState.runId || "").trim(),
+          supplementalContext: payload?.result?.supplemental_context || getSupplementalContextForRequest() || null,
+          applyRecord: payload?.apply || null,
+          draftResult: payload?.result || currentDraftPatchContext.result,
+          currentDraftPatchContext,
+        });
+        renderDraftPatchResult(currentDraftPatchContext.result);
+        statusBox.textContent = selectedMode === "local_apply"
+          ? "Approved draft patch applied and committed."
+          : selectedMode === "workspace_apply"
+            ? "Approved draft patch applied in clean workspace and committed."
+            : "Dry apply completed for the approved draft patch.";
+        actionStatus.textContent = statusBox.textContent;
+      } catch (error) {
+        statusBox.textContent = error.message;
+        actionStatus.textContent = error.message;
+      } finally {
+        inlineRunningMessage = "";
+        setDraftPatchActionBusy(false, currentDraftPatchContext?.result || aiDeliveryState.draftResult || {});
+      }
+    }
+
     function attachDraftPatchReviewControls(result) {
       const approveButton = document.getElementById("approveDraftPatchButton");
       const rejectButton = document.getElementById("rejectDraftPatchButton");
       const applyButton = document.getElementById("applyDraftPatchButton");
       const applyMode = document.getElementById("draftPatchApplyMode");
-      const statusBox = document.getElementById("draftPatchStatus");
-      const actionStatus = document.getElementById("actionStatus");
-      if (!approveButton || !rejectButton || !applyButton || !applyMode || !statusBox || !currentDraftPatchContext) {
+      if (!approveButton || !rejectButton || !applyButton || !applyMode) {
         return;
       }
-      applyMode.value = String(result?.apply_mode || "").trim() || (applyMode.querySelector("option")?.value || "dry_apply");
-      const setBusy = (isBusy) => {
-        draftPatchActionInFlight = Boolean(isBusy);
-        approveButton.disabled = isBusy;
-        rejectButton.disabled = isBusy;
-        applyMode.disabled = isBusy;
-        applyButton.disabled = isBusy || !(Boolean(result?.apply_ready) && String(result?.review_state || "").trim() === "approved");
-      };
-      const submitReview = async (decision) => {
-        setBusy(true);
-        statusBox.textContent = decision === "approved" ? "Recording approval..." : "Recording rejection...";
-        actionStatus.textContent = statusBox.textContent;
-        try {
-          const payload = await auth.fetchJson("/workflows/review-draft-patch", {
-            method: "POST",
-            body: {
-              jira_ticket: currentDraftPatchContext.jiraTicket,
-              repo_id: currentDraftPatchContext.repoId,
-              decision,
-              seed_context: draftPatchSeedContext(),
-            }
-          });
-          currentDraftPatchContext.result = payload?.result || {};
-          renderDraftPatchResult(currentDraftPatchContext.result);
-          actionStatus.textContent = decision === "approved" ? "Draft patch approved." : "Draft patch rejected.";
-        } catch (error) {
-          statusBox.textContent = error.message;
-          actionStatus.textContent = error.message;
-          setBusy(false);
-        }
-      };
-      approveButton.onclick = async () => submitReview("approved");
-      rejectButton.onclick = async () => submitReview("rejected");
-      applyButton.onclick = async () => {
-        const selectedMode = String(applyMode.value || "dry_apply").trim() || "dry_apply";
-        const confirmationText = selectedMode === "local_apply"
-          ? "Apply this approved draft patch to the local repository and create a commit?"
-          : "Run a dry apply for this approved draft patch?";
-        if (!window.confirm(confirmationText)) {
-          return;
-        }
-        setBusy(true);
-        statusBox.textContent = selectedMode === "local_apply" ? "Applying approved draft patch..." : "Running dry apply...";
-        actionStatus.textContent = statusBox.textContent;
-        try {
-          const payload = await auth.fetchJson("/workflows/apply-draft-patch", {
-            method: "POST",
-            body: {
-              jira_ticket: currentDraftPatchContext.jiraTicket,
-              repo_id: currentDraftPatchContext.repoId,
-              review_id: String(currentDraftPatchContext.result?.review_id || "").trim(),
-              apply_mode: selectedMode,
-              seed_context: draftPatchSeedContext(),
-            }
-          });
-          currentDraftPatchContext.result = payload?.result || {};
-          renderDraftPatchResult(currentDraftPatchContext.result);
-          actionStatus.textContent = selectedMode === "local_apply"
-            ? "Approved draft patch applied and committed."
-            : "Dry apply completed for the approved draft patch.";
-        } catch (error) {
-          statusBox.textContent = error.message;
-          actionStatus.textContent = error.message;
-          setBusy(false);
-        }
-      };
+      const preferredApplyMode = isUnifiedFlowMode() && Array.from(applyMode.options).some((option) => option.value === "workspace_apply")
+        ? "workspace_apply"
+        : String(result?.apply_mode || "").trim();
+      applyMode.value = preferredApplyMode || (applyMode.querySelector("option")?.value || "dry_apply");
+      setDraftPatchActionBusy(false, result);
     }
 
     function configurePromoteToImplementation(payload) {
@@ -643,7 +2619,7 @@
       button.hidden = true;
       button.disabled = false;
       button.onclick = null;
-      if (currentRenderedWorkflow !== "analyze_task") {
+      if (currentRenderedWorkflow !== "analyze_task" || isUnifiedFlowMode()) {
         return;
       }
       const result = payload?.result || {};
@@ -705,7 +2681,7 @@
       draftPanel.hidden = true;
       draftPanel.open = false;
       draftBody.textContent = "";
-      if (currentRenderedWorkflow !== "analyze_task") {
+      if (currentRenderedWorkflow !== "analyze_task" || isUnifiedFlowMode()) {
         return;
       }
       const result = payload?.result || {};
@@ -811,11 +2787,15 @@
     }
 
     function renderResult(payload) {
+      currentFlowPayload = payload;
       currentRenderedWorkflow = String(payload?.workflow || workflowType || "analyze_task");
       const result = payload?.result || {};
       const technicalRun = result.technical_run || {};
       const resultCard = document.getElementById("resultCard");
-      resultCard.hidden = false;
+      const shouldShowResultCard = !isUnifiedFlowMode()
+        || Boolean(aiDeliveryState.draftResult)
+        || currentRenderedWorkflow === "pre_review";
+      resultCard.hidden = !shouldShowResultCard;
       const summaryBox = document.getElementById("resultSummary");
       const bodyBox = document.getElementById("resultBody");
       const technicalRunLink = document.getElementById("technicalRunLink");
@@ -919,9 +2899,17 @@
       configureFixAndRetry(result, technicalRun);
       configurePromoteToImplementation(payload);
       configureGenerateDraftPatch(payload);
+      if (isUnifiedFlowMode()) {
+        hydrateAiDeliveryState({ detectedRepo: detectRepoFromPayload(payload, getCanonicalDetectedRepo()) });
+        renderAiDeliveryFlowState();
+      }
     }
 
     async function submitWorkflow() {
+      if (isUnifiedFlowMode()) {
+        await runUnifiedFlowNextStep();
+        return;
+      }
       if (workflowRequestInFlight) {
         return;
       }
@@ -945,6 +2933,12 @@
       }
       document.getElementById("errorBox").textContent = "";
       currentDraftPatchContext = null;
+      aiDeliveryState.analyzePayload = null;
+      aiDeliveryState.planPayload = null;
+      aiDeliveryState.draftResult = null;
+      aiDeliveryState.reviewRecord = null;
+      aiDeliveryState.executionRecord = null;
+      aiDeliveryState.applyRecord = null;
       draftPatchActionInFlight = false;
       workflowRequestInFlight = true;
       setWorkflowLoadingState(true);
@@ -964,16 +2958,108 @@
       await submitWorkflow();
     });
     document.getElementById("runWorkflowButton").addEventListener("click", submitWorkflow);
+    document.getElementById("saveSupplementalContextButton")?.addEventListener("click", saveSupplementalContext);
+    ["supplementalNotes", "supplementalConstraints", "supplementalSuggestedFiles", "supplementalValidationHints"].forEach((id) => {
+      document.getElementById(id)?.addEventListener("input", () => {
+        supplementalContextDraft = cloneSupplementalContext(buildSupplementalContextFromInputs());
+      });
+    });
+    document.addEventListener("click", async (event) => {
+      const toggleButton = event.target.closest("[data-flow-step-toggle]");
+      if (toggleButton) {
+        event.preventDefault();
+        const stepKey = String(toggleButton.getAttribute("data-flow-step-toggle") || "").trim();
+        if (stepKey) {
+          const states = getAiDeliveryStepStates();
+          setFlowStepExpanded(stepKey, !isFlowStepExpanded(stepKey, states[stepKey] || "idle"));
+        }
+        return;
+      }
+      const stepButton = event.target.closest("[data-flow-step-action]");
+      if (stepButton) {
+        if (stepButton.disabled || workflowRequestInFlight || draftPatchActionInFlight) {
+          return;
+        }
+        const action = stepButton.getAttribute("data-flow-step-action");
+        if (action === "review-approve") {
+          await submitDraftPatchReviewDecision("approved");
+          return;
+        }
+        if (action === "review-reject") {
+          await submitDraftPatchReviewDecision("rejected");
+          return;
+        }
+        if (action === "apply") {
+          const selectedMode = String(document.getElementById("flowStepApplyMode")?.value || document.getElementById("draftPatchApplyMode")?.value || "dry_apply").trim() || "dry_apply";
+          await submitDraftPatchApply(selectedMode);
+          return;
+        }
+        if (action === "apply-retry") {
+          const selectedMode = String(document.getElementById("flowStepApplyMode")?.value || document.getElementById("draftPatchApplyMode")?.value || "dry_apply").trim() || "dry_apply";
+          await submitDraftPatchApply(selectedMode);
+          return;
+        }
+        if (action === "back-to-draft") {
+          setFlowStepExpanded("draft", true);
+          setFlowStepExpanded("apply", false);
+          document.querySelector("[data-flow-step-toggle=\"draft\"]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        await runUnifiedFlowNextStep();
+        return;
+      }
+      const approveButton = event.target.closest("#approveDraftPatchButton");
+      if (approveButton) {
+        event.preventDefault();
+        if (!approveButton.disabled) {
+          await submitDraftPatchReviewDecision("approved");
+        }
+        return;
+      }
+      const rejectButton = event.target.closest("#rejectDraftPatchButton");
+      if (rejectButton) {
+        event.preventDefault();
+        if (!rejectButton.disabled) {
+          await submitDraftPatchReviewDecision("rejected");
+        }
+        return;
+      }
+      const applyButton = event.target.closest("#applyDraftPatchButton");
+      if (applyButton) {
+        event.preventDefault();
+        if (!applyButton.disabled) {
+          const selectedMode = String(document.getElementById("draftPatchApplyMode")?.value || "dry_apply").trim() || "dry_apply";
+          await submitDraftPatchApply(selectedMode);
+        }
+      }
+    });
+    document.getElementById("continueRunButton")?.addEventListener("click", async () => {
+      await continueAiDeliveryRun();
+    });
+    document.getElementById("discardRunButton")?.addEventListener("click", () => {
+      resetAiDeliveryState();
+      renderFields();
+      document.getElementById("resultCard").hidden = true;
+      document.getElementById("errorBox").textContent = "";
+    });
 
-    auth.requireLogin({ redirectTo: "/ui/login.html" }).then((me) => {
+    Promise.all([
+      auth.i18nReady(),
+      auth.requireLogin({ redirectTo: "/ui/login.html" })
+    ]).then(async ([, me]) => {
       if (!me) return;
+      loadAiDeliveryUiState();
+      const requestedRunId = getRequestedFlowRunId();
+      const restoredFromServer = requestedRunId ? await restoreAiDeliveryStateFromRunId(requestedRunId) : false;
+      if (!restoredFromServer) {
+        restoreAiDeliveryState();
+      }
       renderFields();
       document.getElementById("userBox").textContent = auth.t("index.signed_in_as", {
         name: me.user.display_name || me.user.username || "-"
       });
     });
     document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
-    auth.i18nReady().then(renderFields);
   </script>
 </body>
 </html>

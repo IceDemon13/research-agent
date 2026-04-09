@@ -66,6 +66,33 @@ def _gitnexus_repo_path(repo_meta: RepoMetadata, repo_settings: RepoIntelligence
     return str(PurePosixPath(normalized_repo_root).joinpath(relative_posix))
 
 
+def _is_runtime_temporary_repo(repo_meta: RepoMetadata | None) -> bool:
+    if repo_meta is None:
+        return False
+    workspace_creation_mode = _safe_text(getattr(repo_meta, "workspace_creation_mode", "")).lower()
+    normalized_path = _normalize_repo_value(
+        getattr(repo_meta, "local_path", "")
+        or getattr(repo_meta, "resolved_local_path", "")
+        or getattr(repo_meta, "root_path", "")
+    )
+    if workspace_creation_mode in {
+        "copytree_ignore_dotgit",
+        "git_clone_no_hardlinks",
+        "docker_compose_cp_from_container",
+        "native_local_path",
+        "unresolved_local_path",
+    }:
+        return True
+    return any(
+        marker in normalized_path
+        for marker in (
+            "/artifacts/temp-workspaces/",
+            "/artifacts/host-validation-runner/",
+            "/artifacts/test-temp/",
+        )
+    )
+
+
 def _extract_embedded_json_payload(value: object) -> Any | None:
     text = _safe_text(value)
     if not text:
@@ -140,8 +167,14 @@ class GitNexusIndexService:
         normalized_repo_root = normalized_repo_root.rstrip("/")
         return normalized_translated_path == normalized_repo_root or normalized_translated_path.startswith(normalized_repo_root + "/")
 
+    @staticmethod
+    def _is_runtime_temporary_repo(repo_meta: RepoMetadata | None) -> bool:
+        return _is_runtime_temporary_repo(repo_meta)
+
     def is_enabled_for_repo(self, repo_meta: RepoMetadata | None, *, allow_unlisted: bool = False) -> bool:
         if repo_meta is None or not bool(self._repo_settings.gitnexus_enabled):
+            return False
+        if _is_runtime_temporary_repo(repo_meta):
             return False
         allowlist = {
             str(item or "").strip().lower()
@@ -161,6 +194,14 @@ class GitNexusIndexService:
         return bool(visibility_debug.get("visible", False))
 
     def analyze_repo(self, repo_meta: RepoMetadata, force: bool = True, *, allow_unlisted: bool = False) -> dict[str, Any]:
+        if _is_runtime_temporary_repo(repo_meta):
+            return {
+                "provider": "native",
+                "success": False,
+                "gitnexus_index_status": "disabled",
+                "gitnexus_index_error": "GitNexus indexing is disabled for temporary runtime copies.",
+                "gitnexus_indexed_at": "",
+            }
         if not self.is_enabled_for_repo(repo_meta, allow_unlisted=allow_unlisted):
             return {
                 "provider": "native",

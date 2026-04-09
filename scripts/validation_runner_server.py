@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -16,16 +17,20 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from services.storage_maintenance_service import PRUNABLE_RUNTIME_DIR_NAMES, write_runtime_workspace_metadata
 
 ALLOWED_ACTIONS = {"build", "test", "restore"}
 FORBIDDEN_TOKENS = {";", "&&", "||", "|", ">", "<", "$(", "`"}
 DEFAULT_PORT = int(os.environ.get("VALIDATION_RUNNER_PORT", "8091") or "8091")
+DEFAULT_HOST = str(os.environ.get("VALIDATION_RUNNER_HOST", "0.0.0.0") or "0.0.0.0").strip() or "0.0.0.0"
+DEFAULT_AUTH_TOKEN = str(os.environ.get("VALIDATION_RUNNER_AUTH_TOKEN", "") or "").strip()
 DEFAULT_ALLOWED_ROOTS = [
     item.strip().rstrip("/")
     for item in os.environ.get("VALIDATION_RUNNER_ALLOWED_ROOTS", "/app/artifacts/temp-workspaces,/repos").split(",")
     if item.strip()
 ]
 DEFAULT_OUTPUT_MAX_CHARS = max(0, int(os.environ.get("VALIDATION_RUNNER_OUTPUT_MAX_CHARS", "12000") or "12000"))
+DEFAULT_MAX_TIMEOUT_SECONDS = max(1, int(os.environ.get("VALIDATION_RUNNER_MAX_TIMEOUT_SECONDS", "1800") or "1800"))
 PRIVATE_FEED_MARKERS = (
     "nuget.telemart.ua",
     "telemart.ua",
@@ -96,6 +101,33 @@ def _log_validate_event(event: str, **fields: object) -> None:
             print(str(payload), flush=True)
         except Exception:
             return
+
+
+def _capabilities_payload() -> dict[str, object]:
+    return {
+        "ok": True,
+        "runner_type": "http_dotnet_sdk",
+        "host": DEFAULT_HOST,
+        "port": DEFAULT_PORT,
+        "allowed_roots": list(DEFAULT_ALLOWED_ROOTS),
+        "allowed_actions": sorted(ALLOWED_ACTIONS),
+        "auth_enabled": bool(DEFAULT_AUTH_TOKEN),
+        "max_timeout_seconds": int(DEFAULT_MAX_TIMEOUT_SECONDS),
+        "environment_summary": _runner_environment_summary(),
+        "supports": {
+            "restore": True,
+            "build": True,
+            "test": True,
+            "windows_targeting": _windows_desktop_runtime_present(_runner_environment_summary()),
+        },
+    }
+
+
+def _extract_auth_token(headers: object) -> str:
+    auth_header = str(headers.get("Authorization", "") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return str(headers.get("X-Validation-Token", "") or "").strip()
 
 
 def _new_validation_job(payload: dict[str, object]) -> str:
@@ -309,18 +341,62 @@ def _build_host_runner_command_diagnostics(
 
 def _copy_repo_from_container(*, source_container: str, repo_path: str, destination_root: Path) -> Path:
     destination_root.mkdir(parents=True, exist_ok=True)
-    source_spec = f"{source_container}:{repo_path}"
-    completed = subprocess.run(
-        ["docker", "compose", "cp", source_spec, destination_root.as_posix()],
-        capture_output=True,
-        text=True,
-        timeout=300,
-        shell=False,
-        check=False,
-    )
-    if completed.returncode != 0:
-        error_text = _redact_sensitive_text(str(completed.stderr or completed.stdout or "").strip())
-        raise RuntimeError(f"docker compose cp failed for {source_spec}: {error_text}")
+    compose_candidates: list[str] = []
+    normalized_source = str(source_container or "").strip()
+    if normalized_source:
+        compose_candidates.append(normalized_source)
+        try:
+            inspect = subprocess.run(
+                ["docker", "inspect", normalized_source, "--format", "{{ index .Config.Labels \"com.docker.compose.service\" }}"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                shell=False,
+                check=False,
+            )
+        except Exception:
+            inspect = None
+        inspected_service = ""
+        if inspect and inspect.returncode == 0:
+            inspected_service = str(inspect.stdout or "").strip()
+        if inspected_service and inspected_service not in compose_candidates:
+            compose_candidates.insert(0, inspected_service)
+
+    compose_errors: list[str] = []
+    copied = False
+    source_spec = f"{normalized_source}:{repo_path}"
+    for compose_source in compose_candidates:
+        compose_source_spec = f"{compose_source}:{repo_path}"
+        completed = subprocess.run(
+            ["docker", "compose", "cp", compose_source_spec, destination_root.as_posix()],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            shell=False,
+            check=False,
+        )
+        if completed.returncode == 0:
+            copied = True
+            break
+        compose_error_text = _redact_sensitive_text(str(completed.stderr or completed.stdout or "").strip())
+        compose_errors.append(f"{compose_source_spec}: {compose_error_text}")
+
+    if not copied:
+        fallback = subprocess.run(
+            ["docker", "cp", source_spec, destination_root.as_posix()],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            shell=False,
+            check=False,
+        )
+        if fallback.returncode != 0:
+            fallback_error_text = _redact_sensitive_text(str(fallback.stderr or fallback.stdout or "").strip())
+            compose_error_summary = "; ".join(item for item in compose_errors if item) or "no docker compose cp attempts"
+            raise RuntimeError(
+                f"docker compose cp failed for {source_spec}: {compose_error_summary}; "
+                f"docker cp fallback failed: {fallback_error_text}"
+            )
     copied_path = destination_root / Path(repo_path.rstrip("/")).name
     if copied_path.exists():
         return copied_path.resolve()
@@ -328,6 +404,42 @@ def _copy_repo_from_container(*, source_container: str, repo_path: str, destinat
     if len(children) == 1 and children[0].exists():
         return children[0].resolve()
     raise RuntimeError(f"Copied repo path could not be located for {source_spec}.")
+
+
+def _prune_runtime_copy_tree(repo_root: Path) -> dict[str, object]:
+    removed_paths: list[str] = []
+    removed_bytes = 0
+    if not repo_root.exists():
+        return {
+            "runtime_prune_applied": False,
+            "runtime_prune_removed_paths": removed_paths,
+            "runtime_prune_removed_bytes": 0,
+        }
+    for candidate in repo_root.rglob("*"):
+        try:
+            is_dir = candidate.is_dir()
+        except OSError:
+            continue
+        if not is_dir:
+            continue
+        if str(candidate.name or "").strip().lower() not in PRUNABLE_RUNTIME_DIR_NAMES:
+            continue
+        try:
+            for nested in candidate.rglob("*"):
+                try:
+                    if nested.is_file():
+                        removed_bytes += int(nested.stat().st_size)
+                except OSError:
+                    continue
+            shutil.rmtree(candidate, ignore_errors=True)
+            removed_paths.append(candidate.as_posix())
+        except OSError:
+            continue
+    return {
+        "runtime_prune_applied": bool(removed_paths),
+        "runtime_prune_removed_paths": removed_paths,
+        "runtime_prune_removed_bytes": int(removed_bytes),
+    }
 
 
 def _prepare_execution_repo_path(repo_path: str) -> tuple[str, dict[str, object]]:
@@ -365,6 +477,16 @@ def _prepare_execution_repo_path(repo_path: str) -> tuple[str, dict[str, object]
         repo_path=normalized_repo_path,
         destination_root=execution_root,
     )
+    maintenance_metadata = write_runtime_workspace_metadata(
+        execution_root,
+        kind="host_validation_copy",
+        repo_id=Path(normalized_repo_path.rstrip("/")).name or "repo",
+        source_root_path=normalized_repo_path,
+        workspace_creation_mode="docker_compose_cp_from_container",
+        create_lock=False,
+        extra={"source_container": DEFAULT_SOURCE_CONTAINER},
+    )
+    prune_summary = _prune_runtime_copy_tree(copied_repo)
     return copied_repo.as_posix(), {
         "execution_repo_path": copied_repo.as_posix(),
         "workspace_creation_mode": "docker_compose_cp_from_container",
@@ -375,6 +497,9 @@ def _prepare_execution_repo_path(repo_path: str) -> tuple[str, dict[str, object]
         "host_runner_sanitized_path_used": original_root.as_posix() != sanitized_root.as_posix(),
         "host_runner_path_has_spaces_before": _path_has_spaces(original_root.as_posix()),
         "host_runner_path_has_spaces_after": _path_has_spaces(sanitized_root.as_posix()),
+        "runtime_workspace_metadata_path": str(maintenance_metadata.get("metadata_path", "") or ""),
+        "runtime_workspace_lock_path": str(maintenance_metadata.get("lock_path", "") or ""),
+        **prune_summary,
     }
 
 
@@ -485,6 +610,15 @@ def _augment_command_tokens_for_repo_family(tokens: list[str], *, metadata: dict
     normalized_tokens = [str(token or "") for token in list(tokens or [])]
     if not normalized_tokens:
         return []
+    if (
+        len(normalized_tokens) >= 2
+        and normalized_tokens[0] == "dotnet"
+        and normalized_tokens[1] == "restore"
+        and "--configfile" not in normalized_tokens
+    ):
+        effective_restore_config = str(metadata.get("host_runner_restore_configfile_arg", "") or "").strip()
+        if effective_restore_config:
+            normalized_tokens.extend(["--configfile", effective_restore_config])
     validation_repo_family = str(metadata.get("validation_repo_family", "") or "")
     if validation_repo_family != "telemart_soft_desktop_client":
         return normalized_tokens
@@ -1434,6 +1568,15 @@ def _run_validation_job(job_id: str) -> None:
 class _Handler(BaseHTTPRequestHandler):
     server_version = "ValidationRunner/1.0"
 
+    def _check_auth(self) -> bool:
+        if not DEFAULT_AUTH_TOKEN:
+            return True
+        provided = _extract_auth_token(self.headers)
+        if provided == DEFAULT_AUTH_TOKEN:
+            return True
+        self._write_json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
+        return False
+
     def do_GET(self) -> None:  # noqa: N802
         normalized_path = self.path.rstrip("/")
         if normalized_path == "/health":
@@ -1446,7 +1589,14 @@ class _Handler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if normalized_path == "/capabilities":
+            if not self._check_auth():
+                return
+            self._write_json(HTTPStatus.OK, _capabilities_payload())
+            return
         if normalized_path.startswith("/validate/"):
+            if not self._check_auth():
+                return
             job_id = normalized_path.rsplit("/", 1)[-1].strip()
             job = _get_validation_job(job_id)
             if not isinstance(job, dict):
@@ -1482,6 +1632,8 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         if self.path.rstrip("/") != "/validate":
             self._write_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
+            return
+        if not self._check_auth():
             return
         request_started = time.perf_counter()
         try:
@@ -1520,7 +1672,10 @@ class _Handler(BaseHTTPRequestHandler):
             repo_exists=Path(repo_path).exists(),
             allowed_root_count=len(allowed_roots),
         )
-        timeout_seconds = max(1, int(payload.get("timeout_seconds", 180) or 180))
+        timeout_seconds = min(
+            DEFAULT_MAX_TIMEOUT_SECONDS,
+            max(1, int(payload.get("timeout_seconds", 180) or 180)),
+        )
         _log_validate_event(
             "validate_command_discovery_started",
             repo_path=repo_path,
@@ -1605,11 +1760,12 @@ class _Handler(BaseHTTPRequestHandler):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--healthcheck", action="store_true")
+    parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args()
     if args.healthcheck:
         return 0
-    server = ThreadingHTTPServer(("0.0.0.0", int(args.port)), _Handler)
+    server = ThreadingHTTPServer((str(args.host or DEFAULT_HOST), int(args.port)), _Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

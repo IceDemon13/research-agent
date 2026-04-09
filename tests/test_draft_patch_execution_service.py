@@ -182,12 +182,14 @@ class DraftPatchExecutionServiceTests(unittest.TestCase):
             record = self.service.execute_approved_draft(self.handoff)
 
         self.assertFalse(record.validated)
+        self.assertFalse(record.apply_ready)
         self.assertFalse(record.repair_attempted)
         self.assertFalse(repair_mock.called)
         self.assertEqual(record.baseline_validation.build, "success")
         self.assertEqual(record.patched_validation.build, "success")
         self.assertEqual(record.regression_map.targeted_stages, [])
         self.assertIn("validation matches baseline failures; no patch regressions detected for repair", record.apply_blockers)
+        self.assertEqual(record.blocked_reason, "validation_failed_without_patch_regressions")
 
     def test_execute_approved_draft_allows_repair_for_patch_regressions(self) -> None:
         baseline = ValidationResult(repo_id="sample", overall_status="passed", passed=True, build_passed=True)
@@ -214,6 +216,67 @@ class DraftPatchExecutionServiceTests(unittest.TestCase):
         self.assertTrue(repair_mock.called)
         self.assertEqual(record.regression_map.targeted_stages, ["build"])
         self.assertTrue(record.validated)
+
+    def test_execute_approved_draft_marks_validated_when_baseline_and_patched_succeed(self) -> None:
+        baseline = ValidationResult(repo_id="sample", overall_status="success", passed=True, restore_passed=True, build_passed=True, targeted_test_attempted=True)
+        patched = ValidationResult(repo_id="sample", overall_status="success", passed=False, restore_passed=True, build_passed=True, targeted_test_attempted=True)
+        with patch.object(self.service, "_run_validation_in_workspace", return_value=baseline), patch.object(
+            self.service,
+            "_apply_and_validate_in_workspace",
+            return_value=patched,
+        ):
+            record = self.service.execute_approved_draft(self.handoff)
+
+        self.assertFalse(record.validated)
+        self.assertFalse(record.apply_ready)
+        self.assertIn("validation matches baseline failures; no patch regressions detected for repair", record.apply_blockers)
+        self.assertEqual(record.blocked_reason, "validation_failed_without_patch_regressions")
+
+    def test_execute_approved_draft_blocks_when_validation_did_not_execute_steps(self) -> None:
+        baseline = ValidationResult(repo_id="sample", overall_status="failed", passed=False, outcome_type="validation_runner_no_steps")
+        patched = ValidationResult(repo_id="sample", overall_status="failed", passed=False, outcome_type="validation_runner_no_steps")
+        with patch.object(self.service, "_run_validation_in_workspace", return_value=baseline), patch.object(
+            self.service,
+            "_apply_and_validate_in_workspace",
+            return_value=patched,
+        ), patch.object(self.service, "_run_repair_attempt") as repair_mock:
+            record = self.service.execute_approved_draft(self.handoff)
+
+        self.assertFalse(record.validated)
+        self.assertFalse(record.apply_ready)
+        self.assertFalse(repair_mock.called)
+        self.assertIn("validation matches baseline failures; no patch regressions detected for repair", record.apply_blockers)
+        self.assertEqual(record.blocked_reason, "validation_failed_without_patch_regressions")
+
+    def test_exhausted_repair_blocked_artifact_round_trips_through_storage(self) -> None:
+        baseline = ValidationResult(repo_id="sample", overall_status="passed", passed=True, build_passed=True)
+        with patch.object(
+            self.service,
+            "_run_validation_in_workspace",
+            return_value=baseline,
+        ), patch.object(
+            self.service,
+            "_apply_and_validate_in_workspace",
+            return_value=ValidationResult(repo_id="sample", overall_status="failed", passed=False, errors=["build failed"]),
+        ), patch.object(
+            self.service,
+            "_run_repair_attempt",
+            side_effect=[
+                {"attempt_index": 1, "status": "failed", "error_summary": "repair failed"},
+                {"attempt_index": 2, "status": "failed", "error_summary": "repair failed again"},
+            ],
+        ):
+            record = self.service.execute_approved_draft(self.handoff)
+
+        loaded = self.service.load_execution("review-1")
+        self.assertIsNotNone(loaded)
+        self.assertFalse(record.validated)
+        self.assertFalse(record.apply_ready)
+        self.assertEqual(record.blocked_reason, "validation_failed_after_bounded_repair_attempts")
+        self.assertIn("validation failed after bounded repair attempts", record.apply_blockers)
+        self.assertFalse(loaded.validated)
+        self.assertFalse(loaded.apply_ready)
+        self.assertEqual(loaded.blocked_reason, "validation_failed_after_bounded_repair_attempts")
 
     def test_invalidated_repair_is_rejected_when_it_introduces_new_regression(self) -> None:
         reason = self.service._invalidated_repair_reason(
@@ -276,6 +339,27 @@ class DraftPatchExecutionServiceTests(unittest.TestCase):
                 generated_diff="",
                 apply_ready=False,
                 apply_blockers=["blocked"],
+                touched_files=["src/app.py"],
+                out_of_bounds_detected=False,
+                invariant_check_passed=True,
+            )
+
+    def test_execution_result_contract_rejects_failed_validation_marked_apply_ready(self) -> None:
+        with self.assertRaises(Exception):
+            DraftPatchExecutionResult(
+                execution_id="exec-1",
+                review_record_id="review-1",
+                jira_ticket="TEL-13508",
+                repo_id="sample",
+                allowed_files=["src/app.py"],
+                validated=True,
+                validation_status="failed",
+                validation_summary="failed",
+                generated_diff="--- a/src/app.py\n+++ b/src/app.py",
+                diff_hash="hash",
+                apply_input=ApplyInputPayload.model_validate(self.initial_apply_input.to_dict()),
+                apply_ready=True,
+                apply_blockers=[],
                 touched_files=["src/app.py"],
                 out_of_bounds_detected=False,
                 invariant_check_passed=True,

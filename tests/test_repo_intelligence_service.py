@@ -335,6 +335,10 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
             return_value=True,
         ), patch.object(
             self.service._gitnexus_index_service,
+            "_is_runtime_temporary_repo",
+            return_value=False,
+        ), patch.object(
+            self.service._gitnexus_index_service,
             "analyze_repo",
             return_value={
                 "provider": "gitnexus_http",
@@ -350,6 +354,33 @@ class RepoIntelligenceServiceTests(unittest.TestCase):
         mocked_analyze.assert_called_once()
         self.assertTrue(mocked_analyze.call_args.kwargs["allow_unlisted"])
         self.assertEqual(result["gitnexus_index_status"], "ready")
+
+    def test_explicit_reindex_does_not_bootstrap_gitnexus_for_temporary_runtime_repo(self) -> None:
+        temp_root = self.workspace_root / "artifacts" / "temp-workspaces" / "catalog-temp" / "repo"
+        (temp_root / ".git").mkdir(parents=True, exist_ok=True)
+        self.registry.register_repo(
+            root_path=str(temp_root),
+            repo_id="catalog_service_temp",
+            display_name="Catalog Service Temp",
+            default_branch="main",
+        )
+        self.registry.update_repo_metadata(
+            "catalog_service_temp",
+            workspace_creation_mode="copytree_ignore_dotgit",
+            workspace_git_identity_expected="copied_files_only_non_git",
+            workspace_is_git_checkout=False,
+            intelligence_provider="native",
+            gitnexus_indexed=False,
+            gitnexus_index_status="",
+        )
+
+        with patch.object(
+            self.service._gitnexus_index_service,
+            "analyze_repo",
+        ) as mocked_analyze:
+            self.service.reindex_repo("catalog_service_temp")
+
+        mocked_analyze.assert_not_called()
 
     def test_query_falls_back_to_native_when_gitnexus_result_is_weak(self) -> None:
         weak_result = NormalizedRepoIntelligenceResult(fallback_reason="GitNexus returned weak query evidence.")

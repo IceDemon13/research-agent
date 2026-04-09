@@ -323,6 +323,7 @@ class RepoValidationService:
         poll_url = f"{base_url.rstrip('/')}/{job_id}"
         poll_interval_seconds = 1.0
         iteration = 0
+        transient_poll_failures = 0
         last_poll_diagnostics = {
             "validation_poll_raw_response_body": initial_raw_response,
             "validation_poll_parsed_payload": dict(response or {}),
@@ -432,6 +433,21 @@ class RepoValidationService:
                 key in poll_response
                 for key in ("steps", "result", "overall_status", "outcome_type")
             )
+            poll_error_text = str(poll_response.get("error", "") or "").strip()
+            transient_transport_error = (
+                not final_payload_present
+                and not bool(poll_response.get("accepted"))
+                and bool(poll_error_text)
+                and any(
+                    marker in poll_error_text.lower()
+                    for marker in (
+                        "connection refused",
+                        "timed out",
+                        "temporarily unavailable",
+                        "failed to establish a new connection",
+                    )
+                )
+            )
             completed_predicate_result = not bool(poll_response.get("accepted"))
             last_poll_diagnostics = {
                 "validation_poll_raw_response_body": poll_raw_response,
@@ -446,6 +462,19 @@ class RepoValidationService:
                 "validation_poll_timed_out_flag": bool(poll_response.get("timed_out", False)),
                 "validation_poll_ok_flag": bool(poll_response.get("ok", False)),
             }
+            if transient_transport_error:
+                transient_poll_failures += 1
+                emit(
+                    "validation_poll_iteration",
+                    "finished",
+                    validation_poll_iteration=iteration,
+                    validation_poll_job_status=str(poll_response.get("job_status", "") or ""),
+                    validation_poll_transient_transport_error=True,
+                    validation_poll_transient_transport_error_count=transient_poll_failures,
+                    validation_poll_transient_transport_error_text=poll_error_text,
+                )
+                time.sleep(poll_interval_seconds)
+                continue
             emit(
                 "validation_poll_request_sent",
                 "finished",

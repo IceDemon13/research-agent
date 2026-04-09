@@ -2,12 +2,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Технічні run-и</title>
+  <title>TELEMART AI Delivery Runs</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./config.js"></script>
 </head>
 <body>
-  <div class="page-shell">
+  <div class="page-shell runs-dashboard-page">
     <div class="topbar">
       <div id="userBox" class="muted">Завантаження...</div>
       <div class="actions">
@@ -18,127 +18,476 @@
             <option value="en">English</option>
           </select>
         </label>
-        <a href="./index.html" data-i18n="common.home">Головна</a>
-        <a href="./admin/index.html" id="adminLink" data-i18n="common.admin">Адмін</a>
-        <a href="./create.html" data-i18n="common.create_technical_run">Створити технічний run</a>
-        <a href="./repos.html" data-i18n="common.repositories">Репозиторії</a>
-        <button id="logoutButton" type="button" data-i18n="common.logout">Вийти</button>
+        <a href="./index.html">Головна</a>
+        <a href="./workflow.html">Flow</a>
+        <a href="./runs.html" aria-current="page">Runs</a>
+        <a href="./admin/index.html" id="adminLink">Адмін</a>
+        <button id="logoutButton" type="button">Вийти</button>
       </div>
     </div>
 
     <div class="page-header">
-      <h1 data-i18n="runs.title">Технічні run-и</h1>
-      <p class="muted" data-i18n="runs.subtitle">Налагодження та перегляд внутрішніх tracked run-ів.</p>
+      <h1>Runs Dashboard</h1>
+      <p class="muted">Основний екран для історії AI Delivery Flow: поточний статус, блокери, підсумок по кроках і продовження роботи без плутанини між технічними артефактами.</p>
     </div>
 
-    <div class="card">
-      <div class="toolbar">
-        <label><span data-i18n="common.filter.status">Статус</span> <input id="statusFilter" placeholder="success / failed"></label>
-        <label><span data-i18n="common.filter.repo">Repo</span> <input id="repoFilter" placeholder="sample"></label>
-        <button id="refreshButton" class="primary" type="button" data-i18n="common.refresh">Оновити</button>
+    <section class="runs-hero-grid">
+      <div class="card runs-intro-card">
+        <div class="runs-intro-head">
+          <div>
+            <h2>TELEMART AI Delivery Runs</h2>
+            <p>Оберіть конкретний запуск, швидко оцініть його стан і продовжіть flow з того кроку, де він зараз реально збережений.</p>
+          </div>
+          <div class="actions">
+            <a class="button-primary" href="./workflow.html">Запустити новий flow</a>
+          </div>
+        </div>
+        <div class="runs-live-bar">
+          <span id="runsLiveIndicator" class="status-badge status-neutral">Idle</span>
+          <span id="runsLiveText" class="muted">Автооновлення вимкнене, поки немає активних запусків.</span>
+        </div>
       </div>
-    </div>
+      <div class="runs-stats-grid" id="runsStats">
+        <article class="card metric-card"><span class="metric-label">Усього</span><strong id="statTotal">0</strong></article>
+        <article class="card metric-card"><span class="metric-label">Running</span><strong id="statRunning">0</strong></article>
+        <article class="card metric-card"><span class="metric-label">Awaiting review</span><strong id="statAwaitingReview">0</strong></article>
+        <article class="card metric-card"><span class="metric-label">Ready to apply</span><strong id="statReadyToApply">0</strong></article>
+        <article class="card metric-card"><span class="metric-label">Completed</span><strong id="statCompleted">0</strong></article>
+        <article class="card metric-card"><span class="metric-label">Blocked / failed</span><strong id="statBlocked">0</strong></article>
+      </div>
+    </section>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Run ID</th>
-            <th data-i18n="common.status">Статус</th>
-            <th data-i18n="common.goal">Ціль</th>
-            <th data-i18n="common.user">Користувач</th>
-            <th data-i18n="common.started_at">Почато</th>
-            <th data-i18n="common.branch">Гілка</th>
-            <th data-i18n="common.pr">PR</th>
-            <th data-i18n="common.review">Review</th>
-          </tr>
-        </thead>
-        <tbody id="runsBody">
-          <tr><td colspan="8">Завантаження...</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <section class="card">
+      <div class="runs-toolbar">
+        <label class="runs-filter">
+          <span>Jira</span>
+          <input id="jiraFilter" type="search" placeholder="TEL-13508">
+        </label>
+        <label class="runs-filter">
+          <span>Status</span>
+          <select id="statusFilter">
+            <option value="">Усі</option>
+            <option value="running">running</option>
+            <option value="awaiting_review">awaiting_review</option>
+            <option value="ready_to_apply">ready_to_apply</option>
+            <option value="completed">completed</option>
+            <option value="blocked">blocked</option>
+            <option value="failed">failed</option>
+            <option value="rejected">rejected</option>
+          </select>
+        </label>
+        <div class="runs-toolbar-actions">
+          <button id="refreshRunsButton" type="button" class="primary">Оновити</button>
+        </div>
+      </div>
+    </section>
 
-    <div id="errorBox" class="error"></div>
+    <section class="runs-list-shell">
+      <div id="runsErrorCard" class="card error-panel" hidden>
+        <strong>Не вдалося завантажити runs.</strong>
+        <div id="runsErrorText" class="muted"></div>
+        <div class="actions">
+          <button id="retryRunsButton" type="button" class="primary">Спробувати ще раз</button>
+        </div>
+      </div>
+
+      <div id="runsList" class="runs-list" aria-live="polite"></div>
+    </section>
   </div>
 
   <script>
     const auth = window.AuthUI;
+    const RUNS_POLL_INTERVAL_MS = 3000;
+    const expandedRunIds = new Set();
+    const runDetailCache = new Map();
+    let lastRunsPayload = { runs: [], stats: {} };
+    let runsLoading = false;
+    let pollTimer = null;
+    let pendingInitialRequestedRunId = "";
 
-    function normalizeStatus(value) {
-      return String(value || "neutral").toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+    function escapeHtml(value) {
+      return auth.escapeHtml(String(value || ""));
     }
 
-    function actorLabel(run) {
-      return run.actor_display_name || run.actor_username || run?.actor?.display_name || run?.actor?.username || run?.actor?.actor_id || "-";
+    function normalizeStatus(value) {
+      return String(value || "running").toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+    }
+
+    function mapStatusLabel(status) {
+      const value = normalizeStatus(status);
+      const labels = {
+        running: "Running",
+        awaiting_review: "Awaiting review",
+        ready_to_apply: "Ready to apply",
+        completed: "Completed",
+        blocked: "Blocked",
+        failed: "Failed",
+        rejected: "Rejected",
+      };
+      return labels[value] || value || "Unknown";
+    }
+
+    function mapNextAction(run) {
+      const status = normalizeStatus(run?.normalized_status);
+      if (status === "awaiting_review") return "Open Review";
+      if (status === "ready_to_apply") return "Apply";
+      if (status === "blocked" || status === "failed") return "Fix blockers";
+      if (status === "completed") return "Open";
+      if (status === "rejected") return "Open";
+      return "Continue";
+    }
+
+    function badge(label, status) {
+      return `<span class="status-badge status-${escapeHtml(normalizeStatus(status))}">${escapeHtml(label)}</span>`;
+    }
+
+    function artifactViewerHref(path) {
+      const normalized = String(path || "").trim();
+      if (!normalized) return "";
+      return `/flow-runs/artifacts/view?path=${encodeURIComponent(normalized)}`;
+    }
+
+    function updateLiveIndicator() {
+      const runs = Array.isArray(lastRunsPayload?.runs) ? lastRunsPayload.runs : [];
+      const runningCount = runs.filter((run) => normalizeStatus(run.normalized_status) === "running").length;
+      const indicator = document.getElementById("runsLiveIndicator");
+      const text = document.getElementById("runsLiveText");
+      if (runningCount > 0) {
+        indicator.className = "status-badge status-running";
+        indicator.textContent = "Auto refresh";
+        text.textContent = document.visibilityState === "visible"
+          ? `Автооновлення кожні 3 секунди для ${runningCount} активних запусків.`
+          : "Автооновлення призупинене, поки вкладка неактивна.";
+        return;
+      }
+      indicator.className = "status-badge status-neutral";
+      indicator.textContent = "Idle";
+      text.textContent = "Автооновлення вимкнене, поки немає активних запусків.";
+    }
+
+    function schedulePolling() {
+      if (pollTimer) {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      const runs = Array.isArray(lastRunsPayload?.runs) ? lastRunsPayload.runs : [];
+      const hasRunning = runs.some((run) => normalizeStatus(run.normalized_status) === "running");
+      if (!hasRunning || document.visibilityState !== "visible") {
+        updateLiveIndicator();
+        return;
+      }
+      updateLiveIndicator();
+      pollTimer = window.setTimeout(() => {
+        loadRuns({ silent: true, preserveExpanded: true });
+      }, RUNS_POLL_INTERVAL_MS);
+    }
+
+    function setStats(stats) {
+      document.getElementById("statTotal").textContent = Number(stats?.total_runs || 0);
+      document.getElementById("statRunning").textContent = Number(stats?.running || 0);
+      document.getElementById("statAwaitingReview").textContent = Number(stats?.awaiting_review || 0);
+      document.getElementById("statReadyToApply").textContent = Number(stats?.ready_to_apply || 0);
+      document.getElementById("statCompleted").textContent = Number(stats?.completed || 0);
+      document.getElementById("statBlocked").textContent = Number(stats?.blocked_or_failed || 0) + Number(stats?.rejected || 0);
+    }
+
+    function renderLoadingRuns() {
+      const list = document.getElementById("runsList");
+      list.innerHTML = Array.from({ length: 5 }).map(() => `
+        <article class="run-row run-row-skeleton" aria-hidden="true">
+          <div class="skeleton-line wide"></div>
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line short"></div>
+        </article>
+      `).join("");
+    }
+
+    function renderEmptyRuns() {
+      document.getElementById("runsList").innerHTML = `
+        <article class="card empty-state-card">
+          <h2>No runs yet</h2>
+          <p class="muted">Ще немає збережених запусків AI Delivery Flow. Запустіть перший flow, щоб побачити його тут.</p>
+          <div class="actions">
+            <a class="button-primary" href="./workflow.html">Запустити flow</a>
+          </div>
+        </article>
+      `;
+    }
+
+    function listHtml(items, emptyText = "Немає даних") {
+      const values = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!values.length) {
+        return `<p class="muted">${escapeHtml(emptyText)}</p>`;
+      }
+      return `<ul class="run-detail-list">${values.map((item) => `<li>${escapeHtml(typeof item === "string" ? item : JSON.stringify(item))}</li>`).join("")}</ul>`;
+    }
+
+    function renderStepper(currentStep, normalizedStatus) {
+      const steps = ["Analyze", "Plan", "Draft", "Review", "Apply"];
+      const order = { Analyze: 1, Plan: 2, Draft: 3, Review: 4, Apply: 5 };
+      const current = order[currentStep] || 0;
+      return `
+        <div class="run-detail-stepper">
+          ${steps.map((step) => {
+            let state = "idle";
+            if (current > order[step]) state = "success";
+            else if (current === order[step]) state = normalizeStatus(normalizedStatus) === "running" ? "running" : "current";
+            if (current === order[step] && ["blocked", "failed", "rejected"].includes(normalizeStatus(normalizedStatus))) {
+              state = normalizeStatus(normalizedStatus);
+            }
+            return `<div class="flow-step ${escapeHtml(state)}"><div class="flow-step-index">${order[step]}</div><div class="flow-step-label">${escapeHtml(step)}</div></div>`;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function renderArtifactLinks(artifacts) {
+      const items = [
+        ["Execution artifact", artifacts.execution_artifact_path],
+        ["Apply artifact", artifacts.apply_artifact_path],
+        ["Review artifact", artifacts.review_artifact_path],
+      ].filter(([, path]) => String(path || "").trim());
+      if (!items.length) {
+        return `<p class="muted">Артефакти для цього run поки відсутні.</p>`;
+      }
+      return `
+        <ul class="artifact-links">
+          ${items.map(([label, path]) => `
+            <li>
+              <a href="${escapeHtml(artifactViewerHref(path))}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>
+              <code>${escapeHtml(path)}</code>
+            </li>
+          `).join("")}
+        </ul>
+      `;
+    }
+
+    function renderExpandedDetail(runId) {
+      const run = (lastRunsPayload.runs || []).find((item) => item.run_id === runId);
+      const detail = runDetailCache.get(runId);
+      if (!detail) {
+        return `
+          <section class="run-row-detail">
+            <div class="run-inline-loading">
+              <div class="spinner"></div>
+              <span>Завантаження деталей run...</span>
+            </div>
+          </section>
+        `;
+      }
+      if (detail.error) {
+        return `
+          <section class="run-row-detail">
+            <div class="error-panel compact">
+              <strong>Не вдалося завантажити деталі.</strong>
+              <div class="muted">${escapeHtml(detail.error)}</div>
+              <div class="actions">
+                <button type="button" class="secondary" data-run-refresh="${escapeHtml(runId)}">Повторити</button>
+              </div>
+            </div>
+          </section>
+        `;
+      }
+      const blockers = Array.isArray(detail.blockers) ? detail.blockers : [];
+      const validation = detail.validation_summary || {};
+      const apply = detail.apply_summary || {};
+      return `
+        <section class="run-row-detail">
+          ${renderStepper(detail.current_step, detail.normalized_status)}
+          <div class="run-detail-grid">
+            <article class="flow-detail-section">
+              <h3>Analyze</h3>
+              <p>${escapeHtml(detail.analyze_summary?.summary || "-")}</p>
+              <div class="muted">Repo: ${escapeHtml(detail.analyze_summary?.detected_repo || detail.repo_id || "-")}</div>
+            </article>
+            <article class="flow-detail-section">
+              <h3>Plan</h3>
+              <p>${escapeHtml(detail.plan_summary?.summary || "-")}</p>
+              ${listHtml(detail.plan_summary?.likely_changed_files || detail.plan_summary?.implementation_plan_preview?.map((item) => item.file || item), "План ще не побудований")}
+            </article>
+            <article class="flow-detail-section">
+              <h3>Draft</h3>
+              <p>${escapeHtml(detail.draft_summary?.summary || "-")}</p>
+              ${listHtml(detail.draft_summary?.allowed_files, "Allowed files ще не визначені")}
+            </article>
+            <article class="flow-detail-section">
+              <h3>Review</h3>
+              <p>State: ${escapeHtml(detail.review_summary?.decision || detail.review_state || "pending")}</p>
+              <div class="muted">Review ID: ${escapeHtml(detail.review_summary?.review_id || "-")}</div>
+            </article>
+            <article class="flow-detail-section">
+              <h3>Validation</h3>
+              <p>Status: ${escapeHtml(validation.validation_status || "-")}</p>
+              <div class="muted">Validated: ${validation.validated ? "true" : "false"}</div>
+            </article>
+            <article class="flow-detail-section">
+              <h3>Apply</h3>
+              <p>Mode: ${escapeHtml(apply.apply_mode || "-")}</p>
+              <div class="muted">Commit: ${escapeHtml(apply.commit_hash || "-")}</div>
+            </article>
+          </div>
+          <div class="run-detail-footer">
+            <div class="run-detail-block">
+              <h4>Blockers</h4>
+              ${listHtml(blockers, "Blockers відсутні")}
+            </div>
+            <div class="run-detail-block">
+              <h4>Artifacts</h4>
+              ${renderArtifactLinks(detail.artifact_links || {})}
+            </div>
+          </div>
+        </section>
+      `;
     }
 
     function renderRuns(runs) {
-      const tbody = document.getElementById("runsBody");
-      tbody.innerHTML = "";
-      if (!runs.length) {
-        tbody.innerHTML = `<tr><td colspan="8">${auth.t("runs.empty")}</td></tr>`;
+      const list = document.getElementById("runsList");
+      if (!Array.isArray(runs) || !runs.length) {
+        renderEmptyRuns();
         return;
       }
-      runs.forEach((run) => {
-        const branchName = run?.branch_name || run?.branch || "-";
-        const prCell = run?.pr_url
-          ? `<a href="${run.pr_url}" target="_blank" rel="noopener noreferrer">${auth.t("common.open")}</a>`
-          : "-";
-        let reviewCell = "-";
-        if (run?.review_url) {
-          reviewCell = `<a href="${run.review_url}" target="_blank" rel="noopener noreferrer">${auth.t("common.open")}</a>`;
-        } else if ((run?.review_status || run?.publication_result?.review_status || "").toLowerCase() === "failed" || (run?.failed_step || "") === "review") {
-          reviewCell = `<span class="status-failed">${auth.t("common.failed")}</span>`;
-        }
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${run.run_id || ""}</td>
-          <td><span class="status-badge status-${normalizeStatus(run.status)}">${auth.translateStatus(run.status_display || run.status || "")}</span></td>
-          <td>${run.goal || ""}</td>
-          <td>${actorLabel(run)}</td>
-          <td>${auth.formatDateTime(run.started_at)}</td>
-          <td>${branchName}</td>
-          <td>${prCell}</td>
-          <td>${reviewCell}</td>
+      list.innerHTML = runs.map((run) => {
+        const status = normalizeStatus(run.normalized_status || run.flow_status || "running");
+        const actionLabel = mapNextAction(run);
+        const expanded = expandedRunIds.has(run.run_id);
+        const metricChips = [
+          run.task_quality ? `Q ${Number(run.task_quality)}` : "",
+          run.task_confidence ? `C ${Number(run.task_confidence)}` : "",
+          run.task_novelty ? `N ${Number(run.task_novelty)}` : "",
+        ].filter(Boolean).map((item) => `<span class="metric-chip">${escapeHtml(item)}</span>`).join("");
+        return `
+          <article class="run-row status-${escapeHtml(status)}" data-run-id="${escapeHtml(run.run_id)}">
+            <div class="run-row-main">
+              <div class="run-row-title">
+                <strong>${escapeHtml(run.jira_ticket || "Без Jira")}</strong>
+                ${badge(mapStatusLabel(status), status)}
+                <span class="run-step-chip">Step: ${escapeHtml(run.current_step || "-")}</span>
+              </div>
+              <div class="run-row-meta">
+                <span>Repo: ${escapeHtml(run.repo_id || "-")}</span>
+                <span>Updated: ${escapeHtml(auth.formatDateTime(run.updated_at) || "-")}</span>
+              </div>
+              <div class="run-row-submeta">
+                ${metricChips || '<span class="muted">Метрики з’являться після Analyze.</span>'}
+              </div>
+            </div>
+            <div class="run-row-actions">
+              <a class="button-primary" href="./workflow.html?run_id=${encodeURIComponent(run.run_id || "")}">${escapeHtml(actionLabel)}</a>
+              <button type="button" class="secondary" data-run-toggle="${escapeHtml(run.run_id)}">${expanded ? "Згорнути" : "Розгорнути"}</button>
+            </div>
+            ${expanded ? renderExpandedDetail(run.run_id) : ""}
+          </article>
         `;
-        row.addEventListener("click", () => {
-          window.location.href = `./run.html?id=${encodeURIComponent(run.run_id || "")}`;
-        });
-        tbody.appendChild(row);
-      });
+      }).join("");
     }
 
-    async function loadRuns() {
-      const errorBox = document.getElementById("errorBox");
-      errorBox.textContent = "";
-      document.getElementById("runsBody").innerHTML = `<tr><td colspan="8">${auth.t("common.loading")}</td></tr>`;
+    async function loadRunDetail(runId, { force = false } = {}) {
+      const normalized = String(runId || "").trim();
+      if (!normalized) return;
+      if (!force && runDetailCache.has(normalized) && !runDetailCache.get(normalized)?.error) return;
+      runDetailCache.set(normalized, { loading: true });
+      renderRuns(lastRunsPayload.runs || []);
       try {
-        const query = {};
-        if (document.getElementById("statusFilter").value.trim()) {
-          query.status = document.getElementById("statusFilter").value.trim();
-        }
-        if (document.getElementById("repoFilter").value.trim()) {
-          query.repo_id = document.getElementById("repoFilter").value.trim();
-        }
-        const payload = await auth.fetchJson("/runs", { query });
-        renderRuns(payload.runs || []);
+        const payload = await auth.fetchJson(`/flow-runs/${encodeURIComponent(normalized)}`);
+        runDetailCache.set(normalized, payload.run || {});
       } catch (error) {
-        document.getElementById("runsBody").innerHTML = `<tr><td colspan="8">${auth.t("runs.load_failed")}</td></tr>`;
-        errorBox.textContent = error.message;
+        runDetailCache.set(normalized, { error: error.message });
+      }
+      renderRuns(lastRunsPayload.runs || []);
+    }
+
+    function setRunsError(message) {
+      const card = document.getElementById("runsErrorCard");
+      document.getElementById("runsErrorText").textContent = message || "";
+      card.hidden = !message;
+    }
+
+    function currentQuery() {
+      const query = {};
+      const jira = document.getElementById("jiraFilter").value.trim();
+      const status = document.getElementById("statusFilter").value.trim();
+      if (jira) query.jira_ticket = jira;
+      if (status) query.status = status;
+      return query;
+    }
+
+    async function loadRuns({ silent = false, preserveExpanded = true } = {}) {
+      if (runsLoading) return;
+      runsLoading = true;
+      setRunsError("");
+      if (!silent) renderLoadingRuns();
+      try {
+        const payload = await auth.fetchJson("/flow-runs", { query: currentQuery() });
+        lastRunsPayload = payload || { runs: [], stats: {} };
+        setStats(lastRunsPayload.stats || {});
+        if (!preserveExpanded) {
+          expandedRunIds.clear();
+        } else {
+          const visibleIds = new Set((lastRunsPayload.runs || []).map((run) => run.run_id));
+          Array.from(expandedRunIds).forEach((runId) => {
+            if (!visibleIds.has(runId)) expandedRunIds.delete(runId);
+          });
+        }
+        renderRuns(lastRunsPayload.runs || []);
+        const expandedIds = Array.from(expandedRunIds);
+        if (expandedIds.length) {
+          await Promise.all(expandedIds.map((runId) => loadRunDetail(runId)));
+        }
+        if (pendingInitialRequestedRunId) {
+          expandedRunIds.add(pendingInitialRequestedRunId);
+          await loadRunDetail(pendingInitialRequestedRunId, { force: true });
+          pendingInitialRequestedRunId = "";
+        }
+      } catch (error) {
+        setRunsError(error.message);
+        if (!silent) {
+          document.getElementById("runsList").innerHTML = "";
+        }
+      } finally {
+        runsLoading = false;
+        updateLiveIndicator();
+        schedulePolling();
       }
     }
 
-    auth.requireLogin({ redirectTo: "/ui/login.html" }).then((me) => {
+    document.addEventListener("click", async (event) => {
+      const toggleButton = event.target.closest("[data-run-toggle]");
+      if (toggleButton) {
+        const runId = String(toggleButton.getAttribute("data-run-toggle") || "").trim();
+        if (!runId) return;
+        if (expandedRunIds.has(runId)) {
+          expandedRunIds.delete(runId);
+          renderRuns(lastRunsPayload.runs || []);
+          return;
+        }
+        expandedRunIds.add(runId);
+        await loadRunDetail(runId, { force: true });
+        return;
+      }
+      const refreshButton = event.target.closest("[data-run-refresh]");
+      if (refreshButton) {
+        const runId = String(refreshButton.getAttribute("data-run-refresh") || "").trim();
+        if (!runId) return;
+        await loadRunDetail(runId, { force: true });
+      }
+    });
+
+    document.getElementById("refreshRunsButton").addEventListener("click", () => loadRuns({ preserveExpanded: true }));
+    document.getElementById("retryRunsButton").addEventListener("click", () => loadRuns({ preserveExpanded: true }));
+    document.getElementById("jiraFilter").addEventListener("input", () => loadRuns({ preserveExpanded: false }));
+    document.getElementById("statusFilter").addEventListener("change", () => loadRuns({ preserveExpanded: false }));
+    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
+    document.addEventListener("visibilitychange", () => schedulePolling());
+
+    auth.requireLogin({ redirectTo: "/ui/login.html" }).then(async (me) => {
       if (!me) return;
       auth.applySessionNavigation({ me, logoutButtonId: "logoutButton", adminLinkId: "adminLink" });
       document.getElementById("userBox").textContent = auth.t("index.signed_in_as", {
         name: me.user.display_name || me.user.username || "-"
       });
-      loadRuns();
+      pendingInitialRequestedRunId = String(new URLSearchParams(window.location.search).get("run_id") || "").trim();
+      await loadRuns({ preserveExpanded: true });
     });
-    document.getElementById("logoutButton").addEventListener("click", () => auth.logout());
-    document.getElementById("refreshButton").addEventListener("click", loadRuns);
   </script>
 </body>
 </html>

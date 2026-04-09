@@ -1,0 +1,75 @@
+{
+  "index": {
+    "cards": [
+      {
+        "idx": 0,
+        "h": 225,
+        "title": "AI Delivery Flow"
+      },
+      {
+        "idx": 1,
+        "h": 234,
+        "title": "Проаналізувати Jira задачу"
+      },
+      {
+        "idx": 2,
+        "h": 234,
+        "title": "Структурувати задачу з вільного тексту"
+      },
+      {
+        "idx": 3,
+        "h": 234,
+        "title": "Побудувати план імплементації"
+      },
+      {
+        "idx": 4,
+        "h": 234,
+        "title": "Перевірити готовність до review"
+      }
+    ],
+    "shell": 842
+  },
+  "workflow_initial": {
+    "flowCardHeight": 1592,
+    "stepPanelsHeight": 1122,
+    "toggleCount": 5,
+    "reviewButtonsInStep": true,
+    "applyControlsInStep": true
+  },
+  "toggle_info": {
+    "expanded": "true",
+    "detailsVisible": true
+  },
+  "review_after_approve": {
+    "reviewStatus": "Draft patch approved.",
+    "applyEnabled": true,
+    "currentStep": "Apply",
+    "requestUrls": [
+      "http://localhost:8000/workflows/analyze-task",
+      "http://localhost:8000/workflows/implementation-plan",
+      "http://localhost:8000/workflows/generate-draft-patch",
+      "http://localhost:8000/workflows/review-draft-patch"
+    ]
+  },
+  "apply_after": {
+    "applyStatus": "Approved draft patch applied in clean workspace and committed.",
+    "currentStep": "Apply",
+    "requestUrls": [
+      "http://localhost:8000/workflows/analyze-task",
+      "http://localhost:8000/workflows/implementation-plan",
+      "http://localhost:8000/workflows/generate-draft-patch",
+      "http://localhost:8000/workflows/review-draft-patch",
+      "http://localhost:8000/workflows/apply-draft-patch"
+    ]
+  },
+  "reject_after": {
+    "reviewStatus": "Draft patch rejected.",
+    "applySummaryContainsReject": true,
+    "requestUrls": [
+      "http://localhost:8000/workflows/analyze-task",
+      "http://localhost:8000/workflows/implementation-plan",
+      "http://localhost:8000/workflows/generate-draft-patch",
+      "http://localhost:8000/workflows/review-draft-patch"
+    ]
+  }
+}

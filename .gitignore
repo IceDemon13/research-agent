@@ -211,3 +211,28 @@ __marimo__/
 *.env
 .env.*
 !.env.example
+
+
+# build
+bin/
+obj/
+
+# temp
+tmp*/
+artifacts/test-temp/
+artifacts/temp-workspaces/
+artifacts/host-validation-runner/
+artifacts/ai_delivery_runs/
+artifacts/draft_patch_executions/*.json
+artifacts/draft_patch_applies/*.json
+artifacts/draft_patch_executions/runs/
+artifacts/draft_patch_applies/runs/
+
+# keep only placeholders
+!artifacts/draft_patch_executions/.gitkeep
+!artifacts/draft_patch_applies/.gitkeep
+
+# local/debug/live artifacts
+artifacts/live_*/
+artifacts/_tmp_*
+artifacts/tmp_*

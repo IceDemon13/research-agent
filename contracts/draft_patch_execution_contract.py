@@ -211,6 +211,7 @@ class DraftPatchExecutionResult(BaseModel):
     validated: bool = False
     validation_status: str = ""
     validation_summary: str = ""
+    blocked_reason: str = ""
     repair_attempted: bool = False
     repair_attempts: list[DraftPatchRepairAttemptRecord] = Field(default_factory=list)
     repair_successful: bool = False
@@ -227,7 +228,7 @@ class DraftPatchExecutionResult(BaseModel):
     finished_at: str = ""
     technical_details: dict[str, Any] = Field(default_factory=dict)
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "forbid", "validate_assignment": True}
 
     @field_validator("execution_id", "review_record_id", "repo_id")
     @classmethod
@@ -269,12 +270,14 @@ class DraftPatchExecutionResult(BaseModel):
             raise ValueError("repair_successful requires repair_attempted.")
         if self.validated and self.apply_input is None:
             raise ValueError("validated execution requires apply_input.")
+        validation_failed = str(self.validation_status or "").strip().lower() == "failed"
+        if validation_failed and self.validated:
+            raise ValueError("failed validation must not be marked validated.")
         if self.apply_ready and not self.validated:
             raise ValueError("apply_ready requires validated execution.")
         if self.apply_ready and self.apply_blockers:
             raise ValueError("apply_ready requires empty apply_blockers.")
-        validation_failed = str(self.validation_status or "").strip().lower() == "failed"
-        if validation_failed and not self.repair_successful and self.apply_ready:
+        if validation_failed and self.apply_ready:
             raise ValueError("failed validation with exhausted repair must not be apply_ready.")
         if self.baseline_validation.build == "success" and self.patched_validation.build == "success" and self.regression_map.build:
             raise ValueError("regression_map.build cannot be true when baseline and patched build are both successful.")

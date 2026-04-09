@@ -48,6 +48,12 @@ def _dedupe(items: list[str]) -> list[str]:
     return list(dict.fromkeys([str(item or "").strip() for item in list(items or []) if str(item or "").strip()]))
 
 
+def _timestamp_slug(value: str) -> str:
+    normalized = _safe_text(value).replace(":", "").replace("-", "").replace("+00:00", "Z")
+    normalized = normalized.replace(".", "_")
+    return normalized or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+
+
 class DraftPatchExecutionService:
     def __init__(
         self,
@@ -86,6 +92,7 @@ class DraftPatchExecutionService:
             validated=False,
             validation_status="pending",
             validation_summary="",
+            blocked_reason="",
             repair_attempted=False,
             repair_attempts=[],
             repair_successful=False,
@@ -140,7 +147,10 @@ class DraftPatchExecutionService:
             record.validation_summary = self._validation_summary(validation_result)
             record.technical_details["validation_result"] = validation_result.to_dict()
             record.technical_details["regression_map"] = regression_map.model_dump()
-            if validation_result.passed:
+            if self._validation_is_acceptable(
+                validation_result=validation_result,
+                regression_map=regression_map,
+            ):
                 finalized = self._finalize_success(
                     record=record,
                     final_apply_input=final_apply_input,
@@ -149,14 +159,12 @@ class DraftPatchExecutionService:
                 return finalized
 
             if not self._has_regression(regression_map):
-                record.apply_ready = False
-                record.apply_blockers = _dedupe(list(record.apply_blockers or []) + ["validation matches baseline failures; no patch regressions detected for repair"])
-                record.validation_status = str(record.validation_status or "failed").strip()
-                record.finished_at = _now_iso()
-                record.technical_details["invariant_check_passed"] = True
-                record.technical_details["repair_targeted_regressions"] = []
-                self._write_record(record)
-                return record
+                return self._finalize_blocked(
+                    record=record,
+                    blockers=["validation matches baseline failures; no patch regressions detected for repair"],
+                    blocked_reason="validation_failed_without_patch_regressions",
+                    extra_details={"repair_targeted_regressions": []},
+                )
 
             previous_attempts: list[dict[str, Any]] = []
             for attempt_index in range(1, max(1, int(max_repair_attempts or 0)) + 1):
@@ -222,7 +230,10 @@ class DraftPatchExecutionService:
                 record.validation_status = str(validation_result.overall_status or "").strip() or "unknown"
                 record.validation_summary = self._validation_summary(validation_result)
                 record.technical_details["validation_result"] = validation_result.to_dict()
-                if validation_result.passed:
+                if self._validation_is_acceptable(
+                    validation_result=validation_result,
+                    regression_map=repaired_regression_map,
+                ):
                     final_apply_input = self._apply_input_from_draft_set(
                         repo_id=normalized_repo_id,
                         draft_set=repair_attempt["draft_set"],
@@ -242,15 +253,11 @@ class DraftPatchExecutionService:
                     apply_input=current_temp_apply_input,
                 )
 
-            record.apply_ready = False
-            blockers = list(record.apply_blockers or [])
-            blockers.append("validation failed after bounded repair attempts")
-            record.apply_blockers = _dedupe(blockers)
-            record.validation_status = str(record.validation_status or "failed").strip()
-            record.finished_at = _now_iso()
-            record.technical_details["invariant_check_passed"] = True
-            self._write_record(record)
-            return record
+            return self._finalize_blocked(
+                record=record,
+                blockers=["validation failed after bounded repair attempts"],
+                blocked_reason="validation_failed_after_bounded_repair_attempts",
+            )
         finally:
             self._temp_workspace_service.cleanup_workspace(context)
 
@@ -266,6 +273,10 @@ class DraftPatchExecutionService:
             return None
         return DraftPatchExecutionResult.model_validate(payload)
 
+    def save_execution(self, record: DraftPatchExecutionResult) -> DraftPatchExecutionResult:
+        self._write_record(record)
+        return record
+
     def _finalize_success(
         self,
         *,
@@ -279,9 +290,10 @@ class DraftPatchExecutionService:
             apply_result=None,
         )
         final_diff_text = self._stringify_diff_result(diff_result)
+        record.blocked_reason = ""
         record.validated = True
-        record.apply_ready = True
         record.apply_blockers = []
+        record.apply_ready = True
         record.apply_input = ApplyInputPayload.model_validate(final_apply_input.to_dict())
         record.generated_diff = final_diff_text
         record.diff_hash = self._diff_hash(final_diff_text)
@@ -290,6 +302,27 @@ class DraftPatchExecutionService:
         record.technical_details["diff_result"] = diff_result.to_dict()
         record.technical_details["invariant_check_passed"] = True
         record.finished_at = _now_iso()
+        self._write_record(record)
+        return record
+
+    def _finalize_blocked(
+        self,
+        *,
+        record: DraftPatchExecutionResult,
+        blockers: list[str],
+        blocked_reason: str,
+        extra_details: dict[str, Any] | None = None,
+    ) -> DraftPatchExecutionResult:
+        record.validated = False
+        record.apply_ready = False
+        record.apply_blockers = _dedupe(list(record.apply_blockers or []) + list(blockers or []))
+        record.blocked_reason = _safe_text(blocked_reason)
+        record.validation_status = str(record.validation_status or "failed").strip() or "failed"
+        record.finished_at = _now_iso()
+        record.technical_details = dict(record.technical_details or {})
+        record.technical_details["invariant_check_passed"] = True
+        if extra_details:
+            record.technical_details.update(dict(extra_details or {}))
         self._write_record(record)
         return record
 
@@ -497,6 +530,24 @@ class DraftPatchExecutionService:
     def _has_regression(regression_map: DraftPatchRegressionMap) -> bool:
         return any(bool(item) for item in [regression_map.restore, regression_map.build, regression_map.test])
 
+    def _validation_executed_with_stage_results(self, validation_result: ValidationResult) -> bool:
+        stage_states = [
+            self._stage_status(validation_result, "restore"),
+            self._stage_status(validation_result, "build"),
+            self._stage_status(validation_result, "test"),
+        ]
+        return any(state in {"success", "failed"} for state in stage_states)
+
+    def _validation_is_acceptable(
+        self,
+        *,
+        validation_result: ValidationResult,
+        regression_map: DraftPatchRegressionMap,
+    ) -> bool:
+        if self._has_regression(regression_map):
+            return False
+        return bool(validation_result.passed)
+
     @staticmethod
     def _is_build_configuration_file(path: str) -> bool:
         normalized = str(path or "").strip().lower().replace("\\", "/")
@@ -672,12 +723,17 @@ class DraftPatchExecutionService:
         review_id = _safe_text(record.review_record_id)
         if not review_id:
             raise ValueError("review_id is required to persist draft patch execution state.")
-        serializable = self._to_json_safe(record.model_dump())
+        validated_record = DraftPatchExecutionResult.model_validate(record.model_dump())
+        serializable = self._to_json_safe(validated_record.model_dump())
         self._storage_dir.mkdir(parents=True, exist_ok=True)
-        (self._storage_dir / f"{review_id}.json").write_text(
-            json.dumps(serializable, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        serialized_text = json.dumps(serializable, ensure_ascii=False, indent=2)
+        latest_path = self._storage_dir / "latest.json"
+        review_path = self._storage_dir / f"{review_id}.json"
+        timestamped_path = self._storage_dir / "runs" / f"{_timestamp_slug(_safe_text(validated_record.finished_at or validated_record.started_at))}_{_safe_text(validated_record.execution_id)}.json"
+        review_path.write_text(serialized_text, encoding="utf-8")
+        latest_path.write_text(serialized_text, encoding="utf-8")
+        timestamped_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamped_path.write_text(serialized_text, encoding="utf-8")
 
     def _to_json_safe(self, value: Any) -> Any:
         if isinstance(value, (str, int, float, bool)) or value is None:

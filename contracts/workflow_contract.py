@@ -16,6 +16,22 @@ class WorkflowRunLink:
 
 
 @dataclass(slots=True)
+class SupplementalContext:
+    notes: str = ""
+    constraints: list[str] = field(default_factory=list)
+    suggested_files: list[str] = field(default_factory=list)
+    validation_hints: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "notes": self.notes,
+            "constraints": list(self.constraints or []),
+            "suggested_files": list(self.suggested_files or []),
+            "validation_hints": list(self.validation_hints or []),
+        }
+
+
+@dataclass(slots=True)
 class FileChangeAction:
     file: str = ""
     action: str = ""
@@ -144,6 +160,7 @@ class DraftPatchWorkflowResult:
     apply_artifact_path: str = ""
     commit_hash: str = ""
     auto_apply: bool = False
+    supplemental_context: SupplementalContext | None = None
     technical_details: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -177,6 +194,7 @@ class DraftPatchWorkflowResult:
             "apply_artifact_path": self.apply_artifact_path,
             "commit_hash": self.commit_hash,
             "auto_apply": bool(self.auto_apply),
+            "supplemental_context": self.supplemental_context.to_dict() if self.supplemental_context is not None else None,
             "technical_details": dict(self.technical_details or {}),
         }
 
@@ -241,6 +259,7 @@ class ReviewSummaryBlock:
 
 @dataclass(slots=True)
 class AnalyzeTaskWorkflowResult:
+    repo_id: str = ""
     task_quality_summary: str = ""
     quality_score: int = 0
     confidence_score: int = 0
@@ -273,11 +292,13 @@ class AnalyzeTaskWorkflowResult:
     patch_generation_blockers: list[str] = field(default_factory=list)
     patch_generation_allowed_files: list[str] = field(default_factory=list)
     recommendation: str = ""
+    supplemental_context: SupplementalContext | None = None
     technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
 
     def to_dict(self) -> dict:
         return {
+            "repo_id": self.repo_id,
             "task_quality_summary": self.task_quality_summary,
             "quality_score": int(self.quality_score),
             "confidence_score": int(self.confidence_score),
@@ -310,6 +331,7 @@ class AnalyzeTaskWorkflowResult:
             "patch_generation_blockers": list(self.patch_generation_blockers or []),
             "patch_generation_allowed_files": list(self.patch_generation_allowed_files or []),
             "recommendation": self.recommendation,
+            "supplemental_context": self.supplemental_context.to_dict() if self.supplemental_context is not None else None,
             "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
         }
@@ -377,6 +399,7 @@ class ImplementationPlanWorkflowResult:
     implementation_scope_summary: str = ""
     scope_enforcement_reason: str = ""
     recommendation: str = ""
+    supplemental_context: SupplementalContext | None = None
     technical_details: dict = field(default_factory=dict)
     technical_run: WorkflowRunLink | None = None
 
@@ -416,6 +439,7 @@ class ImplementationPlanWorkflowResult:
             "implementation_scope_summary": self.implementation_scope_summary,
             "scope_enforcement_reason": self.scope_enforcement_reason,
             "recommendation": self.recommendation,
+            "supplemental_context": self.supplemental_context.to_dict() if self.supplemental_context is not None else None,
             "technical_details": dict(self.technical_details or {}),
             "technical_run": self.technical_run.to_dict() if self.technical_run is not None else None,
         }

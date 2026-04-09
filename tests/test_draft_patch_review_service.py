@@ -153,3 +153,136 @@ class DraftPatchReviewServiceTests(unittest.TestCase):
         self.assertEqual(artifact["blockers"], ["draft patch is not approved"])
         self.assertEqual(artifact["apply_payload"], {})
         self.assertIn("return 'ok'", (self.repo_root / "src" / "app.py").read_text(encoding="utf-8"))
+
+    def test_apply_reviewed_patch_workspace_apply_succeeds_when_live_repo_is_dirty(self) -> None:
+        (self.repo_root / "src" / "other.py").write_text("def untouched() -> str:\n    return 'dirty live repo'\n", encoding="utf-8")
+        review_record = self.service.record_review(
+            actor_id="lead-1",
+            actor_role="techlead",
+            repo_id="sample",
+            jira_ticket="TEL-13508",
+            diff_text="--- a/src/app.py\n+++ b/src/app.py",
+            allowed_files=["src/app.py"],
+            confidence_score=90,
+            novelty_score=20,
+            patch_generation_ready=True,
+            decision="approved",
+        )
+        apply_input = ApplyInput(
+            repo_id="sample",
+            operations=[
+                ApplyOperation(
+                    relative_path="src/app.py",
+                    operation_type="update",
+                    new_content="def run() -> str:\n    return 'workspace apply'\n",
+                    expected_hash=ApplyService._read_hash(self.repo_root / "src" / "app.py"),
+                )
+            ],
+            dry_run=False,
+        )
+
+        artifact = self.service.apply_reviewed_patch(
+            review_record=review_record,
+            repo_id="sample",
+            jira_ticket="TEL-13508",
+            diff_text="--- a/src/app.py\n+++ b/src/app.py",
+            apply_input=apply_input,
+            apply_mode="workspace_apply",
+            actor_id="lead-1",
+            actor_role="techlead",
+            allow_apply=True,
+            blockers=[],
+            validation_plan=["Run the targeted report smoke test."],
+        )
+
+        workspace_path = Path(artifact["workspace_path"])
+        self.assertTrue(workspace_path.exists())
+        self.assertEqual(artifact["touched_files"], ["src/app.py"])
+        self.assertEqual(artifact["files_written"], 1)
+        self.assertFalse(artifact["out_of_bounds_detected"])
+        self.assertTrue(str(artifact["commit_hash"]).strip())
+        self.assertIn("workspace apply", (workspace_path / "src" / "app.py").read_text(encoding="utf-8"))
+        self.assertEqual((self.repo_root / "src" / "other.py").read_text(encoding="utf-8"), "def untouched() -> str:\n    return 'dirty live repo'\n")
+
+    def test_local_apply_remains_blocked_when_live_repo_is_dirty(self) -> None:
+        (self.repo_root / "src" / "other.py").write_text("def untouched() -> str:\n    return 'dirty live repo'\n", encoding="utf-8")
+        review_record = self.service.record_review(
+            actor_id="lead-1",
+            actor_role="techlead",
+            repo_id="sample",
+            jira_ticket="TEL-13508",
+            diff_text="--- a/src/app.py\n+++ b/src/app.py",
+            allowed_files=["src/app.py"],
+            confidence_score=90,
+            novelty_score=20,
+            patch_generation_ready=True,
+            decision="approved",
+        )
+        apply_input = ApplyInput(
+            repo_id="sample",
+            operations=[
+                ApplyOperation(
+                    relative_path="src/app.py",
+                    operation_type="update",
+                    new_content="def run() -> str:\n    return 'updated'\n",
+                    expected_hash=ApplyService._read_hash(self.repo_root / "src" / "app.py"),
+                )
+            ],
+            dry_run=False,
+        )
+
+        with self.assertRaisesRegex(ValueError, "uncommitted changes"):
+            self.service.apply_reviewed_patch(
+                review_record=review_record,
+                repo_id="sample",
+                jira_ticket="TEL-13508",
+                diff_text="--- a/src/app.py\n+++ b/src/app.py",
+                apply_input=apply_input,
+                apply_mode="local_apply",
+                actor_id="lead-1",
+                actor_role="techlead",
+                allow_apply=True,
+                blockers=[],
+                validation_plan=["Run the targeted report smoke test."],
+            )
+
+    def test_workspace_apply_fails_hard_on_out_of_bounds_attempt(self) -> None:
+        review_record = self.service.record_review(
+            actor_id="lead-1",
+            actor_role="techlead",
+            repo_id="sample",
+            jira_ticket="TEL-13508",
+            diff_text="--- a/src/other.py\n+++ b/src/other.py",
+            allowed_files=["src/app.py"],
+            confidence_score=90,
+            novelty_score=20,
+            patch_generation_ready=True,
+            decision="approved",
+        )
+        apply_input = ApplyInput(
+            repo_id="sample",
+            operations=[
+                ApplyOperation(
+                    relative_path="src/other.py",
+                    operation_type="update",
+                    new_content="def untouched() -> str:\n    return 'changed'\n",
+                    expected_hash=ApplyService._read_hash(self.repo_root / "src" / "other.py"),
+                )
+            ],
+            dry_run=False,
+        )
+
+        with self.assertRaisesRegex(ValueError, "outside allowed_files"):
+            self.service.apply_reviewed_patch(
+                review_record=review_record,
+                repo_id="sample",
+                jira_ticket="TEL-13508",
+                diff_text="--- a/src/other.py\n+++ b/src/other.py",
+                apply_input=apply_input,
+                apply_mode="workspace_apply",
+                actor_id="lead-1",
+                actor_role="techlead",
+                allow_apply=True,
+                blockers=[],
+                validation_plan=["Run the targeted report smoke test."],
+            )

@@ -84,6 +84,8 @@ services:
       - "8000:8000"
     volumes:
       - app_artifacts:/app/artifacts
+      - ./artifacts/draft_patch_applies:/app/artifacts/draft_patch_applies
+      - ./artifacts/draft_patch_executions:/app/artifacts/draft_patch_executions
       - app_logs:/app/logs
       - app_index:/app/index
       - app_data:/app/data

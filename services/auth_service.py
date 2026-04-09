@@ -105,6 +105,32 @@ class AuthService:
     def bootstrap_admin_if_needed(self) -> None:
         if not self.enabled:
             return
+        username = str(settings.runtime.bootstrap_admin_username or "").strip()
+        password = str(settings.runtime.bootstrap_admin_password or "")
+        if not username or not password:
+            if self._db_service.count_users() > 0 and not self._has_admin_user() and not self._warned_missing_admin:
+                warnings.warn(
+                    "Users exist but no admin account is present. Configure bootstrap admin credentials or use the local password reset command.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                self._warned_missing_admin = True
+            return
+
+        existing_bootstrap_user = self._db_service.fetch_user_by_username(username)
+        if existing_bootstrap_user is not None:
+            existing_user = self._user_from_row(existing_bootstrap_user)
+            if existing_user.role_name != "admin" or not existing_user.is_active:
+                self.update_user(
+                    existing_user.user_id,
+                    display_name=existing_user.display_name,
+                    email=existing_user.email,
+                    role_name="admin",
+                    is_active=True,
+                    must_change_password=existing_user.must_change_password,
+                )
+            return
+
         if self._db_service.count_users() > 0:
             if not self._has_admin_user() and not self._warned_missing_admin:
                 warnings.warn(
@@ -113,21 +139,17 @@ class AuthService:
                     stacklevel=2,
                 )
                 self._warned_missing_admin = True
-            return
-        username = str(settings.runtime.bootstrap_admin_username or "").strip()
-        password = str(settings.runtime.bootstrap_admin_password or "")
-        if not username or not password:
-            return
-        self.create_user(
+        user_row = self._db_service.create_or_update_directory_user(
+            user_id=uuid.uuid4().hex,
             username=username,
             display_name=str(settings.runtime.bootstrap_admin_display_name or "Bootstrap Admin").strip(),
-            role_name="admin",
             email="",
+            role_name="admin",
             is_active=True,
             must_change_password=True,
-            generate_password=False,
-            password=password,
+            password_hash=self._bootstrap_password_hash(password),
         )
+        self._user_from_row(user_row)
 
     def authenticate(
         self,
@@ -368,6 +390,18 @@ class AuthService:
             return self._passwords.generate_password()
         PasswordManager.validate_strength(password)
         return str(password or "")
+
+    def _bootstrap_password_hash(self, password: str) -> str:
+        resolved = str(password or "")
+        try:
+            PasswordManager.validate_strength(resolved)
+        except AuthError:
+            warnings.warn(
+                "Bootstrap admin password does not meet the interactive password policy; preserving configured secret and requiring a password change on first login.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        return self._passwords.hash_password(resolved)
 
     def _has_admin_user(self) -> bool:
         return any(self._normalize_role_name(user.role_name) == "admin" for user in self.list_users())

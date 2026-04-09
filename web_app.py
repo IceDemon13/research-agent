@@ -14,7 +14,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from agents import root_agent
 from contracts.actor_contract import ActorContext
@@ -40,6 +40,7 @@ from contracts.workflow_contract import (
     ReviewIssue,
     ReviewSummaryBlock,
     SelectionCandidate,
+    SupplementalContext,
     StructureTaskWorkflowResult,
     WorkflowRunLink,
 )
@@ -62,6 +63,7 @@ from services.repo_registry import RepositoryRegistryService
 from services.repo_intelligence_service import RepoIntelligenceService
 from services.repo_onboarding_service import RepoOnboardingService
 from services.routing_benchmark_service import RoutingBenchmarkService
+from services.run_dashboard_service import RunDashboardService
 from services.run_service import RunService
 from services.scm_service import ScmService
 from services.apply_service import ApplyService
@@ -95,6 +97,7 @@ _draft_patch_review_service = DraftPatchReviewService(
 _draft_patch_execution_service = DraftPatchExecutionService(
     registry_service=RepositoryRegistryService(),
 )
+_run_dashboard_service = RunDashboardService()
 _repo_fleet_service = RepoFleetService()
 _repo_bulk_job_service = RepoBulkJobService()
 _routing_benchmark_service = RoutingBenchmarkService()
@@ -105,6 +108,13 @@ _jira_evidence_service = JiraEvidenceService()
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SESSIONS: dict[str, dict[str, str]] = {}
 _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$", re.IGNORECASE)
+_SUPPLEMENTAL_CONTEXT_MAX_NOTES_CHARS = 2000
+_SUPPLEMENTAL_CONTEXT_MAX_LIST_ITEMS = {"constraints": 20, "suggested_files": 30, "validation_hints": 20}
+_SUPPLEMENTAL_CONTEXT_MAX_ITEM_CHARS = {"constraints": 240, "suggested_files": 260, "validation_hints": 240}
+_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_NOTES_CHARS = 1200
+_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEM_CHARS = {"constraints": 180, "suggested_files": 220, "validation_hints": 180}
+_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEMS = {"constraints": 8, "suggested_files": 10, "validation_hints": 8}
+_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_TOKENS = 350
 
 
 @app.middleware("http")
@@ -205,7 +215,9 @@ class RunRetryRequest(BaseModel):
 class AnalyzeTaskRequest(BaseModel):
     jira_ticket: str
     repo_id: str = ""
+    run_id: str = ""
     execution_mode: Literal["safe_top1_write", "dry_run_all_selected", "plan_only"] = "plan_only"
+    supplemental_context: dict[str, Any] | None = None
 
 
 class StructureTaskRequest(BaseModel):
@@ -215,31 +227,46 @@ class StructureTaskRequest(BaseModel):
 class ImplementationPlanRequest(BaseModel):
     jira_ticket: str
     repo_id: str = ""
+    run_id: str = ""
     execution_mode: Literal["safe_top1_write", "dry_run_all_selected", "plan_only"] = "safe_top1_write"
     seed_context: dict[str, Any] = Field(default_factory=dict)
+    supplemental_context: dict[str, Any] | None = None
 
 
 class DraftPatchRequest(BaseModel):
     jira_ticket: str
     repo_id: str = ""
+    run_id: str = ""
     seed_context: dict[str, Any] = Field(default_factory=dict)
+    supplemental_context: dict[str, Any] | None = None
 
 
 class DraftPatchReviewRequest(BaseModel):
     jira_ticket: str
     repo_id: str = ""
+    run_id: str = ""
     decision: Literal["approved", "rejected"]
     note: str = ""
     seed_context: dict[str, Any] = Field(default_factory=dict)
+    supplemental_context: dict[str, Any] | None = None
 
 
 class DraftPatchApplyRequest(BaseModel):
     jira_ticket: str
     repo_id: str = ""
+    run_id: str = ""
     review_id: str
-    apply_mode: Literal["dry_apply", "local_apply", "branch_create"] = "dry_apply"
+    apply_mode: Literal["dry_apply", "local_apply", "workspace_apply", "branch_create"] = "dry_apply"
     note: str = ""
     seed_context: dict[str, Any] = Field(default_factory=dict)
+    supplemental_context: dict[str, Any] | None = None
+
+
+class FlowRunSupplementalContextRequest(BaseModel):
+    notes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    suggested_files: list[str] = Field(default_factory=list)
+    validation_hints: list[str] = Field(default_factory=list)
 
 
 class PreReviewRequest(BaseModel):
@@ -843,6 +870,180 @@ def _limit_items(items: list[Any] | None, *, max_items: int = 5) -> list[str]:
         for item in list(items or [])[:max_items]
         if str(item or "").strip()
     ]
+
+
+def _safe_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _json_safe_payload(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if hasattr(value, "model_dump"):
+        return _json_safe_payload(value.model_dump())
+    if isinstance(value, dict):
+        return {str(key): _json_safe_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_payload(item) for item in value]
+    return value
+
+
+def _normalize_supplemental_context(raw: Any) -> SupplementalContext | None:
+    if raw is None:
+        return None
+    payload = raw.to_dict() if hasattr(raw, "to_dict") else raw.model_dump() if hasattr(raw, "model_dump") else dict(raw or {})
+    notes = _safe_text(payload.get("notes", ""))
+    constraints = [_safe_text(item) for item in list(payload.get("constraints", []) or []) if _safe_text(item)]
+    suggested_files = [_safe_text(item) for item in list(payload.get("suggested_files", []) or []) if _safe_text(item)]
+    validation_hints = [_safe_text(item) for item in list(payload.get("validation_hints", []) or []) if _safe_text(item)]
+    if not notes and not constraints and not suggested_files and not validation_hints:
+        return None
+    return SupplementalContext(
+        notes=notes,
+        constraints=constraints,
+        suggested_files=suggested_files,
+        validation_hints=validation_hints,
+    )
+
+
+def _resolve_supplemental_context(run_id: str, raw: Any) -> SupplementalContext | None:
+    normalized = _normalize_supplemental_context(raw)
+    if normalized is not None:
+        return normalized
+    detail = _run_dashboard_service.get_run_detail(_safe_text(run_id))
+    if not detail:
+        return None
+    return _normalize_supplemental_context(detail.get("supplemental_context"))
+
+
+def _sanitize_multiline_context_text(value: Any, *, max_chars: int) -> str:
+    lines = [_safe_text(line) for line in str(value or "").splitlines()]
+    collapsed = "\n".join(line for line in lines if line).strip()
+    return collapsed[:max_chars]
+
+
+def _estimate_text_token_count(text: str) -> int:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return 0
+    return max(1, (len(normalized) + 3) // 4)
+
+
+def _trim_supplemental_context_to_prompt_budget(context: SupplementalContext) -> SupplementalContext | None:
+    trimmed = SupplementalContext(
+        notes=_sanitize_multiline_context_text(context.notes, max_chars=_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_NOTES_CHARS),
+        constraints=[_safe_text(item)[:_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEM_CHARS["constraints"]] for item in list(context.constraints or [])[:_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEMS["constraints"]] if _safe_text(item)],
+        suggested_files=[_safe_text(item)[:_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEM_CHARS["suggested_files"]] for item in list(context.suggested_files or [])[:_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEMS["suggested_files"]] if _safe_text(item)],
+        validation_hints=[_safe_text(item)[:_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEM_CHARS["validation_hints"]] for item in list(context.validation_hints or [])[:_SUPPLEMENTAL_CONTEXT_PROMPT_MAX_ITEMS["validation_hints"]] if _safe_text(item)],
+    )
+    while _estimate_text_token_count(_format_supplemental_context_block(trimmed, for_logging=False)) > _SUPPLEMENTAL_CONTEXT_PROMPT_MAX_TOKENS:
+        if trimmed.validation_hints:
+            trimmed.validation_hints = trimmed.validation_hints[:-1]
+            continue
+        if trimmed.suggested_files:
+            trimmed.suggested_files = trimmed.suggested_files[:-1]
+            continue
+        if trimmed.constraints:
+            trimmed.constraints = trimmed.constraints[:-1]
+            continue
+        if trimmed.notes:
+            shorter = trimmed.notes[: max(0, len(trimmed.notes) - 120)].rstrip()
+            if shorter == trimmed.notes:
+                shorter = trimmed.notes[: max(0, len(trimmed.notes) - 1)].rstrip()
+            trimmed.notes = shorter
+            continue
+        break
+    if not trimmed.notes and not trimmed.constraints and not trimmed.suggested_files and not trimmed.validation_hints:
+        return None
+    return trimmed
+
+
+def _sanitize_supplemental_context_payload(raw: Any) -> SupplementalContext | None:
+    normalized = _normalize_supplemental_context(raw)
+    if normalized is None:
+        return None
+
+    def _trim_list(values: list[str], *, max_items: int, max_chars: int) -> list[str]:
+        items: list[str] = []
+        for item in list(values or []):
+            value = _safe_text(item)[:max_chars]
+            if value:
+                items.append(value)
+            if len(items) >= max_items:
+                break
+        return items
+
+    notes = _sanitize_multiline_context_text(normalized.notes, max_chars=_SUPPLEMENTAL_CONTEXT_MAX_NOTES_CHARS)
+    constraints = _trim_list(
+        normalized.constraints,
+        max_items=_SUPPLEMENTAL_CONTEXT_MAX_LIST_ITEMS["constraints"],
+        max_chars=_SUPPLEMENTAL_CONTEXT_MAX_ITEM_CHARS["constraints"],
+    )
+    suggested_files = _trim_list(
+        normalized.suggested_files,
+        max_items=_SUPPLEMENTAL_CONTEXT_MAX_LIST_ITEMS["suggested_files"],
+        max_chars=_SUPPLEMENTAL_CONTEXT_MAX_ITEM_CHARS["suggested_files"],
+    )
+    validation_hints = _trim_list(
+        normalized.validation_hints,
+        max_items=_SUPPLEMENTAL_CONTEXT_MAX_LIST_ITEMS["validation_hints"],
+        max_chars=_SUPPLEMENTAL_CONTEXT_MAX_ITEM_CHARS["validation_hints"],
+    )
+    if not notes and not constraints and not suggested_files and not validation_hints:
+        return None
+    return SupplementalContext(
+        notes=notes,
+        constraints=constraints,
+        suggested_files=suggested_files,
+        validation_hints=validation_hints,
+    )
+
+
+def _supplemental_context_to_prompt_payload(raw: Any) -> SupplementalContext | None:
+    normalized = _sanitize_supplemental_context_payload(raw)
+    if normalized is None:
+        return None
+    return _trim_supplemental_context_to_prompt_budget(normalized)
+
+
+def _format_supplemental_context_block(raw: Any, *, for_logging: bool = True) -> str:
+    context = raw if isinstance(raw, SupplementalContext) else _supplemental_context_to_prompt_payload(raw)
+    if context is None:
+        return ""
+    lines = ["User supplemental context (higher priority than heuristics, lower than hard constraints):"]
+    if context.notes:
+        lines.extend(["", "Notes:", context.notes])
+    if context.constraints:
+        lines.extend(["", "Constraints:"])
+        lines.extend(f"- {item}" for item in context.constraints)
+    if context.suggested_files:
+        lines.extend(["", "Suggested files:"])
+        lines.extend(f"- {item}" for item in context.suggested_files)
+    if context.validation_hints:
+        lines.extend(["", "Validation hints:"])
+        lines.extend(f"- {item}" for item in context.validation_hints)
+    return "\n".join(lines).strip()
+
+
+def _append_supplemental_context_to_prompt(prompt_task_text: str, raw: Any, *, usage: str = "") -> str:
+    prompt = _clean_user_text(prompt_task_text)
+    prompt_context = _supplemental_context_to_prompt_payload(raw)
+    block = _format_supplemental_context_block(prompt_context, for_logging=False)
+    if not block:
+        return prompt
+    _automation_audit_logger.info(
+        "supplemental_context_applied usage=%s notes=%s constraints=%s suggested_files=%s validation_hints=%s chars=%s approx_tokens=%s",
+        str(usage or "").strip() or "workflow",
+        bool(getattr(prompt_context, "notes", "")),
+        len(list(getattr(prompt_context, "constraints", []) or [])),
+        len(list(getattr(prompt_context, "suggested_files", []) or [])),
+        len(list(getattr(prompt_context, "validation_hints", []) or [])),
+        len(block),
+        _estimate_text_token_count(block),
+    )
+    if not prompt:
+        return block
+    return f"{prompt}\n\n{block}".strip()
 
 
 def _unknown_files_list(locale: str = DEFAULT_LOCALE) -> list[str]:
@@ -1488,7 +1689,12 @@ def _compose_resolved_jira_text(issue_payload: dict[str, Any]) -> str:
     return "\n".join(line for line in lines if line).strip()
 
 
-def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dict[str, Any]:
+def _resolve_jira_workflow_input(
+    jira_ticket: str,
+    *,
+    workflow_type: str,
+    supplemental_context: SupplementalContext | None = None,
+) -> dict[str, Any]:
     request_input_text = str(jira_ticket or "").strip()
     resolved_jira_auth_present = bool(jira_auth_present())
     if not request_input_text:
@@ -1551,6 +1757,12 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
     prompt_task_text = resolved_text
     if supplemental_text:
         prompt_task_text = f"{resolved_text}\n\nSupplemental Jira evidence:\n{supplemental_text}".strip()
+    user_supplemental_context_text = _format_supplemental_context_block(supplemental_context)
+    prompt_task_text = _append_supplemental_context_to_prompt(
+        prompt_task_text,
+        supplemental_context,
+        usage=f"{workflow_type}:jira_input",
+    )
     acceptance_criteria = [
         _clean_user_text(item)
         for item in list(issue_payload.get("acceptance_criteria", []) or [])
@@ -1573,6 +1785,9 @@ def _resolve_jira_workflow_input(jira_ticket: str, *, workflow_type: str) -> dic
         "final_workflow_input": resolved_text,
         "final_workflow_input_hash": _hash_workflow_input(resolved_text),
         "prompt_task_text": prompt_task_text,
+        "user_supplemental_context": supplemental_context.to_dict() if supplemental_context is not None else None,
+        "user_supplemental_context_text": user_supplemental_context_text,
+        "user_supplemental_context_text_length": len(user_supplemental_context_text),
         "acceptance_criteria": acceptance_criteria,
         "acceptance_criteria_count": len(acceptance_criteria),
         "acceptance_criteria_source": str(issue_payload.get("acceptance_criteria_source", "") or "").strip(),
@@ -1730,6 +1945,9 @@ def _workflow_technical_details(
         "final_workflow_input": _clean_user_text(resolved_input.get("final_workflow_input", "") or normalized_task_text),
         "final_workflow_input_hash": str(resolved_input.get("final_workflow_input_hash", "") or _hash_workflow_input(normalized_task_text)).strip(),
         "prompt_task_text_length": len(_clean_user_text(resolved_input.get("prompt_task_text", "") or "")),
+        "user_supplemental_context": _json_safe_payload(resolved_input.get("user_supplemental_context")),
+        "user_supplemental_context_text": _clean_user_text(resolved_input.get("user_supplemental_context_text", "") or ""),
+        "user_supplemental_context_text_length": int(resolved_input.get("user_supplemental_context_text_length", 0) or 0),
         "acceptance_criteria_count": int(resolved_input.get("acceptance_criteria_count", 0) or 0),
         "acceptance_criteria_source": str(resolved_input.get("acceptance_criteria_source", "") or "").strip(),
         "acceptance_criteria_included_in_workflow_input": bool(resolved_input.get("acceptance_criteria_included_in_workflow_input", False)),
@@ -2598,6 +2816,7 @@ def _normalize_implementation_plan_preview_items(items: list[dict[str, Any]] | N
 def _seeded_implementation_plan_input_debug(
     jira_ticket: str,
     seed_context: dict[str, Any],
+    supplemental_context: SupplementalContext | None = None,
 ) -> dict[str, Any]:
     technical_details = dict(seed_context.get("technical_details", {}) or {})
     final_workflow_input = _clean_user_text(
@@ -2609,6 +2828,12 @@ def _seeded_implementation_plan_input_debug(
         seed_context.get("prompt_task_text", "")
         or technical_details.get("prompt_task_text", "")
         or final_workflow_input
+    )
+    user_supplemental_context_text = _format_supplemental_context_block(supplemental_context)
+    prompt_task_text = _append_supplemental_context_to_prompt(
+        prompt_task_text,
+        supplemental_context,
+        usage="implementation_plan:seeded_input",
     )
     selected_repos = list(seed_context.get("selected_repos", []) or [])
     top_candidate_files = _normalize_selection_candidate_dicts(seed_context.get("top_candidate_files"), limit=5)
@@ -2631,6 +2856,9 @@ def _seeded_implementation_plan_input_debug(
         "final_workflow_input": final_workflow_input,
         "final_workflow_input_hash": _hash_workflow_input(final_workflow_input),
         "prompt_task_text": prompt_task_text,
+        "user_supplemental_context": supplemental_context.to_dict() if supplemental_context is not None else None,
+        "user_supplemental_context_text": user_supplemental_context_text,
+        "user_supplemental_context_text_length": len(user_supplemental_context_text),
         "supplemental_jira_evidence_text": _clean_user_text(technical_details.get("supplemental_jira_evidence_text", "") or ""),
         "supplemental_jira_evidence_text_length": int(technical_details.get("supplemental_jira_evidence_text_length", 0) or 0),
         "jira_title_present": bool(technical_details.get("jira_title_present", False)),
@@ -3704,7 +3932,7 @@ def _draft_patch_diff_hash(diff_text: str) -> str:
 
 
 def _draft_patch_apply_modes() -> list[str]:
-    return ["dry_apply", "local_apply"]
+    return ["dry_apply", "workspace_apply", "local_apply"]
 
 
 def _build_draft_patch_apply_input(
@@ -3785,6 +4013,7 @@ def _build_draft_patch_result(
     analysis_mode: str,
     selected_files_count: int,
     final_workflow_input: str,
+    supplemental_context: SupplementalContext | None = None,
     locale: str = DEFAULT_LOCALE,
 ) -> DraftPatchWorkflowResult:
     gate = _compute_patch_generation_gate(
@@ -3853,6 +4082,12 @@ def _build_draft_patch_result(
         if locale == "en"
         else f"Draft patch {'готовий' if gate['patch_generation_ready'] else 'заблокований'} для {repo_id}; обмежені файли: {', '.join(allowed_files) or '-'}."
     )
+    user_supplemental_context_text = _format_supplemental_context_block(supplemental_context)
+    prompt_task_text = _append_supplemental_context_to_prompt(
+        final_workflow_input,
+        supplemental_context,
+        usage="draft_patch:seeded_input",
+    )
     technical_details = {
         "jira_ticket": str(jira_ticket or "").strip(),
         "repo_id": str(repo_id or "").strip(),
@@ -3864,6 +4099,10 @@ def _build_draft_patch_result(
         "novelty_score": int(novelty_score or 0),
         "critical_decision_questions": list(gate.get("critical_decision_questions", []) or []),
         "final_workflow_input_excerpt": str(final_workflow_input or "").strip()[:400],
+        "prompt_task_text_excerpt": str(prompt_task_text or "").strip()[:600],
+        "user_supplemental_context": supplemental_context.to_dict() if supplemental_context is not None else None,
+        "user_supplemental_context_text": user_supplemental_context_text,
+        "user_supplemental_context_text_length": len(user_supplemental_context_text),
     }
     generated_diff = "\n".join(diff_parts).strip()
     return DraftPatchWorkflowResult(
@@ -3893,6 +4132,7 @@ def _draft_patch_result_from_seed(
     jira_ticket: str,
     repo_id: str,
     seed_context: dict[str, Any],
+    supplemental_context: SupplementalContext | None = None,
     locale: str,
 ) -> DraftPatchWorkflowResult:
     technical_details = dict(seed_context.get("technical_details", {}) or {})
@@ -3926,6 +4166,7 @@ def _draft_patch_result_from_seed(
         analysis_mode=str(seed_context.get("analysis_mode", "") or technical_details.get("analysis_mode", "") or "").strip(),
         selected_files_count=int(seed_context.get("selected_files_count", 0) or technical_details.get("selected_files_count", 0) or 0),
         final_workflow_input=str(seed_context.get("final_workflow_input", "") or technical_details.get("final_workflow_input", "") or "").strip(),
+        supplemental_context=supplemental_context,
         locale=locale,
     )
 
@@ -3955,6 +4196,91 @@ def _apply_blockers_for_draft_result(
     if str(apply_mode or "").strip().lower() == "branch_create":
         blockers.append("branch_create is not enabled yet")
     return list(dict.fromkeys([item for item in blockers if str(item or "").strip()]))
+
+
+def _draft_patch_regression_map_has_entries(regression_map: Any) -> bool:
+    payload = regression_map.model_dump() if hasattr(regression_map, "model_dump") else dict(regression_map or {})
+    return bool(
+        payload.get("restore")
+        or payload.get("build")
+        or payload.get("test")
+        or list(payload.get("targeted_stages", []) or [])
+    )
+
+
+def _load_persisted_draft_patch_execution(review_id: str) -> tuple[DraftPatchExecutionResult | None, str]:
+    try:
+        return _draft_patch_execution_service.load_execution(review_id), ""
+    except (ValidationError, ValueError) as exc:
+        return None, str(exc)
+
+
+def _persist_draft_patch_execution_artifact(
+    execution_record: DraftPatchExecutionResult | None,
+) -> DraftPatchExecutionResult | None:
+    if execution_record is None:
+        return None
+    return _draft_patch_execution_service.save_execution(execution_record)
+
+
+def _derive_apply_state_from_execution_artifact(
+    execution_record: DraftPatchExecutionResult | None,
+    *,
+    load_error: str = "",
+) -> tuple[bool, bool, list[str]]:
+    if execution_record is None:
+        blockers = ["execution_not_validated"]
+        if str(load_error or "").strip():
+            blockers.append(str(load_error).strip())
+        return False, False, list(dict.fromkeys(blockers))
+    validated = bool(execution_record.validated)
+    has_regressions = _draft_patch_regression_map_has_entries(execution_record.regression_map)
+    blockers = list(execution_record.apply_blockers or [])
+    blocked_reason = str(getattr(execution_record, "blocked_reason", "") or "").strip()
+    if blocked_reason:
+        blockers.append(blocked_reason)
+    if not validated or has_regressions:
+        blockers.append("execution_not_validated")
+    blockers = list(dict.fromkeys([str(item or "").strip() for item in blockers if str(item or "").strip()]))
+    apply_ready = validated and not has_regressions and not blockers
+    return validated, apply_ready, blockers
+
+
+def _synchronize_execution_artifact_state(
+    execution_record: DraftPatchExecutionResult | None,
+    *,
+    load_error: str = "",
+    persist: bool = False,
+) -> tuple[DraftPatchExecutionResult | None, bool, bool, list[str], list[str]]:
+    validated, apply_ready, apply_blockers = _derive_apply_state_from_execution_artifact(
+        execution_record,
+        load_error=load_error,
+    )
+    if execution_record is None:
+        errors = [str(load_error or "").strip()] if str(load_error or "").strip() else []
+        return None, validated, apply_ready, apply_blockers, errors
+    consistency_errors: list[str] = []
+    normalized_existing_blockers = list(
+        dict.fromkeys(
+            [
+                str(item or "").strip()
+                for item in list(execution_record.apply_blockers or [])
+                if str(item or "").strip()
+            ]
+        )
+    )
+    if bool(execution_record.validated) != validated:
+        consistency_errors.append("validated state does not match persisted execution artifact invariants.")
+    if bool(execution_record.apply_ready) != apply_ready:
+        consistency_errors.append("apply_ready does not match persisted execution artifact invariants.")
+    if normalized_existing_blockers != apply_blockers:
+        consistency_errors.append("apply_blockers do not match persisted execution artifact invariants.")
+    execution_record.validated = validated
+    execution_record.apply_ready = apply_ready
+    execution_record.apply_blockers = apply_blockers
+    if persist and consistency_errors:
+        _persist_draft_patch_execution_artifact(execution_record)
+    return execution_record, validated, apply_ready, apply_blockers, consistency_errors
 
 
 def _apply_input_from_payload(payload: ApplyInputPayload | dict[str, Any] | None) -> ApplyInput:
@@ -3998,6 +4324,7 @@ def _overlay_draft_patch_execution_result(
         "execution_id": result.execution_id,
         "validated": bool(result.validated),
         "validation_status": result.validation_status,
+        "blocked_reason": str(record.blocked_reason or "").strip(),
         "repair_attempts_count": len(result.repair_attempts or []),
         "repaired": bool(result.repaired),
         "contract_version": str(record.contract_version or "").strip(),
@@ -4499,6 +4826,7 @@ def _build_analyze_task_result(run_record: RunRecord, detail: RunDetail, *, loca
     technical_details["advisory_suggestions_debug"] = list(quality_feedback.get("suggested_additions_debug", []) or [])
     _attach_workflow_technical_details(detail, technical_details, workflow_name="analyze_task")
     return AnalyzeTaskWorkflowResult(
+        repo_id=primary_repo_id,
         task_quality_summary=task_quality_summary,
         quality_score=int(quality_score_payload.get("quality_score", 0) or 0),
         confidence_score=int(novelty_payload.get("confidence_score", 0) or 0),
@@ -7041,9 +7369,14 @@ def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any
     locale = _locale_from_request(request)
     actor_context = _build_actor_context(request)
     _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
+    supplemental_context = _resolve_supplemental_context(payload.run_id, payload.supplemental_context)
     input_debug: dict[str, Any]
     try:
-        input_debug = _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="analyze_task")
+        input_debug = _resolve_jira_workflow_input(
+            payload.jira_ticket,
+            workflow_type="analyze_task",
+            supplemental_context=supplemental_context,
+        )
     except HTTPException as exc:
         detail = dict(exc.detail or {}) if isinstance(exc.detail, dict) else {"message": str(exc.detail or exc)}
         if int(exc.status_code or 0) >= 424:
@@ -7089,13 +7422,28 @@ def analyze_task(payload: AnalyzeTaskRequest, request: Request) -> dict[str, Any
     detail.spec_result = spec_payload
     _attach_workflow_input_debug(detail, input_debug, workflow_name="analyze_task")
     result = _build_analyze_task_result(run_record, detail, locale=locale)
+    result.supplemental_context = supplemental_context
     detail.final_result_summary = str(result.task_quality_summary or "").strip()
     detail.recommendation = str(result.recommendation or "").strip()
     detail.run_outcome_type = "success"
     _persist_workflow_detail(run_record, detail)
+    delivery_run_id = _safe_text(payload.run_id) or _run_dashboard_service.create_run_id()
+    _run_dashboard_service.record_stage(
+        run_id=delivery_run_id,
+        stage="analyze",
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=_safe_text(result.repo_id),
+        analyze_payload=_json_safe_payload({
+            "workflow": "analyze_task",
+            "run_id": run_record.run_id,
+            "result": result.to_dict(),
+        }),
+        supplemental_context=supplemental_context.to_dict() if supplemental_context is not None else None,
+    )
     return {
         "workflow": "analyze_task",
         "run_id": run_record.run_id,
+        "delivery_run_id": delivery_run_id,
         "result": result.to_dict(),
     }
 
@@ -7130,10 +7478,15 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
     actor_context = _build_actor_context(request)
     _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
     seed_context = dict(payload.seed_context or {})
+    supplemental_context = _resolve_supplemental_context(payload.run_id, payload.supplemental_context)
     input_debug = (
-        _seeded_implementation_plan_input_debug(payload.jira_ticket, seed_context)
+        _seeded_implementation_plan_input_debug(payload.jira_ticket, seed_context, supplemental_context=supplemental_context)
         if seed_context
-        else _resolve_jira_workflow_input(payload.jira_ticket, workflow_type="implementation_plan")
+        else _resolve_jira_workflow_input(
+            payload.jira_ticket,
+            workflow_type="implementation_plan",
+            supplemental_context=supplemental_context,
+        )
     )
     selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
     resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
@@ -7162,10 +7515,25 @@ def implementation_plan(payload: ImplementationPlanRequest, request: Request) ->
     detail.spec_result = spec_payload
     _attach_workflow_input_debug(detail, input_debug, workflow_name="implementation_plan")
     result = _build_implementation_plan_result(run_record, detail, locale=locale)
+    result.supplemental_context = supplemental_context
     _persist_workflow_detail(run_record, detail)
+    delivery_run_id = _safe_text(payload.run_id) or _run_dashboard_service.create_run_id()
+    _run_dashboard_service.record_stage(
+        run_id=delivery_run_id,
+        stage="plan",
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        plan_payload=_json_safe_payload({
+            "workflow": "implementation_plan",
+            "run_id": run_record.run_id,
+            "result": result.to_dict(),
+        }),
+        supplemental_context=supplemental_context.to_dict() if supplemental_context is not None else None,
+    )
     return {
         "workflow": "implementation_plan",
         "run_id": run_record.run_id,
+        "delivery_run_id": delivery_run_id,
         "result": result.to_dict(),
     }
 
@@ -7176,16 +7544,32 @@ def generate_draft_patch(payload: DraftPatchRequest, request: Request) -> dict[s
     _build_actor_context(request)
     _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
     seed_context = dict(payload.seed_context or {})
+    supplemental_context = _resolve_supplemental_context(payload.run_id, payload.supplemental_context)
     selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
     resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
     result = _draft_patch_result_from_seed(
         jira_ticket=str(payload.jira_ticket or "").strip(),
         repo_id=resolved_repo_id,
         seed_context=seed_context,
+        supplemental_context=supplemental_context,
         locale=locale,
+    )
+    result.supplemental_context = supplemental_context
+    delivery_run_id = _safe_text(payload.run_id) or _run_dashboard_service.create_run_id()
+    _run_dashboard_service.record_stage(
+        run_id=delivery_run_id,
+        stage="draft",
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        draft_payload=_json_safe_payload({
+            "workflow": "generate_draft_patch",
+            "result": result.to_dict(),
+        }),
+        supplemental_context=supplemental_context.to_dict() if supplemental_context is not None else None,
     )
     return {
         "workflow": "generate_draft_patch",
+        "delivery_run_id": delivery_run_id,
         "result": result.to_dict(),
     }
 
@@ -7196,14 +7580,17 @@ def review_draft_patch(payload: DraftPatchReviewRequest, request: Request) -> di
     actor_context = _build_actor_context(request)
     _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
     seed_context = dict(payload.seed_context or {})
+    supplemental_context = _resolve_supplemental_context(payload.run_id, payload.supplemental_context)
     selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
     resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
     result = _draft_patch_result_from_seed(
         jira_ticket=str(payload.jira_ticket or "").strip(),
         repo_id=resolved_repo_id,
         seed_context=seed_context,
+        supplemental_context=supplemental_context,
         locale=locale,
     )
+    result.supplemental_context = supplemental_context
     review_record = _draft_patch_review_service.record_review(
         actor_id=actor_context.actor_id,
         actor_role=actor_context.role,
@@ -7222,6 +7609,8 @@ def review_draft_patch(payload: DraftPatchReviewRequest, request: Request) -> di
     result.review_state = str(review_record.get("decision", "") or "pending").strip()
     result.reviewed_by = str(review_record.get("actor_id", "") or "").strip()
     execution_record: DraftPatchExecutionResult | None = None
+    runtime_execution_record: DraftPatchExecutionResult | None = None
+    execution_load_error = ""
     if result.review_state == "approved":
         try:
             handoff = DraftPatchExecutionHandoff(
@@ -7243,16 +7632,54 @@ def review_draft_patch(payload: DraftPatchReviewRequest, request: Request) -> di
                 diff_hash=str(result.diff_hash or "").strip(),
                 review_state=result.review_state,
             )
-            execution_record = _draft_patch_execution_service.execute_approved_draft(
+            runtime_execution_record = _draft_patch_execution_service.execute_approved_draft(
                 handoff,
             )
         except Exception as exc:
             raise HTTPException(status_code=400, detail={"error": "draft_patch_validation_failed", "message": str(exc)}) from exc
+        review_id = str(review_record.get("review_id", "") or "").strip()
+        if runtime_execution_record is not None:
+            _persist_draft_patch_execution_artifact(runtime_execution_record)
+        persisted_execution_record, execution_load_error = _load_persisted_draft_patch_execution(review_id)
+        if persisted_execution_record is None and runtime_execution_record is not None:
+            _persist_draft_patch_execution_artifact(runtime_execution_record)
+            persisted_execution_record, execution_load_error = _load_persisted_draft_patch_execution(review_id)
+        execution_record, validated, apply_ready, apply_blockers, execution_consistency_errors = _synchronize_execution_artifact_state(
+            persisted_execution_record,
+            load_error=execution_load_error,
+            persist=True,
+        )
         result = _overlay_draft_patch_execution_result(result=result, execution_record=execution_record)
-    result.apply_blockers = _apply_blockers_for_draft_result(result=result, review_record=review_record, execution_record=execution_record)
-    result.apply_ready = not bool(result.apply_blockers)
+        result.validated = validated
+        result.apply_ready = apply_ready
+        result.apply_blockers = apply_blockers
+        if execution_load_error or execution_consistency_errors:
+            technical_details = dict(result.technical_details or {})
+            if execution_load_error:
+                technical_details["draft_patch_execution_load_error"] = execution_load_error
+            if execution_consistency_errors:
+                technical_details["draft_patch_execution_consistency_errors"] = execution_consistency_errors
+            result.technical_details = technical_details
+    else:
+        result.apply_blockers = _apply_blockers_for_draft_result(result=result, review_record=review_record, execution_record=execution_record)
+        result.apply_ready = not bool(result.apply_blockers)
+    delivery_run_id = _safe_text(payload.run_id) or _run_dashboard_service.create_run_id()
+    _run_dashboard_service.record_stage(
+        run_id=delivery_run_id,
+        stage="review",
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        draft_payload=_json_safe_payload({
+            "workflow": "generate_draft_patch",
+            "result": result.to_dict(),
+        }),
+        review_record=review_record,
+        execution_record=_json_safe_payload(execution_record),
+        supplemental_context=supplemental_context.to_dict() if supplemental_context is not None else None,
+    )
     return {
         "workflow": "review_draft_patch",
+        "delivery_run_id": delivery_run_id,
         "result": result.to_dict(),
         "review": review_record,
         "execution": execution_record,
@@ -7265,29 +7692,62 @@ def apply_draft_patch(payload: DraftPatchApplyRequest, request: Request) -> dict
     actor_context = _build_actor_context(request)
     _set_request_audit_context(request, jira_ticket=payload.jira_ticket, repo_id=payload.repo_id)
     seed_context = dict(payload.seed_context or {})
+    supplemental_context = _resolve_supplemental_context(payload.run_id, payload.supplemental_context)
     selected_repos = [dict(item or {}) for item in list(seed_context.get("selected_repos", []) or []) if isinstance(item, dict)]
     resolved_repo_id = str(payload.repo_id or "").strip() or str((selected_repos[0].get("repo_id", "") if selected_repos else "") or "").strip()
     result = _draft_patch_result_from_seed(
         jira_ticket=str(payload.jira_ticket or "").strip(),
         repo_id=resolved_repo_id,
         seed_context=seed_context,
+        supplemental_context=supplemental_context,
         locale=locale,
     )
+    result.supplemental_context = supplemental_context
     review_record = _draft_patch_review_service.load_review(str(payload.review_id or "").strip())
     if not review_record:
         raise HTTPException(status_code=404, detail={"error": "draft_patch_review_not_found", "message": "Draft patch review record was not found."})
-    execution_record = _draft_patch_execution_service.load_execution(str(payload.review_id or "").strip())
+    execution_record, execution_load_error = _load_persisted_draft_patch_execution(str(payload.review_id or "").strip())
     if not execution_record:
-        raise HTTPException(status_code=409, detail={"error": "draft_patch_execution_missing", "message": "Draft patch apply requires a persisted validated execution artifact."})
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "draft_patch_execution_invalid",
+                "message": "Execution artifact is stale or inconsistent. Re-run execution.",
+                "validation_error": execution_load_error,
+            },
+        )
+    execution_record, execution_validated, execution_apply_ready, execution_blockers, execution_consistency_errors = _synchronize_execution_artifact_state(
+        execution_record,
+        persist=False,
+    )
+    if execution_load_error or execution_consistency_errors:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "draft_patch_execution_invalid",
+                "message": "Execution artifact is stale or inconsistent. Re-run execution.",
+                "validation_error": execution_load_error,
+                "consistency_errors": execution_consistency_errors,
+            },
+        )
     if str(execution_record.repo_id or "").strip() != str(resolved_repo_id or "").strip():
         raise HTTPException(status_code=409, detail={"error": "draft_patch_repo_mismatch", "message": "Draft patch execution artifact repo_id does not match the apply request repo_id."})
-    if not bool(execution_record.validated):
+    if not execution_validated:
         raise HTTPException(
             status_code=409,
             detail={
                 "error": "draft_patch_not_validated",
                 "message": "Draft patch apply is blocked because the execution artifact is not validated.",
-                "blockers": list(execution_record.apply_blockers or []),
+                "blockers": execution_blockers,
+            },
+        )
+    if not execution_apply_ready:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "draft_patch_not_apply_ready",
+                "message": "Draft patch apply is blocked because the execution artifact is not apply-ready.",
+                "blockers": execution_blockers,
             },
         )
     result = _overlay_draft_patch_execution_result(result=result, execution_record=execution_record)
@@ -7313,6 +7773,7 @@ def apply_draft_patch(payload: DraftPatchApplyRequest, request: Request) -> dict
             allow_apply=not bool(apply_blockers),
             blockers=apply_blockers,
             validation_plan=list(result.validation_plan or []),
+            execution_id=str(execution_record.execution_id or "").strip(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"error": "draft_patch_apply_failed", "message": str(exc)}) from exc
@@ -7325,8 +7786,24 @@ def apply_draft_patch(payload: DraftPatchApplyRequest, request: Request) -> dict
     result.applied = bool(apply_record.get("allow_apply", False)) and bool(apply_record.get("apply_payload", {}).get("apply_result", {}).get("applied", False))
     result.apply_artifact_path = (Path("artifacts") / "draft_patch_applies" / f"{apply_record.get('apply_id', '')}.json").as_posix()
     result.commit_hash = str(apply_record.get("apply_payload", {}).get("commit_hash", "") or "").strip()
+    delivery_run_id = _safe_text(payload.run_id) or _run_dashboard_service.create_run_id()
+    _run_dashboard_service.record_stage(
+        run_id=delivery_run_id,
+        stage="apply",
+        jira_ticket=str(payload.jira_ticket or "").strip(),
+        repo_id=resolved_repo_id,
+        draft_payload=_json_safe_payload({
+            "workflow": "generate_draft_patch",
+            "result": result.to_dict(),
+        }),
+        review_record=review_record,
+        execution_record=_json_safe_payload(execution_record),
+        apply_record=apply_record,
+        supplemental_context=supplemental_context.to_dict() if supplemental_context is not None else None,
+    )
     return {
         "workflow": "apply_draft_patch",
+        "delivery_run_id": delivery_run_id,
         "result": result.to_dict(),
         "apply": apply_record,
     }
@@ -7783,6 +8260,80 @@ def reject_run(run_id: str, request: Request, payload: RunDecisionRequest | None
         "blocked_reason": str(result.metadata.get("blocked_reason", "") or "").strip(),
         "success": bool(result.metadata.get("success", result.success)),
     }
+
+
+@app.get("/flow-runs")
+def list_flow_runs(
+    request: Request,
+    jira_ticket: str = Query(""),
+    repo_id: str = Query(""),
+    status: str = Query(""),
+) -> dict[str, Any]:
+    _build_actor_context(request)
+    runs = _run_dashboard_service.list_runs(jira_ticket=jira_ticket, repo_id=repo_id, status=status)
+    stats = {
+        "total_runs": len(runs),
+        "running": sum(1 for item in runs if str(item.get("normalized_status", "")) == "running"),
+        "awaiting_review": sum(1 for item in runs if str(item.get("normalized_status", "")) == "awaiting_review"),
+        "ready_to_apply": sum(1 for item in runs if str(item.get("normalized_status", "")) == "ready_to_apply"),
+        "completed": sum(1 for item in runs if str(item.get("normalized_status", "")) == "completed"),
+        "blocked_or_failed": sum(1 for item in runs if str(item.get("normalized_status", "")) in {"blocked", "failed"}),
+        "rejected": sum(1 for item in runs if str(item.get("normalized_status", "")) == "rejected"),
+    }
+    return {"runs": runs, "stats": stats}
+
+
+@app.get("/flow-runs/artifacts/view")
+def view_flow_run_artifact(path: str, request: Request) -> dict[str, Any]:
+    _build_actor_context(request)
+    normalized = Path(path)
+    allowed_roots = [
+        _run_dashboard_service._review_storage_dir.resolve(),
+        _run_dashboard_service._execution_storage_dir.resolve(),
+        _run_dashboard_service._apply_storage_dir.resolve(),
+        _run_dashboard_service._storage_dir.resolve(),
+    ]
+    candidate = normalized.resolve() if normalized.is_absolute() else Path(path).resolve()
+    if not any(root == candidate or root in candidate.parents for root in allowed_roots):
+        raise HTTPException(status_code=400, detail={"error": "artifact_path_not_allowed", "message": "Artifact path is not allowed."})
+    if not candidate.exists() or not candidate.is_file():
+        raise HTTPException(status_code=404, detail={"error": "artifact_not_found", "message": "Artifact file was not found."})
+    try:
+        payload = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail={"error": "artifact_not_readable", "message": str(exc)}) from exc
+    return {"path": candidate.as_posix(), "payload": payload}
+
+
+@app.get("/flow-runs/{run_id}")
+def show_flow_run(run_id: str, request: Request) -> dict[str, Any]:
+    _build_actor_context(request)
+    detail = _run_dashboard_service.get_run_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail={"error": "flow_run_not_found", "message": "AI Delivery Flow run was not found."})
+    return {"run": detail}
+
+
+@app.post("/flow-runs/{run_id}/context")
+def update_flow_run_context(run_id: str, payload: FlowRunSupplementalContextRequest, request: Request) -> dict[str, Any]:
+    _build_actor_context(request)
+    detail = _run_dashboard_service.get_run_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail={"error": "flow_run_not_found", "message": "AI Delivery Flow run was not found."})
+    sanitized = _sanitize_supplemental_context_payload(payload.model_dump())
+    workflow_state = dict(detail.get("workflow_state", {}) or {})
+    current_step_key = _safe_text(workflow_state.get("currentStepKey", "")) or _safe_text(detail.get("current_step", "")).lower() or "input"
+    updated_record = _run_dashboard_service.record_stage(
+        run_id=_safe_text(run_id),
+        stage=current_step_key,
+        jira_ticket=_safe_text(detail.get("jira_ticket", "")),
+        repo_id=_safe_text(detail.get("repo_id", "")),
+        supplemental_context=sanitized.to_dict() if sanitized is not None else None,
+    )
+    updated_detail = _run_dashboard_service.get_run_detail(_safe_text(updated_record.get("run_id", run_id)))
+    if updated_detail is None:
+        raise HTTPException(status_code=500, detail={"error": "flow_run_context_update_failed", "message": "Flow run context was not persisted correctly."})
+    return {"run": updated_detail}
 
 
 app.mount("/ui", StaticFiles(directory=_STATIC_DIR, html=True), name="ui")

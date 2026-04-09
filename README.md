@@ -351,4 +351,4 @@ The intended production shape is:
 - Postgres in Docker
 - environment-driven configuration from `.env` or container environment variables
 
-This change set keeps the existing runtime architecture intact and only adds UTF-8 cleanup, Docker packaging, and clearer operational documentation.
+This change set keeps the existing runtime architecture intact and only adds UTF-8 cleanup, Docker packaging, and clearer operational documentation..
