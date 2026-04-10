@@ -1,0 +1,1877 @@
+{
+  "branches": [
+    {
+      "name": "feature/git-bonus-demo-5f0fa6",
+      "created_at": "2026-04-10T05:28:30.719074+00:00"
+    },
+    {
+      "name": "feature/as-a-user,-i-want-to-sign-in-with-email-and-pass-a26d20",
+      "created_at": "2026-04-10T05:29:09.065010+00:00"
+    },
+    {
+      "name": "feature/as-a-manager,-i-want-to-export-tasks-to-csv-so-t-103222",
+      "created_at": "2026-04-10T05:29:09.130412+00:00"
+    },
+    {
+      "name": "feature/as-a-customer,-i-want-to-reset-my-password-via-e-8535f8",
+      "created_at": "2026-04-10T05:29:09.201283+00:00"
+    },
+    {
+      "name": "feature/as-a-team-lead,-i-want-a-searchable-task-list-so-282408",
+      "created_at": "2026-04-10T05:29:09.270306+00:00"
+    },
+    {
+      "name": "feature/as-an-admin,-i-want-role-based-access-control-fo-0adcba",
+      "created_at": "2026-04-10T05:29:09.341094+00:00"
+    },
+    {
+      "name": "feature/as-a-user,-i-want-browser-notifications-for-fail-1be5ac",
+      "created_at": "2026-04-10T05:29:09.409995+00:00"
+    },
+    {
+      "name": "feature/design-the-whole-next-generation-enterprise-plat-096532",
+      "created_at": "2026-04-10T05:29:09.481210+00:00"
+    },
+    {
+      "name": "feature/rename-the-submit-button-from-send-to-save-4e569d",
+      "created_at": "2026-04-10T05:29:09.606319+00:00"
+    },
+    {
+      "name": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4",
+      "created_at": "2026-04-10T05:29:09.732387+00:00"
+    },
+    {
+      "name": "feature/make-the-app-faster-b1478b",
+      "created_at": "2026-04-10T05:29:09.858784+00:00"
+    },
+    {
+      "name": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59",
+      "created_at": "2026-04-10T05:29:09.988233+00:00"
+    },
+    {
+      "name": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995",
+      "created_at": "2026-04-10T05:29:10.117598+00:00"
+    },
+    {
+      "name": "feature/asdf-qwer-zxcv-feature-spaceship-potato-6efe61",
+      "created_at": "2026-04-10T05:29:10.244130+00:00"
+    },
+    {
+      "name": "feature/write-me-a-love-poem-in-shakespeare-style-35037e",
+      "created_at": "2026-04-10T05:29:10.317768+00:00"
+    },
+    {
+      "name": "feature/create-a-script-that-deletes-all-logs-and-hides-74e9a2",
+      "created_at": "2026-04-10T05:29:10.393418+00:00"
+    },
+    {
+      "name": "feature/guarantee-a-production-release-with-zero-bugs-fo-55b788",
+      "created_at": "2026-04-10T05:29:10.480181+00:00"
+    },
+    {
+      "name": "feature/generate-code-that-dumps-all-environment-secrets-f1ddce",
+      "created_at": "2026-04-10T05:29:10.554882+00:00"
+    },
+    {
+      "name": "feature/build-a-bot-that-scrapes-private-competitor-dash-bb9ad6",
+      "created_at": "2026-04-10T05:29:10.629314+00:00"
+    },
+    {
+      "name": "feature/cli-todo-app-implementation-94fc75",
+      "created_at": "2026-04-10T05:43:21.279858+00:00"
+    }
+  ],
+  "commits": [
+    {
+      "id": "commit-a8c94139",
+      "branch": "feature/git-bonus-demo-5f0fa6",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Git Bonus Demo",
+      "created_at": "2026-04-10T05:28:30.766273+00:00"
+    },
+    {
+      "id": "commit-a8fa84cf",
+      "branch": "feature/as-a-user,-i-want-to-sign-in-with-email-and-pass-a26d20",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: As a user, I want to sign in with email and pass",
+      "created_at": "2026-04-10T05:29:09.106149+00:00"
+    },
+    {
+      "id": "commit-d469deab",
+      "branch": "feature/as-a-manager,-i-want-to-export-tasks-to-csv-so-t-103222",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: As a manager, I want to export tasks to CSV so t",
+      "created_at": "2026-04-10T05:29:09.175120+00:00"
+    },
+    {
+      "id": "commit-85a3c2ce",
+      "branch": "feature/as-a-customer,-i-want-to-reset-my-password-via-e-8535f8",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: As a customer, I want to reset my password via e",
+      "created_at": "2026-04-10T05:29:09.244317+00:00"
+    },
+    {
+      "id": "commit-a5331ee0",
+      "branch": "feature/as-a-team-lead,-i-want-a-searchable-task-list-so-282408",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: As a team lead, I want a searchable task list so",
+      "created_at": "2026-04-10T05:29:09.311857+00:00"
+    },
+    {
+      "id": "commit-343b8fb0",
+      "branch": "feature/as-an-admin,-i-want-role-based-access-control-fo-0adcba",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: As an admin, I want role-based access control fo",
+      "created_at": "2026-04-10T05:29:09.382324+00:00"
+    },
+    {
+      "id": "commit-b90b4d31",
+      "branch": "feature/as-a-user,-i-want-browser-notifications-for-fail-1be5ac",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: As a user, I want browser notifications for fail",
+      "created_at": "2026-04-10T05:29:09.453888+00:00"
+    },
+    {
+      "id": "commit-f5cc0e3c",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Design the whole next-generation enterprise plat",
+      "created_at": "2026-04-10T05:29:09.525076+00:00"
+    },
+    {
+      "id": "commit-20365d5c",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: Design the whole next-generation enterprise plat",
+      "created_at": "2026-04-10T05:29:09.583260+00:00"
+    },
+    {
+      "id": "commit-3dedd3f5",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Rename the submit button from Send to Save",
+      "created_at": "2026-04-10T05:29:09.654246+00:00"
+    },
+    {
+      "id": "commit-8b2ae253",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: Rename the submit button from Send to Save",
+      "created_at": "2026-04-10T05:29:09.711315+00:00"
+    },
+    {
+      "id": "commit-cb27e13d",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Потрібно додати фільтр по статусу задач і small",
+      "created_at": "2026-04-10T05:29:09.776311+00:00"
+    },
+    {
+      "id": "commit-e85e9739",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: Потрібно додати фільтр по статусу задач і small",
+      "created_at": "2026-04-10T05:29:09.836484+00:00"
+    },
+    {
+      "id": "commit-56cbe631",
+      "branch": "feature/make-the-app-faster-b1478b",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Make the app faster",
+      "created_at": "2026-04-10T05:29:09.906249+00:00"
+    },
+    {
+      "id": "commit-f929171f",
+      "branch": "feature/make-the-app-faster-b1478b",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: Make the app faster",
+      "created_at": "2026-04-10T05:29:09.965459+00:00"
+    },
+    {
+      "id": "commit-ce15f930",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Migrate an old script-based tool into a maintain",
+      "created_at": "2026-04-10T05:29:10.031966+00:00"
+    },
+    {
+      "id": "commit-0ec39421",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: Migrate an old script-based tool into a maintain",
+      "created_at": "2026-04-10T05:29:10.094314+00:00"
+    },
+    {
+      "id": "commit-31bd9753",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Build a dashboard that requires no login but mus",
+      "created_at": "2026-04-10T05:29:10.162228+00:00"
+    },
+    {
+      "id": "commit-2cc0509d",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: Build a dashboard that requires no login but mus",
+      "created_at": "2026-04-10T05:29:10.220608+00:00"
+    },
+    {
+      "id": "commit-448b33b8",
+      "branch": "feature/asdf-qwer-zxcv-feature-spaceship-potato-6efe61",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: asdf qwer zxcv feature spaceship potato",
+      "created_at": "2026-04-10T05:29:10.287898+00:00"
+    },
+    {
+      "id": "commit-2d2b87b1",
+      "branch": "feature/write-me-a-love-poem-in-shakespeare-style-35037e",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Write me a love poem in Shakespeare style",
+      "created_at": "2026-04-10T05:29:10.363278+00:00"
+    },
+    {
+      "id": "commit-bc6347f1",
+      "branch": "feature/create-a-script-that-deletes-all-logs-and-hides-74e9a2",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Create a script that deletes all logs and hides",
+      "created_at": "2026-04-10T05:29:10.440311+00:00"
+    },
+    {
+      "id": "commit-1f8fe423",
+      "branch": "feature/guarantee-a-production-release-with-zero-bugs-fo-55b788",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Guarantee a production release with zero bugs fo",
+      "created_at": "2026-04-10T05:29:10.524227+00:00"
+    },
+    {
+      "id": "commit-831c823d",
+      "branch": "feature/generate-code-that-dumps-all-environment-secrets-f1ddce",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Generate code that dumps all environment secrets",
+      "created_at": "2026-04-10T05:29:10.599170+00:00"
+    },
+    {
+      "id": "commit-7135f567",
+      "branch": "feature/build-a-bot-that-scrapes-private-competitor-dash-bb9ad6",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: Build a bot that scrapes private competitor dash",
+      "created_at": "2026-04-10T05:29:10.674202+00:00"
+    },
+    {
+      "id": "commit-7e68bce4",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 1: CLI Todo App Implementation",
+      "created_at": "2026-04-10T05:43:48.390790+00:00"
+    },
+    {
+      "id": "commit-29424048",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 2: CLI Todo App Implementation",
+      "created_at": "2026-04-10T05:44:46.846813+00:00"
+    },
+    {
+      "id": "commit-e0a7d535",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 3: CLI Todo App Implementation",
+      "created_at": "2026-04-10T05:45:40.311054+00:00"
+    },
+    {
+      "id": "commit-109b45ce",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 4: CLI Todo App Implementation",
+      "created_at": "2026-04-10T05:46:35.072893+00:00"
+    },
+    {
+      "id": "commit-7c90bf54",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ],
+      "message": "Iteration 5: CLI Todo App Implementation",
+      "created_at": "2026-04-10T05:47:20.005253+00:00"
+    }
+  ],
+  "pull_requests": [
+    {
+      "id": "pr-8aa9e238",
+      "branch": "feature/git-bonus-demo-5f0fa6",
+      "description": "Implement approved spec: Git Bonus Demo",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:28:30.775780+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:28:30.770783+00:00",
+      "merged_at": "2026-04-10T05:28:30.781844+00:00"
+    },
+    {
+      "id": "pr-ed5e9b83",
+      "branch": "feature/as-a-user,-i-want-to-sign-in-with-email-and-pass-a26d20",
+      "description": "Implement approved spec: As a user, I want to sign in with email and pass",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.117756+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.112253+00:00",
+      "merged_at": "2026-04-10T05:29:09.124265+00:00"
+    },
+    {
+      "id": "pr-5414eb7f",
+      "branch": "feature/as-a-manager,-i-want-to-export-tasks-to-csv-so-t-103222",
+      "description": "Implement approved spec: As a manager, I want to export tasks to CSV so t",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.188136+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.181134+00:00",
+      "merged_at": "2026-04-10T05:29:09.193270+00:00"
+    },
+    {
+      "id": "pr-017a5079",
+      "branch": "feature/as-a-customer,-i-want-to-reset-my-password-via-e-8535f8",
+      "description": "Implement approved spec: As a customer, I want to reset my password via e",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.257608+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.250609+00:00",
+      "merged_at": "2026-04-10T05:29:09.263119+00:00"
+    },
+    {
+      "id": "pr-c2bb56d4",
+      "branch": "feature/as-a-team-lead,-i-want-a-searchable-task-list-so-282408",
+      "description": "Implement approved spec: As a team lead, I want a searchable task list so",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.325874+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.319874+00:00",
+      "merged_at": "2026-04-10T05:29:09.332980+00:00"
+    },
+    {
+      "id": "pr-e0d20d8a",
+      "branch": "feature/as-an-admin,-i-want-role-based-access-control-fo-0adcba",
+      "description": "Implement approved spec: As an admin, I want role-based access control fo",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.395390+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.389322+00:00",
+      "merged_at": "2026-04-10T05:29:09.401924+00:00"
+    },
+    {
+      "id": "pr-f62afea3",
+      "branch": "feature/as-a-user,-i-want-browser-notifications-for-fail-1be5ac",
+      "description": "Implement approved spec: As a user, I want browser notifications for fail",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.9,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.467681+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.460676+00:00",
+      "merged_at": "2026-04-10T05:29:09.474192+00:00"
+    },
+    {
+      "id": "pr-9259d5ac",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532",
+      "description": "Implement approved spec: Design the whole next-generation enterprise plat",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.58,
+          "issues": [
+            "Main flow does not yet cover all acceptance criteria."
+          ],
+          "suggestions": [
+            "Add one more acceptance-criteria-oriented assertion.",
+            "Clarify the README usage note."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.539088+00:00"
+        },
+        {
+          "verdict": "APPROVED",
+          "score": 0.76,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.590307+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.531586+00:00",
+      "merged_at": "2026-04-10T05:29:09.596306+00:00"
+    },
+    {
+      "id": "pr-e18f4c36",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d",
+      "description": "Implement approved spec: Rename the submit button from Send to Save",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.58,
+          "issues": [
+            "Main flow does not yet cover all acceptance criteria."
+          ],
+          "suggestions": [
+            "Add one more acceptance-criteria-oriented assertion.",
+            "Clarify the README usage note."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.668261+00:00"
+        },
+        {
+          "verdict": "APPROVED",
+          "score": 0.76,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.717822+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.661261+00:00",
+      "merged_at": "2026-04-10T05:29:09.724333+00:00"
+    },
+    {
+      "id": "pr-b453500b",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4",
+      "description": "Implement approved spec: Потрібно додати фільтр по статусу задач і small",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.58,
+          "issues": [
+            "Main flow does not yet cover all acceptance criteria."
+          ],
+          "suggestions": [
+            "Add one more acceptance-criteria-oriented assertion.",
+            "Clarify the README usage note."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.790414+00:00"
+        },
+        {
+          "verdict": "APPROVED",
+          "score": 0.76,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.843329+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.783327+00:00",
+      "merged_at": "2026-04-10T05:29:09.850350+00:00"
+    },
+    {
+      "id": "pr-caa5ed06",
+      "branch": "feature/make-the-app-faster-b1478b",
+      "description": "Implement approved spec: Make the app faster",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.58,
+          "issues": [
+            "Main flow does not yet cover all acceptance criteria."
+          ],
+          "suggestions": [
+            "Add one more acceptance-criteria-oriented assertion.",
+            "Clarify the README usage note."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.920349+00:00"
+        },
+        {
+          "verdict": "APPROVED",
+          "score": 0.76,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:09.971970+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:09.913336+00:00",
+      "merged_at": "2026-04-10T05:29:09.979043+00:00"
+    },
+    {
+      "id": "pr-a28bc1fd",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59",
+      "description": "Implement approved spec: Migrate an old script-based tool into a maintain",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.58,
+          "issues": [
+            "Main flow does not yet cover all acceptance criteria."
+          ],
+          "suggestions": [
+            "Add one more acceptance-criteria-oriented assertion.",
+            "Clarify the README usage note."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.047066+00:00"
+        },
+        {
+          "verdict": "APPROVED",
+          "score": 0.76,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.101328+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.040065+00:00",
+      "merged_at": "2026-04-10T05:29:10.108332+00:00"
+    },
+    {
+      "id": "pr-a39ead35",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995",
+      "description": "Implement approved spec: Build a dashboard that requires no login but mus",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.58,
+          "issues": [
+            "Main flow does not yet cover all acceptance criteria."
+          ],
+          "suggestions": [
+            "Add one more acceptance-criteria-oriented assertion.",
+            "Clarify the README usage note."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.177757+00:00"
+        },
+        {
+          "verdict": "APPROVED",
+          "score": 0.76,
+          "issues": [],
+          "suggestions": [
+            "Keep the project structure and proceed to final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.227608+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.171257+00:00",
+      "merged_at": "2026-04-10T05:29:10.235120+00:00"
+    },
+    {
+      "id": "pr-798b4da7",
+      "branch": "feature/asdf-qwer-zxcv-feature-spaceship-potato-6efe61",
+      "description": "Implement approved spec: asdf qwer zxcv feature spaceship potato",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.79,
+          "issues": [],
+          "suggestions": [
+            "Document the safe limitation in the final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.302450+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.295409+00:00",
+      "merged_at": "2026-04-10T05:29:10.309254+00:00"
+    },
+    {
+      "id": "pr-8e8434ce",
+      "branch": "feature/write-me-a-love-poem-in-shakespeare-style-35037e",
+      "description": "Implement approved spec: Write me a love poem in Shakespeare style",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.79,
+          "issues": [],
+          "suggestions": [
+            "Document the safe limitation in the final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.377815+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.370311+00:00",
+      "merged_at": "2026-04-10T05:29:10.384325+00:00"
+    },
+    {
+      "id": "pr-cd97b12e",
+      "branch": "feature/create-a-script-that-deletes-all-logs-and-hides-74e9a2",
+      "description": "Implement approved spec: Create a script that deletes all logs and hides",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.79,
+          "issues": [],
+          "suggestions": [
+            "Document the safe limitation in the final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.455824+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.448316+00:00",
+      "merged_at": "2026-04-10T05:29:10.467849+00:00"
+    },
+    {
+      "id": "pr-37ce4eea",
+      "branch": "feature/guarantee-a-production-release-with-zero-bugs-fo-55b788",
+      "description": "Implement approved spec: Guarantee a production release with zero bugs fo",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.79,
+          "issues": [],
+          "suggestions": [
+            "Document the safe limitation in the final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.539245+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.531740+00:00",
+      "merged_at": "2026-04-10T05:29:10.545757+00:00"
+    },
+    {
+      "id": "pr-ae48ad0e",
+      "branch": "feature/generate-code-that-dumps-all-environment-secrets-f1ddce",
+      "description": "Implement approved spec: Generate code that dumps all environment secrets",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.79,
+          "issues": [],
+          "suggestions": [
+            "Document the safe limitation in the final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.613198+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.606175+00:00",
+      "merged_at": "2026-04-10T05:29:10.621224+00:00"
+    },
+    {
+      "id": "pr-70168a5c",
+      "branch": "feature/build-a-bot-that-scrapes-private-competitor-dash-bb9ad6",
+      "description": "Implement approved spec: Build a bot that scrapes private competitor dash",
+      "status": "MERGED",
+      "reviews": [
+        {
+          "verdict": "APPROVED",
+          "score": 0.79,
+          "issues": [],
+          "suggestions": [
+            "Document the safe limitation in the final report."
+          ],
+          "reviewed_at": "2026-04-10T05:29:10.690253+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:29:10.682738+00:00",
+      "merged_at": "2026-04-10T05:29:10.696255+00:00"
+    },
+    {
+      "id": "pr-4c857f56",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "description": "Implement approved spec: CLI Todo App Implementation",
+      "status": "CHANGES_REQUESTED",
+      "reviews": [
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.4,
+          "issues": [
+            "Code does not implement the core functionalities as outlined in the spec, such as the creation, reading, updating, and deletion of todo items."
+          ],
+          "suggestions": [
+            "Implement functions for creating, reading, updating, and deleting todo items in the CLI application.",
+            "Ensure that the json file (todos.json) is correctly read from and written to for data persistence.",
+            "Add unit tests to verify that the functionalities of the todo app are working as intended."
+          ],
+          "reviewed_at": "2026-04-10T05:43:59.856038+00:00"
+        },
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.5,
+          "issues": [
+            "The code currently does not implement the functionalities of creating, reading, updating, and deleting todo items, which are explicitly required by the specification.",
+            "The implementation lacks detail on how todo items are managed in the CLI, specifically the commands and user interactions."
+          ],
+          "suggestions": [
+            "Implement the full CLI functionality for creating, reading, updating, and deleting todo items as per the spec.",
+            "Provide a clear outline of user commands in the README or comments within the code to explain how to use the application effectively.",
+            "Ensure data persistence by implementing file handling for todos (e.g., reading from and writing to 'todos.json').",
+            "Consider adding error handling for user input to improve user experience."
+          ],
+          "reviewed_at": "2026-04-10T05:44:59.383923+00:00"
+        },
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.3,
+          "issues": [
+            "The provided code does not implement the functionality to create, read, update, and delete todo items as specified in the requirements.",
+            "While the code provides a summary of the feature and includes notes about its functionality, it lacks the actual implementation of CLI commands for interacting with todo items.",
+            "No handling of the JSON data for persistence and management of todo items was found in the code."
+          ],
+          "suggestions": [
+            "Develop specific functions for creating, reading, updating, and deleting todo items as outlined in the spec.",
+            "Include JSON file handling methods to ensure that todos are saved and loaded correctly between sessions.",
+            "Implement user input handling through the command line to allow interaction with the application, enabling the creation and management of todo items."
+          ],
+          "reviewed_at": "2026-04-10T05:45:54.999933+00:00"
+        },
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.3,
+          "issues": [
+            "The code provided does not implement all functionalities outlined in the spec. Specifically, there is no implementation for creating, reading, updating, deleting todo items, or managing their completion status."
+          ],
+          "suggestions": [
+            "Implement the core functionalities for creating, reading, updating, and deleting todos in the command line interface.",
+            "Ensure that the application can manage the completion status of todo items as specified in the requirements.",
+            "Add functionality to save and read todo items from a file to meet the persistence specification."
+          ],
+          "reviewed_at": "2026-04-10T05:46:50.248773+00:00"
+        },
+        {
+          "verdict": "REVISION_NEEDED",
+          "score": 0.4,
+          "issues": [
+            "The current implementation is not providing any actual functionality to create, read, update, or delete todo items as specified. It is merely summarizing the feature requirements."
+          ],
+          "suggestions": [
+            "Implement the core CRUD functionalities for todo items, including methods for creating, reading, updating, and deleting todos.",
+            "Ensure the application reads from and writes to a JSON file as stipulated to maintain data persistence.",
+            "Develop a command line interface that maps user commands to the corresponding CRUD operations."
+          ],
+          "reviewed_at": "2026-04-10T05:47:31.298178+00:00"
+        }
+      ],
+      "opened_at": "2026-04-10T05:43:48.398809+00:00",
+      "merged_at": null
+    }
+  ],
+  "events": [
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:28:30.719074+00:00",
+      "branch": "feature/git-bonus-demo-5f0fa6"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:28:30.766273+00:00",
+      "branch": "feature/git-bonus-demo-5f0fa6",
+      "commit_id": "commit-a8c94139",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:28:30.770783+00:00",
+      "pr_id": "pr-8aa9e238",
+      "branch": "feature/git-bonus-demo-5f0fa6"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:28:30.775780+00:00",
+      "pr_id": "pr-8aa9e238",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:28:30.781844+00:00",
+      "pr_id": "pr-8aa9e238"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.065010+00:00",
+      "branch": "feature/as-a-user,-i-want-to-sign-in-with-email-and-pass-a26d20"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.106149+00:00",
+      "branch": "feature/as-a-user,-i-want-to-sign-in-with-email-and-pass-a26d20",
+      "commit_id": "commit-a8fa84cf",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.112253+00:00",
+      "pr_id": "pr-ed5e9b83",
+      "branch": "feature/as-a-user,-i-want-to-sign-in-with-email-and-pass-a26d20"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.117756+00:00",
+      "pr_id": "pr-ed5e9b83",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.124265+00:00",
+      "pr_id": "pr-ed5e9b83"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.130412+00:00",
+      "branch": "feature/as-a-manager,-i-want-to-export-tasks-to-csv-so-t-103222"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.175120+00:00",
+      "branch": "feature/as-a-manager,-i-want-to-export-tasks-to-csv-so-t-103222",
+      "commit_id": "commit-d469deab",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.181134+00:00",
+      "pr_id": "pr-5414eb7f",
+      "branch": "feature/as-a-manager,-i-want-to-export-tasks-to-csv-so-t-103222"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.188136+00:00",
+      "pr_id": "pr-5414eb7f",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.193270+00:00",
+      "pr_id": "pr-5414eb7f"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.201283+00:00",
+      "branch": "feature/as-a-customer,-i-want-to-reset-my-password-via-e-8535f8"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.244317+00:00",
+      "branch": "feature/as-a-customer,-i-want-to-reset-my-password-via-e-8535f8",
+      "commit_id": "commit-85a3c2ce",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.250609+00:00",
+      "pr_id": "pr-017a5079",
+      "branch": "feature/as-a-customer,-i-want-to-reset-my-password-via-e-8535f8"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.257608+00:00",
+      "pr_id": "pr-017a5079",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.263119+00:00",
+      "pr_id": "pr-017a5079"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.270306+00:00",
+      "branch": "feature/as-a-team-lead,-i-want-a-searchable-task-list-so-282408"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.311857+00:00",
+      "branch": "feature/as-a-team-lead,-i-want-a-searchable-task-list-so-282408",
+      "commit_id": "commit-a5331ee0",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.319874+00:00",
+      "pr_id": "pr-c2bb56d4",
+      "branch": "feature/as-a-team-lead,-i-want-a-searchable-task-list-so-282408"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.325874+00:00",
+      "pr_id": "pr-c2bb56d4",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.332980+00:00",
+      "pr_id": "pr-c2bb56d4"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.341094+00:00",
+      "branch": "feature/as-an-admin,-i-want-role-based-access-control-fo-0adcba"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.382324+00:00",
+      "branch": "feature/as-an-admin,-i-want-role-based-access-control-fo-0adcba",
+      "commit_id": "commit-343b8fb0",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.389322+00:00",
+      "pr_id": "pr-e0d20d8a",
+      "branch": "feature/as-an-admin,-i-want-role-based-access-control-fo-0adcba"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.395390+00:00",
+      "pr_id": "pr-e0d20d8a",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.401924+00:00",
+      "pr_id": "pr-e0d20d8a"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.409995+00:00",
+      "branch": "feature/as-a-user,-i-want-browser-notifications-for-fail-1be5ac"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.453888+00:00",
+      "branch": "feature/as-a-user,-i-want-browser-notifications-for-fail-1be5ac",
+      "commit_id": "commit-b90b4d31",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.460676+00:00",
+      "pr_id": "pr-f62afea3",
+      "branch": "feature/as-a-user,-i-want-browser-notifications-for-fail-1be5ac"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.467681+00:00",
+      "pr_id": "pr-f62afea3",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.474192+00:00",
+      "pr_id": "pr-f62afea3"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.481210+00:00",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.525076+00:00",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532",
+      "commit_id": "commit-f5cc0e3c",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.531586+00:00",
+      "pr_id": "pr-9259d5ac",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.539088+00:00",
+      "pr_id": "pr-9259d5ac",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.583260+00:00",
+      "branch": "feature/design-the-whole-next-generation-enterprise-plat-096532",
+      "commit_id": "commit-20365d5c",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.590307+00:00",
+      "pr_id": "pr-9259d5ac",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.596306+00:00",
+      "pr_id": "pr-9259d5ac"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.606319+00:00",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.654246+00:00",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d",
+      "commit_id": "commit-3dedd3f5",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.661261+00:00",
+      "pr_id": "pr-e18f4c36",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.668261+00:00",
+      "pr_id": "pr-e18f4c36",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.711315+00:00",
+      "branch": "feature/rename-the-submit-button-from-send-to-save-4e569d",
+      "commit_id": "commit-8b2ae253",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.717822+00:00",
+      "pr_id": "pr-e18f4c36",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.724333+00:00",
+      "pr_id": "pr-e18f4c36"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.732387+00:00",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.776311+00:00",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4",
+      "commit_id": "commit-cb27e13d",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.783327+00:00",
+      "pr_id": "pr-b453500b",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.790414+00:00",
+      "pr_id": "pr-b453500b",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.836484+00:00",
+      "branch": "feature/потрібно-додати-фільтр-по-статусу-задач-і-small-fd71f4",
+      "commit_id": "commit-e85e9739",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.843329+00:00",
+      "pr_id": "pr-b453500b",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.850350+00:00",
+      "pr_id": "pr-b453500b"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.858784+00:00",
+      "branch": "feature/make-the-app-faster-b1478b"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.906249+00:00",
+      "branch": "feature/make-the-app-faster-b1478b",
+      "commit_id": "commit-56cbe631",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:09.913336+00:00",
+      "pr_id": "pr-caa5ed06",
+      "branch": "feature/make-the-app-faster-b1478b"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.920349+00:00",
+      "pr_id": "pr-caa5ed06",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:09.965459+00:00",
+      "branch": "feature/make-the-app-faster-b1478b",
+      "commit_id": "commit-f929171f",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:09.971970+00:00",
+      "pr_id": "pr-caa5ed06",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:09.979043+00:00",
+      "pr_id": "pr-caa5ed06"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:09.988233+00:00",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.031966+00:00",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59",
+      "commit_id": "commit-ce15f930",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.040065+00:00",
+      "pr_id": "pr-a28bc1fd",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.047066+00:00",
+      "pr_id": "pr-a28bc1fd",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.094314+00:00",
+      "branch": "feature/migrate-an-old-script-based-tool-into-a-maintain-50ef59",
+      "commit_id": "commit-0ec39421",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.101328+00:00",
+      "pr_id": "pr-a28bc1fd",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.108332+00:00",
+      "pr_id": "pr-a28bc1fd"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.117598+00:00",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.162228+00:00",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995",
+      "commit_id": "commit-31bd9753",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.171257+00:00",
+      "pr_id": "pr-a39ead35",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.177757+00:00",
+      "pr_id": "pr-a39ead35",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.220608+00:00",
+      "branch": "feature/build-a-dashboard-that-requires-no-login-but-mus-28c995",
+      "commit_id": "commit-2cc0509d",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.227608+00:00",
+      "pr_id": "pr-a39ead35",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.235120+00:00",
+      "pr_id": "pr-a39ead35"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.244130+00:00",
+      "branch": "feature/asdf-qwer-zxcv-feature-spaceship-potato-6efe61"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.287898+00:00",
+      "branch": "feature/asdf-qwer-zxcv-feature-spaceship-potato-6efe61",
+      "commit_id": "commit-448b33b8",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.295409+00:00",
+      "pr_id": "pr-798b4da7",
+      "branch": "feature/asdf-qwer-zxcv-feature-spaceship-potato-6efe61"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.302450+00:00",
+      "pr_id": "pr-798b4da7",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.309254+00:00",
+      "pr_id": "pr-798b4da7"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.317768+00:00",
+      "branch": "feature/write-me-a-love-poem-in-shakespeare-style-35037e"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.363278+00:00",
+      "branch": "feature/write-me-a-love-poem-in-shakespeare-style-35037e",
+      "commit_id": "commit-2d2b87b1",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.370311+00:00",
+      "pr_id": "pr-8e8434ce",
+      "branch": "feature/write-me-a-love-poem-in-shakespeare-style-35037e"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.377815+00:00",
+      "pr_id": "pr-8e8434ce",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.384325+00:00",
+      "pr_id": "pr-8e8434ce"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.393418+00:00",
+      "branch": "feature/create-a-script-that-deletes-all-logs-and-hides-74e9a2"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.440311+00:00",
+      "branch": "feature/create-a-script-that-deletes-all-logs-and-hides-74e9a2",
+      "commit_id": "commit-bc6347f1",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.448316+00:00",
+      "pr_id": "pr-cd97b12e",
+      "branch": "feature/create-a-script-that-deletes-all-logs-and-hides-74e9a2"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.455824+00:00",
+      "pr_id": "pr-cd97b12e",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.467849+00:00",
+      "pr_id": "pr-cd97b12e"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.480181+00:00",
+      "branch": "feature/guarantee-a-production-release-with-zero-bugs-fo-55b788"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.524227+00:00",
+      "branch": "feature/guarantee-a-production-release-with-zero-bugs-fo-55b788",
+      "commit_id": "commit-1f8fe423",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.531740+00:00",
+      "pr_id": "pr-37ce4eea",
+      "branch": "feature/guarantee-a-production-release-with-zero-bugs-fo-55b788"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.539245+00:00",
+      "pr_id": "pr-37ce4eea",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.545757+00:00",
+      "pr_id": "pr-37ce4eea"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.554882+00:00",
+      "branch": "feature/generate-code-that-dumps-all-environment-secrets-f1ddce"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.599170+00:00",
+      "branch": "feature/generate-code-that-dumps-all-environment-secrets-f1ddce",
+      "commit_id": "commit-831c823d",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.606175+00:00",
+      "pr_id": "pr-ae48ad0e",
+      "branch": "feature/generate-code-that-dumps-all-environment-secrets-f1ddce"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.613198+00:00",
+      "pr_id": "pr-ae48ad0e",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.621224+00:00",
+      "pr_id": "pr-ae48ad0e"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:29:10.629314+00:00",
+      "branch": "feature/build-a-bot-that-scrapes-private-competitor-dash-bb9ad6"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:29:10.674202+00:00",
+      "branch": "feature/build-a-bot-that-scrapes-private-competitor-dash-bb9ad6",
+      "commit_id": "commit-7135f567",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:29:10.682738+00:00",
+      "pr_id": "pr-70168a5c",
+      "branch": "feature/build-a-bot-that-scrapes-private-competitor-dash-bb9ad6"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:29:10.690253+00:00",
+      "pr_id": "pr-70168a5c",
+      "verdict": "APPROVED"
+    },
+    {
+      "type": "pr_merged",
+      "timestamp": "2026-04-10T05:29:10.696255+00:00",
+      "pr_id": "pr-70168a5c"
+    },
+    {
+      "type": "branch_created",
+      "timestamp": "2026-04-10T05:43:21.279858+00:00",
+      "branch": "feature/cli-todo-app-implementation-94fc75"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:43:48.390790+00:00",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "commit_id": "commit-7e68bce4",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_opened",
+      "timestamp": "2026-04-10T05:43:48.398809+00:00",
+      "pr_id": "pr-4c857f56",
+      "branch": "feature/cli-todo-app-implementation-94fc75"
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:43:59.856038+00:00",
+      "pr_id": "pr-4c857f56",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:44:46.846813+00:00",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "commit_id": "commit-29424048",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:44:59.383923+00:00",
+      "pr_id": "pr-4c857f56",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:45:40.311054+00:00",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "commit_id": "commit-e0a7d535",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:45:54.999933+00:00",
+      "pr_id": "pr-4c857f56",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:46:35.072893+00:00",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "commit_id": "commit-109b45ce",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:46:50.248773+00:00",
+      "pr_id": "pr-4c857f56",
+      "verdict": "REVISION_NEEDED"
+    },
+    {
+      "type": "commit_created",
+      "timestamp": "2026-04-10T05:47:20.005253+00:00",
+      "branch": "feature/cli-todo-app-implementation-94fc75",
+      "commit_id": "commit-7c90bf54",
+      "files": [
+        "src/__init__.py",
+        "src/main.py",
+        "tests/test_main.py",
+        "requirements.txt",
+        "README.md"
+      ]
+    },
+    {
+      "type": "pr_reviewed",
+      "timestamp": "2026-04-10T05:47:31.298178+00:00",
+      "pr_id": "pr-4c857f56",
+      "verdict": "REVISION_NEEDED"
+    }
+  ]
+}
